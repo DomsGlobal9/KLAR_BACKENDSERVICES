@@ -1,0 +1,35 @@
+{
+    "status": true,
+    "statusCode": 200,
+    "body": {
+        "propertyId": "HOTEL_001",
+        "propertyName": "Taj Deccan",
+        "products": [
+            {
+                "roomCode": "DLX",
+                "roomName": "Deluxe Room",
+                "rates": [
+                    {
+                        "rateKey": "RATE_KEY_001",
+                        "rateType": "BOOKABLE",
+                        "totalPrice": 9500,
+                        "currency": "INR",
+                        "boardCode": "RO",
+                        "boardName": "Room Only",
+                        "cancellationPolicies": [
+                            {
+                                "from": "2025-09-28",
+                                "amount": 0
+                            },
+                            {
+                                "from": "2025-09-30",
+                                "amount": 9500
+                            }
+                        ],
+                        "status": "Available"
+                    }
+                ]
+            }
+        ]
+    }
+}

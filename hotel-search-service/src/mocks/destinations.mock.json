@@ -1,0 +1,18 @@
+{
+    "status": true,
+    "statusCode": 200,
+    "body": [
+        {
+            "destCode": "HYD",
+            "destName": "Hyderabad India",
+            "countryCode": "IN",
+            "countryName": "India"
+        },
+        {
+            "destCode": "BLR",
+            "destName": "Bangalore India",
+            "countryCode": "IN",
+            "countryName": "India"
+        }
+    ]
+}

@@ -1,0 +1,9 @@
+{
+    "bookingId": "BOOKING_987654",
+    "status": "CONFIRMED",
+    "hotelName": "Taj Deccan",
+    "checkin": "2025-10-01",
+    "checkout": "2025-10-02",
+    "totalPrice": 9500,
+    "currency": "INR"
+}

@@ -1,0 +1,29 @@
+{
+    "status": true,
+    "statusCode": 200,
+    "totalRecord": 2,
+    "body": [
+        {
+            "propertyId": "HOTEL_001",
+            "propertyName": "Taj Deccan",
+            "destinationCode": "HYD",
+            "destinationName": "Hyderabad",
+            "categoryName": "5 Star",
+            "price": 9500,
+            "currency": "INR",
+            "brandCode": "TAJ",
+            "address": "Banjara Hills, Hyderabad"
+        },
+        {
+            "propertyId": "HOTEL_002",
+            "propertyName": "ITC Kohenur",
+            "destinationCode": "HYD",
+            "destinationName": "Hyderabad",
+            "categoryName": "5 Star",
+            "price": 10500,
+            "currency": "INR",
+            "brandCode": "ITC",
+            "address": "HITEC City, Hyderabad"
+        }
+    ]
+}

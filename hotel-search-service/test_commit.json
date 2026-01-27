@@ -1,0 +1,49 @@
+{
+    "BookReservation": {
+        "ResStatus": 1,
+        "DemandBookingId": "KlarDemo-001",
+        "CurrencyCode": "USD",
+        "GuaranteeMethod": "CreditCard",
+        "GuaranteeType": "Guarantee",
+        "checkin": "2026-02-15",
+        "checkout": "2026-02-18",
+        "propertyID": "06c192e9-0d40-4df0-9d45-d0d89a14c9a6",
+        "PropertyCode": "25293",
+        "BrandCode": "SEI6SEI6SEI=",
+        "EchoToken": "ECHO-TOKEN-001",
+        "BookingRate": 370.85,
+        "Session": "SESSION_ABC_123",
+        "CreditCard": {
+            "ExpirationDate": "2026-12",
+            "IssuedName": "John Doe",
+            "Number": "4111111111111111",
+            "TypeIdentifier": "VISA"
+        },
+        "RoomSelection": [
+            {
+                "RoomTypeCode": "ROO.B1-KG",
+                "NumberOfRooms": 1,
+                "NumberOfAdults": 2,
+                "NumberOfChild": 1,
+                "RoomSelectionKey": "20260215|20260218|W|256|25293|ROO.B1-KG|PREFERRED PART|RO||1~2~1|3|N@07~~26111c~-1754544027~N~~~NOR~~721FB4A7EB374E4176919082345205AAUS0001000000000526111c",
+                "RoomRate": 370.85,
+                "BoardName": "ROOM ONLY",
+                "Guest": [
+                    {
+                        "FirstName": "John",
+                        "LastName": "Doe",
+                        "Primary": true,
+                        "Email": "john.doe@example.com",
+                        "Phone": "1234567890"
+                    }
+                ],
+                "Children": [
+                    {
+                        "type": "Child",
+                        "age": 3
+                    }
+                ]
+            }
+        ]
+    }
+}

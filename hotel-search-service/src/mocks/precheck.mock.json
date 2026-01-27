@@ -1,0 +1,7 @@
+{
+    "bookingReference": "PRECHECK_12345",
+    "price": 9500,
+    "currency": "INR",
+    "available": true,
+    "cancellationPolicy": "Free cancellation till 24 hours"
+}
