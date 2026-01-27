@@ -2,8 +2,20 @@ import { rateGainClient } from "../clients/rategain.client";
 
 export class RateGainApiProvider {
     async precheck(payload: any) {
+        // RateGain requires ReservationDate (today) and Echotoken (case sensitive)
+        const booking = payload.BookReservation || {};
+        const consolidatedPayload = {
+            BookReservation: {
+                ...booking,
+                ReservationDate: booking.ReservationDate || new Date().toISOString().split('T')[0],
+                Echotoken: booking.Echotoken || booking.EchoToken || `echo-${Date.now()}`
+            }
+        };
+
         try {
-            const response = await rateGainClient.post("/api/SmartDistribution/PreCheckReservation", payload);
+            console.log("RateGain PreCheck Payload:", JSON.stringify(consolidatedPayload, null, 2));
+            const response = await rateGainClient.post("/api/SmartDistribution/PreCheckReservation", consolidatedPayload);
+            console.log("RateGain PreCheck Success:", JSON.stringify(response.data, null, 2));
             return response.data;
         } catch (error: any) {
             console.error("RateGain PreCheck Error:", error.response?.data || error.message);
@@ -12,9 +24,19 @@ export class RateGainApiProvider {
     }
 
     async commit(payload: any) {
+        // RateGain requires ReservationDate (today) and Echotoken (case sensitive)
+        const booking = payload.BookReservation || {};
+        const consolidatedPayload = {
+            BookReservation: {
+                ...booking,
+                ReservationDate: booking.ReservationDate || new Date().toISOString().split('T')[0],
+                Echotoken: booking.Echotoken || booking.EchoToken || `echo-${Date.now()}`
+            }
+        };
+
         try {
-            console.log("RateGain Commit Request Payload:", JSON.stringify(payload, null, 2));
-            const response = await rateGainClient.post("/api/SmartDistribution/CommitReservation", payload);
+            console.log("RateGain Commit Request Payload:", JSON.stringify(consolidatedPayload, null, 2));
+            const response = await rateGainClient.post("/api/SmartDistribution/CommitReservation", consolidatedPayload);
             console.log("RateGain Commit Success Response:", JSON.stringify(response.data, null, 2));
             return response.data;
         } catch (error: any) {

@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 
-// Load environment variables
+// Load environment variables from search service (contains RateGain credentials)
 dotenv.config({ path: "./hotel-search-service/.env" });
 
 // Import routes from both services

@@ -1,5 +1,6 @@
-import dotenv from "dotenv";
-dotenv.config();
+// dotenv is loaded by main server.ts before importing this module
+// import dotenv from "dotenv";
+// dotenv.config();
 
 export const env = {
     port: process.env.PORT || 5002,
