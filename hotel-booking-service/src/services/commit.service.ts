@@ -1,8 +1,71 @@
 import { rateGainProvider } from "../providers/rategain.provider";
+import Booking, { BookingStatus } from "../../../shared/db/models/Booking.model";
 
 class CommitService {
-    async commit(payload: any) {
-        return rateGainProvider.commit(payload);
+    async commit(payload: any, userId: string) {
+        try {
+            // Call RateGain API to commit the booking
+            const rateGainResponse = await rateGainProvider.commit(payload);
+
+            // Check if RateGain commit was successful
+            if (rateGainResponse && rateGainResponse.data) {
+                // Extract booking details from payload and response
+                const bookReservation = payload.BookReservation;
+
+                // Save booking to database
+                const booking = new Booking({
+                    userId,
+                    confirmationNumber: rateGainResponse.data.ConfirmationNumber || bookReservation.EchoToken,
+                    propertyId: bookReservation.propertyID,
+                    propertyName: bookReservation.PropertyCode, // You might want to get actual name from search results
+                    propertyCode: bookReservation.PropertyCode,
+                    status: BookingStatus.CONFIRMED,
+                    checkIn: new Date(bookReservation.checkin),
+                    checkOut: new Date(bookReservation.checkout),
+                    totalAmount: bookReservation.BookingRate,
+                    currencyCode: bookReservation.CurrencyCode,
+                    guests: bookReservation.RoomSelection.flatMap((room: any) =>
+                        room.Guest.map((guest: any) => ({
+                            firstName: guest.FirstName,
+                            lastName: guest.LastName,
+                            email: guest.Email,
+                            phone: guest.Phone,
+                            isPrimary: guest.Primary
+                        }))
+                    ),
+                    rooms: bookReservation.RoomSelection.map((room: any) => ({
+                        roomTypeCode: room.RoomTypeCode,
+                        numberOfRooms: room.NumberOfRooms,
+                        numberOfAdults: room.NumberOfAdults,
+                        numberOfChildren: room.NumberOfChild,
+                        roomRate: room.RoomRate,
+                        boardName: room.BoardName
+                    })),
+                    rateGainResponse: rateGainResponse.data,
+                    // Add optional fields if present in payload
+                    walletId: payload.BookReservation.walletId,
+                    paymentId: payload.BookReservation.paymentId,
+                    paymentStatus: payload.BookReservation.paymentId ? 'COMPLETED' : 'PENDING'
+                });
+
+                await booking.save();
+
+                // Return combined response
+                return {
+                    ...rateGainResponse,
+                    booking: booking.toJSON()
+                };
+            }
+
+            return rateGainResponse;
+
+        } catch (error: any) {
+            // If it's a database error after successful RateGain commit, log it but don't fail
+            if (error.message && !error.message.includes('RateGain')) {
+                console.error('Failed to save booking to database:', error);
+            }
+            throw error;
+        }
     }
 }
 

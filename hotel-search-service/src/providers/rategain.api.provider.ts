@@ -23,6 +23,7 @@ export class RateGainApiProvider {
     }
 
     async getBestProperties(payload: any) {
+        logToFile(`[DEBUG] Raw Input Payload to getBestProperties: ${JSON.stringify(payload)}`);
         // Build the exact payload format required by RateGain API v1.5.2
         const rateGainPayload = {
             destinationCode: payload.destinationCode || payload.destCode,

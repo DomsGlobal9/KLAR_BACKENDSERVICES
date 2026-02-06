@@ -7,9 +7,9 @@ import swaggerJsdoc from "swagger-jsdoc";
 // Load environment variables from search service (contains RateGain credentials)
 dotenv.config({ path: "./hotel-search-service/.env" });
 
-// Import routes from both services
-import searchRoutes from "./hotel-search-service/src/routes";
-import bookingRoutes from "./hotel-booking-service/src/routes";
+// Import routes from both services (Use require to ensure dotenv is loaded first)
+const searchRoutes = require("./hotel-search-service/src/routes").default;
+const bookingRoutes = require("./hotel-booking-service/src/routes").default;
 
 const app = express();
 
@@ -35,7 +35,8 @@ const swaggerOptions = {
     },
     apis: [
         "./hotel-search-service/src/controllers/*.ts",
-        "./hotel-booking-service/src/controllers/*.ts"
+        "./hotel-booking-service/src/controllers/*.ts",
+        "./shared/auth/*.ts"
     ]
 };
 
