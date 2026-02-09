@@ -4,13 +4,13 @@ import { getCache, setCache } from "./redisService";
 
 export const searchFromTripJack = async (payload: any) => {
   const cacheKey = JSON.stringify(payload);
-  console.log("🔍 TripJack Search Request");
-  console.log("📦 Payload:", JSON.stringify(payload, null, 2));
+  console.log("TripJack Search Request");
+  console.log("Payload:", JSON.stringify(payload, null, 2));
 
   // 🔥 1. Check Cache First
   const cached = await getCache(cacheKey);
   if (cached) {
-    console.log("⚡ Returning cached flight results");
+    console.log("Returning cached flight results");
     return JSON.parse(cached);
   }
 
@@ -22,7 +22,6 @@ export const searchFromTripJack = async (payload: any) => {
       headers: {
         "Content-Type": "application/json",
         apikey: envConfig.TRIPJACK.API_KEY,
-        agencyId: envConfig.TRIPJACK.AGENCY_ID
       },
       timeout: 20000
     }
