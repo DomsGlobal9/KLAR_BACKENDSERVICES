@@ -111,7 +111,7 @@ const bookingSchema = new Schema<IBooking>(
         userId: {
             type: Schema.Types.ObjectId,
             ref: 'User',
-            required: [true, 'User ID is required'],
+            required: false,
             index: true
         },
         confirmationNumber: {

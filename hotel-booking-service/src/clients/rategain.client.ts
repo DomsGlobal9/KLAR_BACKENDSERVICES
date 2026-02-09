@@ -7,8 +7,8 @@ export const rateGainClient = axios.create({
     headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "apikey": env.rateGain.apiKey,
-        "apisecret": env.rateGain.apiSecret,
+        "ApiKey": env.rateGain.apiKey,
+        "ApiSecret": env.rateGain.apiSecret,
     },
 });
 

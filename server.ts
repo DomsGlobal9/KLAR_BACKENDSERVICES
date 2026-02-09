@@ -7,7 +7,8 @@ import swaggerJsdoc from "swagger-jsdoc";
 // Load environment variables from search service (contains RateGain credentials)
 dotenv.config({ path: "./hotel-search-service/.env" });
 
-// Import routes from both services (Use require to ensure dotenv is loaded first)
+// Import routes and shared database client
+import mongooseClient from "./shared/db/mongoose.client";
 const searchRoutes = require("./hotel-search-service/src/routes").default;
 const bookingRoutes = require("./hotel-booking-service/src/routes").default;
 
@@ -79,9 +80,21 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`🚀 Klar Hotels Unified API running on http://localhost:${PORT}`);
-    console.log(`📚 Swagger docs available at http://localhost:${PORT}/api-docs`);
-});
+// Start unified server
+async function startServer() {
+    try {
+        console.log("Connecting to MongoDB...");
+        await mongooseClient.connect();
+
+        const PORT = process.env.PORT || 5000;
+        app.listen(PORT, () => {
+            console.log(`🚀 Klar Hotels Unified API running on http://localhost:${PORT}`);
+            console.log(`📚 Swagger docs available at http://localhost:${PORT}/api-docs`);
+        });
+    } catch (error) {
+        console.error("❌ Failed to start unified server:", error);
+        process.exit(1);
+    }
+}
+
+startServer();
