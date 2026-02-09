@@ -1,6 +1,6 @@
 import app from "./app";
 import { connectDB } from "./config/database";
-import { envConfig } from "./config/env";
+import { envConfig } from "./config/env.config";
 
 const PORT = envConfig.BASE.PORT;
 

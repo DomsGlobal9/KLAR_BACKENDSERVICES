@@ -6,7 +6,7 @@ import {
 } from "../services/adminVerification.service";
 import { AuthService } from "../services/auth.service";
 import { ClientType } from "../constants/clientTypes";
-import { envConfig } from "../config/env";
+import { envConfig } from "../config/env.config";
 
 export const signupB2B = async (
   req: Request,

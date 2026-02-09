@@ -1,5 +1,5 @@
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
-import { envConfig } from "../config/env";
+import { envConfig } from "../config/env.config";
 import { UnauthorizedError } from "../errors/AppError";
 
 export interface TokenPayload {

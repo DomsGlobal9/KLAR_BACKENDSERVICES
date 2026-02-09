@@ -25,11 +25,15 @@ export const envConfig = {
     BASE: {
         PORT: Number(getEnv("PORT", false) || "4000"),
         API_PREFIX: getEnv("API_PREFIX", false) || "/api",
+        BASE_URL: getEnv("BASE_URL", false) || "http://localhost:4000/api/auth",
     },
 
     DATABASE: {
         MONGODB_URI: getEnv("MONGODB_URI"),
-        DB_NAME: getEnv("DB_NAME", false) || "your_database_name",
+        DB_NAME: getEnv("MONGODB_DATABASE", false) || "auth-service",
+        MONGODB_USER: getEnv("MONGODB_USER", false),
+        MONGODB_PASSWORD: getEnv("MONGODB_PASSWORD", false),
+        MONGODB_CLUSTER: getEnv("MONGODB_CLUSTER", false),
     },
 
     JWT: {
@@ -40,18 +44,21 @@ export const envConfig = {
     },
 
     CORS: {
-        ORIGINS: (getEnv("CORS_ORIGINS", false) || "http://localhost:3000")
-            .split(",")
-            .map(origin => origin.trim()),
+        CORS_ORIGIN: getEnv("CORS_ORIGIN"),
+        CORS_METHODS: getEnv("CORS_METHODS"),
+        CORS_ALLOWED_HEADERS: getEnv("CORS_ALLOWED_HEADERS"),
+        CORS_CREDENTIALS: getEnv("CORS_CREDENTIALS"),
+
+        CORS_MAX_AGE: getEnv("CORS_MAX_AGE"),
+
     },
 
     COOKIE: {
         SECURE: getEnv("NODE_ENV", false) === "production",
         HTTP_ONLY: true,
-        SAME_SITE: getEnv("NODE_ENV", false) === "production" ? "none" as const : "lax" as const,
+        SAME_SITE: (getEnv("NODE_ENV", false) === "production" ? "none" : "lax") as "none" | "lax" | "strict",
         MAX_AGE: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
-
 };
 
 /**

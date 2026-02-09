@@ -9,7 +9,7 @@ router.get("/health", (_req, res) => {
     res.json({ status: "OK" });
 });
 
-router.use("/", authRoutes);
+router.use("/auth", authRoutes);
 router.use("/", adminRoutes);
 router.use("/", walletRoutes);
 
