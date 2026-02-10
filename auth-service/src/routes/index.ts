@@ -10,7 +10,7 @@ router.get("/health", (_req, res) => {
 });
 
 router.use("/auth", authRoutes);
-router.use("/", adminRoutes);
-router.use("/", walletRoutes);
+router.use("/admin/verifications", adminRoutes);
+router.use("/wallet", walletRoutes);
 
 export default router;

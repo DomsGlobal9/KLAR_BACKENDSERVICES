@@ -13,12 +13,12 @@ export const authenticateJWT = (
     // Try to get token from cookie first, then fall back to Authorization header
     let token: string | undefined = req.cookies?.token;
 
-    if (!token) {
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-            token = authHeader.split(" ")[1];
-        }
-    }
+    // if (!token) {
+    //     const authHeader = req.headers.authorization;
+    //     if (authHeader && authHeader.startsWith("Bearer ")) {
+    //         token = authHeader.split(" ")[1];
+    //     }
+    // }
 
     if (!token) {
         return res.status(401).json({ message: "Authentication token missing" });

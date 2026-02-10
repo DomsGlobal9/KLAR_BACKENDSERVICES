@@ -3,8 +3,9 @@ import { envConfig } from './env.config';
 
 // Parse CORS origins from comma-separated string to array
 const allowedOrigins = envConfig.CORS.CORS_ORIGIN.split(',').map(origin => origin.trim());
-
+console.log("The allowed origins are", allowedOrigins);
 export const corsOptions: CorsOptions = {
+
     origin: (origin, callback) => {
         if (!origin) {
             return callback(null, true);

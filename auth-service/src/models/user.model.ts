@@ -14,6 +14,9 @@ export interface IUser extends Document {
     passwordHash: string;
     roles: Roles[];
     status: UserStatus;
+    blockReason?: string;
+    pendingReason?: string;
+    rejectedReason?: string;
 
     businessProfile?: any;
     verification?: any;
@@ -60,6 +63,21 @@ const UserSchema = new Schema<IUser>(
             type: String,
             enum: Object.values(UserStatus),
             default: UserStatus.REGISTERED,
+        },
+
+        blockReason: {
+            type: String,
+            trim: true,
+        },
+
+        pendingReason: {
+            type: String,
+            trim: true,
+        },
+
+        rejectedReason: {
+            type: String,
+            trim: true,
         },
 
         businessProfile: {

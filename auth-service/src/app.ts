@@ -8,28 +8,20 @@ import { corsOptions } from "./config/cors.config";
 
 const app = express();
 
-// app.use(cors(corsOptions));
-app.use(cors({
-    origin: "http://localhost:5999",
-    credentials: true,
-    allowedHeaders: ["Content-Type", "apikey"],
-    methods: ["GET", "POST", "OPTIONS"],
-}));
+app.use(cors(corsOptions));
 
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "http://localhost:5999");
-    res.header("Access-Control-Allow-Headers", "Content-Type, apikey");
-    res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.header("Access-Control-Allow-Credentials", "true");
 
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
+app.options("/", cors(corsOptions));
 
-    next();
+
+app.get("/health", (req, res) => {
+    console.log("Health check");
+    res.status(200).json({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        service: "auth-service"
+    });
 });
-
-// app.options("/", cors());
 
 app.use(express.json());
 app.use(cookieParser());

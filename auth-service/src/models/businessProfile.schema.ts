@@ -29,6 +29,29 @@ export const BusinessProfileSchema = new Schema(
             type: String,
             required: true,
         },
+
+        gstNumber: {
+            type: String,
+        },
+
+        panNumber: {
+            type: String,
+        },
+
+        address: {
+            type: String,
+            required: true,
+        },
+
+        city: {
+            type: String,
+            required: true,
+        },
+
+        country: {
+            type: String,
+            required: true,
+        },
     },
     { _id: false }
 );
