@@ -4,8 +4,9 @@ import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 
-// Load environment variables from search service (contains RateGain credentials)
-dotenv.config({ path: "./hotel-search-service/.env" });
+// Load environment variables
+dotenv.config(); // Try root .env first
+dotenv.config({ path: "./hotel-search-service/.env" }); // Then try service-specific .env
 
 // Import routes and shared database client
 import mongooseClient from "./shared/db/mongoose.client";
