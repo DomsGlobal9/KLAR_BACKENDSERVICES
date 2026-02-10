@@ -32,10 +32,15 @@ export const commitController = async (req: Request, res: Response) => {
         const data = await commitService.commit(req.body, userId);
         res.json(data);
     } catch (error: any) {
-        res.status(500).json({
+        const statusCode = error.response?.status || 500;
+        const errorData = error.response?.data || {};
+
+        console.error('Commit Controller Error:', error.message);
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Failed to commit booking',
-            error: error.message
+            message: errorData.description || error.message || 'Failed to commit booking',
+            error: errorData
         });
     }
 };
