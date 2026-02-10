@@ -16,7 +16,7 @@ const startServer = async () => {
       console.log(`Flight Search Service running on port ${envConfig.BASE.PORT}`);
     });
 
-    // Handle port already in use error
+    
     server.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE') {
         console.error(`❌ Port ${envConfig.BASE.PORT} is already in use`);
