@@ -1,5 +1,20 @@
-import precheckMock from "../mocks/precheck.mock.json";
-import commitMock from "../mocks/commit.mock.json";
+const precheckMock = {
+    "bookingReference": "PRECHECK_12345",
+    "price": 9500,
+    "currency": "INR",
+    "available": true,
+    "cancellationPolicy": "Free cancellation till 24 hours"
+};
+
+const commitMock = {
+    "bookingId": "BOOKING_987654",
+    "status": "CONFIRMED",
+    "hotelName": "Taj Deccan",
+    "checkin": "2025-10-01",
+    "checkout": "2025-10-02",
+    "totalPrice": 9500,
+    "currency": "INR"
+};
 
 export class RateGainMockProvider {
     async precheck(_payload: any) {

@@ -1,17 +1,105 @@
-// import destinationsMock from "../mocks/destinations.mock.json";
+const destinationsMock = {
+    "status": true,
+    "statusCode": 200,
+    "body": [
+        {
+            "destCode": "HYD",
+            "destName": "Hyderabad India",
+            "countryCode": "IN",
+            "countryName": "India"
+        },
+        {
+            "destCode": "BLR",
+            "destName": "Bangalore India",
+            "countryCode": "IN",
+            "countryName": "India"
+        }
+    ]
+};
 
-// export class RateGainMockProvider {
-//     async getDestinations() {
-//         return destinationsMock;
-//     }
-// }
+const hotelsMock = {
+    "status": true,
+    "statusCode": 200,
+    "totalRecord": 2,
+    "body": [
+        {
+            "propertyId": "HOTEL_001",
+            "propertyName": "Taj Deccan",
+            "destinationCode": "HYD",
+            "destinationName": "Hyderabad",
+            "categoryName": "5 Star",
+            "price": 9500,
+            "currency": "INR",
+            "brandCode": "TAJ",
+            "address": "Banjara Hills, Hyderabad"
+        },
+        {
+            "propertyId": "HOTEL_002",
+            "propertyName": "ITC Kohenur",
+            "destinationCode": "HYD",
+            "destinationName": "Hyderabad",
+            "categoryName": "5 Star",
+            "price": 10500,
+            "currency": "INR",
+            "brandCode": "ITC",
+            "address": "HITEC City, Hyderabad"
+        }
+    ]
+};
 
+const productsMock = {
+    "status": true,
+    "statusCode": 200,
+    "body": {
+        "propertyId": "HOTEL_001",
+        "propertyName": "Taj Deccan",
+        "products": [
+            {
+                "roomCode": "DLX",
+                "roomName": "Deluxe Room",
+                "rates": [
+                    {
+                        "rateKey": "RATE_KEY_001",
+                        "rateType": "BOOKABLE",
+                        "totalPrice": 9500,
+                        "currency": "INR",
+                        "boardCode": "RO",
+                        "boardName": "Room Only",
+                        "cancellationPolicies": [
+                            {
+                                "from": "2025-09-28",
+                                "amount": 0
+                            },
+                            {
+                                "from": "2025-09-30",
+                                "amount": 9500
+                            }
+                        ],
+                        "status": "Available"
+                    }
+                ]
+            }
+        ]
+    }
+};
 
-import destinationsMock from "../mocks/destinations.mock.json";
-import hotelsMock from "../mocks/hotels.mock.json";
-import productsMock from "../mocks/products.mock.json";
-import precheckMock from "../mocks/precheck.mock.json";
-import commitMock from "../mocks/commit.mock.json";
+const precheckMock = {
+    "bookingReference": "PRECHECK_12345",
+    "price": 9500,
+    "currency": "INR",
+    "available": true,
+    "cancellationPolicy": "Free cancellation till 24 hours"
+};
+
+const commitMock = {
+    "bookingId": "BOOKING_987654",
+    "status": "CONFIRMED",
+    "hotelName": "Taj Deccan",
+    "checkin": "2025-10-01",
+    "checkout": "2025-10-02",
+    "totalPrice": 9500,
+    "currency": "INR"
+};
 
 export class RateGainMockProvider {
     async getDestinations() {
