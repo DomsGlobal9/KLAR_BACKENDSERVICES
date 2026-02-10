@@ -10,6 +10,20 @@ import authRoutes from "../../../shared/auth/auth.routes";
 
 const router = Router();
 
+router.get("/", (_req, res) => {
+    res.json({
+        message: "Hotel Booking Service API",
+        endpoints: {
+            health: "/health",
+            auth: "/auth (SUB-ROUTES)",
+            precheck: "/precheck (POST)",
+            commit: "/commit (POST)",
+            cancel: "/cancel (POST)",
+            bookings: "/bookings (GET/POST)"
+        }
+    });
+});
+
 router.get("/health", (_req, res) => {
     res.json({ status: "UP", service: "hotel-booking-service" });
 });
