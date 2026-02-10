@@ -5,6 +5,18 @@ import { getProducts } from "../controllers/products.controller";
 
 const router = Router();
 
+router.get("/", (_req, res) => {
+  res.json({
+    message: "Hotel Search Service API",
+    endpoints: {
+      health: "/health",
+      destinations: "/destinations",
+      search: "/hotels/search (POST)",
+      products: "/hotels/:propertyId/products (POST)"
+    }
+  });
+});
+
 router.get("/health", (_req, res) => {
   res.json({
     status: "UP",
