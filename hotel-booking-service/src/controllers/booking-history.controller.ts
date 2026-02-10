@@ -56,7 +56,7 @@ export class BookingHistoryController {
 
             const { id } = req.params;
 
-            const booking = await bookingHistoryService.getBookingById(id, req.user.id);
+            const booking = await bookingHistoryService.getBookingById(id as string, req.user.id);
 
             if (!booking) {
                 res.status(404).json({
@@ -98,7 +98,7 @@ export class BookingHistoryController {
             const { number } = req.params;
 
             const booking = await bookingHistoryService.getBookingByConfirmation(
-                number,
+                number as string,
                 req.user.id
             );
 

@@ -75,7 +75,7 @@ userSchema.virtual('fullName').get(function () {
 });
 
 // Hash password before saving
-userSchema.pre('save', async function (this: IUser, next) {
+userSchema.pre('save', async function (this: IUser, next: any) {
     if (!this.isModified('password')) {
         return next();
     }
