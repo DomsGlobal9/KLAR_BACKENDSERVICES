@@ -19,7 +19,7 @@ class MongooseClient {
             return;
         }
 
-        const mongoUri = uri || process.env.MONGODB_URI || 'mongodb://localhost:27017/klar';
+        const mongoUri = uri || process.env.MONGODB_URI || 'mongodb+srv://domsgloballlp_Klar_Auth:EqPiFeGcACd0BW5y@klar.ynuvafo.mongodb.net/hotel_booking_service?retryWrites=true&w=majority';
 
         try {
             await mongoose.connect(mongoUri, {
