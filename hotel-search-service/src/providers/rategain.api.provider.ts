@@ -4,7 +4,20 @@ import path from "path";
 
 const logFile = path.join(process.cwd(), "debug.log");
 function logToFile(msg: string) {
-    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
+    const formattedMsg = `[${new Date().toISOString()}] ${msg}`;
+
+    // Always log to console in Vercel or if file logging fails
+    if (process.env.VERCEL) {
+        console.log(formattedMsg);
+        return;
+    }
+
+    try {
+        fs.appendFileSync(logFile, `${formattedMsg}\n`);
+    } catch (error) {
+        console.log(formattedMsg);
+        console.error(`[ERROR] Failed to write to log file: ${(error as Error).message}`);
+    }
 }
 
 export class RateGainApiProvider {
