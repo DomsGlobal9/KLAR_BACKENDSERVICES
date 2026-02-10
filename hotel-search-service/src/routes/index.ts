@@ -5,6 +5,9 @@ import { getProducts } from "../controllers/products.controller";
 
 const router = Router();
 
+// Base route returns destinations data as requested
+router.get("/", getDestinations);
+
 router.get("/health", (_req, res) => {
   res.json({
     status: "UP",

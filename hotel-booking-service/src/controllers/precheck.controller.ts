@@ -30,7 +30,8 @@ export const precheckController = async (req: Request, res: Response) => {
         res.status(error.response?.status || 500).json({
             status: false,
             statusCode: error.response?.status || 500,
-            message: error.response?.data?.description || error.response?.data?.message || error.message || "Internal Server Error"
+            description: error.response?.data?.description || error.response?.data?.message || error.message || "Internal Server Error",
+            body: null
         });
     }
 };

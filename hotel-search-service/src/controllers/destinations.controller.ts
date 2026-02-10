@@ -20,7 +20,12 @@ export const getDestinations = async (
     try {
         const data = await destinationsService.getDestinations();
         res.status(200).json(data);
-    } catch (error) {
-        next(error);
+    } catch (error: any) {
+        res.status(error.response?.status || 500).json({
+            status: false,
+            statusCode: error.response?.status || 500,
+            description: error.response?.data?.description || error.response?.data?.message || error.message,
+            body: []
+        });
     }
 };
