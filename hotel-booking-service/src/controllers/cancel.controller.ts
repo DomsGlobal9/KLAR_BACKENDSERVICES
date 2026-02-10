@@ -43,6 +43,6 @@ import { cancelService } from "../services/cancel.service";
  */
 
 export const cancelController = async (req: Request, res: Response) => {
-    const data = await cancelService.cancel(req.body);
+    const data = await cancelService.cancel(req.body, req.user?.id as string);
     res.json(data);
 };
