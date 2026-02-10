@@ -41,6 +41,8 @@ export interface IBooking extends Document {
     walletId?: mongoose.Types.ObjectId;
     paymentId?: string;
     paymentStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+    specialRequests?: string[];
+    remarks?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -187,6 +189,14 @@ const bookingSchema = new Schema<IBooking>(
             type: String,
             enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED'],
             default: 'PENDING'
+        },
+        specialRequests: {
+            type: [String],
+            default: []
+        },
+        remarks: {
+            type: String,
+            default: ''
         }
     },
     {

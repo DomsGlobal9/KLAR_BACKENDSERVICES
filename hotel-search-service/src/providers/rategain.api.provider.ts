@@ -31,15 +31,31 @@ export class RateGainApiProvider {
             checkout: payload.checkout || payload.checkOut,
             CountryCode: payload.CountryCode || payload.countryCode || "US",
             Currency: payload.Currency || payload.currency || "USD",
-            Rooms: (payload.Rooms || payload.rooms || [{}]).map((r: any) => ({
-                NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || r.rooms || 1,
-                adults: r.Adults || r.adults || 2,
-                children: r.Children || r.children || 0,
-                // Add paxes if children > 0
-                ...((r.Children > 0 || r.children > 0 || r.paxes?.length > 0) ? {
-                    paxes: r.paxes || r.childrenAges?.map((age: number) => ({ type: "Child", age })) || [{ type: "Child", age: 5 }]
-                } : {})
-            })),
+            Rooms: (payload.Rooms || payload.rooms || [{}]).map((r: any) => {
+                const adultsCount = r.Adults || r.adults || 2;
+                const childrenCount = r.Children || r.children || 0;
+                const childrenAges = r.childrenAges || [];
+
+                // Always construct paxes to ensure RateGain accepts the request
+                const paxes = r.paxes || [
+                    ...Array(adultsCount).fill({ type: "Adult", age: 30 }), // Default adult age
+                    ...childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
+                ];
+
+                // Ensure child paxes exist if children count > 0 but paxes was empty
+                if (childrenCount > 0 && paxes.filter((p: any) => p.type === 'Child').length === 0) {
+                    for (let i = 0; i < childrenCount; i++) {
+                        paxes.push({ type: "Child", age: 5 });
+                    }
+                }
+
+                return {
+                    NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || r.rooms || 1,
+                    Adults: adultsCount,
+                    Children: childrenCount,
+                    paxes: paxes
+                };
+            }),
             pageNo: payload.pageNo || 1,
             Echotoken: payload.Echotoken || payload.echoToken || `echo-${Date.now()}`
         };

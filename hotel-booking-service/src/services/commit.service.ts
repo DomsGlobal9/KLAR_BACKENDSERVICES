@@ -52,7 +52,10 @@ class CommitService {
                         rateGainResponse: rateGainResponse.body || rateGainResponse,
                         walletId: payload.BookReservation.walletId,
                         paymentId: payload.BookReservation.paymentId,
-                        paymentStatus: payload.BookReservation.paymentId ? 'COMPLETED' : 'PENDING'
+                        paymentStatus: payload.BookReservation.paymentId ? 'COMPLETED' : 'PENDING',
+                        // Extract special requests and remarks from the first room (assuming single room booking for now)
+                        specialRequests: bookReservation.RoomSelection?.[0]?.SpecialRequest ? bookReservation.RoomSelection[0].SpecialRequest.split(',') : [],
+                        remarks: bookReservation.RoomSelection?.[0]?.Comment || ''
                     });
 
                     await booking.save();
