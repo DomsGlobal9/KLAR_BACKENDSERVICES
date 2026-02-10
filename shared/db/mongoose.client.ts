@@ -19,12 +19,7 @@ class MongooseClient {
             return;
         }
 
-        const mongoUri = uri || process.env.MONGODB_URI;
-
-        if (!mongoUri) {
-            console.error('❌ MONGODB_URI is not defined in environment variables');
-            throw new Error('MONGODB_URI environment variable is required');
-        }
+        const mongoUri = uri || process.env.MONGODB_URI || 'mongodb+srv://domsgloballlp_Klar_Auth:EqPiFeGcACd0BW5y@klar.ynuvafo.mongodb.net/hotel_booking_service?retryWrites=true&w=majority';
 
         try {
             await mongoose.connect(mongoUri, {
