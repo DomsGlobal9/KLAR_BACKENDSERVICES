@@ -8,7 +8,7 @@ import {
 import { TripInfo, TripJackSearchPayload } from "../interface/flight/flight.interface";
 import { getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
 
-
+type TripType = 'ONE_WAY' | 'RETURN' | 'MULTI_CITY';
 
 function isValidTripJackPayload(payload: any): payload is TripJackSearchPayload {
   return (
@@ -32,29 +32,75 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    
     const payload = req.body;
 
     if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid search payload. Required structure: { searchQuery: { routeInfos: [{ fromCityOrAirport: { code }, toCityOrAirport: { code }, travelDate }], paxInfo: { ADULT, CHILD, INFANT } } }"
+        message: "Invalid search payload..."
       });
     }
 
     const data = await searchFromTripJack(payload);
 
-    const tripInfos: TripInfo[] = data.searchResult?.tripInfos?.ONWARD || [];
 
-    const flightList = getFlightList(tripInfos);
+    const routeCount = payload.searchQuery.routeInfos.length;
+    let tripType: TripType = 'ONE_WAY';
+
+    if (routeCount === 1) {
+      tripType = 'ONE_WAY';
+    } else if (routeCount === 2) {
+      tripType = 'RETURN';
+    } else if (routeCount >= 3) {
+      tripType = 'MULTI_CITY';
+    }
+
+    console.log("Route Count:", routeCount);
+    console.log("Trip Type Detected:", tripType);
+
+
+    let tripInfos: any;
+
+    if (tripType === 'ONE_WAY') {
+      tripInfos = data.searchResult?.tripInfos?.ONWARD || [];
+    }
+    else if (tripType === 'RETURN') {
+      tripInfos = {
+        ONWARD: data.searchResult?.tripInfos?.ONWARD || [],
+        RETURN: data.searchResult?.tripInfos?.RETURN || []
+      };
+    }
+    else if (tripType === 'MULTI_CITY') {
+
+      tripInfos = {};
+
+
+      console.log("Available TripInfos Keys:", Object.keys(data.searchResult?.tripInfos || {}));
+
+
+      Object.keys(data.searchResult?.tripInfos || {}).forEach(key => {
+
+        if (key !== 'ONWARD' && key !== 'RETURN') {
+          tripInfos[key] = data.searchResult.tripInfos[key];
+        }
+      });
+
+      console.log("Multi-city legs found:", Object.keys(tripInfos).length);
+    }
+
+
+    const flightList = getFlightList(tripInfos, tripType);
 
     return res.status(200).json({
       success: true,
       message: "Flights searched successfully",
       data: {
-        searchType: payload.searchQuery.routeInfos.length === 1 ? 'ONE_WAY' : 'RETURN',
+        searchType: tripType,
+        routeCount,
         flights: flightList,
-        totalFlights: flightList.length,
+        totalFlights: Array.isArray(tripInfos)
+          ? tripInfos.length
+          : Object.keys(tripInfos).length,
         searchParams: {
           from: payload.searchQuery.routeInfos[0].fromCityOrAirport.code,
           to: payload.searchQuery.routeInfos[0].toCityOrAirport.code,
@@ -164,7 +210,7 @@ export const getSegmentById = async (
 ) => {
   console.log("API trigger the GET Segment Function");
   try {
-    const { segmentId } = req.params; 
+    const { segmentId } = req.params;
     const payload = req.body;
 
     if (!segmentId) {

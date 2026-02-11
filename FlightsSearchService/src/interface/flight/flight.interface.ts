@@ -34,11 +34,66 @@ export interface FlightSegment {
   sN: number;
 }
 
-
 export interface FareDetail {
   tai: any;
   fd: {
     ADULT: {
+      fC: {
+        TAF: number;
+        BF: number;
+        TF: number;
+        NF: number;
+        OB?: number;
+      };
+      afC?: {
+        TAF: {
+          MFT?: number;
+          OT?: number;
+          AGST?: number;
+          MF?: number;
+          YR?: number;
+        };
+      };
+      sR: number;
+      bI: {
+        iB: string;
+        cB: string;
+      };
+      rT: number;
+      cc: string;
+      cB: string;
+      fB: string;
+      mI?: boolean;
+    };
+    CHILD?: {  // Add CHILD as optional
+      fC: {
+        TAF: number;
+        BF: number;
+        TF: number;
+        NF: number;
+        OB?: number;
+      };
+      afC?: {
+        TAF: {
+          MFT?: number;
+          OT?: number;
+          AGST?: number;
+          MF?: number;
+          YR?: number;
+        };
+      };
+      sR: number;
+      bI: {
+        iB: string;
+        cB: string;
+      };
+      rT: number;
+      cc: string;
+      cB: string;
+      fB: string;
+      mI?: boolean;
+    };
+    INFANT?: {
       fC: {
         TAF: number;
         BF: number;
@@ -83,6 +138,14 @@ export interface TripInfo {
 export interface TransformedFlight {
   flightId: string;
   segmentId: string;
+
+
+  tripType?: 'ONE_WAY' | 'RETURN' | 'MULTI_CITY';
+  legNumber?: number;
+  legKey?: string;
+  legIndex?: number;
+  isOutbound?: boolean;
+
   airline: {
     code: string;
     name: string;
@@ -98,6 +161,7 @@ export interface TransformedFlight {
     terminal?: string;
     time: string;
     date: string;
+    datetime?: string;
   };
   arrival: {
     airportCode: string;
@@ -107,6 +171,7 @@ export interface TransformedFlight {
     terminal?: string;
     time: string;
     date: string;
+    datetime?: string;
   };
   duration: number;
   stops: number;
@@ -126,6 +191,34 @@ export interface TransformedFlight {
       cabin: string;
     };
     seatAvailability: number;
+    passengerFares?: {
+      adult: {
+        baseFare: number;
+        taxesAndFees: number;
+        totalFare: number;
+        netFare: number;
+      };
+      child?: {
+        baseFare: number;
+        taxesAndFees: number;
+        totalFare: number;
+        netFare: number;
+        baggage?: {
+          checked: string;
+          cabin: string;
+        };
+      };
+      infant?: {
+        baseFare: number;
+        taxesAndFees: number;
+        totalFare: number;
+        netFare: number;
+        baggage?: {
+          checked: string;
+          cabin: string;
+        };
+      };
+    };
     fareBreakdown?: {
       managementFee?: number;
       otherTax?: number;
