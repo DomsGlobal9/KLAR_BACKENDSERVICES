@@ -1,20 +1,21 @@
 import { Router } from "express";
-import { 
-    filterFlightsController, 
-    getFlightByIdController, 
-    getFlightsByAirlineController, 
-    getUniqueFlightsController, 
-    searchFlights 
+import {
+    getAllFlightsWithDetails,
+    getFlightDetails,
+    getSegmentById,
+    getTransformedSegmentById,
+    searchFlights
 } from "../controllers/flightSearchController";
 
 const router = Router();
 
 router.post("/search", searchFlights);
-router.post("/filter", filterFlightsController);
-router.post('/flight/:id', getFlightByIdController); 
-router.post('/flight-by-id', getFlightByIdController); 
-router.post('/unique-flights', getUniqueFlightsController);
-router.post('/airline-flights', getFlightsByAirlineController);
+router.post("/:flightId", getFlightDetails);
+router.post("/all-details", getAllFlightsWithDetails);
+
+router.post("/segment/:segmentId", getSegmentById);
+
+router.post("/segment/transformed/:segmentId", getTransformedSegmentById);
 
 export default router;
 

@@ -1,6 +1,30 @@
 import { Request, Response, NextFunction } from "express";
-import { getFlightById, getFlightsByAirline, getUniqueFlights, searchFromTripJack } from "../services/tripjackService";
-import { filterFlights } from "../utils/flightFilter";
+import { searchFromTripJack } from "../services/tripjackService";
+import {
+  transformFlightsForDisplay,
+  getFlightDetailsById,
+  getFlightList
+} from "../utils/flightTransformer";
+import { TripInfo, TripJackSearchPayload } from "../interface/flight/flight.interface";
+import { getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
+
+
+
+function isValidTripJackPayload(payload: any): payload is TripJackSearchPayload {
+  return (
+    payload &&
+    payload.searchQuery &&
+    Array.isArray(payload.searchQuery.routeInfos) &&
+    payload.searchQuery.routeInfos.length > 0 &&
+    payload.searchQuery.routeInfos.every((route: any) =>
+      route.fromCityOrAirport?.code &&
+      route.toCityOrAirport?.code &&
+      route.travelDate
+    ) &&
+    payload.searchQuery.paxInfo &&
+    typeof payload.searchQuery.paxInfo.ADULT === 'string'
+  );
+}
 
 export const searchFlights = async (
   req: Request,
@@ -8,65 +32,91 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    console.log("The request we got for search controller");
+    console.log("Search flights request received");
     const payload = req.body;
 
-    if (!payload.searchQuery?.routeInfos || payload.searchQuery.routeInfos.length === 0) {
+    if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid search payload: routeInfos is required and cannot be empty"
+        message: "Invalid search payload. Required structure: { searchQuery: { routeInfos: [{ fromCityOrAirport: { code }, toCityOrAirport: { code }, travelDate }], paxInfo: { ADULT, CHILD, INFANT } } }"
       });
     }
 
     const data = await searchFromTripJack(payload);
 
+    const tripInfos: TripInfo[] = data.searchResult?.tripInfos?.ONWARD || [];
+
+    const flightList = getFlightList(tripInfos);
+
     return res.status(200).json({
       success: true,
       message: "Flights searched successfully",
-      data
+      data: {
+        searchType: payload.searchQuery.routeInfos.length === 1 ? 'ONE_WAY' : 'RETURN',
+        flights: flightList,
+        totalFlights: flightList.length,
+        searchParams: {
+          from: payload.searchQuery.routeInfos[0].fromCityOrAirport.code,
+          to: payload.searchQuery.routeInfos[0].toCityOrAirport.code,
+          travelDate: payload.searchQuery.routeInfos[0].travelDate,
+          passengers: payload.searchQuery.paxInfo
+        }
+      }
     });
   } catch (error) {
     next(error);
   }
 };
 
-export const filterFlightsController = async (req: Request, res: Response) => {
+export const getAllFlightsWithDetails = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { searchQuery, filters } = req.body;
+    const payload = req.body;
 
-    if (!searchQuery?.routeInfos || searchQuery.routeInfos.length === 0) {
+    if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid search payload: routeInfos is required and cannot be empty"
+        message: "Invalid search payload. Required structure: { searchQuery: { routeInfos: [{ fromCityOrAirport: { code }, toCityOrAirport: { code }, travelDate }], paxInfo: { ADULT, CHILD, INFANT } } }"
       });
     }
 
-    const flightsData = await searchFromTripJack({
-      searchQuery: searchQuery,
-      filters: filters
-    });
+    const data = await searchFromTripJack(payload);
+    const tripInfos: TripInfo[] = data.searchResult?.tripInfos?.ONWARD || [];
 
-    const filteredFlights = filterFlights(flightsData, filters);
+    const allFlights = transformFlightsForDisplay(tripInfos);
 
     return res.status(200).json({
       success: true,
-      message: "Flights filtered successfully",
-      data: filteredFlights,
-      count: filteredFlights.length
+      message: "All flights retrieved successfully",
+      data: {
+        searchType: payload.searchQuery.routeInfos.length === 1 ? 'ONE_WAY' : 'RETURN',
+        count: allFlights.length,
+        flights: allFlights,
+        searchParams: {
+          from: payload.searchQuery.routeInfos[0].fromCityOrAirport.code,
+          to: payload.searchQuery.routeInfos[0].toCityOrAirport.code,
+          travelDate: payload.searchQuery.routeInfos[0].travelDate,
+          passengers: payload.searchQuery.paxInfo,
+          cabinClass: payload.searchQuery.cabinClass
+        }
+      }
     });
   } catch (error) {
-    console.error("Flight filter error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to filter flights",
-      error: error instanceof Error ? error.message : "Unknown error"
-    });
+    next(error);
   }
 };
 
-export const getFlightByIdController = async (req: Request, res: Response) => {
+export const getFlightDetails = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { searchPayload, flightId } = req.body;
+    const { flightId } = req.params;
+    const payload = req.body;
 
     if (!flightId) {
       return res.status(400).json({
@@ -75,89 +125,122 @@ export const getFlightByIdController = async (req: Request, res: Response) => {
       });
     }
 
-
-    const flightsData = await searchFromTripJack(searchPayload);
-
-
-    const flight = getFlightById(flightsData.data, flightId);
-
-    if (!flight) {
-      return res.status(404).json({
-        success: false,
-        message: "Flight not found"
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Flight retrieved successfully",
-      data: flight
-    });
-  } catch (error) {
-    console.error("Get flight by ID error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get flight",
-      error: error instanceof Error ? error.message : "Unknown error"
-    });
-  }
-};
-
-export const getUniqueFlightsController = async (req: Request, res: Response) => {
-  try {
-    const searchPayload = req.body;
-
-
-    const flightsData = await searchFromTripJack(searchPayload);
-
-
-    const uniqueFlights = getUniqueFlights(flightsData.data);
-
-    return res.status(200).json({
-      success: true,
-      message: "Unique flights retrieved successfully",
-      data: uniqueFlights,
-      count: uniqueFlights.length
-    });
-  } catch (error) {
-    console.error("Get unique flights error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get unique flights",
-      error: error instanceof Error ? error.message : "Unknown error"
-    });
-  }
-};
-
-export const getFlightsByAirlineController = async (req: Request, res: Response) => {
-  try {
-    const { searchPayload, airlineCode } = req.body;
-
-    if (!airlineCode) {
+    if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
         success: false,
-        message: "Airline code is required"
+        message: "Original search payload is required. Please provide the same search parameters used for initial search."
       });
     }
 
+    const data = await searchFromTripJack(payload);
+    const tripInfos: TripInfo[] = data.searchResult?.tripInfos?.ONWARD || [];
 
-    const flightsData = await searchFromTripJack(searchPayload);
+    const flightDetails = getFlightDetailsById(tripInfos, flightId);
 
-
-    const airlineFlights = getFlightsByAirline(flightsData.data, airlineCode);
+    if (!flightDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Flight not found. The flight ID may be invalid or the search results may have expired."
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Airline flights retrieved successfully",
-      data: airlineFlights,
-      count: airlineFlights.length
+      message: "Flight details retrieved successfully",
+      data: flightDetails
     });
   } catch (error) {
-    console.error("Get airline flights error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get airline flights",
-      error: error instanceof Error ? error.message : "Unknown error"
+    next(error);
+  }
+};
+
+/**
+ * Get flight segment by ID (returns raw TripJack structure)
+ */
+export const getSegmentById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  console.log("API trigger the GET Segment Function");
+  try {
+    const { segmentId } = req.params; 
+    const payload = req.body;
+
+    if (!segmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Segment ID is required"
+      });
+    }
+
+    if (!isValidTripJackPayload(payload)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid search payload is required"
+      });
+    }
+
+    const segmentData = await getFlightSegmentById(payload, segmentId);
+
+    if (!segmentData) {
+      return res.status(404).json({
+        success: false,
+        message: "Flight segment not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Flight segment retrieved successfully",
+      data: segmentData
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get transformed flight segment by ID (returns clean, structured data)
+ */
+export const getTransformedSegmentById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { segmentId } = req.params;
+    const payload = req.body;
+
+    if (!segmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Segment ID is required"
+      });
+    }
+
+    if (!isValidTripJackPayload(payload)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid search payload is required"
+      });
+    }
+
+    const transformedData = await getTransformedFlightSegment(payload, segmentId);
+
+    if (!transformedData) {
+      return res.status(404).json({
+        success: false,
+        message: "Flight segment not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Flight segment retrieved successfully",
+      data: transformedData
+    });
+  } catch (error) {
+    next(error);
   }
 };

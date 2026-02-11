@@ -16,15 +16,16 @@ app.use(helmet()); // used to set security headers
 app.use(compression()); // used to compress the response
 app.use(express.json()); // used to parse the request body
 
-
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-app.get("/", (req, res) => {
+app.get("/check", (req, res) => {
     res.status(200).json({
         success: true,
         message: "Welcome to Flights Search Service API"
     });
 });
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+
 
 app.use("/api", apiRoutes);
 
