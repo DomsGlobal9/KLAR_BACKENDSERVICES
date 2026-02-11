@@ -82,7 +82,7 @@ export interface TripInfo {
 
 export interface TransformedFlight {
   flightId: string;
-  segmentId: string; 
+  segmentId: string;
   airline: {
     code: string;
     name: string;
@@ -168,3 +168,73 @@ export interface SegmentResponse {
   tripInfo: TripInfo;
 }
 
+export interface FareRuleRequest {
+  id: string;
+  flowType: 'REVIEW' | 'SEARCH';
+}
+
+export interface FareRuleResponse {
+  fareRule: {
+    [routeKey: string]: {
+      miscInfo?: string[];
+      fareRuleInfo?: any;
+      tfr?: {
+        NO_SHOW?: FareRuleDetail[];
+        DATECHANGE?: FareRuleDetail[];
+        CANCELLATION?: FareRuleDetail[];
+        SEAT_CHARGEABLE?: FareRuleDetail[];
+        BAGGAGE_CHARGES?: FareRuleDetail[];
+        // Could have other rule types
+      };
+    };
+  };
+  status: {
+    success: boolean;
+    httpStatus: number;
+  };
+}
+
+export interface FareRuleDetail {
+  amount?: number;
+  additionalFee?: number;
+  policyInfo: string;
+  st?: string;
+  et?: string;
+  pp?: 'BEFORE_DEPARTURE' | 'AFTER_DEPARTURE';
+  fcs?: {
+    ARFT?: number;
+    CRF?: number;
+    ARF?: number;
+    CRFT?: number;
+    ACF?: number;
+    CCFT?: number;
+    CCF?: number;
+    ACFT?: number;
+  };
+}
+
+export interface TransformedFareRule {
+  routeKey: string;
+  flowType: 'REVIEW' | 'SEARCH';
+  structuredRules?: {
+    cancellation?: {
+      beforeDeparture?: FareRuleDetail;
+      afterDeparture?: FareRuleDetail;
+      timeWindows?: FareRuleDetail[];
+    };
+    dateChange?: {
+      beforeDeparture?: FareRuleDetail;
+      afterDeparture?: FareRuleDetail;
+      timeWindows?: FareRuleDetail[];
+    };
+    noShow?: {
+      beforeDeparture?: FareRuleDetail;
+      afterDeparture?: FareRuleDetail;
+      timeWindows?: FareRuleDetail[];
+    };
+    seatCharges?: FareRuleDetail[];
+    baggageCharges?: FareRuleDetail[];
+  };
+  rawText?: string;
+  rawRtf?: string;
+}
