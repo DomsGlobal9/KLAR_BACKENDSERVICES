@@ -16,6 +16,12 @@ export interface B2BSignupInput {
     businessEmail: string;
     businessMobile: string;
     password: string;
+
+    gstNumber?: string;
+    panNumber?: string;
+    address: string;
+    city: string;
+    country: string;
 }
 
 export interface LoginInput {
@@ -28,11 +34,16 @@ export interface AuthResponse {
     user: {
         id: string;
         email: string;
-        token: string;
+        token?: string;
         roles: string[];
         clientType: ClientType;
+        status: UserStatus;
+        verificationStatus: VerificationStatus;
+        blockReason?: string;
+        pendingReason?: string;
+        rejectedReason?: string;
     };
-    token: string;
+    token?: string;
 }
 
 export interface SignupResponse {
@@ -122,6 +133,11 @@ export class AuthService {
                 contactPerson,
                 businessEmail,
                 businessMobile,
+                gstNumber: data.gstNumber,
+                panNumber: data.panNumber,
+                address: data.address,
+                city: data.city,
+                country: data.country,
             },
 
             verification: {
@@ -179,14 +195,26 @@ export class AuthService {
         }
 
         /**
-         * Enforce ACTIVE status
+         * Return user info for non-ACTIVE statuses without throwing error
          */
         if (user.status !== UserStatus.ACTIVE) {
-            throw new UnauthorizedError(`Login not allowed. Current status: ${user.status}`);
+            return {
+                user: {
+                    id: user._id.toString(),
+                    email: user.email,
+                    roles: user.roles,
+                    clientType: user.clientType,
+                    status: user.status,
+                    verificationStatus: user.verification.status,
+                    blockReason: user.blockReason,
+                    pendingReason: user.pendingReason,
+                    rejectedReason: user.rejectedReason,
+                },
+            };
         }
 
         /**
-         * Generate JWT token
+         * Generate JWT token for ACTIVE users
          */
         const tokenPayload: TokenPayload = {
             userId: user._id.toString(),
@@ -205,6 +233,8 @@ export class AuthService {
                 token: token,
                 roles: user.roles,
                 clientType: user.clientType,
+                status: user.status,
+                verificationStatus: user.verification.status,
             },
         };
     }
@@ -240,11 +270,14 @@ export class AuthService {
                 token: newAccessToken,
                 roles: user.roles,
                 clientType: user.clientType,
+                status: user.status,
+                verificationStatus: user.verification.status,
+
             },
         };
     }
 
-    public async getCurrentUser(userId: string): Promise<{ id: string; email: string; roles: string[]; clientType: ClientType }> {
+    public async getCurrentUser(userId: string): Promise<any> {
         const user = await UserModel.findById(userId);
         if (!user) {
             throw new UnauthorizedError('User not found');
@@ -255,6 +288,8 @@ export class AuthService {
             email: user.email,
             roles: user.roles,
             clientType: user.clientType,
+            status: user.status,
+            verificationStatus: user.verification?.status,
         };
     }
 }

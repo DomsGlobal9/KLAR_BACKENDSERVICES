@@ -5,11 +5,11 @@ import { authenticateJWT as authMiddleware } from "../middlewares/auth.middlewar
 const router = Router();
 
 // Wallet Routes - All require authentication
-router.get("/b2b/wallet", authMiddleware, WalletController.getWallet);
-router.post("/b2b/wallet/credit", authMiddleware, WalletController.creditWallet);
-router.post("/b2b/wallet/debit", authMiddleware, WalletController.debitWallet);
-router.get("/b2b/wallet/transactions", authMiddleware, WalletController.getTransactions);
-router.patch("/b2b/wallet/settings", authMiddleware, WalletController.updateSettings);
+router.get("/", authMiddleware, WalletController.getWallet);
+router.post("/credit", authMiddleware, WalletController.creditWallet);
+router.post("/debit", authMiddleware, WalletController.debitWallet);
+router.get("/transactions", authMiddleware, WalletController.getTransactions);
+router.patch("/settings", authMiddleware, WalletController.updateSettings);
 
 export default router;
 

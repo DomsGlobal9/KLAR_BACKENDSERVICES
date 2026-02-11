@@ -7,8 +7,8 @@ import {
 
 const router = Router();
 
-router.get("/admin/verifications/pending", getPendingVerifications);
-router.post("/admin/verifications/:userId/approve", approveVerification);
-router.post("/admin/verifications/:userId/reject", rejectVerification);
+router.get("/pending", getPendingVerifications);
+router.post("/:userId/approve", approveVerification);
+router.post("/:userId/reject", rejectVerification);
 
 export default router;
