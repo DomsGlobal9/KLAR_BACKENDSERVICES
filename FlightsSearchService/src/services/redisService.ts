@@ -50,8 +50,10 @@ client.on("ready", () => {
  * Get value from cache
  */
 export const getCache = async (key: string): Promise<string | null> => {
+  console.log("Cached serice got called to get cached");
   try {
     if (!isRedisConnected) return null;
+    console.log("Cache getting returned here..................");
     return await client.get(key);
   } catch (error) {
     console.error("Redis GET error:", error);

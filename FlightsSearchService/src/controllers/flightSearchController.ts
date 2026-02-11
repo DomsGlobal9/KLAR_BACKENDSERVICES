@@ -32,7 +32,7 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    console.log("Search flights request received");
+    
     const payload = req.body;
 
     if (!isValidTripJackPayload(payload)) {

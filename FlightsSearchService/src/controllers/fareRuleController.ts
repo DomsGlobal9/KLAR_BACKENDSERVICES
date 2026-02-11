@@ -16,6 +16,7 @@ export const getFareRulesById = async (
     res: Response,
     next: NextFunction
 ) => {
+    console.log("API trigger to run GET fare rules");
     try {
         const { id, flowType = 'SEARCH' } = req.body;
 
@@ -39,7 +40,12 @@ export const getFareRulesById = async (
         };
 
 
+        console.log("Trying to get fare rule from controller ...........");
         const fareRuleResponse = await getFareRules(fareRuleRequest);
+
+        console.log("THe fare rule details we get", fareRuleResponse);
+
+        
 
         if (!fareRuleResponse.status.success) {
             return res.status(fareRuleResponse.status.httpStatus || 500).json({

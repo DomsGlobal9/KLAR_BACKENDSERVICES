@@ -15,12 +15,7 @@ export async function getFlightSegmentById(
     try {
         const data = await searchFromTripJack(payload);
 
-        console.log("&&&&&&&&&&&&&&&&\nThe flight data we get", data);
-
         const tripInfos: TripInfo[] = data.searchResult?.tripInfos?.ONWARD || [];
-
-        console.log("@@@@@@@@@@@@@@@@@@@@\nThe trip info data we got", JSON.stringify(tripInfos, null, 2));
-
 
         for (const tripInfo of tripInfos) {
             const segment = tripInfo.sI.find(s => s.id === segmentId);
@@ -40,7 +35,7 @@ export async function getFlightSegmentById(
             }
         }
 
-        return null; // Segment not found
+        return null; 
     } catch (error) {
         console.error("Error fetching flight segment:", error);
         throw error;

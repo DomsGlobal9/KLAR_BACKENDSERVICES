@@ -31,7 +31,7 @@ export const envConfig = {
 
   BASE: {
     PORT: getEnvNumber("PORT", 5001),
-    BASE_URL: getEnv("BASE_URL", false) || "http://localhost:5001/",
+    BASE_URL: getEnv("BASE_URL", false) || "http://localhost:5397",
   },
 
   DATABASE: {
@@ -43,13 +43,13 @@ export const envConfig = {
     BASE_URL: getEnv("TRIPJACK_BASE_URL"),
     API_KEY: getEnv("TRIPJACK_API_KEY"),
     AGENCY_ID: getEnv("TRIPJACK_AGENCY_ID"),
-    TOKEN: getEnv("TRIPJACK_TOKEN", false),
+    TOKEN: getEnv("TRIPJACK_API_KEY", false),
     TIMEOUT: getEnvNumber("TRIPJACK_TIMEOUT", 20000),
     CACHE_TTL: getEnvNumber("TRIPJACK_CACHE_TTL", 300),
     
     // TripJack Endpoints
     ENDPOINTS: {
-      AIR_SEARCH_ALL: "/fms/v2/air-search-all",
+      AIR_SEARCH_ALL: "/fms/v1/air-search-all",
       FARE_RULE: "/fms/v2/farerule",
       REVIEW: "/fms/v2/review",
       REVALIDATE: "/fms/v2/revalidate",
@@ -65,7 +65,7 @@ export const envConfig = {
 
   REDIS: {
     URL: getEnv("REDIS_URL"),
-    CACHE_TTL: getEnvNumber("TRIPJACK_CACHE_TTL", 300), // Use same TTL
+    CACHE_TTL: getEnvNumber("TRIPJACK_CACHE_TTL", 300),
   },
 };
 
@@ -75,7 +75,6 @@ export const envConfig = {
 export function getTripJackEndpoint(endpointKey: keyof typeof envConfig.TRIPJACK.ENDPOINTS): string {
   const endpoint = envConfig.TRIPJACK.ENDPOINTS[endpointKey];
   
-  // Check if there's a direct URL for this endpoint
   const directUrlMap: Record<string, string | null> = {
     REVIEW: envConfig.TRIPJACK.REVIEW_URL,
     REVALIDATE: envConfig.TRIPJACK.REVALIDATE_URL,
@@ -86,7 +85,6 @@ export function getTripJackEndpoint(endpointKey: keyof typeof envConfig.TRIPJACK
     return directUrl;
   }
   
-  // Otherwise combine base URL with endpoint path
   return `${envConfig.TRIPJACK.BASE_URL}${endpoint}`;
 }
 

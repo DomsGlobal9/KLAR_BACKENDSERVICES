@@ -235,6 +235,14 @@ export interface TransformedFareRule {
     seatCharges?: FareRuleDetail[];
     baggageCharges?: FareRuleDetail[];
   };
+  extractedRules?: {
+    hasCancellation: boolean;
+    hasDateChange: boolean;
+    isRefundable: boolean;
+    hasNoShow: boolean;
+    cancellationFee: number | null;
+    dateChangeFee: number | null;
+  };
   rawText?: string;
   rawRtf?: string;
 }
