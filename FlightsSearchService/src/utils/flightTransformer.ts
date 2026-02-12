@@ -310,228 +310,264 @@ export function getFlightDetailsById(
 export function getFlightList(
     tripInfos: Record<string, TripInfo[]> | TripInfo[],
     tripType: TripType = 'ONE_WAY'
-): any[] {
-
+) {
     console.log("getFlightList - Trip Type:", tripType);
     console.log("getFlightList - tripInfos type:", Array.isArray(tripInfos) ? 'array' : 'object');
 
-    const transformedFlights = transformFlightsForDisplay(tripInfos, tripType);
-    console.log(`Transformed ${transformedFlights.length} flights for ${tripType}`);
+    if (tripType === 'ONE_WAY' && Array.isArray(tripInfos)) {
+        const flights: TransformedFlight[] = [];
 
-    if (tripType === 'ONE_WAY') {
-        return transformedFlights.map(flight => ({
-            flightId: flight.flightId,
-            segmentId: flight.segmentId,
-            airline: {
-                code: flight.airline.code,
-                name: flight.airline.name,
-            },
-            flightNumber: flight.flightNumber,
-            departure: {
-                airportCode: flight.departure.airportCode,
-                time: flight.departure.time,
-            },
-            arrival: {
-                airportCode: flight.arrival.airportCode,
-                time: flight.arrival.time,
-            },
-            duration: flight.duration,
-            stops: flight.stops,
-            lowestFare: Math.min(...flight.fareOptions.map(f => f.netFare)),
-            fareOptionsCount: flight.fareOptions.length,
-        }));
+        tripInfos.forEach((tripInfo, index) => {
+            const segments = tripInfo.sI || [];
+            const totalStops = segments.length - 1;
+            const firstSegment = segments[0];
+            const lastSegment = segments[segments.length - 1];
+            const totalDuration = segments.reduce((sum, seg) => sum + (seg.duration || 0), 0);
+            const isInternational = segments.some(seg => seg.iand === true);
+            const isRedEye = segments.some(seg => seg.isRs === true);
+
+            flights.push({
+                flightId: `FLIGHT_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                segmentId: segments.map(s => s.id).join(','),
+                airline: {
+                    code: firstSegment?.fD?.aI?.code || '',
+                    name: firstSegment?.fD?.aI?.name || '',
+                    isLcc: firstSegment?.fD?.aI?.isLcc || false,
+                },
+                flightNumber: segments.map(s => s.fD?.fN).join(', '),
+                aircraftType: segments.map(s => s.fD?.eT).join(', '),
+                departure: {
+                    airportCode: firstSegment?.da?.code || '',
+                    airportName: firstSegment?.da?.name || '',
+                    cityCode: firstSegment?.da?.cityCode || '',
+                    city: firstSegment?.da?.city || '',
+                    terminal: firstSegment?.da?.terminal,
+                    time: firstSegment?.dt || '',
+                    date: firstSegment?.dt || '',
+                    datetime: firstSegment?.dt,
+                },
+                arrival: {
+                    airportCode: lastSegment?.aa?.code || '',
+                    airportName: lastSegment?.aa?.name || '',
+                    cityCode: lastSegment?.aa?.cityCode || '',
+                    city: lastSegment?.aa?.city || '',
+                    terminal: lastSegment?.aa?.terminal,
+                    time: lastSegment?.at || '',
+                    date: lastSegment?.at || '',
+                    datetime: lastSegment?.at,
+                },
+                duration: totalDuration,
+                stops: totalStops,
+                fareOptions: (tripInfo.totalPriceList || []).map(fare => {
+                    const adultFare = fare.fd?.ADULT;
+                    return {
+                        id: fare.id,
+                        fareIdentifier: fare.fareIdentifier,
+                        cabinClass: adultFare?.cc || 'ECONOMY',
+                        bookingClass: adultFare?.cB || '',
+                        fareBasis: adultFare?.fB || '',
+                        baseFare: adultFare?.fC?.BF || 0,
+                        taxesAndFees: adultFare?.fC?.TAF || 0,
+                        totalFare: adultFare?.fC?.TF || 0,
+                        netFare: adultFare?.fC?.NF || 0,
+                        refundable: adultFare?.rT === 1,
+                        baggage: {
+                            checked: adultFare?.bI?.iB || 'Not Specified',
+                            cabin: adultFare?.bI?.cB || 'Not Specified',
+                        },
+                        seatAvailability: adultFare?.sR || 0,
+                        isCorporateFare: fare.icca || false,
+                    };
+                }),
+                isInternational,
+                isRedEye,
+                isOutbound: true, // For ONE_WAY, all flights are outbound
+            });
+        });
+
+        console.log(`Transformed ${flights.length} ONE_WAY flights`);
+        return flights;
     }
-    else if (tripType === 'RETURN') {
-        
-        const outboundFlights = transformedFlights.filter(f => f.isOutbound === true);
-        const returnFlights = transformedFlights.filter(f => f.isOutbound === false);
 
-        console.log(`Outbound flights: ${outboundFlights.length}, Return flights: ${returnFlights.length}`);
+    if (tripType === 'RETURN' && !Array.isArray(tripInfos)) {
+        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || [], true);
+        const returnFlights = transformFlightSegments(tripInfos.RETURN || [], false);
 
-        
-        if (outboundFlights.length === 0 || returnFlights.length === 0) {
+        console.log(`ONWARD flights: ${onwardFlights.length}, RETURN flights: ${returnFlights.length}`);
+
+        if (onwardFlights.length === 0 || returnFlights.length === 0) {
             return [];
         }
 
-        
         const combinations = [];
 
-        for (const outbound of outboundFlights) {
-        
-            const outboundLowestFare = Math.min(...outbound.fareOptions.map(f => f.netFare));
-
-            
-            const outboundBestFare = outbound.fareOptions.reduce((prev, current) =>
+        for (const onward of onwardFlights) {
+            const onwardLowestFare = Math.min(...onward.fareOptions.map(f => f.netFare));
+            const onwardBestFare = onward.fareOptions.reduce((prev, current) =>
                 prev.netFare < current.netFare ? prev : current
             );
 
             for (const returnFlight of returnFlights) {
                 const returnLowestFare = Math.min(...returnFlight.fareOptions.map(f => f.netFare));
-
                 const returnBestFare = returnFlight.fareOptions.reduce((prev, current) =>
                     prev.netFare < current.netFare ? prev : current
                 );
 
-                
-                const totalFare = outboundLowestFare + returnLowestFare;
-
                 combinations.push({
-                    combinationId: `${outbound.flightId}_${returnFlight.flightId}`,
-                    totalFare,
+                    combinationId: `${onward.flightId}_${returnFlight.flightId}`,
+                    totalFare: onwardLowestFare + returnLowestFare,
                     currency: 'INR',
-
-                    outbound: {
-                        flightId: outbound.flightId,
-                        segmentId: outbound.segmentId,
-                        airline: {
-                            code: outbound.airline.code,
-                            name: outbound.airline.name,
-                            isLcc: outbound.airline.isLcc,
+                    onward: {
+                        flightId: onward.flightId,
+                        segmentId: onward.segmentId,
+                        airline: onward.airline,
+                        flightNumber: onward.flightNumber,
+                        aircraftType: onward.aircraftType,
+                        departure: onward.departure,
+                        arrival: onward.arrival,
+                        duration: onward.duration,
+                        stops: onward.stops,
+                        lowestFare: onwardLowestFare,
+                        bestFare: {
+                            ...onwardBestFare,
+                            fareId: onwardBestFare.id,
                         },
-                        flightNumber: outbound.flightNumber,
-                        aircraftType: outbound.aircraftType,
-                        departure: {
-                            airportCode: outbound.departure.airportCode,
-                            airportName: outbound.departure.airportName,
-                            cityCode: outbound.departure.cityCode,
-                            city: outbound.departure.city,
-                            terminal: outbound.departure.terminal,
-                            time: outbound.departure.time,
-                            date: outbound.departure.date,
-                        },
-                        arrival: {
-                            airportCode: outbound.arrival.airportCode,
-                            airportName: outbound.arrival.airportName,
-                            cityCode: outbound.arrival.cityCode,
-                            city: outbound.arrival.city,
-                            terminal: outbound.arrival.terminal,
-                            time: outbound.arrival.time,
-                            date: outbound.arrival.date,
-                        },
-                        duration: outbound.duration,
-                        stops: outbound.stops,
-                        lowestFare: outboundLowestFare,
-                        bestFare: outboundBestFare,
-                        fareOptions: outbound.fareOptions,
-                        fareOptionsCount: outbound.fareOptions.length,
+                        fareOptions: onward.fareOptions,
+                        fareOptionsCount: onward.fareOptions.length,
                     },
-
                     return: {
                         flightId: returnFlight.flightId,
                         segmentId: returnFlight.segmentId,
-                        airline: {
-                            code: returnFlight.airline.code,
-                            name: returnFlight.airline.name,
-                            isLcc: returnFlight.airline.isLcc,
-                        },
+                        airline: returnFlight.airline,
                         flightNumber: returnFlight.flightNumber,
                         aircraftType: returnFlight.aircraftType,
-                        departure: {
-                            airportCode: returnFlight.departure.airportCode,
-                            airportName: returnFlight.departure.airportName,
-                            cityCode: returnFlight.departure.cityCode,
-                            city: returnFlight.departure.city,
-                            terminal: returnFlight.departure.terminal,
-                            time: returnFlight.departure.time,
-                            date: returnFlight.departure.date,
-                        },
-                        arrival: {
-                            airportCode: returnFlight.arrival.airportCode,
-                            airportName: returnFlight.arrival.airportName,
-                            cityCode: returnFlight.arrival.cityCode,
-                            city: returnFlight.arrival.city,
-                            terminal: returnFlight.arrival.terminal,
-                            time: returnFlight.arrival.time,
-                            date: returnFlight.arrival.date,
-                        },
+                        departure: returnFlight.departure,
+                        arrival: returnFlight.arrival,
                         duration: returnFlight.duration,
                         stops: returnFlight.stops,
                         lowestFare: returnLowestFare,
-                        bestFare: returnBestFare,
+                        bestFare: {
+                            ...returnBestFare,
+                            fareId: returnBestFare.id,
+                        },
                         fareOptions: returnFlight.fareOptions,
                         fareOptionsCount: returnFlight.fareOptions.length,
                     },
-
-
-                    passengers: {
-                        adult: outboundBestFare.passengerFares?.adult || null,
-                        child: outboundBestFare.passengerFares?.child || null,
-                        infant: outboundBestFare.passengerFares?.infant || null,
-                    },
-
                     fareBreakdown: {
-                        baseFare: outboundBestFare.baseFare + returnBestFare.baseFare,
-                        taxesAndFees: outboundBestFare.taxesAndFees + returnBestFare.taxesAndFees,
-                        totalFare: totalFare,
+                        baseFare: onwardBestFare.baseFare + returnBestFare.baseFare,
+                        taxesAndFees: onwardBestFare.taxesAndFees + returnBestFare.taxesAndFees,
+                        totalFare: onwardLowestFare + returnLowestFare,
                     },
-
                     baggage: {
-                        outbound: outboundBestFare.baggage,
+                        onward: onwardBestFare.baggage,
                         return: returnBestFare.baggage,
                     },
-
-                    isRefundable: outboundBestFare.refundable && returnBestFare.refundable,
+                    isRefundable: onwardBestFare.refundable && returnBestFare.refundable,
                 });
             }
         }
 
         const sortedCombinations = combinations.sort((a, b) => a.totalFare - b.totalFare);
-
-        console.log(`Generated ${sortedCombinations.length} return flight combinations`);
-
+        console.log(`Generated ${sortedCombinations.length} RETURN flight combinations`);
         return sortedCombinations;
     }
 
-    else {
-        const legs: Record<number, any[]> = {};
+    if (tripType === 'MULTI_CITY' && !Array.isArray(tripInfos)) {
+        const legs: Record<string, any[]> = {};
 
-        transformedFlights.forEach(flight => {
-            const legNum = flight.legNumber || 1;
-            if (!legs[legNum]) {
-                legs[legNum] = [];
+        Object.keys(tripInfos).forEach((key, legIndex) => {
+            if (key !== 'ONWARD' && key !== 'RETURN') {
+                const legFlights = transformFlightSegments(tripInfos[key], true, legIndex);
+                legs[key] = legFlights;
             }
-
-            legs[legNum].push({
-                flightId: flight.flightId,
-                segmentId: flight.segmentId,
-                legNumber: flight.legNumber,
-                legIndex: flight.legIndex,
-                airline: {
-                    code: flight.airline.code,
-                    name: flight.airline.name,
-                },
-                flightNumber: flight.flightNumber,
-                departure: {
-                    airportCode: flight.departure.airportCode,
-                    airportName: flight.departure.airportName,
-                    time: flight.departure.time,
-                    date: flight.departure.date,
-                },
-                arrival: {
-                    airportCode: flight.arrival.airportCode,
-                    airportName: flight.arrival.airportName,
-                    time: flight.arrival.time,
-                    date: flight.arrival.date,
-                },
-                duration: flight.duration,
-                stops: flight.stops,
-                lowestFare: Math.min(...flight.fareOptions.map(f => f.netFare)),
-                fareOptions: flight.fareOptions,
-                fareOptionsCount: flight.fareOptions.length,
-            });
         });
 
-        // Convert to array of legs
-        const result = Object.keys(legs)
-            .sort((a, b) => parseInt(a) - parseInt(b))
-            .map(legNum => ({
-                legNumber: parseInt(legNum),
-                flights: legs[parseInt(legNum)]
-            }));
-
-        console.log("Multi-city legs result:", result.length);
-        return result;
+        return legs;
     }
+
+    return [];
+}
+
+// Helper function to transform flight segments
+function transformFlightSegments(
+    tripInfoArray: TripInfo[],
+    isOutbound: boolean,
+    legNumber: number = 0
+): TransformedFlight[] {
+    const flights: TransformedFlight[] = [];
+
+    tripInfoArray.forEach((tripInfo, index) => {
+        const segments = tripInfo.sI || [];
+        const totalStops = segments.length - 1;
+        const firstSegment = segments[0];
+        const lastSegment = segments[segments.length - 1];
+        const totalDuration = segments.reduce((sum, seg) => sum + (seg.duration || 0), 0);
+        const isInternational = segments.some(seg => seg.iand === true);
+        const isRedEye = segments.some(seg => seg.isRs === true);
+
+        flights.push({
+            flightId: `FLIGHT_${isOutbound ? 'OUT' : 'RET'}_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            segmentId: segments.map(s => s.id).join(','),
+            airline: {
+                code: firstSegment?.fD?.aI?.code || '',
+                name: firstSegment?.fD?.aI?.name || '',
+                isLcc: firstSegment?.fD?.aI?.isLcc || false,
+            },
+            flightNumber: segments.map(s => s.fD?.fN).join(', '),
+            aircraftType: segments.map(s => s.fD?.eT).join(', '),
+            departure: {
+                airportCode: firstSegment?.da?.code || '',
+                airportName: firstSegment?.da?.name || '',
+                cityCode: firstSegment?.da?.cityCode || '',
+                city: firstSegment?.da?.city || '',
+                terminal: firstSegment?.da?.terminal,
+                time: firstSegment?.dt || '',
+                date: firstSegment?.dt || '',
+                datetime: firstSegment?.dt,
+            },
+            arrival: {
+                airportCode: lastSegment?.aa?.code || '',
+                airportName: lastSegment?.aa?.name || '',
+                cityCode: lastSegment?.aa?.cityCode || '',
+                city: lastSegment?.aa?.city || '',
+                terminal: lastSegment?.aa?.terminal,
+                time: lastSegment?.at || '',
+                date: lastSegment?.at || '',
+                datetime: lastSegment?.at,
+            },
+            duration: totalDuration,
+            stops: totalStops,
+            fareOptions: (tripInfo.totalPriceList || []).map(fare => {
+                const adultFare = fare.fd?.ADULT;
+                return {
+                    id: fare.id,
+                    fareIdentifier: fare.fareIdentifier,
+                    cabinClass: adultFare?.cc || 'ECONOMY',
+                    bookingClass: adultFare?.cB || '',
+                    fareBasis: adultFare?.fB || '',
+                    baseFare: adultFare?.fC?.BF || 0,
+                    taxesAndFees: adultFare?.fC?.TAF || 0,
+                    totalFare: adultFare?.fC?.TF || 0,
+                    netFare: adultFare?.fC?.NF || 0,
+                    refundable: adultFare?.rT === 1,
+                    baggage: {
+                        checked: adultFare?.bI?.iB || 'Not Specified',
+                        cabin: adultFare?.bI?.cB || 'Not Specified',
+                    },
+                    seatAvailability: adultFare?.sR || 0,
+                    isCorporateFare: fare.icca || false,
+                };
+            }),
+            isInternational,
+            isRedEye,
+            isOutbound,
+            legNumber,
+            legKey: isOutbound ? 'ONWARD' : 'RETURN',
+            legIndex: index,
+        });
+    });
+
+    return flights;
 }
 
 export function getFlightBySegmentId(
