@@ -55,7 +55,9 @@ export class RateGainApiProvider {
                 DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
                 ReservationDate: booking.ReservationDate || now,
                 EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-                TimeStamp: booking.TimeStamp || now
+                TimeStamp: booking.TimeStamp || now,
+                SellingRate: booking.SellingRate,     // Added for v1.5.3 B2C
+                Commission: booking.Commission        // Added for v1.5.3 B2C
             }
         };
 
@@ -76,6 +78,7 @@ export class RateGainApiProvider {
         // RateGain requires TimeStamp and Echotoken for cancel
         const consolidatedPayload = {
             ...payload,
+            DemandCancelId: payload.DemandCancelId || `demand-cancel-${Date.now()}`,
             TimeStamp: payload.TimeStamp || new Date().toISOString(),
             EchoToken: payload.EchoToken || payload.Echotoken || `echo-${Date.now()}`
         };

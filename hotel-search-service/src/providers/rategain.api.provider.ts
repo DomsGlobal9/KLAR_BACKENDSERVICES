@@ -44,6 +44,8 @@ export class RateGainApiProvider {
             checkout: payload.checkout || payload.checkOut,
             CountryCode: payload.CountryCode || payload.countryCode || "US",
             Currency: payload.Currency || payload.currency || "USD",
+            starRating: payload.starRating, // Added for v1.5.3
+            Geofilter: payload.Geofilter,   // Added for v1.5.3
             Rooms: (payload.Rooms || payload.rooms || [{}]).map((r: any) => {
                 const adultsCount = r.Adults || r.adults || 2;
                 const childrenCount = r.Children || r.children || 0;
