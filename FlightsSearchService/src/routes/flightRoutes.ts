@@ -12,10 +12,37 @@ const router = Router();
 router.post("/search", searchFlights);
 
 /**
-* POST /api/flights/search?primary=CHEAPEST&secondary=EARLY_DEPARTURE
-* POST /api/flights/search?primary=QUICKEST&secondary=EARLY_ARRIVAL
-* POST /api/flights/search?primary=CHEAPEST&secondary=NONE
+* @ SOTRING 
+* POST /search?primary=CHEAPEST&secondary=EARLY_DEPARTURE
+* POST /search?primary=QUICKEST&secondary=EARLY_ARRIVAL
+* POST /search?primary=CHEAPEST&secondary=NONE
 */
+
+/**
+ * Filter by stops
+ * GET /api/flights/search?stops=NON_STOP
+ * GET /api/flights/search?stops=NON_STOP&stops=ONE_STOP
+ * GET /api/flights/search?stops=TWO_PLUS_STOPS
+ */
+
+/**
+ * Filter by refund type
+ * GET /api/flights/search?refundType=REFUNDABLE
+ * GET /api/flights/search?refundType=NON_REFUNDABLE
+ * GET /api/flights/search?refundType=HOLD_AVAILABLE
+ */
+
+/**
+ * Filter by price range
+ * GET /api/flights/search?minPrice=2000&maxPrice=5000
+ */
+
+/**
+ * Filter by arrival time
+ * GET /api/flights/search?arrivalTime=BEFORE_6AM
+ * GET /api/flights/search?arrivalTime=6AM_TO_12PM&arrivalTime=12PM_TO_6PM
+ */
+
 
 
 router.post("/:flightId", getFlightDetails);

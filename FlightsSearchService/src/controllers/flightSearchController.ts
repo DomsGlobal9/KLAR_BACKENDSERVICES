@@ -12,9 +12,7 @@ import { detectTripType, getTripInfos } from "../utils/tripTypeDetector";
 import { extractSearchParams } from "../utils/searchParamsExtractor";
 import { formatFlightResponse } from "../utils/responseFormatter";
 import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
-
-
-type TripType = 'ONE_WAY' | 'RETURN' | 'MULTI_CITY';
+import { FilterValidator, filterFlights } from "../utils/filter";
 
 
 export const searchFlights = async (
@@ -25,6 +23,7 @@ export const searchFlights = async (
   try {
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
+    const filters = FilterValidator.validateFilters(req.query); 
 
     if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
@@ -39,12 +38,25 @@ export const searchFlights = async (
     const tripInfos = getTripInfos(data, tripType);
     let flightData = getFlightList(tripInfos, tripType);
 
+    
+    if (!FilterValidator.isEmpty(filters)) {
+      flightData = filterFlights(flightData, tripType, filters);
+    }
+
+    
     flightData = sortFlights(flightData, tripType, sortOptions);
 
     const searchParams = extractSearchParams(payload);
 
     return res.status(200).json(
-      formatFlightResponse(flightData, tripType, payload.searchQuery.routeInfos.length, searchParams)
+      formatFlightResponse(
+        flightData,
+        tripType,
+        payload.searchQuery.routeInfos.length,
+        searchParams,
+        sortOptions,
+        filters 
+      )
     );
 
   } catch (error) {
