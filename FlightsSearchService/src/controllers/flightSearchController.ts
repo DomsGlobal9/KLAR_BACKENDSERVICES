@@ -29,7 +29,6 @@ export const searchFlights = async (
 
     const data = await searchFromTripJack(payload);
 
-
     const routeCount = payload.searchQuery.routeInfos.length;
     let tripType: TripType = 'ONE_WAY';
 
@@ -40,10 +39,6 @@ export const searchFlights = async (
     } else if (routeCount >= 3) {
       tripType = 'MULTI_CITY';
     }
-
-    console.log("Route Count:", routeCount);
-    console.log("Trip Type Detected:", tripType);
-
 
     let tripInfos: any;
 
@@ -57,25 +52,15 @@ export const searchFlights = async (
       };
     }
     else if (tripType === 'MULTI_CITY') {
-
       tripInfos = {};
-
-
-      console.log("Available TripInfos Keys:", Object.keys(data.searchResult?.tripInfos || {}));
-
-
       Object.keys(data.searchResult?.tripInfos || {}).forEach(key => {
-
         if (key !== 'ONWARD' && key !== 'RETURN') {
           tripInfos[key] = data.searchResult.tripInfos[key];
         }
       });
-
-      console.log("Multi-city legs found:", Object.keys(tripInfos).length);
     }
 
-
-    const flightList = getFlightList(tripInfos, tripType);
+    const flightData = getFlightList(tripInfos, tripType);
 
     return res.status(200).json({
       success: true,
@@ -83,14 +68,13 @@ export const searchFlights = async (
       data: {
         searchType: tripType,
         routeCount,
-        flights: flightList,
-        totalFlights: Array.isArray(tripInfos)
-          ? tripInfos.length
-          : Object.keys(tripInfos).length,
+        flights: flightData,
+        totalFlights: Array.isArray(flightData) ? flightData.length : Object.keys(flightData).length,
         searchParams: {
           from: payload.searchQuery.routeInfos[0].fromCityOrAirport.code,
           to: payload.searchQuery.routeInfos[0].toCityOrAirport.code,
           travelDate: payload.searchQuery.routeInfos[0].travelDate,
+          returnDate: payload.searchQuery.routeInfos[1]?.travelDate,
           passengers: payload.searchQuery.paxInfo
         }
       }
