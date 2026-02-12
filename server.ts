@@ -86,20 +86,39 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 // Start unified server
-async function startServer() {
+// ... (middleware and routes setup remains unchanged)
+
+// Export Express app for testability/extensibility
+export { app };
+
+// Vercel Serverless Function Handler
+// This exports a function that ensures DB connection before handling the request
+export default async (req: express.Request, res: express.Response) => {
     try {
-        console.log("Connecting to MongoDB...");
         await mongooseClient.connect();
-
-        const PORT = process.env.PORT || 5000;
-        app.listen(PORT, () => {
-            console.log(`🚀 Klar Hotels Unified API running on http://localhost:${PORT}`);
-            console.log(`📚 Swagger docs available at http://localhost:${PORT}/api-docs`);
-        });
+        return app(req, res);
     } catch (error) {
-        console.error("❌ Failed to start unified server:", error);
-        process.exit(1);
+        console.error("❌ Vercel Handler Error:", error);
+        res.status(500).json({ error: "Internal Server Error", details: (error as Error).message });
     }
-}
+};
 
-startServer();
+// Start unified server (Only when run directly, e.g. local dev)
+if (require.main === module) {
+    async function startServer() {
+        try {
+            console.log("Connecting to MongoDB...");
+            await mongooseClient.connect();
+
+            const PORT = process.env.PORT || 5000;
+            app.listen(PORT, () => {
+                console.log(`🚀 Klar Hotels Unified API running on http://localhost:${PORT}`);
+                console.log(`📚 Swagger docs available at http://localhost:${PORT}/api-docs`);
+            });
+        } catch (error) {
+            console.error("❌ Failed to start unified server:", error);
+            process.exit(1);
+        }
+    }
+    startServer();
+}
