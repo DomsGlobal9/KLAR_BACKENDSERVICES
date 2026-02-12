@@ -13,6 +13,7 @@ import { extractSearchParams } from "../utils/searchParamsExtractor";
 import { formatFlightResponse } from "../utils/responseFormatter";
 import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
 import { FilterValidator, filterFlights } from "../utils/filter";
+import FlightPagination from "../utils/pagination";
 
 
 export const searchFlights = async (
@@ -23,7 +24,8 @@ export const searchFlights = async (
   try {
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
-    const filters = FilterValidator.validateFilters(req.query); 
+    const filters = FilterValidator.validateFilters(req.query);
+    const paginationOptions = FlightPagination.validateOptions(req.query);
 
     if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
@@ -38,13 +40,20 @@ export const searchFlights = async (
     const tripInfos = getTripInfos(data, tripType);
     let flightData = getFlightList(tripInfos, tripType);
 
-    
+
     if (!FilterValidator.isEmpty(filters)) {
       flightData = filterFlights(flightData, tripType, filters);
     }
 
-    
+
     flightData = sortFlights(flightData, tripType, sortOptions);
+
+
+    const paginatedResult = FlightPagination.paginate(
+      flightData,
+      tripType,
+      paginationOptions
+    );
 
     const searchParams = extractSearchParams(payload);
 
@@ -55,7 +64,8 @@ export const searchFlights = async (
         payload.searchQuery.routeInfos.length,
         searchParams,
         sortOptions,
-        filters 
+        filters,
+        paginatedResult
       )
     );
 

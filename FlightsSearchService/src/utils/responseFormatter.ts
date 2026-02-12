@@ -1,3 +1,5 @@
+import { PaginatedResponse } from "../interface/flight/pagination.interface";
+
 export function formatFlightResponse(
     flightData: any,
     tripType: string,
@@ -5,6 +7,7 @@ export function formatFlightResponse(
     searchParams: any,
     sortOptions?: any,
     filters?: any,
+    pagination?: PaginatedResponse<any>
 ) {
     return {
         success: true,
@@ -12,18 +15,26 @@ export function formatFlightResponse(
         data: {
             searchType: tripType,
             routeCount,
-            flights: flightData,
-            totalFlights: Array.isArray(flightData)
-                ? flightData.length
-                : Object.keys(flightData).length,
+            flights: pagination?.data || flightData,
+            totalFlights: pagination?.pagination.totalItems || (
+                Array.isArray(flightData)
+                    ? flightData.length
+                    : Object.keys(flightData).length
+            ),
             searchParams,
-            sortApplied: sortOptions,
+            appliedSort: sortOptions,
             appliedFilters: filters || {},
-            filterSummary: filters ? getFilterSummary(filters) : undefined
+            filterSummary: filters ? getFilterSummary(filters) : undefined,
+            pagination: pagination?.pagination
         }
     };
 }
 
+/**
+ * Helper function to create readable filter summary
+ * @param filters 
+ * @returns 
+ */
 function getFilterSummary(filters: any) {
     const summary: string[] = [];
 

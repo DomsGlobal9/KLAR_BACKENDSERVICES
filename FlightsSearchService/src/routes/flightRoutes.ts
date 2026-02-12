@@ -43,6 +43,11 @@ router.post("/search", searchFlights);
  * GET /api/flights/search?arrivalTime=6AM_TO_12PM&arrivalTime=12PM_TO_6PM
  */
 
+/**
+ * Pagination Section
+ * GET /api/flights/search?page=1&limit=20
+ * GET /api/flights/search?page=2&limit=10
+ */
 
 
 router.post("/:flightId", getFlightDetails);
