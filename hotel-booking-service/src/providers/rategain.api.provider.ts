@@ -3,19 +3,20 @@ import fs from "fs";
 import path from "path";
 
 const logFile = path.join(process.cwd(), "booking-debug.log");
-function logToFile(msg: string) {
+async function logToFile(msg: string) {
     const formattedMsg = `[${new Date().toISOString()}] ${msg}`;
 
-    // Always log to console in Vercel or if file logging fails
-    if (process.env.VERCEL) {
-        console.log(formattedMsg);
+    // Always log to console to ensure visibility in all environments (Vercel, local terminal)
+    console.log(formattedMsg);
+
+    // Skip file writing in Vercel/Production to avoid filesystem issues
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
         return;
     }
 
     try {
-        fs.appendFileSync(logFile, `${formattedMsg}\n`);
+        await fs.promises.appendFile(logFile, `${formattedMsg}\n`);
     } catch (error) {
-        console.log(formattedMsg);
         console.error(`[ERROR] Failed to write to log file: ${(error as Error).message}`);
     }
 }

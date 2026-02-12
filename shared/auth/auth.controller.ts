@@ -41,6 +41,7 @@ export class AuthController {
      *         description: Email already exists
      */
     public async register(req: Request, res: Response): Promise<void> {
+        console.log("Auth Controller: Register called", req.body);
         try {
             const { email, password, firstName, lastName, role } = req.body;
 

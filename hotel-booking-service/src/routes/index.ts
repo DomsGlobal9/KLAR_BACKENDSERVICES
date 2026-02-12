@@ -29,11 +29,11 @@ router.get("/health", (_req, res) => {
 });
 
 // Authentication routes (public)
-router.use("/auth", authRoutes);
+// router.use("/auth", authRoutes);
 
 // Booking routes (public for testing - auth removed temporarily)
-router.post("/precheck", precheckController);
-router.post("/commit", commitController);
+router.post("/precheck", precheckController); // Precheck doesn't use user ID
+router.post("/commit", authenticate, commitController); // Uses req.user
 router.post("/cancel", cancelController);
 router.post("/bookings", authenticate, bookingsController.createBooking.bind(bookingsController));
 

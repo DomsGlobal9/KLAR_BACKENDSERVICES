@@ -27,8 +27,16 @@ import { commitService } from "../services/commit.service";
 
 export const commitController = async (req: Request, res: Response) => {
     try {
-        // Authentication removed temporarily for testing
-        const userId = req.user?.id || 'guest-user';
+        // Check for user (populated by dummy auth middleware)
+        if (!req.user || !req.user.id) {
+            res.status(401).json({
+                success: false,
+                message: 'User not authenticated'
+            });
+            return;
+        }
+
+        const userId = req.user.id;
         const data = await commitService.commit(req.body, userId);
         res.json(data);
     } catch (error: any) {

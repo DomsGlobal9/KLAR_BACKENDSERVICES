@@ -41,7 +41,7 @@ const router = Router();
  *       409:
  *         description: User already exists
  */
-router.post('/register', authController.register.bind(authController));
+router.post('/register', (req, res, next) => authController.register(req, res).catch(next));
 
 /**
  * @swagger
@@ -70,7 +70,7 @@ router.post('/register', authController.register.bind(authController));
  *       401:
  *         description: Invalid credentials
  */
-router.post('/login', authController.login.bind(authController));
+router.post('/login', (req, res, next) => authController.login(req, res).catch(next));
 
 /**
  * @swagger
@@ -95,7 +95,7 @@ router.post('/login', authController.login.bind(authController));
  *       401:
  *         description: Invalid or expired token
  */
-router.post('/refresh', authController.refreshToken.bind(authController));
+router.post('/refresh', (req, res, next) => authController.refreshToken(req, res).catch(next));
 
 /**
  * @swagger
@@ -118,7 +118,7 @@ router.post('/refresh', authController.refreshToken.bind(authController));
  *       200:
  *         description: Logged out successfully
  */
-router.post('/logout', authController.logout.bind(authController));
+router.post('/logout', (req, res, next) => authController.logout(req, res).catch(next));
 
 /**
  * @swagger

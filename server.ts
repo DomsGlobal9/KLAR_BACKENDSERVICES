@@ -73,6 +73,10 @@ app.use("/api/search", searchRoutes);
 // Mount booking service routes under /api/booking  
 app.use("/api/booking", bookingRoutes);
 
+// Mount auth service routes under /api/auth
+// import authRoutes from "./shared/auth/auth.routes";
+// app.use("/api/auth", authRoutes);
+
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("Error:", err);
