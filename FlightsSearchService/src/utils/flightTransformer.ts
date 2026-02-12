@@ -157,58 +157,182 @@ function transformReturnFlights(tripInfos: TripInfo[], legKey: string): Transfor
 /**
  * Transform Multi-city flights
  */
-function transformMultiCityFlights(tripInfos: TripInfo[], legIndex: string): TransformedFlight[] {
+function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): TransformedFlight[] {
     return tripInfos.map((tripInfo, index) => {
-        const segment = tripInfo.sI[0];
-        const fareOptions = transformFareOptions(tripInfo.totalPriceList, segment.id, 'MULTI_CITY');
+        const segments = tripInfo.sI || [];
+        const totalStops = segments.length - 1;
+        const firstSegment = segments[0];
+        const lastSegment = segments[segments.length - 1];
+        const totalDuration = segments.reduce((sum, seg) => sum + (seg.duration || 0), 0);
+        const isInternational = segments.some(seg => seg.iand === true);
+        const isRedEye = segments.some(seg => seg.isRs === true);
 
-        const departureDate = new Date(segment.dt);
-        const arrivalDate = new Date(segment.at);
+        const fareOptions = transformFareOptionsForMultiCity(tripInfo.totalPriceList, segments);
+
+        const departureDate = new Date(firstSegment.dt);
+        const arrivalDate = new Date(lastSegment.at);
 
         return {
-            flightId: `${segment.fD.aI.code}_${segment.fD.fN}_leg${legIndex}_${index}`,
-            segmentId: segment.id,
+            flightId: `${firstSegment.fD.aI.code}_${firstSegment.fD.fN}_leg${legKey}_${index}_${Date.now()}`,
+            segmentId: segments.map(s => s.id).join(','),
             tripType: 'MULTI_CITY',
-            legNumber: parseInt(legIndex) + 1,
-            legIndex: parseInt(legIndex),
+            legNumber: parseInt(legKey) + 1,
+            legIndex: parseInt(legKey),
+            legKey,
             airline: {
-                code: segment.fD.aI.code,
-                name: segment.fD.aI.name,
-                isLcc: segment.fD.aI.isLcc,
+                code: firstSegment.fD.aI.code,
+                name: firstSegment.fD.aI.name,
+                isLcc: firstSegment.fD.aI.isLcc,
             },
-            flightNumber: segment.fD.fN,
-            aircraftType: segment.fD.eT,
+            flightNumber: segments.map(s => s.fD.fN).join(', '),
+            aircraftType: segments.map(s => s.fD.eT).join(', '),
             departure: {
-                airportCode: segment.da.code,
-                airportName: segment.da.name,
-                cityCode: segment.da.cityCode,
-                city: segment.da.city,
-                terminal: segment.da.terminal,
+                airportCode: firstSegment.da.code,
+                airportName: firstSegment.da.name,
+                cityCode: firstSegment.da.cityCode,
+                city: firstSegment.da.city,
+                terminal: firstSegment.da.terminal,
                 time: departureDate.toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit'
                 }),
                 date: departureDate.toLocaleDateString(),
-                datetime: segment.dt,
+                datetime: firstSegment.dt,
             },
             arrival: {
-                airportCode: segment.aa.code,
-                airportName: segment.aa.name,
-                cityCode: segment.aa.cityCode,
-                city: segment.aa.city,
-                terminal: segment.aa.terminal,
+                airportCode: lastSegment.aa.code,
+                airportName: lastSegment.aa.name,
+                cityCode: lastSegment.aa.cityCode,
+                city: lastSegment.aa.city,
+                terminal: lastSegment.aa.terminal,
                 time: arrivalDate.toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit'
                 }),
                 date: arrivalDate.toLocaleDateString(),
-                datetime: segment.at,
+                datetime: lastSegment.at,
             },
-            duration: segment.duration,
-            stops: segment.stops,
+            duration: totalDuration,
+            stops: totalStops,
             fareOptions,
-            isInternational: segment.iand,
-            isRedEye: segment.isRs,
+            isInternational,
+            isRedEye,
+        };
+    });
+}
+
+/**
+ * Transform fare options for Multi-city with proper segment baggage mapping
+ */
+function transformFareOptionsForMultiCity(
+    totalPriceList: FareDetail[],
+    segments: FlightSegment[]
+): TransformedFlight['fareOptions'] {
+    return totalPriceList.map((fare) => {
+        const adultFare = fare.fd.ADULT;
+        const childFare = fare.fd.CHILD;
+        const infantFare = fare.fd.INFANT;
+        const fareBreakdown = adultFare.afC?.TAF;
+
+        let checkedBaggage = '';
+        let cabinBaggage = '';
+
+        segments.forEach((segment, idx) => {
+            const segmentBaggage = fare.tai?.tbi?.[segment.id]?.[0]?.ADULT;
+            if (segmentBaggage) {
+                checkedBaggage += (checkedBaggage ? ', ' : '') + segmentBaggage.iB;
+                cabinBaggage += (cabinBaggage ? ', ' : '') + segmentBaggage.cB;
+            }
+        });
+
+        if (!checkedBaggage) {
+            checkedBaggage = adultFare.bI.iB;
+            cabinBaggage = adultFare.bI.cB;
+        }
+
+        let childCheckedBaggage = '';
+        let childCabinBaggage = '';
+        if (childFare) {
+            segments.forEach((segment, idx) => {
+                const segmentChildBaggage = fare.tai?.tbi?.[segment.id]?.[1]?.CHILD;
+                if (segmentChildBaggage) {
+                    childCheckedBaggage += (childCheckedBaggage ? ', ' : '') + segmentChildBaggage.iB;
+                    childCabinBaggage += (childCabinBaggage ? ', ' : '') + segmentChildBaggage.cB;
+                }
+            });
+            if (!childCheckedBaggage) {
+                childCheckedBaggage = childFare.bI.iB;
+                childCabinBaggage = childFare.bI.cB;
+            }
+        }
+
+        let infantCheckedBaggage = '';
+        let infantCabinBaggage = '';
+        if (infantFare) {
+            segments.forEach((segment, idx) => {
+                const segmentInfantBaggage = fare.tai?.tbi?.[segment.id]?.[2]?.INFANT;
+                if (segmentInfantBaggage) {
+                    infantCheckedBaggage += (infantCheckedBaggage ? ', ' : '') + segmentInfantBaggage.iB;
+                    infantCabinBaggage += (infantCabinBaggage ? ', ' : '') + segmentInfantBaggage.cB;
+                }
+            });
+            if (!infantCheckedBaggage) {
+                infantCheckedBaggage = infantFare.bI.iB;
+                infantCabinBaggage = infantFare.bI.cB;
+            }
+        }
+
+        return {
+            id: fare.id,
+            fareIdentifier: fare.fareIdentifier,
+            cabinClass: adultFare.cc,
+            bookingClass: adultFare.cB,
+            fareBasis: adultFare.fB,
+            baseFare: adultFare.fC.BF,
+            taxesAndFees: adultFare.fC.TAF,
+            totalFare: adultFare.fC.TF,
+            netFare: adultFare.fC.NF,
+            refundable: adultFare.rT === 1,
+            baggage: {
+                checked: checkedBaggage,
+                cabin: cabinBaggage,
+            },
+            seatAvailability: adultFare.sR,
+            passengerFares: {
+                adult: {
+                    baseFare: adultFare.fC.BF,
+                    taxesAndFees: adultFare.fC.TAF,
+                    totalFare: adultFare.fC.TF,
+                    netFare: adultFare.fC.NF,
+                },
+                child: childFare ? {
+                    baseFare: childFare.fC.BF,
+                    taxesAndFees: childFare.fC.TAF,
+                    totalFare: childFare.fC.TF,
+                    netFare: childFare.fC.NF,
+                    baggage: {
+                        checked: childCheckedBaggage,
+                        cabin: childCabinBaggage,
+                    }
+                } : undefined,
+                infant: infantFare ? {
+                    baseFare: infantFare.fC.BF,
+                    taxesAndFees: infantFare.fC.TAF,
+                    totalFare: infantFare.fC.TF,
+                    netFare: infantFare.fC.NF,
+                    baggage: {
+                        checked: infantCheckedBaggage,
+                        cabin: infantCabinBaggage,
+                    }
+                } : undefined,
+            },
+            fareBreakdown: fareBreakdown ? {
+                managementFee: fareBreakdown.MFT,
+                otherTax: fareBreakdown.OT,
+                serviceTax: fareBreakdown.AGST,
+                airportTax: fareBreakdown.MF,
+                fuelSurcharge: fareBreakdown.YR,
+            } : undefined,
         };
     });
 }
@@ -311,8 +435,6 @@ export function getFlightList(
     tripInfos: Record<string, TripInfo[]> | TripInfo[],
     tripType: TripType = 'ONE_WAY'
 ) {
-    console.log("getFlightList - Trip Type:", tripType);
-    console.log("getFlightList - tripInfos type:", Array.isArray(tripInfos) ? 'array' : 'object');
 
     if (tripType === 'ONE_WAY' && Array.isArray(tripInfos)) {
         const flights: TransformedFlight[] = [];
@@ -381,7 +503,7 @@ export function getFlightList(
                 }),
                 isInternational,
                 isRedEye,
-                isOutbound: true, // For ONE_WAY, all flights are outbound
+                isOutbound: true,
             });
         });
 
@@ -473,15 +595,27 @@ export function getFlightList(
     }
 
     if (tripType === 'MULTI_CITY' && !Array.isArray(tripInfos)) {
-        const legs: Record<string, any[]> = {};
+        const legs: {
+            legNumber: number;
+            legKey: string;
+            flights: TransformedFlight[];
+        }[] = [];
 
-        Object.keys(tripInfos).forEach((key, legIndex) => {
+        const legKeys = Object.keys(tripInfos).sort((a, b) => parseInt(a) - parseInt(b));
+
+        legKeys.forEach((key) => {
             if (key !== 'ONWARD' && key !== 'RETURN') {
-                const legFlights = transformFlightSegments(tripInfos[key], true, legIndex);
-                legs[key] = legFlights;
+                const legFlights = transformMultiCityFlights(tripInfos[key], key);
+
+                legs.push({
+                    legNumber: parseInt(key) + 1,
+                    legKey: key,
+                    flights: legFlights
+                });
             }
         });
 
+        console.log(`Transformed ${legs.length} MULTI_CITY legs`);
         return legs;
     }
 
