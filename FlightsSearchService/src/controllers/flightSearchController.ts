@@ -17,14 +17,17 @@ function isValidTripJackPayload(payload: any): payload is TripJackSearchPayload 
     Array.isArray(payload.searchQuery.routeInfos) &&
     payload.searchQuery.routeInfos.length > 0 &&
     payload.searchQuery.routeInfos.every((route: any) =>
-      route.fromCityOrAirport?.code &&
-      route.toCityOrAirport?.code &&
-      route.travelDate
+      typeof route.fromCityOrAirport?.code === 'string' &&
+      typeof route.toCityOrAirport?.code === 'string' &&
+      typeof route.travelDate === 'string'
     ) &&
     payload.searchQuery.paxInfo &&
-    typeof payload.searchQuery.paxInfo.ADULT === 'string'
+    typeof payload.searchQuery.paxInfo.ADULT === 'number' &&
+    typeof payload.searchQuery.paxInfo.CHILD === 'number' &&
+    typeof payload.searchQuery.paxInfo.INFANT === 'number'
   );
 }
+
 
 export const searchFlights = async (
   req: Request,
@@ -33,6 +36,8 @@ export const searchFlights = async (
 ) => {
   try {
     const payload = req.body;
+
+    console.log("Payload", JSON.stringify(req.body));
 
     if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
@@ -54,9 +59,6 @@ export const searchFlights = async (
     } else if (routeCount >= 3) {
       tripType = 'MULTI_CITY';
     }
-
-    console.log("Route Count:", routeCount);
-    console.log("Trip Type Detected:", tripType);
 
 
     let tripInfos: any;
