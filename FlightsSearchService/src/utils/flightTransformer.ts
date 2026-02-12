@@ -303,11 +303,7 @@ export function getFlightDetailsById(
     return allFlights.find(flight => flight.flightId === flightId) || null;
 }
 
-/**
- * Get all flights with basic info (for listing)
- * @param tripInfos All trip information from API
- * @returns Array of flights with essential info only
- */
+
 /**
  * Get flight list for display (One-way, Return, Multi-city)
  */
