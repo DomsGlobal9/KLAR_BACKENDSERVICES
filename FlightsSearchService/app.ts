@@ -6,7 +6,7 @@ import { envConfig } from "./src/config/env";
 import apiRoutes from "./src/routes/index";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./src/config/swagger";
-import { errorHandler } from "./src/middlewares/errorHandler";
+import { errorHandler } from "./src/middleware/errorHandler";
 
 const app = express();
 

@@ -5,26 +5,12 @@ import {
   getFlightDetailsById,
   getFlightList
 } from "../utils/flightTransformer";
-import { TripInfo, TripJackSearchPayload } from "../interface/flight/flight.interface";
+import { TripInfo } from "../interface/flight/flight.interface";
 import { getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
+import { isValidTripJackPayload } from "../middleware/flightPayloadHandler";
 
 type TripType = 'ONE_WAY' | 'RETURN' | 'MULTI_CITY';
 
-function isValidTripJackPayload(payload: any): payload is TripJackSearchPayload {
-  return (
-    payload &&
-    payload.searchQuery &&
-    Array.isArray(payload.searchQuery.routeInfos) &&
-    payload.searchQuery.routeInfos.length > 0 &&
-    payload.searchQuery.routeInfos.every((route: any) =>
-      route.fromCityOrAirport?.code &&
-      route.toCityOrAirport?.code &&
-      route.travelDate
-    ) &&
-    payload.searchQuery.paxInfo &&
-    typeof payload.searchQuery.paxInfo.ADULT === 'string'
-  );
-}
 
 export const searchFlights = async (
   req: Request,
