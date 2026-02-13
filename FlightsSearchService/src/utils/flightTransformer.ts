@@ -435,7 +435,9 @@ export function getFlightList(
     tripInfos: Record<string, TripInfo[]> | TripInfo[],
     tripType: TripType = 'ONE_WAY'
 ) {
+    console.log(`🎯 getFlightList - Trip Type: ${tripType}`);
 
+    // ONE_WAY
     if (tripType === 'ONE_WAY' && Array.isArray(tripInfos)) {
         const flights: TransformedFlight[] = [];
 
@@ -507,17 +509,22 @@ export function getFlightList(
             });
         });
 
-        console.log(`Transformed ${flights.length} ONE_WAY flights`);
+        console.log(`✅ Transformed ${flights.length} ONE_WAY flights`);
         return flights;
     }
 
+    // RETURN
     if (tripType === 'RETURN' && !Array.isArray(tripInfos)) {
+        console.log("🔄 Processing RETURN trip");
+        console.log(`ONWARD count: ${tripInfos.ONWARD?.length || 0}, RETURN count: ${tripInfos.RETURN?.length || 0}`);
+
         const onwardFlights = transformFlightSegments(tripInfos.ONWARD || [], true);
         const returnFlights = transformFlightSegments(tripInfos.RETURN || [], false);
 
-        console.log(`ONWARD flights: ${onwardFlights.length}, RETURN flights: ${returnFlights.length}`);
+        console.log(`✈️ ONWARD flights: ${onwardFlights.length}, RETURN flights: ${returnFlights.length}`);
 
         if (onwardFlights.length === 0 || returnFlights.length === 0) {
+            console.log("⚠️ No onward or return flights found");
             return [];
         }
 
@@ -589,11 +596,11 @@ export function getFlightList(
             }
         }
 
-        const sortedCombinations = combinations.sort((a, b) => a.totalFare - b.totalFare);
-        console.log(`Generated ${sortedCombinations.length} RETURN flight combinations`);
-        return sortedCombinations;
+        console.log(`✅ Generated ${combinations.length} RETURN flight combinations`);
+        return combinations; // Return unsorted - let sort handle it
     }
 
+    // MULTI_CITY
     if (tripType === 'MULTI_CITY' && !Array.isArray(tripInfos)) {
         const legs: {
             legNumber: number;
@@ -606,7 +613,6 @@ export function getFlightList(
         legKeys.forEach((key) => {
             if (key !== 'ONWARD' && key !== 'RETURN') {
                 const legFlights = transformMultiCityFlights(tripInfos[key], key);
-
                 legs.push({
                     legNumber: parseInt(key) + 1,
                     legKey: key,
@@ -615,10 +621,11 @@ export function getFlightList(
             }
         });
 
-        console.log(`Transformed ${legs.length} MULTI_CITY legs`);
+        console.log(`✅ Transformed ${legs.length} MULTI_CITY legs`);
         return legs;
     }
 
+    console.log("⚠️ No flights found for trip type:", tripType);
     return [];
 }
 

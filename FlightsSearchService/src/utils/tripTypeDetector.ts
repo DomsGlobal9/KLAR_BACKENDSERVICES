@@ -11,23 +11,46 @@ export function detectTripType(payload: TripJackSearchPayload): TripType {
 }
 
 export function getTripInfos(data: any, tripType: TripType) {
-    if (tripType === 'ONE_WAY') {
-        return data.searchResult?.tripInfos?.ONWARD || [];
-    }
+    const tripInfos = data.searchResult?.tripInfos || {};
+    const keys = Object.keys(tripInfos);
 
-    if (tripType === 'RETURN') {
-        return {
-            ONWARD: data.searchResult?.tripInfos?.ONWARD || [],
-            RETURN: data.searchResult?.tripInfos?.RETURN || []
-        };
-    }
+    console.log("📊 TripInfos keys received:", keys);
 
-    // MULTI_CITY
-    const tripInfos: Record<string, any> = {};
-    Object.keys(data.searchResult?.tripInfos || {}).forEach(key => {
-        if (key !== 'ONWARD' && key !== 'RETURN') {
-            tripInfos[key] = data.searchResult.tripInfos[key];
+    // CASE 1: If we have ONWARD/RETURN keys, use them
+    if (tripInfos.ONWARD || tripInfos.RETURN) {
+        if (tripType === 'ONE_WAY') {
+            return tripInfos.ONWARD || [];
         }
-    });
-    return tripInfos;
+        if (tripType === 'RETURN') {
+            return {
+                ONWARD: tripInfos.ONWARD || [],
+                RETURN: tripInfos.RETURN || []
+            };
+        }
+    }
+
+    // CASE 2: If we have numeric keys (0, 1, 2)
+    const numericKeys = keys.filter(key => !isNaN(Number(key)) && key !== 'ONWARD' && key !== 'RETURN');
+
+    if (numericKeys.length > 0) {
+        // If it's a RETURN trip with 2 legs
+        if (tripType === 'RETURN' && numericKeys.length >= 2) {
+            return {
+                ONWARD: tripInfos[0] || [],
+                RETURN: tripInfos[1] || []
+            };
+        }
+
+        // If it's MULTI_CITY or has more than 2 legs
+        const multiCityInfos: Record<string, any> = {};
+        numericKeys.forEach(key => {
+            multiCityInfos[key] = tripInfos[key];
+        });
+        return multiCityInfos;
+    }
+
+    // Fallback
+    return tripType === 'ONE_WAY' ? [] :
+        tripType === 'RETURN' ? { ONWARD: [], RETURN: [] } :
+            {};
 }

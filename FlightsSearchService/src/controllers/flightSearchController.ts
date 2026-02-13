@@ -6,7 +6,7 @@ import {
   getFlightList
 } from "../utils/flightTransformer";
 import { TripInfo } from "../interface/flight/flight.interface";
-import { getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
+import { getFlightDetailsBySegmentId, getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
 import { isValidTripJackPayload } from "../middleware/flightPayloadHandler";
 import { detectTripType, getTripInfos } from "../utils/tripTypeDetector";
 import { extractSearchParams } from "../utils/searchParamsExtractor";
@@ -16,6 +16,13 @@ import { FilterValidator, filterFlights } from "../utils/filter";
 import FlightPagination from "../utils/pagination";
 
 
+/**
+ * 
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const searchFlights = async (
   req: Request,
   res: Response,
@@ -58,6 +65,14 @@ export const searchFlights = async (
     );
 
     const searchParams = extractSearchParams(payload);
+    console.log("🔍 DEBUG - TripJack Response:", {
+      status: data.status,
+      hasONWARD: !!data.searchResult?.tripInfos?.ONWARD,
+      onwardCount: data.searchResult?.tripInfos?.ONWARD?.length || 0,
+      hasRETURN: !!data.searchResult?.tripInfos?.RETURN,
+      returnCount: data.searchResult?.tripInfos?.RETURN?.length || 0,
+      sampleOnward: data.searchResult?.tripInfos?.ONWARD?.[0] ? 'Has data' : 'No data'
+    });
 
     return res.status(200).json(
       formatFlightResponse(
@@ -76,6 +91,13 @@ export const searchFlights = async (
   }
 };
 
+/**
+ * 
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const getAllFlightsWithDetails = async (
   req: Request,
   res: Response,
@@ -117,6 +139,13 @@ export const getAllFlightsWithDetails = async (
   }
 };
 
+/**
+ * 
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const getFlightDetails = async (
   req: Request,
   res: Response,
@@ -170,7 +199,7 @@ export const getSegmentById = async (
   res: Response,
   next: NextFunction
 ) => {
-  console.log("API trigger the GET Segment Function");
+  console.log("🚀 API trigger: Get Flight Details by Segment ID");
   try {
     const { segmentId } = req.params;
     const payload = req.body;
@@ -189,24 +218,27 @@ export const getSegmentById = async (
       });
     }
 
-    const segmentData = await getFlightSegmentById(payload, segmentId);
+    // Use the new function that returns ALL segments
+    const flightDetails = await getFlightDetailsBySegmentId(payload, segmentId);
 
-    if (!segmentData) {
+    if (!flightDetails) {
       return res.status(404).json({
         success: false,
-        message: "Flight segment not found"
+        message: "Flight not found. The segment ID may be invalid."
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Flight segment retrieved successfully",
-      data: segmentData
+      message: "Flight details retrieved successfully",
+      data: flightDetails
     });
   } catch (error) {
+    console.error("❌ Error in getSegmentById:", error);
     next(error);
   }
 };
+
 
 /**
  * Get transformed flight segment by ID (returns clean, structured data)

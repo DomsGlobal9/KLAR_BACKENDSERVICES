@@ -339,3 +339,36 @@ export interface TransformedFareRule {
   rawText?: string;
   rawRtf?: string;
 }
+
+export interface FlightDetailsResponse {
+  flightId: string;
+  segments: FlightSegment[];
+  fareOptions: FareDetail[];
+  tripInfo: TripInfo;
+  totalStops: number;
+  totalDuration: number;
+  departure: {
+    airportCode: string;
+    airportName: string;
+    cityCode: string;
+    city: string;
+    terminal?: string;
+    time: string;
+    date: string;
+  };
+  arrival: {
+    airportCode: string;
+    airportName: string;
+    cityCode: string;
+    city: string;
+    terminal?: string;
+    time: string;
+    date: string;
+  };
+  airlines: {
+    code: string;
+    name: string;
+    isLcc: boolean;
+  }[];
+  flightNumbers: string[];
+}
