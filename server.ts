@@ -80,8 +80,14 @@ app.use("/api/booking", bookingRoutes);
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("Error:", err);
-    res.status(err.status || 500).json({
-        error: err.message || "Internal Server Error"
+
+    // Extract upstream error details (e.g. from RateGain/Axios)
+    const upstreamError = err.response?.data;
+    const status = err.status || err.response?.status || 500;
+
+    res.status(status).json({
+        error: err.message || "Internal Server Error",
+        details: upstreamError || undefined
     });
 });
 
