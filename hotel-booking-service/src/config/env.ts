@@ -7,8 +7,13 @@ export const env = {
     useRateGainMock: process.env.USE_RATEGAIN_MOCK === "true",
 
     rateGain: {
-        baseUrl: process.env.RATEGAIN_BASE_URL || "https://sandbox-smartdistribution.rategain.com",
+        baseUrl: process.env.RATEGAIN_BASE_URL!,
         apiKey: process.env.RATEGAIN_API_KEY!,
         apiSecret: process.env.RATEGAIN_SECRET_KEY!,
     },
 };
+
+// Validate required environment variables
+if (!process.env.RATEGAIN_BASE_URL) {
+    console.warn("⚠️  WARNING: RATEGAIN_BASE_URL is not set. RateGain requests will fail.");
+}

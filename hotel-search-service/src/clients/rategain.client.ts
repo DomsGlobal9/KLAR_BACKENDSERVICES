@@ -6,7 +6,7 @@ if (!env.rateGain.baseUrl) {
 }
 
 export const rateGainClient = axios.create({
-    baseURL: env.rateGain.baseUrl || 'https://sandbox-smartdistribution.rategain.com', // Fallback for safety
+    baseURL: env.rateGain.baseUrl,
     timeout: 60000,
     headers: {
         "Content-Type": "application/json",
