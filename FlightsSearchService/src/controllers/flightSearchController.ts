@@ -8,8 +8,12 @@ import {
 import { TripInfo } from "../interface/flight/flight.interface";
 import { getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
 import { isValidTripJackPayload } from "../middleware/flightPayloadHandler";
-
-type TripType = 'ONE_WAY' | 'RETURN' | 'MULTI_CITY';
+import { detectTripType, getTripInfos } from "../utils/tripTypeDetector";
+import { extractSearchParams } from "../utils/searchParamsExtractor";
+import { formatFlightResponse } from "../utils/responseFormatter";
+import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
+import { FilterValidator, filterFlights } from "../utils/filter";
+import FlightPagination from "../utils/pagination";
 
 
 export const searchFlights = async (
@@ -19,6 +23,9 @@ export const searchFlights = async (
 ) => {
   try {
     const payload = req.body;
+    const sortOptions = validateSortOptions(req.query);
+    const filters = FilterValidator.validateFilters(req.query);
+    const paginationOptions = FlightPagination.validateOptions(req.query);
 
     console.log("Payload", JSON.stringify(req.body));
 
@@ -31,56 +38,39 @@ export const searchFlights = async (
 
     const data = await searchFromTripJack(payload);
 
-    const routeCount = payload.searchQuery.routeInfos.length;
-    let tripType: TripType = 'ONE_WAY';
+    const tripType = detectTripType(payload);
+    const tripInfos = getTripInfos(data, tripType);
+    let flightData = getFlightList(tripInfos, tripType);
 
-    if (routeCount === 1) {
-      tripType = 'ONE_WAY';
-    } else if (routeCount === 2) {
-      tripType = 'RETURN';
-    } else if (routeCount >= 3) {
-      tripType = 'MULTI_CITY';
+
+    if (!FilterValidator.isEmpty(filters)) {
+      flightData = filterFlights(flightData, tripType, filters);
     }
 
-    let tripInfos: any;
 
-    if (tripType === 'ONE_WAY') {
-      tripInfos = data.searchResult?.tripInfos?.ONWARD || [];
-    }
-    else if (tripType === 'RETURN') {
-      tripInfos = {
-        ONWARD: data.searchResult?.tripInfos?.ONWARD || [],
-        RETURN: data.searchResult?.tripInfos?.RETURN || []
-      };
-    }
-    else if (tripType === 'MULTI_CITY') {
-      tripInfos = {};
-      Object.keys(data.searchResult?.tripInfos || {}).forEach(key => {
-        if (key !== 'ONWARD' && key !== 'RETURN') {
-          tripInfos[key] = data.searchResult.tripInfos[key];
-        }
-      });
-    }
+    flightData = sortFlights(flightData, tripType, sortOptions);
 
-    const flightData = getFlightList(tripInfos, tripType);
 
-    return res.status(200).json({
-      success: true,
-      message: "Flights searched successfully",
-      data: {
-        searchType: tripType,
-        routeCount,
-        flights: flightData,
-        totalFlights: Array.isArray(flightData) ? flightData.length : Object.keys(flightData).length,
-        searchParams: {
-          from: payload.searchQuery.routeInfos[0].fromCityOrAirport.code,
-          to: payload.searchQuery.routeInfos[0].toCityOrAirport.code,
-          travelDate: payload.searchQuery.routeInfos[0].travelDate,
-          returnDate: payload.searchQuery.routeInfos[1]?.travelDate,
-          passengers: payload.searchQuery.paxInfo
-        }
-      }
-    });
+    const paginatedResult = FlightPagination.paginate(
+      flightData,
+      tripType,
+      paginationOptions
+    );
+
+    const searchParams = extractSearchParams(payload);
+
+    return res.status(200).json(
+      formatFlightResponse(
+        flightData,
+        tripType,
+        payload.searchQuery.routeInfos.length,
+        searchParams,
+        sortOptions,
+        filters,
+        paginatedResult
+      )
+    );
+
   } catch (error) {
     next(error);
   }
