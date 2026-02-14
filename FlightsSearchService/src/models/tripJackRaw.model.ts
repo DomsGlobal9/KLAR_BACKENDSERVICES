@@ -8,6 +8,11 @@ const TripJackRawSchema = new mongoose.Schema(
       index: true,
     },
 
+    endpoint: {
+      type: String,
+      index: true
+    },
+
     requestPayload: {
       type: Object,
       required: true,
