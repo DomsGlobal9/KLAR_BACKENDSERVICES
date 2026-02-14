@@ -55,7 +55,7 @@ export const envConfig = {
       SEAT: "/fms/v1/seat",
       REVALIDATE: "/fms/v2/revalidate",
       FARE_QUOTE: "/fms/v2/farequote",
-      BOOKING_CREATE: "/fms/v2/booking-create",
+      BOOKING_CREATE: "/oms/v1/air/book",
       BOOKING_RETRIEVE: "/fms/v2/booking-retrieve",
     },
     
