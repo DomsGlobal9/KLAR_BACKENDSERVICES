@@ -52,9 +52,10 @@ export const envConfig = {
       AIR_SEARCH_ALL: "/fms/v1/air-search-all",
       FARE_RULE: "/fms/v2/farerule",
       REVIEW: "/fms/v2/review",
+      SEAT: "/fms/v1/seat",
       REVALIDATE: "/fms/v2/revalidate",
       FARE_QUOTE: "/fms/v2/farequote",
-      BOOKING_CREATE: "/fms/v2/booking-create",
+      BOOKING_CREATE: "/oms/v1/air/book",
       BOOKING_RETRIEVE: "/fms/v2/booking-retrieve",
     },
     

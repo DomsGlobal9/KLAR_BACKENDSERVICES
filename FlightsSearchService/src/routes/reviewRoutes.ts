@@ -1,95 +1,37 @@
 import { Router } from "express";
-import { reviewController, revalidateController } from "../controllers/review.controller";
+import { 
+  getPriceReview, 
+  getBatchPriceReview,
+  getPriceReviewWithRules 
+} from "../controllers/reviewController";
 
 const router = Router();
 
 /**
- * @swagger
- * /api/flights/review:
- *   post:
- *     summary: Review flight before booking
- *     description: Validates flight availability and pricing before proceeding to booking. Returns detailed flight information, pricing, and booking conditions.
- *     tags:
- *       - Flight Review
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/ReviewInput'
- *           example:
- *             searchId: "TJS107700007440"
- *             priceIds: ["TJS107700007440_DELBLRUK807_5962124616134657"]
- *     responses:
- *       200:
- *         description: Review successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/ReviewResult'
- *       400:
- *         description: Bad request - Invalid input
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ * @route   POST /api/flights/review
+ * @desc    Get price review for selected flight options
+ * @access  Public
+ * @body    { priceIds: string[] }
+ * @returns { success: boolean, message: string, data: TransformedReviewPrice }
  */
-router.post("/review", reviewController);
+router.post("/", getPriceReview);
 
 /**
- * @swagger
- * /api/flights/revalidate:
- *   post:
- *     summary: Revalidate fare before final booking
- *     description: Revalidates the fare to ensure pricing hasn't changed since the initial review. Should be called immediately before final booking confirmation.
- *     tags:
- *       - Flight Review
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RevalidateInput'
- *           example:
- *             reviewId: "TJS107700007440"
- *     responses:
- *       200:
- *         description: Revalidation successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/RevalidateResult'
- *       400:
- *         description: Bad request - Invalid review ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ * @route   POST /api/flights/review/batch
+ * @desc    Get price reviews for multiple sets of price IDs
+ * @access  Public
+ * @body    { requests: Array<{ priceIds: string[] }> }
+ * @returns { success: boolean, message: string, data: { successful: TransformedReviewPrice[], failed: ReviewError[], summary: { total: number, successful: number, failed: number } } }
  */
-router.post("/revalidate", revalidateController);
+router.post("/batch", getBatchPriceReview);
+
+/**
+ * @route   POST /api/flights/review-with-rules
+ * @desc    Get price review with fare rules included
+ * @access  Public
+ * @body    { priceIds: string[] }
+ * @returns { success: boolean, message: string, data: TransformedReviewPrice & { fareRules?: any } }
+ */
+router.post("/review-with-rules", getPriceReviewWithRules);
 
 export default router;
