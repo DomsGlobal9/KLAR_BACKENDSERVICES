@@ -51,6 +51,7 @@ router.post("/search", searchFlights);
 
 
 router.post("/:flightId", getFlightDetails);
+
 router.post("/all-details", getAllFlightsWithDetails);
 
 router.post("/segment/:segmentId", getSegmentById);
