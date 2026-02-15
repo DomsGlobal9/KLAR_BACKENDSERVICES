@@ -2,11 +2,32 @@ import { TripJackSearchPayload } from "../interface/flight/flight.interface";
 
 export type TripType = 'ONE_WAY' | 'RETURN' | 'MULTI_CITY';
 
+// export function detectTripType(payload: TripJackSearchPayload): TripType {
+//     const routeCount = payload.searchQuery.routeInfos.length;
+
+//     if (routeCount === 1) return 'ONE_WAY';
+//     if (routeCount === 2) return 'RETURN';
+//     return 'MULTI_CITY';
+// }
+
 export function detectTripType(payload: TripJackSearchPayload): TripType {
-    const routeCount = payload.searchQuery.routeInfos.length;
+    const routeInfos = payload.searchQuery.routeInfos;
+    const routeCount = routeInfos.length;
 
     if (routeCount === 1) return 'ONE_WAY';
-    if (routeCount === 2) return 'RETURN';
+
+    if (routeCount === 2) {
+        const first = routeInfos[0];
+        const second = routeInfos[1];
+
+        
+        if (first.toCityOrAirport.code === second.fromCityOrAirport.code &&
+            first.fromCityOrAirport.code === second.toCityOrAirport.code) {
+            return 'RETURN'; 
+        }
+
+        return 'MULTI_CITY';
+    }
     return 'MULTI_CITY';
 }
 
