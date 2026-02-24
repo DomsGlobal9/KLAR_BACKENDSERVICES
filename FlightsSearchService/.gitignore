@@ -60,6 +60,7 @@ Thumbs.db
 # Nodemon
 # ===============================
 nodemon.json
+package-lock
 
 # ===============================
 # Temporary files
