@@ -17,7 +17,7 @@ export const authenticateJWT = (
     try {
         // Extract token from various possible sources
         const token = extractTokenFromRequest(req);
-        console.log("***((((((((((",token);
+       
 
         // Check if token exists
         if (!token) {
@@ -39,7 +39,7 @@ export const authenticateJWT = (
 
         // Verify the token
         const decoded = JWTUtil.getInstance().verifyAccessToken(token);
-        console.log("!!!!@!@!@!@!@@!@@2121",decoded);
+        
         
         // Check if token payload contains required user information
         if (!decoded || !decoded.userId || !decoded.email) {
