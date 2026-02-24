@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { signupB2B, loginB2B, logoutB2B, me } from "../controllers/auth.controller";
-import { authenticateJWT } from "../middlewares/auth.middleware";
+import { authenticateJWT } from "../middlewares/authentication.middleware";
 
 const router = Router();
 
