@@ -49,7 +49,7 @@ export const approveVerification = async (
   next: NextFunction
 ) => {
   try {
-    await approveVerificationService(req.params.userId);
+    await approveVerificationService(req.params.userId as string);
     res.status(200).json({
       success: true,
       message: "Verification approved",
@@ -66,7 +66,7 @@ export const rejectVerification = async (
 ) => {
   try {
     const { remarks } = req.body;
-    await rejectVerificationService(req.params.userId, remarks);
+    await rejectVerificationService(req.params.userId as string, remarks);
     res.status(200).json({
       success: true,
       message: "Verification rejected",

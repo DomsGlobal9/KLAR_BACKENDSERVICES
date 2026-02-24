@@ -17,9 +17,21 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
     try {
         const url = getTripJackEndpoint('REVIEW');
 
-        console.log("🔍 Calling TripJack Review API:", {
-            url,
-            priceIdsCount: payload.priceIds.length
+        // 🔥 Log FULL Third Party API URL clearly
+        console.log("🌍 Full TripJack Review API URL:");
+        console.log("➡️", url);
+        console.log("➡️", payload);
+
+
+        console.log("📦 Request Details:", {
+            method: "POST",
+            url: url,
+            headers: {
+                "Content-Type": "application/json",
+                apikey: envConfig.TRIPJACK.API_KEY,
+            },
+            payloadSize: JSON.stringify(payload).length,
+            priceIdsCount: payload.priceIds?.length,
         });
 
         const response = await axios.post(
@@ -34,29 +46,30 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
             }
         );
 
-        await TripJackRawModel.create({
-            provider: "TRIPJACK",
-            endpoint: "REVIEW",
-            requestPayload: payload,
-            responsePayload: response.data,
-            searchKey: cacheKey,
-        }).catch((err) => {
-            console.error("Failed to store TripJack raw data", err);
-        });
+        console.log("✅ TripJack Review API Response received");
+        console.log("📡 Response Status:", response.status);
 
-        await setCache(cacheKey, JSON.stringify(response.data), envConfig.TRIPJACK.CACHE_TTL);
+        await setCache(
+            cacheKey,
+            JSON.stringify(response.data),
+            envConfig.TRIPJACK.CACHE_TTL
+        );
 
         return response.data as ReviewResponse;
+
     } catch (error: any) {
-        console.error("❌ TripJack Review API Error:", {
-            endpoint: getTripJackEndpoint('REVIEW'),
-            error: error.message,
-            status: error.response?.status,
-            data: error.response?.data,
-        });
+        const fullUrl = getTripJackEndpoint('REVIEW');
+
+        console.error("❌ TripJack Review API Error:");
+        console.error("🌍 URL:", fullUrl);
+        console.error("📡 Status:", error.response?.status);
+        console.error("🧾 Response Data:", error.response?.data);
+        console.error("💥 Error Message:", error.message);
+
         throw error;
     }
 };
+
 
 /**
  * Transform review response to frontend-friendly format

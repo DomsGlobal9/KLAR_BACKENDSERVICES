@@ -22,8 +22,6 @@ export const getPriceReview = async (
             });
         }
 
-        console.log("📋 Getting review for price IDs:", priceIds);
-
         const reviewData = await getReviewFromTripJack({ priceIds });
 
         if (!reviewData.status?.success) {
@@ -35,6 +33,12 @@ export const getPriceReview = async (
         }
 
         const transformedData = transformReviewResponse(reviewData, { priceIds });
+        if (!transformedData) {
+            return res.status(400).json({
+                success: false,
+                message: "Error while getting review data"
+            });
+        }
 
         return res.status(200).json({
             success: true,
@@ -43,7 +47,6 @@ export const getPriceReview = async (
         });
 
     } catch (error: any) {
-        console.error("❌ Error in getPriceReview:", error);
 
         if (error.response?.status === 404) {
             return res.status(404).json({

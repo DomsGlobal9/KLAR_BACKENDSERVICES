@@ -21,11 +21,9 @@ export const createInstantBooking = async (
             });
         }
 
-        console.log("📋 Creating instant booking for:", {
-            userRequest
-        });
 
         const tripJackRequest = BookingMapper.toTripJackFormat(userRequest);
+
         const bookingResponse = await FlightInstantBookingService.createInstantBooking(tripJackRequest);
 
         if (!bookingResponse.status?.success) {

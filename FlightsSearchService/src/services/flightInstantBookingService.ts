@@ -25,13 +25,6 @@ export class FlightInstantBookingService {
         try {
             const url = getTripJackEndpoint('BOOKING_CREATE');
 
-            console.log("🔍 Creating instant booking:", {
-                url,
-                bookingId: payload.bookingId,
-                amount: payload.paymentInfos[0]?.amount,
-                travellers: payload.travellerInfo.length
-            });
-
             const response = await axios.post(
                 url,
                 payload,
