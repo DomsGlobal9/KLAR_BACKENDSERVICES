@@ -29,6 +29,7 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
+    console.log("From starting search payload",req.body);
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
     const filters = FilterValidator.validateFilters(req.query);
