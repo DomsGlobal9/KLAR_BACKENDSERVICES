@@ -184,3 +184,28 @@ export const me = async (
   }
 };
 
+
+/**
+ * Validate JWT Token
+ * Simply returns 200 if the token is valid (authenticateJWT middleware already validates it)
+ */
+export const validateToken = async (
+  req: Request,
+  res: Response,
+  _next: NextFunction
+) => {
+
+  const user = (req as any).user;
+
+  res.status(200).json({
+    success: true,
+    message: "Token is valid",
+    data: {
+      userId: user.userId,
+      email: user.email,
+      clientType: user.clientType,
+      roles: user.roles,
+    },
+  });
+};
+
