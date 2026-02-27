@@ -1,54 +1,17 @@
 import { Request, Response } from "express";
 import { commitService } from "../services/commit.service";
 
-/**
- * @swagger
- * /api/booking/commit:
- *   post:
- *     summary: Commit a reservation
- *     tags: [Booking]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               BookReservation:
- *                 $ref: '#/components/schemas/RateGainBookReservation'
- *     responses:
- *       200:
- *         description: Reservation committed successfully
- *       401:
- *         description: Not authenticated
- */
-
 export const commitController = async (req: Request, res: Response) => {
     try {
-        // Check for user (populated by dummy auth middleware)
-        if (!req.user || !req.user.id) {
-            res.status(401).json({
-                success: false,
-                message: 'User not authenticated'
-            });
-            return;
-        }
-
-        const userId = req.user.id;
-        const data = await commitService.commit(req.body, userId);
+        const data = await commitService.commit(req.body);
         res.json(data);
     } catch (error: any) {
-        const statusCode = error.response?.status || 500;
-        const errorData = error.response?.data || {};
-
-        console.error('Commit Controller Error:', error.message);
-
-        res.status(statusCode).json({
-            success: false,
-            message: errorData.description || error.message || 'Failed to commit booking',
-            error: errorData
+        console.error("Commit Controller Error:", error.response?.data || error.message);
+        res.status(error.response?.status || 500).json({
+            status: false,
+            statusCode: error.response?.status || 500,
+            description: error.response?.data?.description || error.message || "Failed to commit booking",
+            body: null
         });
     }
 };

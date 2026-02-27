@@ -1,111 +1,49 @@
-import mongoose from 'mongoose';
 import { rateGainProvider } from "../providers/rategain.provider";
-import Booking, { BookingStatus } from "../../../shared/db/models/Booking.model";
+import { BookingModel, BookingStatus } from "../models/Booking.model";
 
 class CommitService {
-    async commit(payload: any, userId: string) {
-        let rateGainResponse;
-        try {
-            // Call RateGain API to commit the booking
-            rateGainResponse = await rateGainProvider.commit(payload);
-        } catch (apiError: any) {
-            console.warn('⚠️ RateGain API Commit Failed:', apiError.message);
-            console.log('🔄 Proceeding with MOCK COMMIT for development flow...');
+    async commit(payload: any) {
+        // Direct proxy to RateGain CommitReservation API
+        const rateGainResponse = await rateGainProvider.commit(payload);
 
-            // Mock a successful response
-            rateGainResponse = {
-                status: true,
-                body: {
-                    booking: {
-                        confirmationNumber: 'MOCK-' + Math.floor(Math.random() * 1000000),
-                        status: 'Confirmed',
-                        remark: 'Mocked Booking due to API error: ' + apiError.message
-                    }
-                }
-            };
-        }
-
+        // Map and save to DB
         try {
-            // Check if RateGain commit was successful (or mocked)
             if (rateGainResponse && (rateGainResponse.status === true || rateGainResponse.status === 'success')) {
-                // Extract booking details from payload and response
                 const bookReservation = (payload && payload.BookReservation) ? payload.BookReservation : {};
-                const rategainBody = rateGainResponse.body || {};
+                const rategainBooking = rateGainResponse.body?.booking || {};
 
-                // Attempt to save to database
-                let savedBooking = null;
-                try {
-                    const rategainBooking = rategainBody.booking || {};
-                    // Validate userId
-                    const validUserId = mongoose.Types.ObjectId.isValid(userId) ? userId : undefined;
+                // Find primary guest name safely
+                const firstRoom = Array.isArray(bookReservation.RoomSelection) ? bookReservation.RoomSelection[0] : null;
+                const firstGuest = firstRoom && Array.isArray(firstRoom.Guest) ? firstRoom.Guest[0] : null;
+                const guestName = firstGuest ? `${firstGuest.FirstName || ''} ${firstGuest.LastName || ''}`.trim() : 'Unknown';
 
-                    // Safely handle nested properties that might be missing in payload
-                    const checkInDate = bookReservation.checkin ? new Date(bookReservation.checkin) : new Date();
-                    const checkOutDate = bookReservation.checkout ? new Date(bookReservation.checkout) : new Date(Date.now() + 86400000);
+                let confirmationNumber = rategainBooking.confirmationNumber || rategainBooking.ConfirmationNumber || rateGainResponse.ConfirmationNumber || bookReservation.EchoToken || 'CONF-UNKNOWN';
+                let reservationId = rategainBooking.ReservationId || rategainBooking.reservationId || confirmationNumber;
 
-                    // Handle RoomSelection safely
-                    const roomSelection = Array.isArray(bookReservation.RoomSelection) ? bookReservation.RoomSelection : [];
+                const bookingRecord = new BookingModel({
+                    confirmationNumber,
+                    reservationId,
+                    propertyId: bookReservation.propertyID || bookReservation.PropertyId,
+                    propertyCode: bookReservation.PropertyCode,
+                    status: BookingStatus.CONFIRMED,
+                    checkIn: bookReservation.checkin ? new Date(bookReservation.checkin) : new Date(),
+                    checkOut: bookReservation.checkout ? new Date(bookReservation.checkout) : new Date(Date.now() + 86400000),
+                    totalAmount: bookReservation.BookingRate || 0,
+                    currencyCode: bookReservation.CurrencyCode || 'USD',
+                    guestName: guestName,
+                    rooms: Array.isArray(bookReservation.RoomSelection) ? bookReservation.RoomSelection : [],
+                    rateGainRequest: payload,
+                    rateGainResponse: rateGainResponse
+                });
 
-                    const guests = roomSelection.flatMap((room: any) =>
-                        (room.Guest && Array.isArray(room.Guest)) ? room.Guest.map((guest: any) => ({
-                            firstName: guest.FirstName || 'Unknown',
-                            lastName: guest.LastName || 'Guest',
-                            email: guest.Email,
-                            phone: guest.Phone,
-                            isPrimary: guest.Primary
-                        })) : []
-                    );
-
-                    const rooms = roomSelection.map((room: any) => ({
-                        roomTypeCode: room.RoomTypeCode,
-                        numberOfRooms: room.NumberOfRooms,
-                        numberOfAdults: room.NumberOfAdults,
-                        numberOfChildren: room.NumberOfChild,
-                        roomRate: room.RoomRate,
-                        boardName: room.BoardName
-                    }));
-
-                    const booking = new Booking({
-                        userId: validUserId,
-                        confirmationNumber: rategainBooking.confirmationNumber || rateGainResponse.ConfirmationNumber || bookReservation.EchoToken || 'CONF-UNKNOWN',
-                        propertyId: bookReservation.propertyID,
-                        propertyName: bookReservation.PropertyCode,
-                        propertyCode: bookReservation.PropertyCode,
-                        status: BookingStatus.CONFIRMED,
-                        checkIn: checkInDate,
-                        checkOut: checkOutDate,
-                        totalAmount: bookReservation.BookingRate || 0,
-                        currencyCode: bookReservation.CurrencyCode || 'USD',
-                        guests: guests,
-                        rooms: rooms,
-                        rateGainResponse: rateGainResponse.body || rateGainResponse,
-                        walletId: bookReservation.walletId,
-                        paymentId: bookReservation.paymentId,
-                        paymentStatus: bookReservation.paymentId ? 'COMPLETED' : 'PENDING',
-                        specialRequests: roomSelection?.[0]?.SpecialRequest ? roomSelection[0].SpecialRequest.split(',') : [],
-                        remarks: roomSelection?.[0]?.Comment || ''
-                    });
-
-                    await booking.save();
-                    savedBooking = booking.toJSON();
-                    console.log('✅ Booking saved to database:', savedBooking._id);
-                } catch (dbError: any) {
-                    console.error('DATABASE ERROR (Booking not saved to history):', dbError.message);
-                }
-
-                return {
-                    ...rateGainResponse,
-                    booking: savedBooking,
-                    dbError: savedBooking ? null : 'Booking confirmed but not saved to local history'
-                };
+                await bookingRecord.save();
+                console.log(`✅ Saved booking to local DB: ${confirmationNumber}`);
             }
-
-            return rateGainResponse;
-
-        } catch (error: any) {
-            console.error('Commit Service Fatal Error:', error);
-            throw error;
+        } catch (dbError: any) {
+            console.error('⚠️ local DB insert failed (RateGain was successful):', dbError.message);
         }
+
+        return rateGainResponse;
     }
 }
 

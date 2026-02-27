@@ -1,10 +1,6 @@
 import axios from "axios";
 import { env } from "../config/env";
 
-if (!env.rateGain.baseUrl) {
-    console.error("[ERROR] RATEGAIN_BASE_URL is missing! Requests will fail.");
-}
-
 export const rateGainClient = axios.create({
     baseURL: env.rateGain.baseUrl,
     timeout: 60000,

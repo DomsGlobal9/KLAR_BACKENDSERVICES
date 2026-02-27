@@ -1,37 +1,38 @@
 import { rateGainProvider } from "../providers/rategain.provider";
-import bookingHistoryService from "./booking-history.service";
-import { BookingStatus } from "../../../shared/db/models/Booking.model";
+import { BookingModel, BookingStatus } from "../models/Booking.model";
 
 class CancelService {
-    async cancel(payload: any, userId: string) {
+    async cancel(payload: any) {
+        // Direct proxy to RateGain CancelReservation API
+        const rateGainResponse = await rateGainProvider.cancel(payload);
+
         try {
-            // Call RateGain API to cancel the booking
-            const rateGainResponse = await rateGainProvider.cancel(payload);
+            if (rateGainResponse && (rateGainResponse.status === true || rateGainResponse.status === 'success')) {
+                // RateGain usually requires ReservationId and/or ConfirmationNumber to cancel
+                const confirmationNumber = payload.ConfirmationNumber;
+                const reservationId = payload.ReservationId;
 
-            // If cancellation was successful, update booking in database
-            if (rateGainResponse && rateGainResponse.status) {
-                // Find booking by confirmation number and update status
-                const booking = await bookingHistoryService.updateBookingStatus(
-                    payload.ReservationId,
-                    BookingStatus.CANCELLED,
-                    userId
-                );
+                if (confirmationNumber || reservationId) {
+                    const query: any = {};
+                    if (confirmationNumber) query.confirmationNumber = confirmationNumber;
+                    if (reservationId) query.reservationId = reservationId;
 
-                return {
-                    ...rateGainResponse,
-                    booking: booking ? booking.toJSON() : null
-                };
+                    const updated = await BookingModel.findOneAndUpdate(
+                        query,
+                        { status: BookingStatus.CANCELLED },
+                        { new: true }
+                    );
+
+                    if (updated) {
+                        console.log(`✅ Updated local DB booking to CANCELLED: ${updated.confirmationNumber}`);
+                    }
+                }
             }
-
-            return rateGainResponse;
-
-        } catch (error: any) {
-            // If it's a database error after successful RateGain cancel, log it but don't fail
-            if (error.message && !error.message.includes('RateGain')) {
-                console.error('Failed to update booking status in database:', error);
-            }
-            throw error;
+        } catch (dbError: any) {
+            console.error('⚠️ local DB update failed (RateGain cancel was successful):', dbError.message);
         }
+
+        return rateGainResponse;
     }
 }
 

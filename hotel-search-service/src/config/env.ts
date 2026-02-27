@@ -1,15 +1,5 @@
-import dotenv from "dotenv";
-dotenv.config();
-
-console.log("[CONFIG] Loading environment variables...");
-console.log(`[CONFIG] RATEGAIN_BASE_URL present: ${!!process.env.RATEGAIN_BASE_URL}`);
-if (process.env.RATEGAIN_BASE_URL) {
-    console.log(`[CONFIG] RATEGAIN_BASE_URL length: ${process.env.RATEGAIN_BASE_URL.length}`);
-}
-
 export const env = {
-    port: process.env.PORT || 3001,
-    useRateGainMock: process.env.USE_RATEGAIN_MOCK === "true",
+    port: process.env.PORT || 5000,
 
     rateGain: {
         baseUrl: process.env.RATEGAIN_BASE_URL!,
@@ -17,3 +7,10 @@ export const env = {
         apiSecret: process.env.RATEGAIN_SECRET_KEY!,
     },
 };
+
+if (!env.rateGain.baseUrl) {
+    console.error("❌ RATEGAIN_BASE_URL is not set. Service will not work.");
+}
+if (!env.rateGain.apiKey) {
+    console.error("❌ RATEGAIN_API_KEY is not set. Service will not work.");
+}

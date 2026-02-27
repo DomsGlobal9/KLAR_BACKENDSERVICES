@@ -11,5 +11,3 @@ export const rateGainClient = axios.create({
         "ApiSecret": env.rateGain.apiSecret,
     },
 });
-
-

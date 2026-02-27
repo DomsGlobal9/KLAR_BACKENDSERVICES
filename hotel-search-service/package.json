@@ -4,9 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "test:dev": "ts-node-dev --respawn --transpile-only src/test-server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "clean": "rm -rf dist",
+    "deepclean": "rm -rf dist node_modules package-lock.json",
+    "db:seed": "ts-node scripts/seed.ts"
   },
   "keywords": [],
   "author": "",

@@ -1,5 +1,4 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
@@ -7,15 +6,10 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "strict": true,
-    "skipLibCheck": true,
-    "typeRoots": [
-      "./node_modules/@types",
-      "../../shared/types"
-    ]
+    "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "../../shared/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules"

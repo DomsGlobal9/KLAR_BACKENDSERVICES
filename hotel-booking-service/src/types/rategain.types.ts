@@ -55,10 +55,10 @@ export interface RateGainBookReservation {
     propertyID: string;
     PropertyCode: string;
     BrandCode: string;
-    EchoToken: string;
+    EchoToken?: string;
     BookingRate: number;
     sellingRate?: number;
-    Session: string;
+    Session?: string;
     CountryCode?: string;
     Currency?: string;
     CreditCard?: RateGainCreditCard;
@@ -77,7 +77,7 @@ export interface CancelRequest {
     ConfirmationNumber: string;
     DemandCancelId?: string;
     ReservationId: string;
-    EchoToken: string;
+    EchoToken?: string;
     PropertyId: string;
     BrandCode: string; // Required by API even if missing from some documentation
     TimeStamp?: string;

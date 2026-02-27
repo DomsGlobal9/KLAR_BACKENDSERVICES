@@ -1,47 +1,32 @@
 import { rateGainClient } from "../clients/rategain.client";
-import fs from "fs";
-import path from "path";
-
-const logFile = path.join(process.cwd(), "debug.log");
-function logToFile(msg: string) {
-    const formattedMsg = `[${new Date().toISOString()}] ${msg}`;
-
-    if (process.env.VERCEL) {
-        console.log(formattedMsg);
-        return;
-    }
-
-    try {
-        fs.appendFileSync(logFile, `${formattedMsg}\n`);
-    } catch (error) {
-        console.log(formattedMsg);
-        console.error(`[ERROR] Failed to write to log file: ${(error as Error).message}`);
-    }
-}
 
 export class RateGainApiProvider {
+
+    /**
+     * GET /api/SmartDistribution/getDestinations
+     * Returns list of all available destination codes.
+     */
     async getDestinations() {
         try {
-            logToFile("Fetching RateGain Destinations...");
             const res = await rateGainClient.get("/api/SmartDistribution/getDestinations");
-            logToFile(`RateGain Destinations Success: ${JSON.stringify(res.data).substring(0, 100)}...`);
             return res.data;
         } catch (error: any) {
-            logToFile(`RateGain GetDestinations Error: ${JSON.stringify(error.response?.data || error.message)}`);
+            console.error("[RateGain] GetDestinations Error:", error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
     }
 
+    /**
+     * POST /api/SmartDistribution/bestproperties
+     * Search for best available hotel properties in a destination.
+     */
     async getBestProperties(payload: any) {
-        logToFile(`[DEBUG] Raw Input Payload to getBestProperties: ${JSON.stringify(payload)}`);
-
-        // Build payload per RateGain API v1.5.3 spec
         const rateGainPayload: any = {
             destinationCode: payload.destinationCode || payload.destCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
             Echotoken: payload.Echotoken || payload.echoToken || `echo-${Date.now()}`,
-            Rooms: (payload.Rooms || payload.rooms || [{}]).map((r: any) => {
+            Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.Adults || r.adults || 2;
                 const childrenCount = r.Children || r.children || 0;
                 const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type === "Child").map((p: any) => p.age) || [];
@@ -52,12 +37,10 @@ export class RateGainApiProvider {
                     Children: childrenCount,
                 };
 
-                // Spec: paxes only required when children > 0, adult paxes are NOT required
                 if (childrenCount > 0) {
-                    const childPaxes = childrenAges.length > 0
+                    room.paxes = childrenAges.length > 0
                         ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
                         : Array(childrenCount).fill({ type: "Child", age: 5 });
-                    room.paxes = childPaxes;
                 }
 
                 return room;
@@ -65,7 +48,7 @@ export class RateGainApiProvider {
             pageNo: payload.pageNo || 1,
         };
 
-        // Optional fields — only include if provided
+        // Optional fields per spec
         if (payload.CountryCode || payload.countryCode) {
             rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
         }
@@ -83,26 +66,26 @@ export class RateGainApiProvider {
         }
 
         try {
-            logToFile(`RateGain Search Payload: ${JSON.stringify(rateGainPayload, null, 2)}`);
             const res = await rateGainClient.post("/api/SmartDistribution/bestproperties", rateGainPayload);
-            logToFile(`RateGain Search Success: ${JSON.stringify(res.data, null, 2)}`);
             return res.data;
         } catch (error: any) {
-            logToFile(`RateGain Search Error Status: ${error.response?.status}`);
-            logToFile(`RateGain Search Error Response: ${JSON.stringify(error.response?.data || error.message)}`);
+            console.error("[RateGain] BestProperties Error:", error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
     }
 
+    /**
+     * POST /api/SmartDistribution/getproducts
+     * Get room-level product details for a specific property.
+     */
     async getAllProducts(payload: any) {
-        // Build strict payload for getproducts API per v1.5.3 spec
         const rateGainPayload: any = {
-            propertyID: payload.propertyID || payload.propertyId, // Required
-            PropertyCode: payload.PropertyCode || payload.propertyCode, // Required
-            BrandCode: payload.BrandCode || payload.brandCode, // Required
-            checkin: payload.checkin || payload.checkIn,       // Required
-            checkout: payload.checkout || payload.checkOut,    // Required
-            Rooms: (payload.Rooms || payload.rooms || [{}]).map((r: any) => {
+            propertyID: payload.propertyID || payload.propertyId,
+            PropertyCode: payload.PropertyCode || payload.propertyCode,
+            BrandCode: payload.BrandCode || payload.brandCode,
+            checkin: payload.checkin || payload.checkIn,
+            checkout: payload.checkout || payload.checkOut,
+            Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const childrenCount = r.children || r.Children || 0;
                 const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type === "Child").map((p: any) => p.age) || [];
 
@@ -112,7 +95,6 @@ export class RateGainApiProvider {
                     children: childrenCount,
                 };
 
-                // Spec: paxes required if children > 0
                 if (childrenCount > 0) {
                     room.paxes = childrenAges.length > 0
                         ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
@@ -124,7 +106,7 @@ export class RateGainApiProvider {
             echoToken: payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
         };
 
-        // Optional fields — only include if provided
+        // Optional fields
         if (payload.CountryCode || payload.countryCode) {
             rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
         }
@@ -133,99 +115,10 @@ export class RateGainApiProvider {
         }
 
         try {
-            logToFile(`RateGain Products Payload: ${JSON.stringify(rateGainPayload, null, 2)}`);
             const res = await rateGainClient.post("/api/SmartDistribution/getproducts", rateGainPayload);
-            logToFile(`RateGain Products Success: ${JSON.stringify(res.data, null, 2)}`);
             return res.data;
         } catch (error: any) {
-            logToFile(`RateGain Products Error Status: ${error.response?.status}`);
-            logToFile(`RateGain Products Error Response: ${JSON.stringify(error.response?.data || error.message)}`);
-            throw error;
-        }
-    }
-
-    async precheck(payload: any) {
-        // Build PreCheckReservation payload per v1.5.3 spec
-        const booking = payload.BookReservation || {};
-        const consolidatedPayload = {
-            BookReservation: {
-                ...booking,
-                ReservationDate: booking.ReservationDate || new Date().toISOString().split("T")[0],
-                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-            },
-        };
-
-        try {
-            logToFile(`RateGain PreCheck Payload: ${JSON.stringify(consolidatedPayload, null, 2)}`);
-            const response = await rateGainClient.post("/api/SmartDistribution/PreCheckReservation", consolidatedPayload);
-            logToFile(`RateGain PreCheck Success: ${JSON.stringify(response.data, null, 2)}`);
-            return response.data;
-        } catch (error: any) {
-            logToFile(`RateGain PreCheck Error: ${JSON.stringify(error.response?.data || error.message)}`);
-            throw error;
-        }
-    }
-
-    async commit(payload: any) {
-        // Build CommitReservation payload per v1.5.3 spec
-        const booking = payload.BookReservation || {};
-        const now = new Date().toISOString();
-
-        const consolidatedPayload = {
-            BookReservation: {
-                ...booking,
-                // Required fields — auto-fill if not provided
-                DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
-                ReservationDate: booking.ReservationDate || now,
-                TimeStamp: booking.TimeStamp || now,
-                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-                // v1.5.3: SellingRate for B2C Net+Commission model (pass through if provided)
-                ...(booking.SellingRate !== undefined && { SellingRate: booking.SellingRate }),
-                ...(booking.sellingRate !== undefined && { SellingRate: booking.sellingRate }),
-            },
-        };
-
-        try {
-            logToFile(`RateGain Commit Payload: ${JSON.stringify(consolidatedPayload, null, 2)}`);
-            const response = await rateGainClient.post("/api/SmartDistribution/CommitReservation", consolidatedPayload);
-            logToFile(`RateGain Commit Success: ${JSON.stringify(response.data, null, 2)}`);
-            return response.data;
-        } catch (error: any) {
-            logToFile(`RateGain Commit Error Status: ${error.response?.status}`);
-            logToFile(`RateGain Commit Error Data: ${JSON.stringify(error.response?.data || error.message)}`);
-            throw error;
-        }
-    }
-
-    async cancel(payload: any) {
-        // Build CancelReservation payload per v1.5.3 spec
-        const consolidatedPayload = {
-            ...payload,
-            DemandCancelId: payload.DemandCancelId || `demand-cancel-${Date.now()}`,
-            TimeStamp: payload.TimeStamp || new Date().toISOString(),
-            EchoToken: payload.EchoToken || payload.Echotoken || `echo-${Date.now()}`,
-        };
-
-        try {
-            logToFile(`RateGain Cancel Payload: ${JSON.stringify(consolidatedPayload, null, 2)}`);
-            const response = await rateGainClient.post("/api/SmartDistribution/CancelReservation", consolidatedPayload);
-            logToFile(`RateGain Cancel Success: ${JSON.stringify(response.data, null, 2)}`);
-            return response.data;
-        } catch (error: any) {
-            logToFile(`RateGain Cancel Error Status: ${error.response?.status}`);
-            logToFile(`RateGain Cancel Error Data: ${JSON.stringify(error.response?.data || error.message)}`);
-            throw error;
-        }
-    }
-
-    async getSpecialRequests() {
-        try {
-            logToFile("Fetching RateGain SpecialRequests...");
-            const response = await rateGainClient.get("/api/SmartDistribution/getSpecialRequests");
-            logToFile("RateGain SpecialRequests Success");
-            return response.data;
-        } catch (error: any) {
-            logToFile(`RateGain SpecialRequests Error: ${JSON.stringify(error.response?.data || error.message)}`);
+            console.error("[RateGain] GetProducts Error:", error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
     }
