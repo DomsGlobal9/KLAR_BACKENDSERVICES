@@ -4,9 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/server.ts",
-    "dev": "nodemon src/server.ts"
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "clean": "rm -rf dist",
+    "deep-clean": "rm -rf dist node_modules package-lock.json"
   },
   "keywords": [],
   "author": "",

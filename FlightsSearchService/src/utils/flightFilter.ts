@@ -1,6 +1,6 @@
-import { FlightFilterOptions } from "../interface/flight/flight.interface";
 
-export const filterFlights = (flights: any, filters: FlightFilterOptions) => {
+
+export const filterFlights = (flights: any, filters: any) => {
     let filteredFlights = [...flights];
 
 
