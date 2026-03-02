@@ -8,7 +8,13 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "clean": "rm -rf dist",
-    "deep-clean": "rm -rf dist node_modules package-lock.json"
+    "deep-clean": "rm -rf dist node_modules package-lock.json",
+    "start:pm2": "pm2 start dist/server.js --name klar-backend-auth-service",
+    "restart:pm2": "pm2 restart klar-auth",
+    "stop:pm2": "pm2 stop klar-auth",
+    "delete:pm2": "pm2 delete klar-auth",
+    "logs:pm2": "pm2 logs klar-auth",
+    "deploy": "git pull && npm install && npm run build && pm2 restart klar-auth"
   },
   "keywords": [],
   "author": "",
