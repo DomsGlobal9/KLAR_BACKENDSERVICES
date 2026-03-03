@@ -10,7 +10,8 @@ export const contextResolver = (
     _res: Response,
     next: NextFunction
 ) => {
-    const path = req.path.split("/")[1].toLowerCase();
+    console.log("^^^^^^^^^ The import first path we get", req.path);
+    const path = req.path.split("/")[1];
     console.log("1. The path we get", path);
 
     // Bypass context resolution for health check and admin routes
