@@ -1,0 +1,182 @@
+{
+    "info": {
+        "name": "Auth Service - Wallet API",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:4000"
+        }
+    ],
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login B2B",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"yourpassword\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/auth/login",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Logout B2B",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/auth/logout",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "auth",
+                                "logout"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Wallet",
+            "item": [
+                {
+                    "name": "Get Wallet",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/wallet",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "wallet"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Credit Wallet",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"amount\": 1000,\n  \"description\": \"Test credit\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/wallet/credit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "wallet",
+                                "credit"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Debit Wallet",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"amount\": 500,\n  \"description\": \"Test debit\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/wallet/debit",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "wallet",
+                                "debit"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Transactions",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/wallet/transactions",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "wallet",
+                                "transactions"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Update Settings",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"emailAlerts\": true,\n  \"smsAlerts\": false\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/b2b/wallet/settings",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "b2b",
+                                "wallet",
+                                "settings"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

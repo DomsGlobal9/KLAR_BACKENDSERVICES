@@ -1,0 +1,49 @@
+{
+  "name": "klar-auth-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "clean": "rm -rf dist",
+    "deep-clean": "rm -rf dist node_modules package-lock.json",
+    "build": "npm run clean && tsc",
+    "start": "node dist/src/server.js",
+    "start:pm2": "pm2 start dist/src/server.js --name klar-backend-auth-service",
+    "restart:pm2": "pm2 restart klar-backend-auth-service",
+    "stop:pm2": "pm2 stop klar-backend-auth-service",
+    "delete:pm2": "pm2 delete klar-backend-auth-service",
+    "logs:pm2": "pm2 logs klar-backend-auth-service",
+    "deploy": "git pull && npm install && npm run build && pm2 reload klar-backend-auth-service"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/mongoose": "^5.11.96",
+    "@types/node": "^25.0.3",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "directories": {
+    "test": "tests"
+  }
+}
