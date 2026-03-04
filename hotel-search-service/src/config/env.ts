@@ -1,5 +1,5 @@
 export const env = {
-    port: process.env.PORT || 5000,
+    port: process.env.PORT || 5012,
 
     rateGain: {
         baseUrl: process.env.RATEGAIN_BASE_URL!,
