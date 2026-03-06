@@ -9,7 +9,7 @@
     "test:dev": "ts-node-dev --respawn --transpile-only src/test-server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist node_modules",
     "deepclean": "rm -rf dist node_modules package-lock.json",
     "db:seed": "ts-node scripts/seed.ts",
     "pm2:start": "pm2 start dist/server.js --name klar-hotel-booking-service",
