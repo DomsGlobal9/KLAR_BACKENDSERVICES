@@ -65,6 +65,7 @@ export class RateGainApiProvider {
             DemandCancelId: payload.DemandCancelId || `demand-cancel-${Date.now()}`,
             TimeStamp: payload.TimeStamp || new Date().toISOString(),
             EchoToken: payload.EchoToken || payload.Echotoken || `echo-${Date.now()}`,
+            ...(payload.BrandCode !== undefined && { BrandCode: payload.BrandCode }),
         };
 
         try {
