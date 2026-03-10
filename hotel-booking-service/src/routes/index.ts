@@ -18,7 +18,6 @@ router.get("/", (_req, res) => {
             commit: "POST /commit",
             cancel: "POST /cancel",
             specialRequests: "GET /special-requests",
-            bookings: "GET /bookings",
             bookingDetails: "GET /bookings/:id"
         }
     });
@@ -45,7 +44,6 @@ router.post("/cancel", cancelController);
 router.get("/special-requests", specialRequestsController);
 
 // New booking management routes
-router.get("/bookings", getBookings);
 router.get("/bookings/:id", getBookingDetails);
 
 export default router;

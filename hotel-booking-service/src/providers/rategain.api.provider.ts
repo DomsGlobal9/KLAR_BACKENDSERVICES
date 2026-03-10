@@ -78,7 +78,6 @@ export class RateGainApiProvider {
             return response.data;
         } catch (error: any) {
             // Log full error response for debugging
-            require('fs').appendFileSync('cancel-debug.json', 'ERROR:\n' + JSON.stringify(error.response?.data || error.message, null, 2) + '\n');
             console.error('[RateGain] Cancel Error Details:', error.response?.data);
             console.error('[RateGain] Cancel Error:', error.response?.status, error.response?.data?.description || error.message);
             throw error;

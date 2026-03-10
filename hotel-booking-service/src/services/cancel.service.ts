@@ -76,7 +76,29 @@ class CancelService {
         }
 
         // ─── Step 2: Call RateGain CancelReservation ───
-        const rateGainResponse = await rateGainProvider.cancel(enrichedPayload);
+        let rateGainResponse;
+        try {
+            rateGainResponse = await rateGainProvider.cancel(enrichedPayload);
+        } catch (error: any) {
+            const errorDataStr = JSON.stringify(error.response?.data || {});
+            const errorDesc = error.response?.data?.description || error.response?.data?.Description || error.message || "";
+
+            // If RateGain throws "ConfirmationNumber(...) Number Invalid", it means the booking is already cancelled on their side.
+            if ((error.response?.status === 400 || error.response?.status === 500) && (errorDesc.includes("Number Invalid") || errorDataStr.includes("Number Invalid"))) {
+                console.log(`⚠️ RateGain says Number Invalid. Assuming booking is already cancelled on their end. Gracefully syncing local DB.`);
+                rateGainResponse = {
+                    status: true,
+                    statusCode: 200,
+                    body: {
+                        cancellationNumber: "PREV-CANCELLED",
+                        confirmationNumber: confirmationNumber || enrichedPayload.ConfirmationNumber,
+                        status: "CANCELLED"
+                    }
+                };
+            } else {
+                throw error; // Rethrow actual failures
+            }
+        }
 
         // ─── Step 3: Update local DB status if cancellation succeeded ───
         try {
