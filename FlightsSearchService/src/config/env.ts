@@ -31,7 +31,8 @@ export const envConfig = {
 
   BASE: {
     PORT: getEnvNumber("PORT", 5001),
-    BASE_URL: getEnv("BASE_URL", false) || "http://localhost:5397",
+    BASE_URL: getEnv("BASE_URL", false),
+    AUTH_SERVICE: getEnv("AUTHENTICATION_SERVICE", false),
   },
 
   DATABASE: {
