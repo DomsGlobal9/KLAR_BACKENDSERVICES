@@ -7,7 +7,8 @@ import fareRule from "./fareRuleRoutes";
 import reviewRule from "./reviewRoutes";
 import flightSeat from "./flightSeatRoute";
 import flightBooking from "./bookingRoutes";
-import bookingDetails from "./bookingDetails.routes";
+import bookingDetails from "./flightBooking.routes";
+
 
 const router = Router();
 
