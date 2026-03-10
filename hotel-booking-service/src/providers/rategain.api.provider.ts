@@ -60,21 +60,30 @@ export class RateGainApiProvider {
      * Cancel an existing hotel reservation.
      */
     async cancel(payload: any) {
-        const consolidatedPayload = {
-            ...payload,
-            DemandCancelId: payload.DemandCancelId || `demand-cancel-${Date.now()}`,
-            TimeStamp: payload.TimeStamp || new Date().toISOString(),
-            EchoToken: payload.EchoToken || payload.Echotoken || `echo-${Date.now()}`,
-            ...(payload.BrandCode !== undefined && { BrandCode: payload.BrandCode }),
-        };
+        // Wrap payload in CancelReservation as required by RateGain
+        // Also extract BrandCode from nested structure if necessary
+        const booking = payload.CancelReservation || payload;
 
+        const wrappedPayload = {
+            ...booking,
+            DemandCancelId: booking.DemandCancelId || `demand-cancel-${Date.now()}`,
+            TimeStamp: booking.TimeStamp || new Date().toISOString(),
+            EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
+            BrandCode: booking.BrandCode || "N/A",
+            PropertyCode: booking.PropertyCode || "N/A"
+        };
+        console.log(`[RateGain] Cancel Request Payload:`, JSON.stringify(wrappedPayload, null, 2));
         try {
-            const response = await rateGainClient.post("/api/SmartDistribution/CancelReservation", consolidatedPayload);
+            const response = await rateGainClient.post("/api/SmartDistribution/CancelReservation", wrappedPayload);
             return response.data;
         } catch (error: any) {
-            console.error("[RateGain] Cancel Error:", error.response?.status, error.response?.data?.description || error.message);
+            // Log full error response for debugging
+            require('fs').appendFileSync('cancel-debug.json', 'ERROR:\n' + JSON.stringify(error.response?.data || error.message, null, 2) + '\n');
+            console.error('[RateGain] Cancel Error Details:', error.response?.data);
+            console.error('[RateGain] Cancel Error:', error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
+
     }
 
     /**
