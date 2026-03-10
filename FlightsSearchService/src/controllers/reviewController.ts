@@ -15,13 +15,14 @@ export const getPriceReview = async (
     try {
         const { priceIds } = req.body;
 
+        console.log("Completed section: 1");
         if (!validateReviewRequest(priceIds)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid request. Expected { priceIds: string[] } with at least one price ID"
             });
         }
-
+        console.log("Completed section: 2");
         const reviewData = await getReviewFromTripJack({ priceIds });
 
         if (!reviewData.status?.success) {
@@ -32,6 +33,7 @@ export const getPriceReview = async (
             });
         }
 
+        console.log("Completed section: 3");
         const transformedData = transformReviewResponse(reviewData, { priceIds });
         if (!transformedData) {
             return res.status(400).json({
@@ -40,6 +42,7 @@ export const getPriceReview = async (
             });
         }
 
+        console.log("Completed section: 4");
         return res.status(200).json({
             success: true,
             message: "Price review fetched successfully",
@@ -48,6 +51,7 @@ export const getPriceReview = async (
 
     } catch (error: any) {
 
+        console.log("Entered catch section: 1");
         if (error.response?.status === 404) {
             return res.status(404).json({
                 success: false,
@@ -55,6 +59,7 @@ export const getPriceReview = async (
             });
         }
 
+        console.log("Entered catch section: 2");
         if (error.response?.status === 400) {
             return res.status(400).json({
                 success: false,

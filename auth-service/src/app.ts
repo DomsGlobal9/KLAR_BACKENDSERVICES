@@ -13,6 +13,13 @@ app.use(cors(corsOptions));
 
 app.options("/", cors(corsOptions));
 
+app.get("/", (req, res) => {
+    res.status(200).json({
+        message: "Auth service working fine 🚀",
+        status: "ok"
+    });
+});
+
 
 app.get("/health", (req, res) => {
     console.log("Health check");

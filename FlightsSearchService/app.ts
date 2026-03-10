@@ -16,6 +16,13 @@ app.use(helmet()); // used to set security headers
 app.use(compression()); // used to compress the response
 app.use(express.json()); // used to parse the request body
 
+app.get("/", (req, res) => {
+    res.status(200).json({
+        message: "Flight service working fine 🚀",
+        status: "ok"
+    });
+});
+
 app.get("/check", (req, res) => {
     res.status(200).json({
         success: true,

@@ -4,9 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/server.ts",
-    "dev": "nodemon src/server.ts"
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "clean": "rm -rf dist",
+    "deep-clean": "rm -rf dist node_modules package-lock.json",
+    "build": "npm run clean && tsc",
+    "start": "node dist/src/server.js",
+    "start:pm2": "pm2 start dist/src/server.js --name klar-backend-auth-service",
+    "restart:pm2": "pm2 restart klar-backend-auth-service",
+    "stop:pm2": "pm2 stop klar-backend-auth-service",
+    "delete:pm2": "pm2 delete klar-backend-auth-service",
+    "logs:pm2": "pm2 logs klar-backend-auth-service",
+    "deploy": "git pull && npm install && npm run build && pm2 reload klar-backend-auth-service"
   },
   "keywords": [],
   "author": "",

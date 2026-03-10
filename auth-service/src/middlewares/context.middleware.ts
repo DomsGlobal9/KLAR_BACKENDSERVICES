@@ -10,7 +10,9 @@ export const contextResolver = (
     _res: Response,
     next: NextFunction
 ) => {
+    console.log("^^^^^^^^^ The import first path we get", req.path);
     const path = req.path.split("/")[1];
+    console.log("1. The path we get", path);
 
     // Bypass context resolution for health check and admin routes
     if (path === "health" || path === "admin") {
@@ -25,6 +27,9 @@ export const contextResolver = (
         req.clientType = path as ClientType;
         return next();
     }
+
+    console.log("2. The path we get", path);
+
 
     return next(new Error(`Invalid client type: ${path}`));
 };
