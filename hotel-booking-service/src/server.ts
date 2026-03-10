@@ -10,11 +10,13 @@ const MONGODB_URI = process.env.MONGODB_URI;
 async function startServer() {
     if (MONGODB_URI) {
         console.log("⏳ Connecting to MongoDB...");
-        mongoose.connect(MONGODB_URI)
-            .then(() => console.log("✅ MongoDB Connected!"))
-            .catch((err) => {
-                console.error("⚠️  MongoDB connection failed (bookings will not be persisted locally):", err.message);
-            });
+        try {
+            await mongoose.connect(MONGODB_URI);
+            console.log("✅ MongoDB Connected!");
+        } catch (err: any) {
+            console.error("❌ MongoDB connection failed:", err.message);
+            // Optionally exit if DB is required: process.exit(1);
+        }
     } else {
         console.warn("⚠️  MONGODB_URI not set. Bookings will NOT be saved to local DB.");
     }
