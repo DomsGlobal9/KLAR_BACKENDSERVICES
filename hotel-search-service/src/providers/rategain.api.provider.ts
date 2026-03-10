@@ -27,21 +27,20 @@ export class RateGainApiProvider {
             checkout: payload.checkout || payload.checkOut,
             Echotoken: payload.Echotoken || payload.echoToken || `echo-${Date.now()}`,
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
-                const adultsCount = r.Adults || r.adults || 2;
-                const childrenCount = r.Children || r.children || 0;
-                const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type === "Child").map((p: any) => p.age) || [];
+                const adultsCount = r.adults || r.Adults || 2;
+                const childrenCount = r.children || r.Children || 0;
+                const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type?.toLowerCase() === "child").map((p: any) => p.age) || [];
 
                 const room: any = {
                     NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || 1,
-                    Adults: adultsCount,
-                    Children: childrenCount,
+                    adults: adultsCount,
+                    children: childrenCount,
+                    paxes: childrenCount > 0
+                        ? (childrenAges.length > 0
+                            ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
+                            : Array(childrenCount).fill(0).map(() => ({ type: "Child", age: 5 })))
+                        : [],
                 };
-
-                if (childrenCount > 0) {
-                    room.paxes = childrenAges.length > 0
-                        ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
-                        : Array(childrenCount).fill({ type: "Child", age: 5 });
-                }
 
                 return room;
             }),
@@ -66,6 +65,7 @@ export class RateGainApiProvider {
         }
 
         try {
+            console.log(`[RateGain] Requesting Best Properties: ${JSON.stringify(rateGainPayload, null, 2)}`);
             const res = await rateGainClient.post("/api/SmartDistribution/bestproperties", rateGainPayload);
             return res.data;
         } catch (error: any) {
@@ -86,19 +86,20 @@ export class RateGainApiProvider {
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
+                const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;
-                const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type === "Child").map((p: any) => p.age) || [];
+                const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type?.toLowerCase() === "child").map((p: any) => p.age) || [];
 
                 const room: any = {
-                    numberOfRoom: r.numberOfRoom || r.NumberOfRoom || 1,
-                    adults: r.adults || r.Adults || 2,
+                    NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || 1,
+                    adults: adultsCount,
                     children: childrenCount,
                 };
 
                 if (childrenCount > 0) {
                     room.paxes = childrenAges.length > 0
                         ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
-                        : Array(childrenCount).fill({ type: "Child", age: 5 });
+                        : Array(childrenCount).fill(0).map(() => ({ type: "Child", age: 5 }));
                 }
 
                 return room;
@@ -115,6 +116,7 @@ export class RateGainApiProvider {
         }
 
         try {
+            console.log(`[RateGain] Requesting Products: ${JSON.stringify(rateGainPayload, null, 2)}`);
             const res = await rateGainClient.post("/api/SmartDistribution/getproducts", rateGainPayload);
             return res.data;
         } catch (error: any) {
