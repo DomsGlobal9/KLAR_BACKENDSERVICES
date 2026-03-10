@@ -60,6 +60,7 @@ export interface ReviewSSROption {
     code: string;
     amount: number;
     desc: string;
+    iswca: boolean;
 }
 
 export interface ReviewFareDetail {

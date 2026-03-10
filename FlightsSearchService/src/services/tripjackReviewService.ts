@@ -4,11 +4,11 @@ import { getCache, setCache } from "./redisService";
 import { TripJackRawModel } from "../models/tripJackRaw.model";
 import { ReviewError, ReviewRequest, ReviewResponse, TransformedReviewFareOption, TransformedReviewFlight, TransformedReviewPrice } from "../interface/flight/review.interface";
 
-
 /**
  * Get price review from TripJack using price IDs
  */
 export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<ReviewResponse> => {
+
     const cacheKey = `review:${JSON.stringify(payload)}`;
 
     const cached = await getCache(cacheKey);
@@ -16,23 +16,6 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
 
     try {
         const url = getTripJackEndpoint('REVIEW');
-
-        // 🔥 Log FULL Third Party API URL clearly
-        console.log("🌍 Full TripJack Review API URL:");
-        console.log("➡️", url);
-        console.log("➡️", payload);
-
-
-        console.log("📦 Request Details:", {
-            method: "POST",
-            url: url,
-            headers: {
-                "Content-Type": "application/json",
-                apikey: envConfig.TRIPJACK.API_KEY,
-            },
-            payloadSize: JSON.stringify(payload).length,
-            priceIdsCount: payload.priceIds?.length,
-        });
 
         const response = await axios.post(
             url,
@@ -45,9 +28,6 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
                 timeout: envConfig.TRIPJACK.TIMEOUT,
             }
         );
-
-        console.log("✅ TripJack Review API Response received");
-        console.log("📡 Response Status:", response.status);
 
         await setCache(
             cacheKey,
@@ -70,7 +50,6 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
     }
 };
 
-
 /**
  * Transform review response to frontend-friendly format
  */
@@ -90,9 +69,9 @@ export const transformReviewResponse = (
     };
     passengerSummary.totalPassengers = passengerSummary.adult + passengerSummary.child + passengerSummary.infant;
 
-
     const flights: TransformedReviewFlight[] = response.tripInfos.map((tripInfo, index) => {
         const segment = tripInfo.sI[0];
+        const allSegments = tripInfo.sI;
 
         const departureDate = new Date(segment.dt);
         const arrivalDate = new Date(segment.at);
@@ -129,6 +108,40 @@ export const transformReviewResponse = (
                 };
             };
 
+            const getMealsFromSegments = () => {
+                const mealsBySegment: Record<string, Array<{ code: string; amount: number; desc: string; iswca: boolean }>> = {};
+
+                allSegments.forEach(seg => {
+                    if (seg.ssrInfo?.MEAL && seg.ssrInfo.MEAL.length > 0) {
+                        mealsBySegment[seg.id] = seg.ssrInfo.MEAL.map(meal => ({
+                            code: meal.code,
+                            amount: meal.amount || 0,
+                            desc: meal.desc,
+                            iswca: meal.iswca || false
+                        }));
+                    }
+                });
+
+                return mealsBySegment;
+            };
+
+            const getBaggageFromSegments = () => {
+                const baggageBySegment: Record<string, Array<{ code: string; amount?: number; desc: string; iswca: boolean }>> = {};
+
+                allSegments.forEach(seg => {
+                    if (seg.ssrInfo?.BAGGAGE && seg.ssrInfo.BAGGAGE.length > 0) {
+                        baggageBySegment[seg.id] = seg.ssrInfo.BAGGAGE.map(baggage => ({
+                            code: baggage.code,
+                            amount: baggage.amount,
+                            desc: baggage.desc,
+                            iswca: baggage.iswca || false
+                        }));
+                    }
+                });
+
+                return baggageBySegment;
+            };
+
             return {
                 fareId: f.id,
                 fareIdentifier: f.fareIdentifier,
@@ -142,6 +155,8 @@ export const transformReviewResponse = (
                 refundable: adult.rT === 1,
                 baggage: getBaggage(baggageInfo),
                 seatAvailability: adult.sR || 0,
+                meals: getMealsFromSegments(),
+                baggageOptions: getBaggageFromSegments(),
                 passengerBreakdown: {
                     adult: adult ? {
                         baseFare: adult.fC?.BF || 0,
