@@ -64,7 +64,7 @@ export const envConfig = {
       REVALIDATE: "/fms/v2/revalidate",
       FARE_QUOTE: "/fms/v2/farequote",
       BOOKING_CREATE: "/oms/v1/air/book",
-      BOOKING_RETRIEVE: "/fms/v2/booking-retrieve",
+      BOOKING_RETRIEVE: "/oms/v1/booking-details",
     },
 
     // Or use direct URLs if provided
