@@ -161,4 +161,27 @@ export class BookingService {
             throw error;
         }
     }
+
+    /**
+     * Update booking details
+     */
+    async updateBooking(id: string, updateData: Partial<IFlightBooking>): Promise<IFlightBooking | null> {
+        try {
+
+            const sanitizedData = { ...updateData };
+            delete sanitizedData._id;
+            delete sanitizedData.bookingId;
+            delete sanitizedData.userId;
+            delete sanitizedData.createdAt;
+
+            const booking = await this.bookingRepository.updateBooking(id, sanitizedData);
+            if (!booking) {
+                throw new Error('Booking not found');
+            }
+            return booking;
+        } catch (error) {
+            console.error('Error in updateBooking service:', error);
+            throw error;
+        }
+    }
 }

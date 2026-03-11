@@ -4,7 +4,7 @@ import { FlightBookingModel, IFlightBooking } from '../models/flightBooking.mode
 
 
 export class BookingRepository {
-    
+
     /**
      * Get booking by MongoDB ID
      */
@@ -121,7 +121,7 @@ export class BookingRepository {
      */
     async updateStatus(id: string, status: string, additionalData?: any): Promise<IFlightBooking | null> {
         const updateData: any = { status };
-        
+
         if (status === 'CONFIRMED') {
             updateData.confirmedAt = new Date();
         } else if (status === 'CANCELLED') {
@@ -165,5 +165,16 @@ export class BookingRepository {
             totalBookings,
             totalSpent: totalSpent[0]?.total || 0
         };
+    }
+
+    /**
+     * Update booking details
+     */
+    async updateBooking(id: string, updateData: Partial<IFlightBooking>): Promise<IFlightBooking | null> {
+        return await FlightBookingModel.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).lean();
     }
 }

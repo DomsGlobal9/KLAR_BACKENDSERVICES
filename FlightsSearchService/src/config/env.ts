@@ -65,6 +65,12 @@ export const envConfig = {
       FARE_QUOTE: "/fms/v2/farequote",
       BOOKING_CREATE: "/oms/v1/air/book",
       BOOKING_RETRIEVE: "/oms/v1/booking-details",
+      AMENDMENT_CHARGES: "/oms/v1/air/amendment/amendment-charges",
+      SUBMIT_AMENDMENT: "/oms/v1/air/amendment/submit-amendment",
+      AMENDMENT_DETAILS: "/oms/v1/air/amendment/amendment-details",
+      RELEASE_PNR: "/oms/v1/air/unhold",
+      FARE_VALIDATE: "/oms/v1/air/fare-validate",
+      USER_DETAIL: "/ums/v1/user-detail",
     },
 
     // Or use direct URLs if provided

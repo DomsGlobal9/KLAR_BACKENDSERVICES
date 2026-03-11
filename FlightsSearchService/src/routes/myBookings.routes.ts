@@ -40,4 +40,34 @@ router.get('/tripjack/:bookingId', bookingController.getBookingByBookingId);
  */
 router.get('/:id', bookingController.getBookingById);
 
+/*
+ * PUT /api/bookings/:id - Update booking details
+ */
+router.put('/:id', bookingController.updateBooking);
+
+
+// *******************************
+// Cancellation Amendment Section*
+// *******************************
+
+/*
+ * GET /api/bookings/tripjack/:bookingId/cancellation/charges - Get cancellation charges
+ */
+router.get('/tripjack/:bookingId/cancellation/charges', bookingController.getCancellationCharges);
+
+/*
+ * POST /api/bookings/tripjack/:bookingId/cancellation - Submit cancellation
+ */
+router.post('/tripjack/:bookingId/cancellation', bookingController.submitCancellation);
+
+/*
+ * GET /api/bookings/amendments/:amendmentId - Get amendment details
+ */
+router.get('/amendments/:amendmentId', bookingController.getAmendmentDetails);
+
+/*
+ * POST /api/bookings/tripjack/:bookingId/cancellation/complete - Complete cancellation flow (charges + submit + poll)
+ */
+router.post('/tripjack/:bookingId/cancellation/complete', bookingController.completeCancellation);
+
 export default router;
