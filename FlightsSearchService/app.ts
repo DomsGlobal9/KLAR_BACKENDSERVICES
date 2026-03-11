@@ -11,10 +11,33 @@ import { errorHandler } from "./src/middleware/errorHandler";
 const app = express();
 
 
-app.use(cors()); // used to allow cross origin requests
+// app.use(cors()); // used to allow cross origin requests
+
+
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowedOrigins = envConfig.CORS.ORIGINS;
+
+      if (!origin) return callback(null, true); 
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS not allowed for origin: ${origin}`));
+    },
+    credentials: true,
+  })
+);
+
+
 app.use(helmet()); // used to set security headers
 app.use(compression()); // used to compress the response
 app.use(express.json()); // used to parse the request body
+
+
 
 app.get("/", (req, res) => {
     res.status(200).json({

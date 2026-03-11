@@ -14,6 +14,7 @@ export const getFareRules = async (fareRuleRequest: FareRuleRequest): Promise<Fa
     try {
         const url = `${envConfig.TRIPJACK.BASE_URL}/fms/v2/farerule`;
         console.log("TripJack Fare Rule URL (v2):", url);
+        console.log("Fare rule**************",{fareRuleRequest});
 
         const response = await axios.post(
             url,
