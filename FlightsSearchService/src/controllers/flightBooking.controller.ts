@@ -50,12 +50,18 @@ export class FlightBookingController {
     /**
      * Extract token from request headers
      */
-    private extractTokenFromHeader(req: Request): string | null {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return null;
+    private extractToken(req: Request): string | null {
+
+        if (req.cookies?.token) {
+            return req.cookies.token;
         }
-        return authHeader.substring(7);
+
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            return authHeader.substring(7);
+        }
+
+        return null;
     }
 
     /**
@@ -64,7 +70,7 @@ export class FlightBookingController {
     createBooking = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
 
             if (!token) {
                 res.status(401).json({
@@ -128,7 +134,7 @@ export class FlightBookingController {
     getBookingById = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -189,7 +195,7 @@ export class FlightBookingController {
     getBookingByBookingId = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -250,7 +256,7 @@ export class FlightBookingController {
     getUserBookings = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -301,7 +307,7 @@ export class FlightBookingController {
     updateBookingStatus = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -369,7 +375,7 @@ export class FlightBookingController {
     confirmBooking = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -433,7 +439,7 @@ export class FlightBookingController {
     cancelBooking = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -498,7 +504,7 @@ export class FlightBookingController {
     getBookingStats = async (req: Request, res: Response): Promise<void> => {
         try {
 
-            const token = this.extractTokenFromHeader(req);
+            const token = this.extractToken(req);
             if (!token) {
                 res.status(401).json({
                     success: false,
