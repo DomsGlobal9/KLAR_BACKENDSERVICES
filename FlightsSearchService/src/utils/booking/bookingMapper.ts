@@ -5,14 +5,13 @@ import {
     ContactInfo,
     GSTInfo,
     Title,
-    PaxType
+    PaxType,
+    SSRInfo
 } from "../../interface/flight/booking.interface";
 
 export interface UserFriendlyBookingRequest {
     bookingId: string;
-
     totalAmount: number;
-
     deliveryEmail: string;
     deliveryPhone: string;
 
@@ -33,9 +32,21 @@ export interface UserFriendlyBookingRequest {
     travellers: UserFriendlyTraveller[];
 
     ssrSelections?: {
-        baggage?: Array<{ segmentId: string; code: string }>;
-        meal?: Array<{ segmentId: string; code: string }>;
-        seat?: Array<{ segmentId: string; code: string }>;
+        baggage?: Array<{
+            travellerIndex: number;
+            segmentId: string;
+            code: string;
+        }>;
+        meal?: Array<{
+            travellerIndex: number;
+            segmentId: string;
+            code: string;
+        }>;
+        seat?: Array<{
+            travellerIndex: number;
+            segmentId: string;
+            code: string;
+        }>;
     };
 }
 
@@ -52,6 +63,12 @@ export interface UserFriendlyTraveller {
     passportIssueDate?: string;
 
     documentId?: string;
+
+    ssrSelections?: {
+        baggage?: Array<{ segmentId: string; code: string }>;
+        meal?: Array<{ segmentId: string; code: string }>;
+        seat?: Array<{ segmentId: string; code: string }>;
+    };
 }
 
 export class BookingMapper {
@@ -60,9 +77,8 @@ export class BookingMapper {
      * Convert user-friendly booking request to TripJack API format
      */
     static toTripJackFormat(userRequest: UserFriendlyBookingRequest): InstantBookingRequest {
-
-
-        const travellerInfo: TravellerInfo[] = userRequest.travellers.map(t => {
+        // First, create base traveller info without SSR selections from global ssrSelections
+        const travellerInfo: TravellerInfo[] = userRequest.travellers.map((t) => {
             const traveller: TravellerInfo = {
                 ti: t.title,
                 pt: this.mapPaxType(t.type),
@@ -70,11 +86,10 @@ export class BookingMapper {
                 lN: t.lastName,
             };
 
-
+            // Add optional fields if present
             if (t.dateOfBirth) {
                 traveller.dob = t.dateOfBirth;
             }
-
 
             if (t.passportNumber) traveller.pNum = t.passportNumber;
             if (t.passportExpiryDate) traveller.eD = t.passportExpiryDate;
@@ -82,35 +97,83 @@ export class BookingMapper {
             if (t.passportIssueDate) traveller.pid = t.passportIssueDate;
             if (t.documentId) traveller.di = t.documentId;
 
-            return traveller;
-        });
-
-
-        if (userRequest.ssrSelections) {
-            travellerInfo.forEach((traveller, index) => {
-
-                if (userRequest.ssrSelections?.baggage) {
-                    traveller.ssrBaggageInfos = userRequest.ssrSelections.baggage.map(b => ({
+            // Add traveller-specific SSR selections if present
+            if (t.ssrSelections) {
+                if (t.ssrSelections.baggage?.length) {
+                    traveller.ssrBaggageInfos = t.ssrSelections.baggage.map(b => ({
                         key: b.segmentId,
                         code: b.code
                     }));
                 }
-                if (userRequest.ssrSelections?.meal) {
-                    traveller.ssrMealInfos = userRequest.ssrSelections.meal.map(m => ({
+                if (t.ssrSelections.meal?.length) {
+                    traveller.ssrMealInfos = t.ssrSelections.meal.map(m => ({
                         key: m.segmentId,
                         code: m.code
                     }));
                 }
-                if (userRequest.ssrSelections?.seat) {
-                    traveller.ssrSeatInfos = userRequest.ssrSelections.seat.map(s => ({
+                if (t.ssrSelections.seat?.length) {
+                    traveller.ssrSeatInfos = t.ssrSelections.seat.map(s => ({
                         key: s.segmentId,
                         code: s.code
                     }));
                 }
-            });
+            }
+
+            return traveller;
+        });
+
+        // Then, add global SSR selections (with travellerIndex) if present
+        if (userRequest.ssrSelections) {
+            // Process baggage selections
+            if (userRequest.ssrSelections.baggage) {
+                userRequest.ssrSelections.baggage.forEach(selection => {
+                    const traveller = travellerInfo[selection.travellerIndex];
+                    if (traveller) {
+                        if (!traveller.ssrBaggageInfos) {
+                            traveller.ssrBaggageInfos = [];
+                        }
+                        traveller.ssrBaggageInfos.push({
+                            key: selection.segmentId,
+                            code: selection.code
+                        });
+                    }
+                });
+            }
+
+            // Process meal selections
+            if (userRequest.ssrSelections.meal) {
+                userRequest.ssrSelections.meal.forEach(selection => {
+                    const traveller = travellerInfo[selection.travellerIndex];
+                    if (traveller) {
+                        if (!traveller.ssrMealInfos) {
+                            traveller.ssrMealInfos = [];
+                        }
+                        traveller.ssrMealInfos.push({
+                            key: selection.segmentId,
+                            code: selection.code
+                        });
+                    }
+                });
+            }
+
+            // Process seat selections
+            if (userRequest.ssrSelections.seat) {
+                userRequest.ssrSelections.seat.forEach(selection => {
+                    const traveller = travellerInfo[selection.travellerIndex];
+                    if (traveller) {
+                        if (!traveller.ssrSeatInfos) {
+                            traveller.ssrSeatInfos = [];
+                        }
+                        traveller.ssrSeatInfos.push({
+                            key: selection.segmentId,
+                            code: selection.code
+                        });
+                    }
+                });
+            }
         }
 
-
+        // Build the complete booking request
         const bookingRequest: InstantBookingRequest = {
             bookingId: userRequest.bookingId,
             paymentInfos: [{ amount: userRequest.totalAmount }],
@@ -121,7 +184,7 @@ export class BookingMapper {
             travellerInfo
         };
 
-
+        // Add emergency contact if provided
         if (userRequest.emergencyContact) {
             bookingRequest.contactInfo = {
                 emails: [userRequest.emergencyContact.email],
@@ -130,7 +193,7 @@ export class BookingMapper {
             };
         }
 
-
+        // Add GST info if provided
         if (userRequest.gst) {
             bookingRequest.gstInfo = {
                 gstNumber: userRequest.gst.number,
@@ -154,56 +217,5 @@ export class BookingMapper {
             'infant': 'INFANT'
         };
         return map[type] as PaxType;
-    }
-
-    /**
-     * Create a simple example request for users to understand
-     */
-    static getExampleRequest(): UserFriendlyBookingRequest {
-        return {
-            bookingId: "TJSO107900001801",
-            totalAmount: 15172,
-            deliveryEmail: "customer@example.com",
-            deliveryPhone: "+919876543210",
-            emergencyContact: {
-                name: "Emergency Contact",
-                email: "emergency@example.com",
-                phone: "+919876543210"
-            },
-            gst: {
-                number: "27AAPFU0939F1Z5",
-                registeredName: "Customer Company Pvt Ltd",
-                email: "billing@example.com",
-                phone: "+919876543210",
-                address: "Customer Address, City - 400001"
-            },
-            travellers: [
-                {
-                    type: 'adult',
-                    title: 'Mr',
-                    firstName: 'John',
-                    lastName: 'Doe',
-                    dateOfBirth: '1990-01-01',
-                    passportNumber: 'A1234567',
-                    passportExpiryDate: '2030-12-31',
-                    passportNationality: 'IN',
-                    passportIssueDate: '2020-01-01'
-                },
-                {
-                    type: 'child',
-                    title: 'Master',
-                    firstName: 'Jane',
-                    lastName: 'Doe',
-                    dateOfBirth: '2018-05-15'
-                },
-                {
-                    type: 'infant',
-                    title: 'Master',
-                    firstName: 'Baby',
-                    lastName: 'Doe',
-                    dateOfBirth: '2024-01-01'
-                }
-            ]
-        };
     }
 }
