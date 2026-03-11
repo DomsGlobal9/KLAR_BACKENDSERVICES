@@ -35,6 +35,13 @@ export const envConfig = {
     AUTH_SERVICE: getEnv("AUTHENTICATION_SERVICE", false),
   },
 
+  CORS: {
+    ORIGINS: (getEnv("CORS_ORIGINS", false) || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  },
+
   DATABASE: {
     MONGODB_URI: getEnv("MONGODB_URI"),
     DB_NAME: getEnv("DB_NAME", false) || "search_service",
@@ -47,7 +54,7 @@ export const envConfig = {
     TOKEN: getEnv("TRIPJACK_API_KEY", false),
     TIMEOUT: getEnvNumber("TRIPJACK_TIMEOUT", 20000),
     CACHE_TTL: getEnvNumber("TRIPJACK_CACHE_TTL", 300),
-    
+
     // TripJack Endpoints
     ENDPOINTS: {
       AIR_SEARCH_ALL: "/fms/v1/air-search-all",
@@ -59,7 +66,7 @@ export const envConfig = {
       BOOKING_CREATE: "/oms/v1/air/book",
       BOOKING_RETRIEVE: "/fms/v2/booking-retrieve",
     },
-    
+
     // Or use direct URLs if provided
     REVIEW_URL: getEnv("TRIPJACK_REVIEW_URL", false) || null,
     REVALIDATE_URL: getEnv("TRIPJACK_REVALIDATE_URL", false) || null,
@@ -76,17 +83,17 @@ export const envConfig = {
  */
 export function getTripJackEndpoint(endpointKey: keyof typeof envConfig.TRIPJACK.ENDPOINTS): string {
   const endpoint = envConfig.TRIPJACK.ENDPOINTS[endpointKey];
-  
+
   const directUrlMap: Record<string, string | null> = {
     REVIEW: envConfig.TRIPJACK.REVIEW_URL,
     REVALIDATE: envConfig.TRIPJACK.REVALIDATE_URL,
   };
-  
+
   const directUrl = directUrlMap[endpointKey];
   if (directUrl) {
     return directUrl;
   }
-  
+
   return `${envConfig.TRIPJACK.BASE_URL}${endpoint}`;
 }
 
