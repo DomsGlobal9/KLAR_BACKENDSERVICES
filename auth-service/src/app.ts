@@ -9,7 +9,6 @@ import { corsOptions } from "./config/cors.config";
 const app = express();
 
 app.use(cors(corsOptions));
-// app.use(cors(corsOptions));
 
 
 app.options("/", cors(corsOptions));
