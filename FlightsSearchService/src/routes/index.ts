@@ -17,14 +17,14 @@ router.get("/ping", (req, res) => {
     res.json({ success: true, message: "API working!" });
 });
 
-router.use("/flights/fare-rule", authenticateJWT, fareRule);
-router.use("/flights/review", authenticateJWT, reviewRule);
-router.use("/flights/seat", authenticateJWT, flightSeat);
-router.use("/flights/booking", authenticateJWT, flightBooking);
-router.use("/flights/booking-details", authenticateJWT, bookingDetails);
-router.use("/flights", authenticateJWT, flightRoutes);
-router.use("/search-sessions", authenticateJWT, searchSessionRoutes);
+router.use("/flights/fare-rule", fareRule);
+router.use("/flights/review", reviewRule);
+router.use("/flights/seat", flightSeat);
+router.use("/flights/booking", flightBooking);
+router.use("/flights/booking-details", bookingDetails);
+router.use("/flights", flightRoutes);
+router.use("/search-sessions", searchSessionRoutes);
 router.use("/health", healthRoutes);
-router.use("/api/flightsreview", authenticateJWT, reviewRoutes);
+router.use("/api/flightsreview", reviewRoutes);
 
 export default router;
