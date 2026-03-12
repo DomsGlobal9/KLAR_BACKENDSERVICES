@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getDestinations } from "../controllers/destinations.controller";
 import { searchHotels } from "../controllers/hotels.controller";
 import { getProducts } from "../controllers/products.controller";
+import { authenticateJWT } from "../middlewares/auth.middleware";
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get("/health", (_req, res) => {
 });
 
 router.get("/destinations", getDestinations);
-router.post("/hotels/search", searchHotels);
-router.post("/hotels/:propertyId/products", getProducts);
+router.post("/hotels/search", authenticateJWT, searchHotels);
+router.post("/hotels/:propertyId/products", authenticateJWT, getProducts);
 
 export default router;

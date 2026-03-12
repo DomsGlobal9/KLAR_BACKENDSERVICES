@@ -5,6 +5,7 @@ import { cancelController } from "../controllers/cancel.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
 import { getBookings, getBookingDetails } from "../controllers/bookings.controller";
+import { authenticateJWT } from "../middlewares/auth.middleware";
 
 const router = Router();
 
@@ -37,13 +38,13 @@ router.get("/health", (_req, res) => {
 // List bookings from DB
 router.get("/bookings", listController);
 
-// RateGain booking flow — no auth required
-router.post("/precheck", precheckController);
-router.post("/commit", commitController);
-router.post("/cancel", cancelController);
-router.get("/special-requests", specialRequestsController);
+// RateGain booking flow — now protected
+router.post("/precheck", authenticateJWT, precheckController);
+router.post("/commit", authenticateJWT, commitController);
+router.post("/cancel", authenticateJWT, cancelController);
+router.get("/special-requests", authenticateJWT, specialRequestsController);
 
 // New booking management routes
-router.get("/bookings/:id", getBookingDetails);
+router.get("/bookings/:id", authenticateJWT, getBookingDetails);
 
 export default router;

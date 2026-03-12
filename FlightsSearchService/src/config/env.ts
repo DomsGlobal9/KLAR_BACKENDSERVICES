@@ -68,6 +68,10 @@ export const envConfig = {
     URL: getEnv("REDIS_URL"),
     CACHE_TTL: getEnvNumber("TRIPJACK_CACHE_TTL", 300),
   },
+  
+  JWT: {
+    SECRET: getEnv("JWT_SECRET", false) || "your_super_secret_jwt_key_change_me_in_production",
+  },
 };
 
 /**
