@@ -30,9 +30,11 @@ export class AuthServiceClient {
      * @returns Validated user information
      */
     async validateToken(token: string): Promise<ValidatedUser> {
+        console.log("Entered into validate token function for api call........", token);
         try {
+            console.log("Enter into try block^^^^^^^^^^^^^^");
             const response = await this.client.post<TokenValidationResponse>(
-                '/auth/validate-token',
+                '/validate-token',
                 {},
                 {
                     headers: {
@@ -40,6 +42,7 @@ export class AuthServiceClient {
                     }
                 }
             );
+            console.log("Response comes from validate token is&&&&&&&&&&&&&&&&",response);
 
             if (!response.data.success) {
                 throw new Error(response.data.message || 'Token validation failed');

@@ -19,7 +19,7 @@ export class BookingController {
      * Extract token from request headers
      */
     private extractToken(req: Request): string | null {
-
+        console.log('###########################Extracted token:', req.cookies?.token);
         if (req.cookies?.token) {
             return req.cookies.token;
         }
@@ -50,6 +50,7 @@ export class BookingController {
         try {
             // Extract and validate token
             const token = this.extractToken(req);
+            
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -190,6 +191,7 @@ export class BookingController {
         try {
             // Extract and validate token
             const token = this.extractToken(req);
+            console.log("Token is*****************",token);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -202,6 +204,7 @@ export class BookingController {
             let userData: any;
             try {
                 userData = await this.validateToken(token);
+                
             } catch (error: any) {
                 res.status(401).json({
                     success: false,
