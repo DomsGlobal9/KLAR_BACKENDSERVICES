@@ -17,9 +17,13 @@ export enum PassengerType {
 
 export enum Title {
     MR = 'Mr',
+    MR_DOT = 'Mr.',
     MRS = 'Mrs',
+    MRS_DOT = 'Mrs.',
     MS = 'Ms',
-    MASTER = 'Master'
+    MS_DOT = 'Ms.',
+    MASTER = 'Master',
+    MISS = 'Miss'
 }
 
 export interface ISSRItem {
