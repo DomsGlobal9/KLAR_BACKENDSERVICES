@@ -161,13 +161,13 @@ export class BookingController {
                 return;
             }
 
-            if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
-                res.status(403).json({
-                    success: false,
-                    message: 'Access denied. You do not have permission to view this booking.'
-                });
-                return;
-            }
+            // if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
+            //     res.status(403).json({
+            //         success: false,
+            //         message: 'Access denied. You do not have permission to view this booking.'
+            //     });
+            //     return;
+            // }
 
             res.status(200).json({
                 success: true,
