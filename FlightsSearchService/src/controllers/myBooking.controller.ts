@@ -51,7 +51,7 @@ export class BookingController {
             // Extract and validate token
             const token = this.extractToken(req);
             let userData: any;
-        
+
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -60,7 +60,7 @@ export class BookingController {
                 return;
             }
 
-            
+
             try {
                 userData = await this.validateToken(token);
             } catch (error: any) {
@@ -118,8 +118,9 @@ export class BookingController {
      */
     getBookingByBookingId = async (req: Request, res: Response): Promise<void> => {
         try {
-            // Extract and validate token
             const token = this.extractToken(req);
+            const requirePaxPricingParam = req.query.requirePaxPricing;
+            const requirePaxPricing: boolean = requirePaxPricingParam === 'true';
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -150,7 +151,7 @@ export class BookingController {
                 return;
             }
 
-            const booking = await this.bookingService.getBookingByBookingId(bookingId);
+            const booking = await this.bookingService.getBookingByBookingId(bookingId, requirePaxPricing);
 
             if (!booking) {
                 res.status(404).json({
@@ -160,7 +161,6 @@ export class BookingController {
                 return;
             }
 
-            // Check if user has access to this booking
             if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
                 res.status(403).json({
                     success: false,
@@ -190,7 +190,7 @@ export class BookingController {
         try {
             // Extract and validate token
             const token = this.extractToken(req);
-            console.log("Token is*****************",token);
+            console.log("Token is*****************", token);
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -203,7 +203,7 @@ export class BookingController {
             let userData: any;
             try {
                 userData = await this.validateToken(token);
-                
+
             } catch (error: any) {
                 res.status(401).json({
                     success: false,
@@ -517,92 +517,6 @@ export class BookingController {
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to update booking'
-            });
-        }
-    };
-
-    /**
-     * Retrieve booking from TripJack by booking ID
-     */
-    retrieveFromTripJack = async (req: Request, res: Response): Promise<void> => {
-        try {
-            // Extract and validate token
-            const token = this.extractToken(req);
-            if (!token) {
-                res.status(401).json({
-                    success: false,
-                    message: 'Authentication required. Bearer token missing.'
-                });
-                return;
-            }
-
-            // Validate token and get user data
-            let userData: any;
-            try {
-                userData = await this.validateToken(token);
-            } catch (error: any) {
-                res.status(401).json({
-                    success: false,
-                    message: error.message || 'Invalid or expired token'
-                });
-                return;
-            }
-
-            const { bookingId } = req.params;
-            const { fullDetails } = req.query; // ?fullDetails=true for full data, false for minimal
-
-            if (!bookingId) {
-                res.status(400).json({
-                    success: false,
-                    message: 'TripJack Booking ID is required'
-                });
-                return;
-            }
-
-            // Check if booking exists in our database and verify access
-            const existingBooking = await this.bookingService.getBookingByBookingId(bookingId);
-
-            if (existingBooking) {
-                // Verify user has access to this booking
-                if (existingBooking.userId !== userData.id && userData.role !== 'ADMIN') {
-                    res.status(403).json({
-                        success: false,
-                        message: 'Access denied. You do not have permission to view this booking.'
-                    });
-                    return;
-                }
-            } else {
-                // If booking doesn't exist in our DB, only admins can retrieve from TripJack
-                if (userData.role !== 'ADMIN') {
-                    res.status(403).json({
-                        success: false,
-                        message: 'Access denied. Booking not found in your account.'
-                    });
-                    return;
-                }
-            }
-
-            // Retrieve from TripJack based on query parameter
-            let tripJackData;
-            if (fullDetails === 'true') {
-                tripJackData = await retrieveBookingFull(bookingId);
-            } else if (fullDetails === 'false') {
-                tripJackData = await retrieveBookingMinimal(bookingId);
-            } else {
-                // Default to full details if not specified
-                tripJackData = await retrieveBookingFromTripJack(bookingId, true);
-            }
-
-            res.status(200).json({
-                success: true,
-                message: 'Booking retrieved from TripJack successfully',
-                data: tripJackData
-            });
-        } catch (error: any) {
-            console.error('Retrieve from TripJack error:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message || 'Failed to retrieve booking from TripJack'
             });
         }
     };

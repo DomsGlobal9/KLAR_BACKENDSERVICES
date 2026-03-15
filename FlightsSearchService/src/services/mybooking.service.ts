@@ -1,6 +1,7 @@
 import { BookingQueryParams } from '../interface/flight/myBooking.types';
 import { IFlightBooking } from '../models/flightBooking.model';
 import { BookingRepository } from '../repositories/myBooking.repository';
+import { retrieveBookingFromTripJack } from './tripjackService';
 
 export class BookingService {
     private bookingRepository: BookingRepository;
@@ -32,13 +33,13 @@ export class BookingService {
     /**
      * Get booking by TripJack booking ID
      */
-    async getBookingByBookingId(bookingId: string): Promise<IFlightBooking | null> {
+    async getBookingByBookingId(bookingId: string, requirePaxPricing?: boolean) {
         try {
-            const booking = await this.bookingRepository.findByBookingId(bookingId);
-            if (!booking) {
-                throw new Error('Booking not found');
-            }
-            return booking;
+            const bookingResult = retrieveBookingFromTripJack(bookingId, requirePaxPricing);
+            if (!bookingResult) {
+                throw new Error("Error: while getting booking details from 3rd party");
+            }            
+            return bookingResult;
         } catch (error) {
             console.error('Error in getBookingByBookingId service:', error);
             throw error;
