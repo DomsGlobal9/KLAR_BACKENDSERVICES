@@ -12,13 +12,17 @@ export class BookingService {
     /**
      * Get booking by MongoDB ID
      */
-    async getBookingById(id: string): Promise<IFlightBooking | null> {
+    async getBookingById(userId: string) {
         try {
-            const booking = await this.bookingRepository.findById(id);
-            if (!booking) {
+            console.log("The user id we get", userId);
+
+            const result = await this.bookingRepository.findByUserId(userId);
+
+            if (!result.bookings.length) {
                 throw new Error('Booking not found');
             }
-            return booking;
+
+            return result;
         } catch (error) {
             console.error('Error in getBookingById service:', error);
             throw error;

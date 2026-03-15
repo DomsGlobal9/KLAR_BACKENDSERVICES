@@ -50,6 +50,8 @@ export class BookingController {
         try {
             // Extract and validate token
             const token = this.extractToken(req);
+            let userData: any;
+        
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -58,8 +60,7 @@ export class BookingController {
                 return;
             }
 
-            // Validate token and get user data
-            let userData: any;
+            
             try {
                 userData = await this.validateToken(token);
             } catch (error: any) {
@@ -70,17 +71,17 @@ export class BookingController {
                 return;
             }
 
-            const { id } = req.params;
+            // const { id } = req.params;
 
-            if (!id) {
-                res.status(400).json({
-                    success: false,
-                    message: 'Booking ID is required'
-                });
-                return;
-            }
+            // if (!id) {
+            //     res.status(400).json({
+            //         success: false,
+            //         message: 'Booking ID is required'
+            //     });
+            //     return;
+            // }
 
-            const booking = await this.bookingService.getBookingById(id);
+            const booking = await this.bookingService.getBookingById(userData.id || '');
 
             if (!booking) {
                 res.status(404).json({
@@ -90,14 +91,13 @@ export class BookingController {
                 return;
             }
 
-            // Check if user has access to this booking
-            if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
-                res.status(403).json({
-                    success: false,
-                    message: 'Access denied. You do not have permission to view this booking.'
-                });
-                return;
-            }
+            // if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
+            //     res.status(403).json({
+            //         success: false,
+            //         message: 'Access denied. You do not have permission to view this booking.'
+            //     });
+            //     return;
+            // }
 
             res.status(200).json({
                 success: true,
@@ -495,13 +495,13 @@ export class BookingController {
                 return;
             }
 
-            if (existingBooking.userId !== userData.id && userData.role !== 'ADMIN') {
-                res.status(403).json({
-                    success: false,
-                    message: 'Access denied. You do not have permission to update this booking.'
-                });
-                return;
-            }
+            // if (existingBooking.userId !== userData.id && userData.role !== 'ADMIN') {
+            //     res.status(403).json({
+            //         success: false,
+            //         message: 'Access denied. You do not have permission to update this booking.'
+            //     });
+            //     return;
+            // }
 
             const updatedBooking = await this.bookingService.updateBooking(id, updateData);
 

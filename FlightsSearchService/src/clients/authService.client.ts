@@ -10,7 +10,7 @@ export class AuthServiceClient {
     private constructor(baseURL: string) {
         this.client = axios.create({
             baseURL,
-            timeout: 5000, 
+            timeout: 5000,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -31,8 +31,9 @@ export class AuthServiceClient {
      */
     async validateToken(token: string): Promise<ValidatedUser> {
         try {
+            
             const response = await this.client.post<TokenValidationResponse>(
-                '/auth/validate-token',
+                '/validate-token',
                 {},
                 {
                     headers: {
