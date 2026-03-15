@@ -42,7 +42,6 @@ export class AuthServiceClient {
                     }
                 }
             );
-            console.log("Response comes from validate token is&&&&&&&&&&&&&&&&",response);
 
             if (!response.data.success) {
                 throw new Error(response.data.message || 'Token validation failed');

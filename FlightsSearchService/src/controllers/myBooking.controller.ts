@@ -19,7 +19,7 @@ export class BookingController {
      * Extract token from request headers
      */
     private extractToken(req: Request): string | null {
-        console.log('###########################Extracted token:', req.cookies?.token);
+        
         if (req.cookies?.token) {
             return req.cookies.token;
         }
