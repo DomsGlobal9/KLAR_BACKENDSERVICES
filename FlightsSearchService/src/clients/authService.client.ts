@@ -10,7 +10,7 @@ export class AuthServiceClient {
     private constructor(baseURL: string) {
         this.client = axios.create({
             baseURL,
-            timeout: 5000, 
+            timeout: 5000,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -32,7 +32,7 @@ export class AuthServiceClient {
     async validateToken(token: string): Promise<ValidatedUser> {
         console.log("Entered into validate token function for api call........", token);
         try {
-            console.log("Enter into try block^^^^^^^^^^^^^^");
+            
             const response = await this.client.post<TokenValidationResponse>(
                 '/validate-token',
                 {},
