@@ -209,3 +209,47 @@ export const validateToken = async (
   });
 };
 
+export const validateTokenForService = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+
+    const user = (req as any).user;
+
+    if (!user || !user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authentication",
+        code: "INVALID_AUTH"
+      });
+    }
+
+    
+    const authService = AuthService.getInstance();
+    const fullUser = await authService.getCurrentUser(user.userId);
+
+    if (!fullUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        code: "USER_NOT_FOUND"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Token validated successfully",
+      data: fullUser
+    });
+  } catch (error) {
+    console.error("Token validation error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Token validation failed",
+      code: "VALIDATION_FAILED"
+    });
+  }
+};

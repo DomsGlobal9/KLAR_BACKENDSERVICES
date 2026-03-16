@@ -7,7 +7,10 @@ import fareRule from "./fareRuleRoutes";
 import reviewRule from "./reviewRoutes";
 import flightSeat from "./flightSeatRoute";
 import flightBooking from "./bookingRoutes";
-import bookingDetails from "./bookingDetails.routes";
+import bookingDetails from "./flightBooking.routes";
+import myBookings from "./myBookings.routes";
+import weekData from "./multiDay.route";
+
 
 import { authenticateJWT } from "../middleware/auth.middleware";
 
@@ -22,6 +25,8 @@ router.use("/flights/review", reviewRule);
 router.use("/flights/seat", flightSeat);
 router.use("/flights/booking", flightBooking);
 router.use("/flights/booking-details", bookingDetails);
+router.use("/flights/my-booking", myBookings);
+router.use("/flights/week", weekData);
 router.use("/flights", flightRoutes);
 router.use("/search-sessions", searchSessionRoutes);
 router.use("/health", healthRoutes);

@@ -4,7 +4,7 @@ import { envConfig } from "./env";
 /**
  * Connect to MongoDB database
  */
-export const connectDB = async (): Promise<void> => {
+export const connectDB = async (): Promise<boolean> => {
     try {
         const conn = await mongoose.connect(envConfig.DATABASE.MONGODB_URI, {
             dbName: envConfig.DATABASE.DB_NAME,
@@ -15,9 +15,10 @@ export const connectDB = async (): Promise<void> => {
             console.log(`📦 Database: ${conn.connection.db.databaseName}`);
         }
         console.log(`🌐 Host: ${conn.connection.host}`);
+        return true;
     } catch (error) {
         console.error("❌ MongoDB connection failed:", error);
-        process.exit(1);
+        return false;
     }
 };
 
