@@ -11,8 +11,14 @@ export class RateGainApiProvider {
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
-                ReservationDate: booking.ReservationDate || new Date().toISOString().split("T")[0],
+                propertyID: booking.propertyID || booking.propertyId || booking.PropertyId,
                 EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
+                RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
+                    ...rs,
+                    NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
+                    NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
+                    NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
+                }))
             },
         };
 
@@ -36,13 +42,19 @@ export class RateGainApiProvider {
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
+                propertyID: booking.propertyID || booking.propertyId || booking.PropertyId,
                 DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
                 ReservationDate: booking.ReservationDate || now,
                 TimeStamp: booking.TimeStamp || now,
                 EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-                // v1.5.3: SellingRate for B2C Net+Commission model
-                ...(booking.sellingRate !== undefined && { sellingRate: booking.sellingRate }),
-                ...(booking.SellingRate !== undefined && { sellingRate: booking.SellingRate }),
+                // v1.5.3: SellingRate (capital S) for B2C Net+Commission model
+                SellingRate: booking.SellingRate || booking.sellingRate,
+                RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
+                    ...rs,
+                    NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
+                    NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
+                    NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
+                }))
             },
         };
 
@@ -65,12 +77,14 @@ export class RateGainApiProvider {
         const booking = payload.CancelReservation || payload;
 
         const wrappedPayload = {
-            ...booking,
+            ConfirmationNumber: booking.ConfirmationNumber || booking.confirmationNumber || booking.confirmationId,
+            ReservationId: booking.ReservationId || booking.reservationId || booking.reservationid,
             DemandCancelId: booking.DemandCancelId || `demand-cancel-${Date.now()}`,
             TimeStamp: booking.TimeStamp || new Date().toISOString(),
             EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
             BrandCode: booking.BrandCode || "N/A",
-            PropertyCode: booking.PropertyCode || "N/A"
+            PropertyCode: booking.PropertyCode || "N/A",
+            PropertyId: booking.PropertyId || booking.propertyId
         };
         console.log(`[RateGain] Cancel Request Payload:`, JSON.stringify(wrappedPayload, null, 2));
         try {
