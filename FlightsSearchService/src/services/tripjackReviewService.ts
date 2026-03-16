@@ -38,14 +38,6 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
         return response.data as ReviewResponse;
 
     } catch (error: any) {
-        const fullUrl = getTripJackEndpoint('REVIEW');
-
-        console.error("❌ TripJack Review API Error:");
-        console.error("🌍 URL:", fullUrl);
-        console.error("📡 Status:", error.response?.status);
-        console.error("🧾 Response Data:", error.response?.data);
-        console.error("💥 Error Message:", error.message);
-
         throw error;
     }
 };

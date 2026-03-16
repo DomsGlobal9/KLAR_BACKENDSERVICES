@@ -7,14 +7,39 @@ import apiRoutes from "./src/routes/index";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./src/config/swagger";
 import { errorHandler } from "./src/middleware/errorHandler";
+import cookieParser from "cookie-parser";
 
 const app = express();
 
 
-app.use(cors()); // used to allow cross origin requests
-app.use(helmet()); // used to set security headers
-app.use(compression()); // used to compress the response
-app.use(express.json()); // used to parse the request body
+// app.use(cors()); // used to allow cross origin requests
+
+
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowedOrigins = envConfig.CORS.ORIGINS;
+
+      if (!origin) return callback(null, true); 
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS not allowed for origin: ${origin}`));
+    },
+    credentials: true,
+  })
+);
+
+
+app.use(helmet()); 
+app.use(compression()); 
+app.use(express.json());
+app.use(cookieParser())
+
+
 
 app.get("/", (req, res) => {
     res.status(200).json({
@@ -36,7 +61,9 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use("/api", apiRoutes);
 
-// Handling 404 - Not Found
+/**
+ * Handling 404 - Not Found
+ */
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -44,7 +71,7 @@ app.use((req, res) => {
     });
 });
 
-// Error handler must be last
+
 app.use(errorHandler);
 
 export default app;
