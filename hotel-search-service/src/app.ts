@@ -22,6 +22,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/search", routes);
+app.use("/", routes);
 app.use(errorHandler);
 
 export default app;
