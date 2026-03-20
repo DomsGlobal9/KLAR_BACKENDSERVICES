@@ -1,4 +1,4 @@
-import { FlightDetailsResponse, SegmentResponse, TripInfo, TripJackSearchPayload } from "../interface/flight/flight.interface";
+import { FlightDetailsResponse, FlightSegment, MealInfo, SegmentResponse, TripInfo, TripJackSearchPayload } from "../interface/flight/flight.interface";
 import { searchFromTripJack } from "../services/tripjackService";
 
 
@@ -46,6 +46,88 @@ export async function getFlightSegmentById(
  * Get flight details by ANY segment ID from the flight
  * Returns ALL segments of that flight
  */
+// export async function getFlightDetailsBySegmentId(
+//     payload: TripJackSearchPayload,
+//     segmentId: string
+// ): Promise<FlightDetailsResponse | null> {
+//     try {
+//         const data = await searchFromTripJack(payload);
+
+//         // Check all possible trip info locations
+//         const tripInfos: TripInfo[] = [
+//             ...(data.searchResult?.tripInfos?.ONWARD || []),
+//             ...(data.searchResult?.tripInfos?.RETURN || [])
+//         ];
+
+//         // Also check numeric keys for multi-city
+//         const tripInfoObj = data.searchResult?.tripInfos || {};
+//         Object.keys(tripInfoObj).forEach(key => {
+//             if (key !== 'ONWARD' && key !== 'RETURN' && Array.isArray(tripInfoObj[key])) {
+//                 tripInfos.push(...tripInfoObj[key]);
+//             }
+//         });
+
+//         // Find the trip info containing this segment
+//         for (const tripInfo of tripInfos) {
+//             const segmentIndex = tripInfo.sI.findIndex(s => s.id === segmentId);
+
+//             if (segmentIndex !== -1) {
+//                 // Found the flight - return ALL segments
+//                 const allSegments = tripInfo.sI;
+//                 const firstSegment = allSegments[0];
+//                 const lastSegment = allSegments[allSegments.length - 1];
+
+//                 const departureDate = new Date(firstSegment.dt);
+//                 const arrivalDate = new Date(lastSegment.at);
+
+//                 return {
+//                     flightId: `${firstSegment.fD.aI.code}_${firstSegment.fD.fN}_${Date.now()}`,
+//                     segments: allSegments,
+//                     fareOptions: tripInfo.totalPriceList,
+//                     tripInfo: {
+//                         sI: tripInfo.sI,
+//                         totalPriceList: tripInfo.totalPriceList,
+//                         airFlowType: tripInfo.airFlowType,
+//                         ipm: tripInfo.ipm,
+//                         issf: tripInfo.issf
+//                     },
+//                     totalStops: allSegments.length - 1,
+//                     totalDuration: allSegments.reduce((sum, seg) => sum + (seg.duration || 0), 0),
+//                     departure: {
+//                         airportCode: firstSegment.da.code,
+//                         airportName: firstSegment.da.name,
+//                         cityCode: firstSegment.da.cityCode,
+//                         city: firstSegment.da.city,
+//                         terminal: firstSegment.da.terminal,
+//                         time: departureDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+//                         date: departureDate.toLocaleDateString()
+//                     },
+//                     arrival: {
+//                         airportCode: lastSegment.aa.code,
+//                         airportName: lastSegment.aa.name,
+//                         cityCode: lastSegment.aa.cityCode,
+//                         city: lastSegment.aa.city,
+//                         terminal: lastSegment.aa.terminal,
+//                         time: arrivalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+//                         date: arrivalDate.toLocaleDateString()
+//                     },
+//                     airlines: allSegments.map(s => ({
+//                         code: s.fD.aI.code,
+//                         name: s.fD.aI.name,
+//                         isLcc: s.fD.aI.isLcc
+//                     })),
+//                     flightNumbers: allSegments.map(s => s.fD.fN)
+//                 };
+//             }
+//         }
+
+//         return null;
+//     } catch (error) {
+//         console.error("Error fetching flight details:", error);
+//         throw error;
+//     }
+// }
+
 export async function getFlightDetailsBySegmentId(
     payload: TripJackSearchPayload,
     segmentId: string
@@ -53,32 +135,22 @@ export async function getFlightDetailsBySegmentId(
     try {
         const data = await searchFromTripJack(payload);
 
-        // Check all possible trip info locations
-        const tripInfos: TripInfo[] = [
-            ...(data.searchResult?.tripInfos?.ONWARD || []),
-            ...(data.searchResult?.tripInfos?.RETURN || [])
-        ];
+        // Get all trip infos
+        const tripInfos = getAllTripInfos(data);
 
-        // Also check numeric keys for multi-city
-        const tripInfoObj = data.searchResult?.tripInfos || {};
-        Object.keys(tripInfoObj).forEach(key => {
-            if (key !== 'ONWARD' && key !== 'RETURN' && Array.isArray(tripInfoObj[key])) {
-                tripInfos.push(...tripInfoObj[key]);
-            }
-        });
-
-        // Find the trip info containing this segment
         for (const tripInfo of tripInfos) {
-            const segmentIndex = tripInfo.sI.findIndex(s => s.id === segmentId);
+            const segmentIndex = tripInfo.sI.findIndex((s: FlightSegment) => s.id === segmentId);
 
             if (segmentIndex !== -1) {
-                // Found the flight - return ALL segments
                 const allSegments = tripInfo.sI;
                 const firstSegment = allSegments[0];
                 const lastSegment = allSegments[allSegments.length - 1];
 
                 const departureDate = new Date(firstSegment.dt);
                 const arrivalDate = new Date(lastSegment.at);
+
+                // EXTRACT MEAL INFORMATION
+                const mealInfo = extractMealInfo(tripInfo.totalPriceList);
 
                 return {
                     flightId: `${firstSegment.fD.aI.code}_${firstSegment.fD.fN}_${Date.now()}`,
@@ -89,15 +161,18 @@ export async function getFlightDetailsBySegmentId(
                         totalPriceList: tripInfo.totalPriceList,
                         airFlowType: tripInfo.airFlowType,
                         ipm: tripInfo.ipm,
-                        issf: tripInfo.issf
+                        issf: tripInfo.issf,
+                        isWarCrisisFlow: tripInfo.isWarCrisisFlow
                     },
                     totalStops: allSegments.length - 1,
-                    totalDuration: allSegments.reduce((sum, seg) => sum + (seg.duration || 0), 0),
+                    totalDuration: allSegments.reduce((sum: number, seg: FlightSegment) => sum + (seg.duration || 0), 0),
                     departure: {
                         airportCode: firstSegment.da.code,
                         airportName: firstSegment.da.name,
                         cityCode: firstSegment.da.cityCode,
                         city: firstSegment.da.city,
+                        country: firstSegment.da.country,
+                        countryCode: firstSegment.da.countryCode,
                         terminal: firstSegment.da.terminal,
                         time: departureDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         date: departureDate.toLocaleDateString()
@@ -107,16 +182,21 @@ export async function getFlightDetailsBySegmentId(
                         airportName: lastSegment.aa.name,
                         cityCode: lastSegment.aa.cityCode,
                         city: lastSegment.aa.city,
+                        country: lastSegment.aa.country,
+                        countryCode: lastSegment.aa.countryCode,
                         terminal: lastSegment.aa.terminal,
                         time: arrivalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         date: arrivalDate.toLocaleDateString()
                     },
-                    airlines: allSegments.map(s => ({
+                    airlines: allSegments.map((s: FlightSegment) => ({
                         code: s.fD.aI.code,
                         name: s.fD.aI.name,
                         isLcc: s.fD.aI.isLcc
                     })),
-                    flightNumbers: allSegments.map(s => s.fD.fN)
+                    flightNumbers: allSegments.map((s: FlightSegment) => s.fD.fN),
+                    
+                    // ADD MEAL INFORMATION
+                    mealInfo: mealInfo
                 };
             }
         }
@@ -126,6 +206,106 @@ export async function getFlightDetailsBySegmentId(
         console.error("Error fetching flight details:", error);
         throw error;
     }
+}
+
+// Helper function to extract meal information
+function extractMealInfo(totalPriceList: any[]): MealInfo {
+    if (!totalPriceList || totalPriceList.length === 0) {
+        return {
+            hasFreeMeal: false,
+            fareTypes: [],
+            mealIncludedFares: []
+        };
+    }
+
+    const mealInfo = {
+        hasFreeMeal: false,
+        fareTypes: [] as string[],
+        mealIncludedFares: [] as Array<{
+            fareIdentifier: string;
+            mealIncluded: boolean;
+            perPassenger: Record<string, boolean>;
+        }>
+    };
+
+    // Check each fare option
+    totalPriceList.forEach(fareOption => {
+        if (!fareOption.fd) return;
+
+        const fareMealInfo = {
+            fareIdentifier: fareOption.fareIdentifier || 'UNKNOWN',
+            mealIncluded: false,
+            perPassenger: {} as Record<string, boolean>
+        };
+
+        // Check each passenger type for meal indicator
+        const paxTypes = ['ADULT', 'CHILD', 'INFANT'];
+        paxTypes.forEach(paxType => {
+            // Note: In your data, it's "mI" not "mi"
+            if (fareOption.fd[paxType] && fareOption.fd[paxType].mI !== undefined) {
+                const hasMeal = fareOption.fd[paxType].mI === true;
+                fareMealInfo.perPassenger[paxType] = hasMeal;
+                
+                if (hasMeal) {
+                    fareMealInfo.mealIncluded = true;
+                    mealInfo.hasFreeMeal = true;
+                }
+            }
+        });
+
+        mealInfo.fareTypes.push(fareOption.fareIdentifier);
+        mealInfo.mealIncludedFares.push(fareMealInfo);
+    });
+
+    return mealInfo;
+}
+
+// Helper function to get all trip infos
+function getAllTripInfos(data: any): any[] {
+    const tripInfos: any[] = [];
+    const tripInfoObj = data.searchResult?.tripInfos || {};
+    
+    ['ONWARD', 'RETURN', ...Object.keys(tripInfoObj)].forEach(key => {
+        if (Array.isArray(tripInfoObj[key])) {
+            tripInfos.push(...tripInfoObj[key]);
+        }
+    });
+    
+    return tripInfos;
+}
+
+// Helper function to extract meal information
+function extractMealInformation(totalPriceList: any[]): any {
+    if (!totalPriceList || totalPriceList.length === 0) {
+        return null;
+    }
+
+    // Take the first fare option (usually the cheapest/recommended)
+    const fareOption = totalPriceList[0];
+    
+    if (!fareOption.fd) {
+        return null;
+    }
+
+    const mealInfo = {
+        hasFreeMeal: false,
+        perPassengerType: {} as Record<string, boolean>,
+        fareIdentifier: fareOption.fareIdentifier || 'PUBLISHED'
+    };
+
+    // Check meal indicator for each passenger type
+    ['ADULT', 'CHILD', 'INFANT'].forEach(paxType => {
+        if (fareOption.fd[paxType] && fareOption.fd[paxType].mi !== undefined) {
+            mealInfo.perPassengerType[paxType] = fareOption.fd[paxType].mi;
+            
+            // If any passenger type has free meal, set overall flag to true
+            if (fareOption.fd[paxType].mi === true) {
+                mealInfo.hasFreeMeal = true;
+            }
+        }
+    });
+
+    return mealInfo;
 }
 
 /**
