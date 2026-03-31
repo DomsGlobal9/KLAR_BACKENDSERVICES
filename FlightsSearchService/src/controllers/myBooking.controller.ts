@@ -653,6 +653,10 @@ export class BookingController {
             const { bookingId } = req.params;
             const { remarks, trips } = req.body;
 
+            console.log("The booking id we got", bookingId);
+            console.log("The remark id we got", remarks);
+            console.log("The trips we get", JSON.stringify(trips, null, 2));
+
             if (!bookingId) {
                 res.status(400).json({ success: false, message: 'Booking ID is required' });
                 return;
