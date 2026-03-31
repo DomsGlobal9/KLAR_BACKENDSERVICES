@@ -594,11 +594,11 @@ export class BookingController {
                 res.status(401).json({ success: false, message: 'Authentication required' });
                 return;
             }
-
+            
             const userData = await this.validateToken(token);
             const { bookingId } = req.params;
             const { remarks, trips } = req.body;
-
+            console.log("##################",JSON.stringify(req.body, null, 2));
             console.log("The booking id we got", bookingId);
             console.log("The remark id we got", remarks);
             console.log("The trips we get", JSON.stringify(remarks, null, 2));
