@@ -615,10 +615,10 @@ export class BookingController {
                 return;
             }
 
-            if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
-                res.status(403).json({ success: false, message: 'Access denied' });
-                return;
-            }
+            // if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
+            //     res.status(403).json({ success: false, message: 'Access denied' });
+            //     return;
+            // }
 
             const charges = await getCancellationCharges(bookingId, remarks || 'Cancellation request', trips);
 
