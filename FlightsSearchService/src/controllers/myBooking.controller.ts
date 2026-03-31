@@ -672,7 +672,7 @@ export class BookingController {
                 data: result
             });
         } catch (error: any) {
-            console.error('Submit cancellation error:', error);
+            // console.error('Submit cancellation error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to submit cancellation'
