@@ -20,18 +20,29 @@ class CommitService {
                 let confirmationNumber = rategainBooking.confirmationNumber || rategainBooking.ConfirmationNumber || rateGainResponse.ConfirmationNumber || bookReservation.EchoToken || 'CONF-UNKNOWN';
                 let reservationId = rategainBooking.ReservationId || rategainBooking.reservationId || confirmationNumber;
 
+                // Inject static hotel details into rateGainResponse for the frontend My Bookings page layout
+                if (!rateGainResponse.body) rateGainResponse.body = {};
+                if (bookReservation.hotelName) rateGainResponse.body.hotelName = bookReservation.hotelName;
+                if (bookReservation.hotelImage) rateGainResponse.body.hotelImage = bookReservation.hotelImage;
+                if (bookReservation.roomName) rateGainResponse.body.roomType = bookReservation.roomName;
+
+                // For the B2B frontend, the client pays in INR (sellingRate). RateGain uses the supplier currency.
+                // We should record the user's actual paid amount in the DB so 'My Bookings' shows the correct INR value.
+                const finalAmount = bookReservation.sellingRate || bookReservation.BookingRate || 0;
+                const finalCurrency = bookReservation.sellingRate ? 'INR' : (bookReservation.CurrencyCode || 'USD');
+
                 const bookingRecord = new BookingModel({
                     confirmationNumber,
                     reservationId,
-                    propertyId: bookReservation.propertyID || bookReservation.PropertyId,
+                    propertyId: bookReservation.propertyID || bookReservation.PropertyId || bookReservation.PropertyCode,
                     propertyCode: bookReservation.PropertyCode,
                     status: BookingStatus.CONFIRMED,
                     checkIn: bookReservation.checkin ? new Date(bookReservation.checkin) : new Date(),
                     checkOut: bookReservation.checkout ? new Date(bookReservation.checkout) : new Date(Date.now() + 86400000),
-                    totalAmount: bookReservation.BookingRate || 0,
-                    currencyCode: bookReservation.CurrencyCode || 'USD',
+                    totalAmount: finalAmount,
+                    currencyCode: finalCurrency,
                     guestName: guestName,
-                    rooms: Array.isArray(bookReservation.RoomSelection) ? bookReservation.RoomSelection : [],
+                    rooms: Array.isArray(bookReservation.RoomSelection) ? bookReservation.RoomSelection : (Array.isArray(payload.RoomSelection) ? payload.RoomSelection : []),
                     rateGainRequest: payload,
                     rateGainResponse: rateGainResponse
                 });

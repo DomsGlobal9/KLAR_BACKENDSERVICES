@@ -25,21 +25,28 @@ export class RateGainApiProvider {
             destinationCode: payload.destinationCode || payload.destCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
-            Echotoken: payload.Echotoken || payload.echoToken || `echo-${Date.now()}`,
+            // v1.5.3: Echotoken (capital E)
+            Echotoken: payload.echotoken || payload.Echotoken || payload.echoToken || `echo-${Date.now()}`,
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;
-                const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type?.toLowerCase() === "child").map((p: any) => p.age) || [];
+
+                // If paxes is already provided in the correct format, use it. Otherwise, derive from childrenAges or children count.
+                let paxes = r.paxes || [];
+                if (childrenCount > 0 && paxes.length === 0) {
+                    const childrenAges: number[] = r.childrenAges || [];
+                    if (childrenAges.length > 0) {
+                        paxes = childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }));
+                    } else {
+                        paxes = Array(childrenCount).fill(0).map(() => ({ type: "Child", age: 5 }));
+                    }
+                }
 
                 const room: any = {
                     NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || 1,
-                    adults: adultsCount,
-                    children: childrenCount,
-                    paxes: childrenCount > 0
-                        ? (childrenAges.length > 0
-                            ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
-                            : Array(childrenCount).fill(0).map(() => ({ type: "Child", age: 5 })))
-                        : [],
+                    Adults: adultsCount,
+                    Children: childrenCount,
+                    paxes: paxes,
                 };
 
                 return room;
@@ -47,7 +54,10 @@ export class RateGainApiProvider {
             pageNo: payload.pageNo || 1,
         };
 
-        // Optional fields per spec
+        // Optional fields per spec - Ensure PropertyId is correctly named for TC3
+        if (payload.PropertyId || payload.propertyId || payload.propertyID) {
+            rateGainPayload.PropertyId = payload.PropertyId || payload.propertyId || payload.propertyID;
+        }
         if (payload.CountryCode || payload.countryCode) {
             rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
         }
@@ -56,9 +66,6 @@ export class RateGainApiProvider {
         }
         if (payload.starRating) {
             rateGainPayload.starRating = payload.starRating;
-        }
-        if (payload.PropertyId || payload.propertyId) {
-            rateGainPayload.PropertyId = payload.PropertyId || payload.propertyId;
         }
         if (payload.Geofilter) {
             rateGainPayload.Geofilter = payload.Geofilter;
@@ -80,31 +87,36 @@ export class RateGainApiProvider {
      */
     async getAllProducts(payload: any) {
         const rateGainPayload: any = {
-            propertyID: payload.propertyID || payload.propertyId,
+            propertyID: payload.propertyID || payload.propertyId || payload.PropertyId,
             PropertyCode: payload.PropertyCode || payload.propertyCode,
             BrandCode: payload.BrandCode || payload.brandCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
+            destinationCode: payload.destinationCode || payload.destCode,
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;
-                const childrenAges: number[] = r.childrenAges || r.paxes?.filter((p: any) => p.type?.toLowerCase() === "child").map((p: any) => p.age) || [];
+
+                let paxes = r.paxes || [];
+                if (childrenCount > 0 && paxes.length === 0) {
+                    const childrenAges: number[] = r.childrenAges || [];
+                    if (childrenAges.length > 0) {
+                        paxes = childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }));
+                    } else {
+                        paxes = Array(childrenCount).fill(0).map(() => ({ type: "Child", age: 5 }));
+                    }
+                }
 
                 const room: any = {
                     NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || 1,
-                    adults: adultsCount,
-                    children: childrenCount,
+                    Adults: adultsCount,
+                    Children: childrenCount,
+                    paxes: paxes,
                 };
-
-                if (childrenCount > 0) {
-                    room.paxes = childrenAges.length > 0
-                        ? childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }))
-                        : Array(childrenCount).fill(0).map(() => ({ type: "Child", age: 5 }));
-                }
 
                 return room;
             }),
-            echoToken: payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
+            EchoToken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
         };
 
         // Optional fields

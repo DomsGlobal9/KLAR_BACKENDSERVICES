@@ -28,6 +28,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.13.4",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
@@ -35,6 +36,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.19.2",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.5",
     "redis": "^5.10.0",
     "swagger-jsdoc": "^6.2.8",

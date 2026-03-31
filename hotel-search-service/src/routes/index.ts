@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getDestinations } from "../controllers/destinations.controller";
 import { searchHotels } from "../controllers/hotels.controller";
 import { getProducts } from "../controllers/products.controller";
+import { authenticateJWT } from "../middlewares/auth.middleware";
 
 const router = Router();
 

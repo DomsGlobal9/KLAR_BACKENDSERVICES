@@ -12,6 +12,8 @@ import myBookings from "./myBookings.routes";
 import weekData from "./multiDay.route";
 
 
+import { authenticateJWT } from "../middleware/auth.middleware";
+
 const router = Router();
 
 router.get("/ping", (req, res) => {

@@ -23,6 +23,7 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.use("/api/booking", routes);
+app.use("/", routes);
 app.use(errorHandler);
 
 export default app;
