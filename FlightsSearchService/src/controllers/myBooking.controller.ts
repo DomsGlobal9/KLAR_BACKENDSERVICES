@@ -659,10 +659,10 @@ export class BookingController {
             }
 
 
-            if (userData.role !== 'ADMIN') {
-                res.status(403).json({ success: false, message: 'Access denied. Only admins can cancel bookings.' });
-                return;
-            }
+            // if (userData.role !== 'ADMIN') {
+            //     res.status(403).json({ success: false, message: 'Access denied. Only admins can cancel bookings.' });
+            //     return;
+            // }
 
             const result = await submitCancellation(bookingId, remarks || 'Cancellation request', trips);
 
