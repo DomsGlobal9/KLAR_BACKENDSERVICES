@@ -601,7 +601,7 @@ export class BookingController {
 
             console.log("The booking id we got", bookingId);
             console.log("The remark id we got", remarks);
-            console.log("The trips we get", JSON.stringify(remarks, null, 2));
+            console.log("The trips we get", JSON.stringify(trips, null, 2));
 
             if (!bookingId) {
                 res.status(400).json({ success: false, message: 'Booking ID is required' });
@@ -621,6 +621,7 @@ export class BookingController {
             // }
 
             const charges = await getCancellationCharges(bookingId, remarks || 'Cancellation request', trips);
+            console.log("The charges we get", JSON.stringify(charges, null, 2));
 
             res.status(200).json({
                 success: true,
@@ -628,7 +629,7 @@ export class BookingController {
                 data: charges
             });
         } catch (error: any) {
-            console.error('Get cancellation charges error:', error);
+            // console.error('Get cancellation charges error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to fetch cancellation charges'
