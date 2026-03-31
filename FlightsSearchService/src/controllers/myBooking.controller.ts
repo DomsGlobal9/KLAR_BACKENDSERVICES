@@ -628,7 +628,7 @@ export class BookingController {
                 data: charges
             });
         } catch (error: any) {
-            console.error('Get cancellation charges error:', error);
+            // console.error('Get cancellation charges error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to fetch cancellation charges'
