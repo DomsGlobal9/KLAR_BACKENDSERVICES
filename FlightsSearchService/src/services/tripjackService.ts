@@ -308,25 +308,25 @@ export const getCancellationCharges = async (
       }
     );
 
-    await TripJackRawModel.create({
-      provider: "TRIPJACK",
-      endpoint: "AMENDMENT_CHARGES",
-      requestPayload: payload,
-      responsePayload: response.data,
-      searchKey: cacheKey,
-    }).catch((err) => {
-      console.error("Failed to store TripJack amendment charges raw data", err);
-    });
+    // await TripJackRawModel.create({
+    //   provider: "TRIPJACK",
+    //   endpoint: "AMENDMENT_CHARGES",
+    //   requestPayload: payload,
+    //   responsePayload: response.data,
+    //   searchKey: cacheKey,
+    // }).catch((err) => {
+    //   console.error("Failed to store TripJack amendment charges raw data", err);
+    // });
 
     return response.data;
   } catch (error: any) {
-    console.error("TripJack Amendment Charges API Error:", {
-      endpoint: getTripJackEndpoint('AMENDMENT_CHARGES'),
-      bookingId,
-      error: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
+    // console.error("TripJack Amendment Charges API Error:", {
+    //   endpoint: getTripJackEndpoint('AMENDMENT_CHARGES'),
+    //   bookingId,
+    //   error: error.message,
+    //   status: error.response?.status,
+    //   data: error.response?.data,
+    // });
     throw error;
   }
 };
