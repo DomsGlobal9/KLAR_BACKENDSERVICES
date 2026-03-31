@@ -659,12 +659,13 @@ export class BookingController {
             }
 
 
-            if (userData.role !== 'ADMIN') {
-                res.status(403).json({ success: false, message: 'Access denied. Only admins can cancel bookings.' });
-                return;
-            }
+            // if (userData.role !== 'ADMIN') {
+            //     res.status(403).json({ success: false, message: 'Access denied. Only admins can cancel bookings.' });
+            //     return;
+            // }
 
             const result = await submitCancellation(bookingId, remarks || 'Cancellation request', trips);
+            console.log("@$@$%^&*^%$#$&*",JSON.stringify(result, null, 2));
 
             res.status(200).json({
                 success: true,
@@ -672,7 +673,7 @@ export class BookingController {
                 data: result
             });
         } catch (error: any) {
-            console.error('Submit cancellation error:', error);
+            // console.error('Submit cancellation error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to submit cancellation'
