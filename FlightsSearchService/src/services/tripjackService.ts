@@ -296,6 +296,9 @@ export const getCancellationCharges = async (
       ...(trips && { trips })
     };
 
+    console.log("@@@@@@@@@@@@@@@@@", JSON.stringify(url, null, 2));
+    console.log("#################", JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       url,
       payload,
