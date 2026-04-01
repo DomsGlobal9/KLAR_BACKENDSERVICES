@@ -378,7 +378,7 @@ export const submitCancellation = async (
     //   console.error("Failed to store TripJack submit amendment raw data", err);
     // });
 
-    console.log("$$$$$$$$$$$$$$$$$$$", JSON.stringify(response, null, 2));
+    // console.log("$$$$$$$$$$$$$$$$$$$", JSON.stringify(response, null, 2));
 
     return response.data;
   } catch (error: any) {
