@@ -311,6 +311,7 @@ export const getCancellationCharges = async (
       }
     );
 
+
     // await TripJackRawModel.create({
     //   provider: "TRIPJACK",
     //   endpoint: "AMENDMENT_CHARGES",
@@ -367,24 +368,27 @@ export const submitCancellation = async (
       }
     );
 
-    await TripJackRawModel.create({
-      provider: "TRIPJACK",
-      endpoint: "SUBMIT_AMENDMENT",
-      requestPayload: payload,
-      responsePayload: response.data,
-    }).catch((err) => {
-      console.error("Failed to store TripJack submit amendment raw data", err);
-    });
+
+    // await TripJackRawModel.create({
+    //   provider: "TRIPJACK",
+    //   endpoint: "SUBMIT_AMENDMENT",
+    //   requestPayload: payload,
+    //   responsePayload: response.data,
+    // }).catch((err) => {
+    //   console.error("Failed to store TripJack submit amendment raw data", err);
+    // });
+
+    console.log("$$$$$$$$$$$$$$$$$$$", JSON.stringify(response, null, 2));
 
     return response.data;
   } catch (error: any) {
-    console.error("TripJack Submit Amendment API Error:", {
-      endpoint: getTripJackEndpoint('SUBMIT_AMENDMENT'),
-      bookingId,
-      error: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
+    // console.error("TripJack Submit Amendment API Error:", {
+    //   endpoint: getTripJackEndpoint('SUBMIT_AMENDMENT'),
+    //   bookingId,
+    //   error: error.message,
+    //   status: error.response?.status,
+    //   data: error.response?.data,
+    // });
     throw error;
   }
 };
