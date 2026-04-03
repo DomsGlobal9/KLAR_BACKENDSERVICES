@@ -1,6 +1,6 @@
 import { Response, NextFunction } from "express";
 import { WalletService } from "../services/wallet.service";
-import { AuthenticatedRequest } from "../middlewares/auth.middleware";
+import { AuthenticatedRequest } from "../middlewares/authentication.middleware";
 import { Types } from "mongoose";
 import { BadRequestError, NotFoundError } from "../errors/AppError";
 import { WalletTransaction } from "../models/walletTransaction.model";
