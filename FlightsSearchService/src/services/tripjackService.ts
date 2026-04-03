@@ -364,7 +364,7 @@ export const submitCancellation = async (
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
