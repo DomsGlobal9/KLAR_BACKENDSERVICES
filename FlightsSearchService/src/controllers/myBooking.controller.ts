@@ -19,7 +19,7 @@ export class BookingController {
      * Extract token from request headers
      */
     private extractToken(req: Request): string | null {
-        
+
         if (req.cookies?.token) {
             return req.cookies.token;
         }
@@ -653,30 +653,38 @@ export class BookingController {
             const { bookingId } = req.params;
             const { remarks, trips } = req.body;
 
-            console.log("The booking id we got", bookingId);
-            console.log("The remark id we got", remarks);
-            console.log("The trips we get", JSON.stringify(trips, null, 2));
-
             if (!bookingId) {
                 res.status(400).json({ success: false, message: 'Booking ID is required' });
                 return;
             }
 
+            const getBookingData = await this.bookingService.getBookingDBdataByID(bookingId);
+            console.log("THe booking data we get", JSON.stringify(getBookingData, null, 2));
 
-            // if (userData.role !== 'ADMIN') {
-            //     res.status(403).json({ success: false, message: 'Access denied. Only admins can cancel bookings.' });
-            //     return;
-            // }
+            if (!getBookingData) {
+                res.status(404).json({ "message": "Booking Data not found" });
+                return;
+            }
+
+            const bookDbId = getBookingData._id?.toString() || '';
 
             const result = await submitCancellation(bookingId, remarks || 'Cancellation request', trips);
 
+            const dbStatusUpdate = await this.bookingService.updateBooking(
+                bookDbId,
+                { status: 'CANCELLED' }
+            );
+
+            if (!dbStatusUpdate) {
+                throw new Error("Error while updating the database")
+            }
             res.status(200).json({
                 success: true,
                 message: 'Cancellation submitted successfully',
                 data: result
             });
+
         } catch (error: any) {
-            // console.error('Submit cancellation error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to submit cancellation'
