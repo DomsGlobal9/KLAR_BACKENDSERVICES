@@ -323,11 +323,24 @@ export const getCancellationCharges = async (
     // });
 
     return response.data;
-  } catch (errors: any) {
-    if (errors){
-    throw response.errors;
+  } catch (error: any) {
+    if (error.response) {
+      console.error("TripJack Error:", error.response.data);
+
+      return {
+        success: false,
+        statusCode: error.response.status,
+        data: error.response.data
+      };
     }
-    
+
+    console.error("Unknown Error:", error.message);
+
+    return {
+      success: false,
+      statusCode: 500,
+      message: error.message
+    };
   }
 };
 

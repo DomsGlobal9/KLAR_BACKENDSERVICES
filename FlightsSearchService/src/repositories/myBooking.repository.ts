@@ -72,7 +72,17 @@ export class BookingRepository {
             FlightBookingModel.countDocuments(filter)
         ]);
 
-        return { bookings, total };
+        const normalizedBookings = bookings.map((booking: any) => {
+            return {
+                ...booking,
+
+                // ✅ pass both clearly
+                bookingStatus: booking?.status || null,
+                orderStatus: booking?.order?.status || null
+            };
+        });
+
+        return { bookings: normalizedBookings, total };
     }
 
     /**
