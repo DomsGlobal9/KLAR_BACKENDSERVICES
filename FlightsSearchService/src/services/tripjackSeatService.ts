@@ -37,7 +37,7 @@ export const getSeatMapFromTripJack = async (payload: SeatMapRequest): Promise<S
                     "Content-Type": "application/json",
                     apikey: envConfig.TRIPJACK.API_KEY,
                 },
-                timeout: envConfig.TRIPJACK.TIMEOUT,
+                // timeout: envConfig.TRIPJACK.TIMEOUT,
             }
         );
 
