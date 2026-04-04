@@ -324,14 +324,23 @@ export const getCancellationCharges = async (
 
     return response.data;
   } catch (error: any) {
-    // console.error("TripJack Amendment Charges API Error:", {
-    //   endpoint: getTripJackEndpoint('AMENDMENT_CHARGES'),
-    //   bookingId,
-    //   error: error.message,
-    //   status: error.response?.status,
-    //   data: error.response?.data,
-    // });
-    throw error;
+    if (error.response) {
+      console.error("TripJack Error:", error.response.data);
+
+      return {
+        success: false,
+        statusCode: error.response.status,
+        data: error.response.data
+      };
+    }
+
+    console.error("Unknown Error:", error.message);
+
+    return {
+      success: false,
+      statusCode: 500,
+      message: error.message
+    };
   }
 };
 
