@@ -170,7 +170,7 @@ export class BookingService {
     /**
      * Update booking details
      */
-    async updateBooking(id: string, updateData: Partial<IFlightBooking>): Promise<IFlightBooking | null> {
+    async updateBooking(id: string, updateData: any): Promise<IFlightBooking | null> {
         try {
 
             const sanitizedData = { ...updateData };
@@ -187,6 +187,20 @@ export class BookingService {
         } catch (error) {
             console.error('Error in updateBooking service:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Get bookings from DB
+     */
+    async getBookingDBdataByID(bookingId: string){
+        try {
+            if (bookingId) {
+                return await this.bookingRepository.findByBookingId(bookingId)
+            }
+        }
+        catch(error) {
+            throw new Error("Some error while get booking data");
         }
     }
 }
