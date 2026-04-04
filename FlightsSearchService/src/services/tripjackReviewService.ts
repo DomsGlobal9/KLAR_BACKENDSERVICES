@@ -23,7 +23,7 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
                     "Content-Type": "application/json",
                     apikey: envConfig.TRIPJACK.API_KEY,
                 },
-                timeout: 300000,
+                // timeout: 300000,
             }
         );
 

@@ -1,7 +1,9 @@
 import { Router } from "express";
 import {
     getAllFlightsWithDetails,
+    getFlightByIndex,
     getFlightDetails,
+    getFlightDetailsFromSession,
     getSegmentById,
     getTransformedSegmentById,
     searchFlights
@@ -50,6 +52,16 @@ router.post("/search", searchFlights);
  */
 
 
+/**
+ * Get flight details from stored session (RECOMMENDED)
+ */
+router.get("/details/:sessionId/:flightId", getFlightDetailsFromSession);
+
+/**
+ * Alternative: Get flight by index
+ */
+router.get("/flight/:sessionId/:tripType/:flightIndex", getFlightByIndex);
+
 router.post("/:flightId", getFlightDetails);
 
 router.post("/all-details", getAllFlightsWithDetails);
@@ -59,4 +71,3 @@ router.post("/segment/:segmentId", getSegmentById);
 router.post("/segment/transformed/:segmentId", getTransformedSegmentById);
 
 export default router;
-

@@ -22,7 +22,7 @@ export const searchFromTripJack = async (payload: any) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -69,7 +69,7 @@ export const getFareRulesFromTripJack = async (payload: { id: string; flowType: 
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -108,7 +108,7 @@ export const getReviewFromTripJack = async (payload: any) => {
           apikey: envConfig.TRIPJACK.API_KEY,
           ...(envConfig.TRIPJACK.TOKEN && { Authorization: `Bearer ${envConfig.TRIPJACK.TOKEN}` }),
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -146,7 +146,7 @@ export const revalidateWithTripJack = async (payload: any) => {
           apikey: envConfig.TRIPJACK.API_KEY,
           ...(envConfig.TRIPJACK.TOKEN && { Authorization: `Bearer ${envConfig.TRIPJACK.TOKEN}` }),
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -183,7 +183,7 @@ export const getFareQuoteFromTripJack = async (payload: any) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -226,7 +226,7 @@ export const retrieveBookingFromTripJack = async (bookingId: string, requirePaxP
           apikey: envConfig.TRIPJACK.API_KEY,
           agencyId: envConfig.TRIPJACK.AGENCY_ID,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -307,7 +307,7 @@ export const getCancellationCharges = async (
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        // timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -364,7 +364,7 @@ export const submitCancellation = async (
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -412,7 +412,7 @@ export const getAmendmentDetails = async (amendmentId: string) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
