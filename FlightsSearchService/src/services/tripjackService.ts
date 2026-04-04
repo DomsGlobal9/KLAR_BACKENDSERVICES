@@ -22,7 +22,7 @@ export const searchFromTripJack = async (payload: any) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        // timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -69,7 +69,7 @@ export const getFareRulesFromTripJack = async (payload: { id: string; flowType: 
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        // timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -307,7 +307,7 @@ export const getCancellationCharges = async (
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        // timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
