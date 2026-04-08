@@ -1,13 +1,45 @@
+import dns from "node:dns/promises";
+dns.setServers(["1.1.1.1", "1.0.0.1"]);
+
 import dotenv from "dotenv";
-dotenv.config({ path: [".env.local", ".env"] });
+dotenv.config({ path: [".env.local", ".env"], override: true });
 
 import app from "./app";
+import { connectDB } from "./config/db";
+import { syncRGDestinations } from "./sync/rgDestinationSync";
+import { syncTJHotels } from "./sync/tjHotelSync";
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5012;
 
-app.listen(PORT, () => {
-    console.log(`🚀 Hotel Search Service running on http://localhost:${PORT}`);
-    console.log(`   GET  /api/search/destinations`);
-    console.log(`   POST /api/search/hotels/search`);
-    console.log(`   POST /api/search/hotels/:propertyId/products`);
+async function start() {
+    // Connect to MongoDB first
+    await connectDB();
+
+    console.log("⏳ Starting background sync processes...");
+    syncRGDestinations().catch((err) =>
+        console.error("❌ [Sync] RG Destinations sync failed:", err.message)
+    );
+    syncTJHotels().catch((err) =>
+        console.error("❌ [Sync] TJ Hotels sync failed:", err.message)
+    );
+
+    console.log(`⏳ Attempting to listen on port ${PORT}...`);
+    const server = app.listen(Number(PORT), "0.0.0.0", () => {
+        console.log(`🚀 Hotel Search Service running on http://localhost:${PORT}`);
+        console.log(`   Health Check: http://localhost:${PORT}/api/search/health`);
+    });
+
+    server.on("error", (err: any) => {
+        if (err.code === "EADDRINUSE") {
+            console.error(`❌ Port ${PORT} is already in use.`);
+        } else {
+            console.error("❌ Server error:", err.message);
+        }
+        process.exit(1);
+    });
+}
+
+start().catch((err) => {
+    console.error("❌ Failed to start server:", err);
+    process.exit(1);
 });

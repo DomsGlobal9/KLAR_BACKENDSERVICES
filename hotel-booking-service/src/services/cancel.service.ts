@@ -1,5 +1,6 @@
 import { rateGainProvider } from "../providers/rategain.provider";
-import { BookingModel, BookingStatus } from "../models/Booking.model";
+import { tripJackProvider } from "../providers/tripjack.provider";
+import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
 
 class CancelService {
     async cancel(payload: any) {
@@ -7,6 +8,30 @@ class CancelService {
         const reservationId = payload.ReservationId;
 
         console.log(`🚫 Cancel service called with:`, JSON.stringify(payload, null, 2));
+
+        // ─── Step 0: Check if this is a TripJack booking ───
+        try {
+            const query: any = {};
+            if (confirmationNumber) query.confirmationNumber = confirmationNumber;
+            else if (reservationId)  query.reservationId = reservationId;
+
+            if (Object.keys(query).length > 0) {
+                const booking = await BookingModel.findOne(query).lean();
+                if (booking && booking.provider === BookingProvider.TRIPJACK) {
+                    console.log(`[TripJack] Cancelling TripJack booking: ${booking.confirmationNumber}`);
+                    const tjResponse = await tripJackProvider.cancel(booking.confirmationNumber);
+
+                    // Update local DB
+                    await BookingModel.findOneAndUpdate(query, { status: BookingStatus.CANCELLED });
+                    console.log(`✅ [TripJack] Booking marked CANCELLED in DB: ${booking.confirmationNumber}`);
+
+                    return tjResponse;
+                }
+            }
+        } catch (tjCancelErr: any) {
+            console.error("[TripJack] Cancel routing error:", tjCancelErr.message);
+            throw tjCancelErr;
+        }
 
         // ─── Step 1: Look up booking from DB to get the full original request data ───
         let enrichedPayload = { ...payload };

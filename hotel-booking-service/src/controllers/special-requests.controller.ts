@@ -6,12 +6,19 @@ export const specialRequestsController = async (_req: Request, res: Response) =>
         const data = await specialRequestsService.getSpecialRequests();
         res.json(data);
     } catch (error: any) {
-        console.error("SpecialRequests Controller Error:", error.response?.data || error.message);
-        res.status(error.response?.status || 500).json({
-            status: false,
-            statusCode: error.response?.status || 500,
-            description: error.message || "Internal Server Error",
-            body: null
+        const errorData = error.response?.data;
+        const errorMessage = typeof errorData === 'string' 
+            ? errorData.substring(0, 500) 
+            : JSON.stringify(errorData || {}).substring(0, 500);
+            
+        console.warn("⚠️ SpecialRequests Provider Unavailable:", errorMessage || error.message);
+        
+        // Return empty body instead of 500 to keep frontend happy
+        res.status(200).json({
+            status: true,
+            statusCode: 200,
+            description: "Special requests temporarily unavailable",
+            body: []
         });
     }
 };

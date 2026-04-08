@@ -8,10 +8,12 @@ export class RateGainApiProvider {
      */
     async precheck(payload: any) {
         const booking = payload.BookReservation || {};
+        const rawPropertyId = (booking.propertyID || booking.propertyId || booking.PropertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
-                propertyID: booking.propertyID || booking.propertyId || booking.PropertyId,
+                propertyID: rawPropertyId,
+                PropertyCode: booking.PropertyCode || rawPropertyId,
                 EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
                 RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
                     ...rs,
@@ -23,6 +25,7 @@ export class RateGainApiProvider {
         };
 
         try {
+            console.log(`[RateGain] Requesting PreCheck: ${JSON.stringify(consolidatedPayload, null, 2)}`);
             const response = await rateGainClient.post("/api/SmartDistribution/PreCheckReservation", consolidatedPayload);
             return response.data;
         } catch (error: any) {
@@ -39,10 +42,12 @@ export class RateGainApiProvider {
         const booking = payload.BookReservation || {};
         const now = new Date().toISOString();
 
+        const rawPropertyId = (booking.propertyID || booking.propertyId || booking.PropertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
-                propertyID: booking.propertyID || booking.propertyId || booking.PropertyId,
+                propertyID: rawPropertyId,
+                PropertyCode: booking.PropertyCode || rawPropertyId,
                 DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
                 ReservationDate: booking.ReservationDate || now,
                 TimeStamp: booking.TimeStamp || now,

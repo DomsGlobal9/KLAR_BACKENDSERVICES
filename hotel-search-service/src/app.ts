@@ -16,7 +16,9 @@ app.get("/", (_req, res) => {
             destinations: "GET /api/search/destinations",
             hotelSearch: "POST /api/search/hotels/search",
             products: "POST /api/search/hotels/:propertyId/products",
-            health: "GET /api/search/health"
+            health: "GET /api/search/health",
+            syncHotels: "POST /api/search/sync/hotels",
+            syncDestinations: "POST /api/search/sync/destinations",
         }
     });
 });

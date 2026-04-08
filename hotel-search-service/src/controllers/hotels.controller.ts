@@ -18,3 +18,24 @@ export const searchHotels = async (
         });
     }
 };
+
+export const getHotelSuggestions = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const query = req.query.q as string;
+        const data = await hotelsService.getHotelSuggestions(query);
+        res.status(200).json({
+            status: true,
+            body: data
+        });
+    } catch (error: any) {
+        res.status(500).json({
+            status: false,
+            description: error.message,
+            body: []
+        });
+    }
+};

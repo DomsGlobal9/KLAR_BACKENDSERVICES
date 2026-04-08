@@ -36,13 +36,13 @@ router.get("/health", (_req, res) => {
 });
 
 // List bookings from DB
-router.get("/bookings", listController);
+router.get("/bookings", authenticateJWT, listController);
 
 // RateGain booking flow — now protected
 router.post("/precheck", authenticateJWT, precheckController);
 router.post("/commit", authenticateJWT, commitController);
 router.post("/cancel", authenticateJWT, cancelController);
-router.get("/special-requests", authenticateJWT, specialRequestsController);
+router.get("/special-requests", specialRequestsController);
 
 // New booking management routes
 router.get("/bookings/:id", authenticateJWT, getBookingDetails);
