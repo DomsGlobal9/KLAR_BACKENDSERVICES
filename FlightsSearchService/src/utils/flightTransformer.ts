@@ -518,86 +518,58 @@ export function getFlightList(
         console.log("🔄 Processing RETURN trip");
         console.log(`ONWARD count: ${tripInfos.ONWARD?.length || 0}, RETURN count: ${tripInfos.RETURN?.length || 0}`);
 
-        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || [], true);
-        const returnFlights = transformFlightSegments(tripInfos.RETURN || [], false);
+        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || []);
+        const returnFlights = transformFlightSegments(tripInfos.RETURN || []);
 
         console.log(`✈️ ONWARD flights: ${onwardFlights.length}, RETURN flights: ${returnFlights.length}`);
 
         if (onwardFlights.length === 0 || returnFlights.length === 0) {
             console.log("⚠️ No onward or return flights found");
-            return [];
+             return [];
         }
 
         const combinations = [];
 
-        for (const onward of onwardFlights) {
+        // Note: TripJack return response often already pairs them if we used multiairflow=false
+        // but here we generate combinations if they are separate lists
+        // If they are meant to be 1:1, we can just use the index
+        const maxLength = Math.max(onwardFlights.length, returnFlights.length);
+        
+        for (let i = 0; i < maxLength; i++) {
+            const onward = onwardFlights[i] || onwardFlights[0];
+            const returnFlight = returnFlights[i] || returnFlights[0];
+            
+            if (!onward || !returnFlight) continue;
+
             const onwardLowestFare = Math.min(...onward.fareOptions.map(f => f.netFare));
-            const onwardBestFare = onward.fareOptions.reduce((prev, current) =>
-                prev.netFare < current.netFare ? prev : current
-            );
+            const returnLowestFare = Math.min(...returnFlight.fareOptions.map(f => f.netFare));
+            const onwardBestFare = onward.fareOptions.reduce((prev, current) => prev.netFare < current.netFare ? prev : current);
+            const returnBestFare = returnFlight.fareOptions.reduce((prev, current) => prev.netFare < current.netFare ? prev : current);
 
-            for (const returnFlight of returnFlights) {
-                const returnLowestFare = Math.min(...returnFlight.fareOptions.map(f => f.netFare));
-                const returnBestFare = returnFlight.fareOptions.reduce((prev, current) =>
-                    prev.netFare < current.netFare ? prev : current
-                );
-
-                combinations.push({
-                    combinationId: `${onward.flightId}_${returnFlight.flightId}`,
-                    totalFare: onwardLowestFare + returnLowestFare,
-                    currency: 'INR',
-                    onward: {
-                        flightId: onward.flightId,
-                        segmentId: onward.segmentId,
-                        airline: onward.airline,
-                        flightNumber: onward.flightNumber,
-                        aircraftType: onward.aircraftType,
-                        departure: onward.departure,
-                        arrival: onward.arrival,
-                        duration: onward.duration,
-                        stops: onward.stops,
-                        lowestFare: onwardLowestFare,
-                        bestFare: {
-                            ...onwardBestFare,
-                            fareId: onwardBestFare.id,
-                        },
-                        fareOptions: onward.fareOptions,
-                        fareOptionsCount: onward.fareOptions.length,
-                    },
-                    return: {
-                        flightId: returnFlight.flightId,
-                        segmentId: returnFlight.segmentId,
-                        airline: returnFlight.airline,
-                        flightNumber: returnFlight.flightNumber,
-                        aircraftType: returnFlight.aircraftType,
-                        departure: returnFlight.departure,
-                        arrival: returnFlight.arrival,
-                        duration: returnFlight.duration,
-                        stops: returnFlight.stops,
-                        lowestFare: returnLowestFare,
-                        bestFare: {
-                            ...returnBestFare,
-                            fareId: returnBestFare.id,
-                        },
-                        fareOptions: returnFlight.fareOptions,
-                        fareOptionsCount: returnFlight.fareOptions.length,
-                    },
-                    fareBreakdown: {
-                        baseFare: onwardBestFare.baseFare + returnBestFare.baseFare,
-                        taxesAndFees: onwardBestFare.taxesAndFees + returnBestFare.taxesAndFees,
-                        totalFare: onwardLowestFare + returnLowestFare,
-                    },
-                    baggage: {
-                        onward: onwardBestFare.baggage,
-                        return: returnBestFare.baggage,
-                    },
-                    isRefundable: onwardBestFare.refundable && returnBestFare.refundable,
-                });
-            }
+            combinations.push({
+                combinationId: onward.flightId + "_" + returnFlight.flightId,
+                onward: {
+                    ...onward,
+                    lowestFare: onwardLowestFare,
+                    bestFare: { ...onwardBestFare, fareId: onwardBestFare.id }
+                },
+                return: {
+                    ...returnFlight,
+                    lowestFare: returnLowestFare,
+                    bestFare: { ...returnBestFare, fareId: returnBestFare.id }
+                },
+                totalFare: onwardLowestFare + returnLowestFare,
+                currency: onward.fareOptions[0]?.currency || 'INR',
+                isRefundable: onwardBestFare.refundable && returnBestFare.refundable,
+                baggage: {
+                    onward: onwardBestFare.baggage,
+                    return: returnBestFare.baggage,
+                }
+            });
         }
 
         console.log(`✅ Generated ${combinations.length} RETURN flight combinations`);
-        return combinations; // Return unsorted - let sort handle it
+        return combinations;
     }
 
     // MULTI_CITY
@@ -632,8 +604,8 @@ export function getFlightList(
 // Helper function to transform flight segments
 function transformFlightSegments(
     tripInfoArray: TripInfo[],
-    isOutbound: boolean,
-    legNumber: number = 0
+    isOutbound?: boolean,
+    legNumber?: number
 ): TransformedFlight[] {
     const flights: TransformedFlight[] = [];
 
@@ -701,10 +673,6 @@ function transformFlightSegments(
             }),
             isInternational,
             isRedEye,
-            isOutbound,
-            legNumber,
-            legKey: isOutbound ? 'ONWARD' : 'RETURN',
-            legIndex: index,
         });
     });
 

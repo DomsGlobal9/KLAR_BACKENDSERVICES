@@ -32,6 +32,7 @@ export interface FilterResult<T> {
         };
         availableStops: StopType[];
         availableRefundTypes: RefundType[];
+        availableAirlines?: string[];
     };
 }
 

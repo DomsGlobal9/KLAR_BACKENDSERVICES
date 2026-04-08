@@ -189,6 +189,7 @@ export interface TransformedFlight {
   fareOptions: {
     id: string;
     fareIdentifier: string;
+    currency?: string;
     cabinClass: string;
     bookingClass: string;
     fareBasis: string;

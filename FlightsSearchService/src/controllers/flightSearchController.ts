@@ -54,8 +54,12 @@ export const searchFlights = async (
     }
 
 
-    flightData = sortFlights(flightData, tripType, sortOptions);
-
+    // Apply pagination
+    const paginatedResults = FlightPagination.paginate(
+      flightData,
+      tripType,
+      paginationOptions
+    );
 
     const searchParams = extractSearchParams(payload);
     console.log("🔍 DEBUG - TripJack Response:", {
@@ -74,7 +78,8 @@ export const searchFlights = async (
         payload.searchQuery.routeInfos.length,
         searchParams,
         sortOptions,
-        filters
+        filters,
+        paginatedResults
       )
     );
 

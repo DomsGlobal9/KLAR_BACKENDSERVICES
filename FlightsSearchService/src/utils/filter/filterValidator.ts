@@ -35,6 +35,12 @@ export class FilterValidator {
       filters.arrivalTime = arrivalParam;
     }
 
+    // Airlines filter
+    if (query.airline) {
+      const airlineParam = Array.isArray(query.airline) ? query.airline : [query.airline];
+      filters.airlines = airlineParam;
+    }
+
     return filters;
   }
 
