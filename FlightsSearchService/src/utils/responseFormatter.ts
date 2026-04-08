@@ -19,7 +19,9 @@ export function formatFlightResponse(
             totalFlights: pagination?.pagination.totalItems || (
                 Array.isArray(flightData)
                     ? flightData.length
-                    : Object.keys(flightData).length
+                    : (flightData.onward && flightData.return)
+                        ? (flightData.onward.length + flightData.return.length)
+                        : Object.keys(flightData).length
             ),
             searchParams,
             appliedSort: sortOptions,

@@ -18,6 +18,8 @@ export interface FlightSegment {
     name: string;
     cityCode: string;
     city: string;
+    country?: string;
+    countryCode?: string;
     terminal?: string;
   };
   aa: {
@@ -25,6 +27,8 @@ export interface FlightSegment {
     name: string;
     cityCode: string;
     city: string;
+    country?: string;
+    countryCode?: string;
     terminal?: string;
   };
   dt: string;
@@ -52,6 +56,7 @@ export interface FareDetail {
           AGST?: number;
           MF?: number;
           YR?: number;
+          YQ?: number;
         };
       };
       sR: number;
@@ -80,6 +85,7 @@ export interface FareDetail {
           AGST?: number;
           MF?: number;
           YR?: number;
+          YQ?: number;
         };
       };
       sR: number;
@@ -108,6 +114,7 @@ export interface FareDetail {
           AGST?: number;
           MF?: number;
           YR?: number;
+          YQ?: number;
         };
       };
       sR: number;
@@ -125,6 +132,9 @@ export interface FareDetail {
   fareIdentifier: string;
   id: string;
   icca: boolean;
+  sri?: string;
+  msri?: string[];
+  messages?: any[];
 }
 
 export interface TripInfo {
@@ -133,6 +143,7 @@ export interface TripInfo {
   airFlowType: string;
   ipm: string;
   issf: boolean;
+  isWarCrisisFlow?: boolean;
 }
 
 export interface TransformedFlight {
@@ -178,6 +189,7 @@ export interface TransformedFlight {
   fareOptions: {
     id: string;
     fareIdentifier: string;
+    currency?: string;
     cabinClass: string;
     bookingClass: string;
     fareBasis: string;
@@ -340,6 +352,16 @@ export interface TransformedFareRule {
   rawRtf?: string;
 }
 
+export interface MealInfo {
+    hasFreeMeal: boolean;
+    fareTypes: string[];
+    mealIncludedFares: Array<{
+        fareIdentifier: string;
+        mealIncluded: boolean;
+        perPassenger: Record<string, boolean>;
+    }>;
+}
+
 export interface FlightDetailsResponse {
   flightId: string;
   segments: FlightSegment[];
@@ -352,6 +374,8 @@ export interface FlightDetailsResponse {
     airportName: string;
     cityCode: string;
     city: string;
+    country?: string;
+    countryCode?: string;
     terminal?: string;
     time: string;
     date: string;
@@ -361,6 +385,8 @@ export interface FlightDetailsResponse {
     airportName: string;
     cityCode: string;
     city: string;
+    country?: string;
+    countryCode?: string;
     terminal?: string;
     time: string;
     date: string;
@@ -371,4 +397,5 @@ export interface FlightDetailsResponse {
     isLcc: boolean;
   }[];
   flightNumbers: string[];
+  mealInfo?: MealInfo;
 }
