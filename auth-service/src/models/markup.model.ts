@@ -5,7 +5,7 @@ export interface IMarkup extends Document {
   serviceType: 'FLIGHT' | 'HOTEL' | 'BUS' | 'CAB' | 'PACKAGE' | 'ALL' | string;
   percentageMarkup: number;
   fixedMarkup: number;
-  appliedTo: 'BASE_FARE' | 'TOTAL_FARE' | 'TAXES_ONLY';
+  appliedTo?: 'BASE_FARE' | 'TOTAL_FARE' | 'TAXES_ONLY';
   rules?: {
     maxMarkupAmount?: number;
     minBookingAmount?: number;
@@ -19,7 +19,7 @@ export interface IMarkup extends Document {
 const MarkupSchema = new Schema<IMarkup>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   serviceType: { type: String, required: true },
-  percentageMarkup: { type: Number, default: 0, min: 0, max: 100 },
+  percentageMarkup: { type: Number, default: 0, min: 0 },
   fixedMarkup: { type: Number, default: 0, min: 0 },
   appliedTo: { type: String, enum: ['BASE_FARE', 'TOTAL_FARE', 'TAXES_ONLY'], default: 'BASE_FARE' },
   rules: {
