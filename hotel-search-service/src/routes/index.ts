@@ -17,6 +17,13 @@ router.post("/sync/destinations", async (_req, res) => {
     );
 });
 
+router.post("/sync/hotels", async (_req, res) => {
+    res.json({ status: "started", message: "TripJack hotel sync triggered in background" });
+    syncTJHotels().catch((err) =>
+        console.error("[Sync] Manual TJ sync failed:", err.message)
+    );
+});
+
 // ─── Core Routes ─────────────────────────────────────────────────────────────
 
 // Base route returns destinations data as requested
