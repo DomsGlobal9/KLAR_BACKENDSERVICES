@@ -19,12 +19,19 @@ class BookingsService {
      */
     async getBookingById(id: string) {
         try {
-            return await BookingModel.findOne({
+            const query: any = {
                 $or: [
                     { confirmationNumber: id },
                     { reservationId: id }
                 ]
-            });
+            };
+
+            // If the ID looks like a MongoDB ObjectId, adds it to the search
+            if (id.match(/^[0-9a-fA-F]{24}$/)) {
+                query.$or.push({ _id: id });
+            }
+
+            return await BookingModel.findOne(query);
         } catch (error: any) {
             console.error("Error fetching booking:", error.message);
             throw error;

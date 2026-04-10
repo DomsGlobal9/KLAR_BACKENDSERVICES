@@ -63,27 +63,48 @@ export async function resolveForTJ(query: string): Promise<string[]> {
     }
 
     // 2. City/Hotel Name Search
-    console.log(`[DEBUG] resolveForTJ: Performing name search for "${normalizedQuery}"`);
+    console.log(`[DEBUG] resolveForTJ: Performing hierarchical search for "${normalizedQuery}"`);
     
     const words = normalizedQuery.split(/\s+/).filter(w => w.length > 2);
-    const orConditions: any[] = [
-        { cityName: { $regex: new RegExp(normalizedQuery, "i") } },
-        { name: { $regex: new RegExp(normalizedQuery, "i") } }
-    ];
+    
+    // Step A: Full phrase match on cityName (e.g. "New Delhi")
+    let hotels = await HotelModel.find({
+        cityName: { $regex: new RegExp(normalizedQuery, "i") }
+    }).select("tjHotelId").limit(300).lean();
 
-    // Add significant words to search if multiple words present
-    if (words.length > 0) {
-        words.forEach(word => {
-            orConditions.push({ cityName: { $regex: new RegExp(word, "i") } });
-            orConditions.push({ name: { $regex: new RegExp(word, "i") } });
-        });
+    // Step B: If no match, try AND-based search across Name, City, and Country
+    if (hotels.length === 0) {
+        // Every word must appear in either Name, City, or Country
+        const andConditions = words.map(word => ({
+            $or: [
+                { cityName: { $regex: new RegExp(word, "i") } },
+                { name: { $regex: new RegExp(word, "i") } },
+                { countryName: { $regex: new RegExp(word, "i") } }
+            ]
+        }));
+
+        if (andConditions.length > 0) {
+            hotels = await HotelModel.find({ $and: andConditions })
+                .select("tjHotelId")
+                .limit(300)
+                .lean();
+        }
     }
 
-    const hotels = await HotelModel.find({ $or: orConditions })
-        .select("tjHotelId")
-        .lean();
+    // Step C: Fallback for very short or no-match queries (back to original behavior but slightly more restricted)
+    if (hotels.length === 0) {
+        hotels = await HotelModel.find({
+            $or: [
+                { cityName: { $regex: new RegExp(normalizedQuery, "i") } },
+                { name: { $regex: new RegExp(normalizedQuery, "i") } }
+            ]
+        }).select("tjHotelId").limit(300).lean();
+    }
     
-    return [...new Set(hotels.map((h) => h.tjHotelId))];
+    const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId))];
+    console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels.`);
+    
+    return uniqueHids;
 }
 
 /**

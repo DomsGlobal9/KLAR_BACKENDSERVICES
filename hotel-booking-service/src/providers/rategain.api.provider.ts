@@ -77,31 +77,40 @@ export class RateGainApiProvider {
      * Cancel an existing hotel reservation.
      */
     async cancel(payload: any) {
-        // Wrap payload in CancelReservation as required by RateGain
-        // Also extract BrandCode from nested structure if necessary
+        // RateGain CancelReservation usually expects fields at top level, not wrapped.
         const booking = payload.CancelReservation || payload;
 
-        const wrappedPayload = {
+        const rawPropertyId = (booking.PropertyId || booking.propertyId || "").toString().replace(/^RG:/, "");
+
+        const unwrappedPayload = {
             ConfirmationNumber: booking.ConfirmationNumber || booking.confirmationNumber || booking.confirmationId,
             ReservationId: booking.ReservationId || booking.reservationId || booking.reservationid,
             DemandCancelId: booking.DemandCancelId || `demand-cancel-${Date.now()}`,
             TimeStamp: booking.TimeStamp || new Date().toISOString(),
             EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-            BrandCode: booking.BrandCode || "N/A",
-            PropertyCode: booking.PropertyCode || "N/A",
-            PropertyId: booking.PropertyId || booking.propertyId
+            BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+            PropertyCode: booking.PropertyCode || rawPropertyId || "N/A",
+            PropertyId: rawPropertyId
         };
-        console.log(`[RateGain] Cancel Request Payload:`, JSON.stringify(wrappedPayload, null, 2));
+
+        console.log(`[RateGain] Cancel Request Payload (Unwrapped):`, JSON.stringify(unwrappedPayload, null, 2));
+        
         try {
-            const response = await rateGainClient.post("/api/SmartDistribution/CancelReservation", wrappedPayload);
-            return response.data;
+            const response = await rateGainClient.post("/api/SmartDistribution/CancelReservation", unwrappedPayload);
+            
+            // Handle case where RateGain returns error message with 200/500 code in body
+            const data = response.data;
+            if (data && (data.Message || data.description) && (data.StatusCode !== 200 || data.status === false)) {
+                console.error('[RateGain] Cancel Application Error:', data);
+            }
+            
+            return data;
         } catch (error: any) {
             // Log full error response for debugging
             console.error('[RateGain] Cancel Error Details:', error.response?.data);
             console.error('[RateGain] Cancel Error:', error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
-
     }
 
     /**

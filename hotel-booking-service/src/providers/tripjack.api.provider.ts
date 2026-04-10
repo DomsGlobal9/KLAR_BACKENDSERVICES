@@ -25,10 +25,10 @@ export class TripJackApiProvider {
         } = payload;
 
         // Fallback extraction
-        const hid = topHid || topPropertyId || topPropertyID || RoomSelection?.[0]?.hid || "";
-        const reviewHash = topReviewHash || RoomSelection?.[0]?.reviewHash || "";
-        const correlationId = topCorrelationId || RoomSelection?.[0]?.correlationId || RoomSelection?.[0]?._correlationId || "";
-        const optionId = topOptionId || RoomSelection?.[0]?.optionId || RoomSelection?.[0]?.RoomSelectionKey || RoomSelection?.[0]?.rateKey || "";
+        const hid = topHid || topPropertyId || topPropertyID || RoomSelection?.[0]?.hid || RoomSelection?.[0]?.tjHotelId || "";
+        const reviewHash = topReviewHash || RoomSelection?.[0]?.reviewHash || RoomSelection?.[0]?.ReviewHash || RoomSelection?.[0]?.review_hash || "";
+        const correlationId = topCorrelationId || RoomSelection?.[0]?.correlationId || RoomSelection?.[0]?.CorrelationId || RoomSelection?.[0]?._correlationId || "";
+        const optionId = topOptionId || RoomSelection?.[0]?.optionId || RoomSelection?.[0]?.rateKey || RoomSelection?.[0]?.RoomSelectionKey || "";
 
         console.log(`[TripJackProvider] Extracted metadata - hid: ${hid}, reviewHash: ${reviewHash}, correlationId: ${correlationId}, optionId: ${optionId}`);
 
