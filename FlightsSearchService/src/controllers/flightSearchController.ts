@@ -14,6 +14,7 @@ import { formatFlightResponse } from "../utils/responseFormatter";
 import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
 import { FilterValidator, filterFlights } from "../utils/filter";
 import FlightPagination from "../utils/pagination";
+import { searchStorage } from "../services/searchStorageService";
 
 
 /**
@@ -29,11 +30,25 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    console.log("From starting search payload",req.body);
+    console.log("From starting search payload", req.body);
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
     const filters = FilterValidator.validateFilters(req.query);
     const paginationOptions = FlightPagination.validateOptions(req.query);
+
+    // Generate session ID for this search
+    const sessionId = req.headers['x-session-id'] as string || searchStorage.generateSessionId();
+
+    // Check if this is a new search or same session
+    const isNewSearch = req.headers['x-new-search'] === 'true' || !req.headers['x-session-id'];
+
+    if (isNewSearch) {
+      // Delete old search results if they exist
+      const existingSession = req.headers['x-session-id'] as string;
+      if (existingSession) {
+        await searchStorage.deleteSearchResults(existingSession);
+      }
+    }
 
     if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
@@ -48,11 +63,9 @@ export const searchFlights = async (
     const tripInfos = getTripInfos(data, tripType);
     let flightData = getFlightList(tripInfos, tripType);
 
-
     if (!FilterValidator.isEmpty(filters)) {
       flightData = filterFlights(flightData, tripType, filters);
     }
-
 
     // Apply pagination
     const paginatedResults = FlightPagination.paginate(
@@ -62,20 +75,27 @@ export const searchFlights = async (
     );
 
     const searchParams = extractSearchParams(payload);
-    console.log("🔍 DEBUG - TripJack Response:", {
-      status: data.status,
-      hasONWARD: !!data.searchResult?.tripInfos?.ONWARD,
-      onwardCount: data.searchResult?.tripInfos?.ONWARD?.length || 0,
-      hasRETURN: !!data.searchResult?.tripInfos?.RETURN,
-      returnCount: data.searchResult?.tripInfos?.RETURN?.length || 0,
-      sampleOnward: data.searchResult?.tripInfos?.ONWARD?.[0] ? 'Has data' : 'No data'
-    });
 
-    return res.status(200).json(
-      formatFlightResponse(
-        flightData,
-        tripType,
-        payload.searchQuery.routeInfos.length,
+    // STORE THE RESULTS IN REDIS
+    await searchStorage.storeSearchResults(
+      sessionId,
+      tripType,
+      searchParams,
+      data, // raw TripJack response
+      flightData // transformed data
+    );
+
+    console.log(`🔍 Search stored with session ID: ${sessionId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Flights searched successfully",
+      sessionId, // Return session ID to frontend
+      data: {
+        searchType: tripType,
+        routeCount: payload.searchQuery.routeInfos.length,
+        flights: paginatedResult.data,
+        totalFlights: paginatedResult.pagination.totalItems,
         searchParams,
         sortOptions,
         filters,

@@ -163,7 +163,7 @@ const FlightBookingSchema = new Schema<IFlightBooking>({
     status: {
         type: String,
         enum: Object.values(BookingStatus),
-        default: BookingStatus.PENDING,
+        default: BookingStatus.CONFIRMED,
         index: true
     },
     

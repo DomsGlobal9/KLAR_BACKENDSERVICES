@@ -1,3 +1,7 @@
+import dns from "node:dns/promises";
+dns.setServers(["1.1.1.1", "1.0.0.1"]);
+
+
 import dotenv from "dotenv";
 dotenv.config({ path: [".env.local", ".env"] });
 

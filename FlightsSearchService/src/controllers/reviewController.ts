@@ -24,6 +24,7 @@ export const getPriceReview = async (
         }
 
         const reviewData = await getReviewFromTripJack({ priceIds });
+        console.log("The review data we get", JSON.stringify(reviewData, null, 2));
 
         if (!reviewData.status?.success) {
             return res.status(400).json({
@@ -63,7 +64,7 @@ export const getPriceReview = async (
         if (error.response?.status === 400) {
             return res.status(400).json({
                 success: false,
-                message: error.response?.data?.message || "Invalid price IDs"
+                message: error.response?.data?.message || "Fares are not available. Choose another."
             });
         }
 

@@ -48,7 +48,7 @@ export class FlightBookingService {
             priceIds: data.priceIds,
             tripDetails: data.tripDetails,
             bookingDate: new Date(),
-            status: BookingStatus.PENDING
+            status: BookingStatus.CONFIRMED
         };
 
         return await this.repository.create(bookingData);

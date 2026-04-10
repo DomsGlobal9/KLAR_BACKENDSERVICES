@@ -22,7 +22,7 @@ export const searchFromTripJack = async (payload: any) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -69,7 +69,7 @@ export const getFareRulesFromTripJack = async (payload: { id: string; flowType: 
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -108,7 +108,7 @@ export const getReviewFromTripJack = async (payload: any) => {
           apikey: envConfig.TRIPJACK.API_KEY,
           ...(envConfig.TRIPJACK.TOKEN && { Authorization: `Bearer ${envConfig.TRIPJACK.TOKEN}` }),
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -146,7 +146,7 @@ export const revalidateWithTripJack = async (payload: any) => {
           apikey: envConfig.TRIPJACK.API_KEY,
           ...(envConfig.TRIPJACK.TOKEN && { Authorization: `Bearer ${envConfig.TRIPJACK.TOKEN}` }),
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -183,7 +183,7 @@ export const getFareQuoteFromTripJack = async (payload: any) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -226,7 +226,7 @@ export const retrieveBookingFromTripJack = async (bookingId: string, requirePaxP
           apikey: envConfig.TRIPJACK.API_KEY,
           agencyId: envConfig.TRIPJACK.AGENCY_ID,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
@@ -296,6 +296,9 @@ export const getCancellationCharges = async (
       ...(trips && { trips })
     };
 
+    console.log("@@@@@@@@@@@@@@@@@", JSON.stringify(url, null, 2));
+    console.log("#################", JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       url,
       payload,
@@ -304,30 +307,40 @@ export const getCancellationCharges = async (
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 
-    await TripJackRawModel.create({
-      provider: "TRIPJACK",
-      endpoint: "AMENDMENT_CHARGES",
-      requestPayload: payload,
-      responsePayload: response.data,
-      searchKey: cacheKey,
-    }).catch((err) => {
-      console.error("Failed to store TripJack amendment charges raw data", err);
-    });
+
+    // await TripJackRawModel.create({
+    //   provider: "TRIPJACK",
+    //   endpoint: "AMENDMENT_CHARGES",
+    //   requestPayload: payload,
+    //   responsePayload: response.data,
+    //   searchKey: cacheKey,
+    // }).catch((err) => {
+    //   console.error("Failed to store TripJack amendment charges raw data", err);
+    // });
 
     return response.data;
   } catch (error: any) {
-    console.error("TripJack Amendment Charges API Error:", {
-      endpoint: getTripJackEndpoint('AMENDMENT_CHARGES'),
-      bookingId,
-      error: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    throw error;
+    if (error.response) {
+      console.error("TripJack Error:", error.response.data);
+
+      return {
+        success: false,
+        statusCode: error.response.status,
+        data: error.response.data
+      };
+    }
+
+    console.error("Unknown Error:", error.message);
+
+    return {
+      success: false,
+      statusCode: 500,
+      message: error.message
+    };
   }
 };
 
@@ -349,36 +362,43 @@ export const submitCancellation = async (
       ...(trips && { trips })
     };
 
-    const response = await axios.post(
-      url,
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          apikey: envConfig.TRIPJACK.API_KEY,
-        },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+    console.log("@@@@@@@@@@@@@@@@@", JSON.stringify(url, null, 2));
+    console.log("#################", JSON.stringify(payload, null, 2));
+
+    try {
+      const response = await axios.post(
+        url,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            apikey: envConfig.TRIPJACK.API_KEY,
+          },
+          // timeout: envConfig.TRIPJACK.TIMEOUT,
+        }
+      );
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error("TripJack API Error:", error);
+
+      if (error.response) {
+        console.error("Error Response Data:", error.response.data);
+        console.error("Status Code:", error.response.status);
+
+        throw new Error(
+          error.response.data?.message || "TripJack API responded with an error"
+        );
       }
-    );
 
-    await TripJackRawModel.create({
-      provider: "TRIPJACK",
-      endpoint: "SUBMIT_AMENDMENT",
-      requestPayload: payload,
-      responsePayload: response.data,
-    }).catch((err) => {
-      console.error("Failed to store TripJack submit amendment raw data", err);
-    });
+      if (error.request) {
+        throw new Error("No response from TripJack API (timeout/network issue)");
+      }
+      throw new Error(error.message || "Unexpected error while calling TripJack API");
+    }
 
-    return response.data;
   } catch (error: any) {
-    console.error("TripJack Submit Amendment API Error:", {
-      endpoint: getTripJackEndpoint('SUBMIT_AMENDMENT'),
-      bookingId,
-      error: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
     throw error;
   }
 };
@@ -402,7 +422,7 @@ export const getAmendmentDetails = async (amendmentId: string) => {
           "Content-Type": "application/json",
           apikey: envConfig.TRIPJACK.API_KEY,
         },
-        timeout: envConfig.TRIPJACK.TIMEOUT,
+        // timeout: envConfig.TRIPJACK.TIMEOUT,
       }
     );
 

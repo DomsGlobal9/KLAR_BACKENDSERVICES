@@ -17,7 +17,7 @@ router.get("/health", (_req, res) => {
 });
 
 router.get("/destinations", getDestinations);
-router.post("/hotels/search", authenticateJWT, searchHotels);
-router.post("/hotels/:propertyId/products", authenticateJWT, getProducts);
+router.post("/hotels/search", searchHotels);
+router.post("/hotels/:propertyId/products", getProducts);
 
 export default router;
