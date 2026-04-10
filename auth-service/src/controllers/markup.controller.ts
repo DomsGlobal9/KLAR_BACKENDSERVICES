@@ -29,7 +29,7 @@ export class MarkupController {
   } catch (error) {
     next(error);
   }
-}
+  }
 
   static async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
 

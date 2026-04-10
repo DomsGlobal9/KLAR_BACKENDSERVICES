@@ -5,36 +5,85 @@ import { Types } from 'mongoose';
 export class MarkupService {
   // === CRUD ===
   static async getAll(userId: Types.ObjectId) {
-    return Markup.find({ userId, isActive: true }).sort({ serviceType: 1 });
+    const markup = await Markup.findOne({ userId, isActive: true });
+    return markup ? markup.services : [];
   }
 
   static async getByServiceType(userId: Types.ObjectId, serviceType: string) {
-    return Markup.findOne({ userId, serviceType, isActive: true });
+    const markup = await Markup.findOne({ userId, isActive: true });
+    if (!markup) return null;
+    return markup.services.find(s => s.serviceType === serviceType) || null;
   }
 
   static async upsert(userId: Types.ObjectId, data: any) {
-    return Markup.findOneAndUpdate(
-      { userId, serviceType: data.serviceType },
-      { ...data, userId, updatedBy: userId },
-      { upsert: true, new: true, runValidators: true }
-    );
+    // Determine if data contains the full services array or a single service object.
+    const markup = await Markup.findOne({ userId });
+    
+    if (data.services && Array.isArray(data.services)) {
+      // Upserting the entire array
+      return Markup.findOneAndUpdate(
+        { userId },
+        { ...data, userId, updatedBy: userId },
+        { upsert: true, new: true, runValidators: true }
+      );
+    } else if (data.serviceType) {
+      // Upserting a single service object into the array
+      if (!markup) {
+        return Markup.create({
+          userId,
+          services: [data],
+          updatedBy: userId,
+          createdBy: userId
+        });
+      }
+
+      const existingServiceIndex = markup.services.findIndex(s => s.serviceType === data.serviceType);
+      
+      if (existingServiceIndex > -1) {
+        markup.services[existingServiceIndex].percentageMarkup = data.percentageMarkup || 0;
+        markup.services[existingServiceIndex].fixedMarkup = data.fixedMarkup || 0;
+      } else {
+        markup.services.push(data);
+      }
+      
+      // Update by userId to trigger mongoose middleware for the rule
+      return markup.save();
+    }
+    
+    throw new Error('Invalid markup data provided.');
   }
 
   static async bulkUpsert(userId: Types.ObjectId, markups: any[]) {
-    const operations = markups.map(m => ({
-      updateOne: {
-        filter: { userId, serviceType: m.serviceType },
-        update: { ...m, userId, updatedBy: userId },
-        upsert: true,
-      },
-    }));
-    return Markup.bulkWrite(operations);
+    // Ensure all services conform to the target format
+    let markup = await Markup.findOne({ userId });
+
+    if (!markup) {
+      return Markup.create({
+        userId,
+        services: markups,
+        updatedBy: userId,
+        createdBy: userId
+      });
+    }
+
+    // Merge new markups into existing ones
+    markups.forEach((m: any) => {
+      const idx = markup!.services.findIndex(s => s.serviceType === m.serviceType);
+      if (idx > -1) {
+        markup!.services[idx].percentageMarkup = m.percentageMarkup || 0;
+        markup!.services[idx].fixedMarkup = m.fixedMarkup || 0;
+      } else {
+        markup!.services.push(m);
+      }
+    });
+
+    return markup.save();
   }
 
   static async delete(userId: Types.ObjectId, serviceType: string) {
     return Markup.findOneAndUpdate(
-      { userId, serviceType },
-      { isActive: false, updatedBy: userId },
+      { userId },
+      { $pull: { services: { serviceType } }, updatedBy: userId },
       { new: true }
     );
   }
