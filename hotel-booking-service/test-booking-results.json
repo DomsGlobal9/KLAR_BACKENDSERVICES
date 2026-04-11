@@ -1,0 +1,695 @@
+{
+  "SEARCH": [
+    "Found 29 hotels. Meta: {\"rgCount\":10,\"tjCount\":19,\"errors\":[]}",
+    "Found TripJack Hotel: TJ:100000007412 Knight Castle Hotel",
+    "Found RateGain Hotel: RG:dd0e7980-994c-4b95-8a43-98d79f1ff8ad Gateway Hotel"
+  ],
+  "TJ_PRODUCTS": [
+    {
+      "topKeys": [
+        "hotelId",
+        "hid",
+        "name",
+        "address",
+        "city",
+        "starRating",
+        "description",
+        "images",
+        "amenities",
+        "reviewHash",
+        "correlationId",
+        "location",
+        "products",
+        "options"
+      ],
+      "hid": "100000007412",
+      "hotelId": "TJ:100000007412"
+    }
+  ],
+  "TJ_PRECHECK_RES": [
+    {
+      "status": false,
+      "statusCode": 400,
+      "description": "Internal Server Error",
+      "body": {
+        "status": {
+          "success": false,
+          "httpStatus": 400
+        },
+        "errors": [
+          {
+            "message": "Requested Room is no longer available. Please try different option",
+            "details": "Requested Room is no longer available. Please try different option",
+            "errCode": "6001"
+          }
+        ],
+        "correlationId": "50addc7c-2cd5-4180-adf4-e1b4783ec70d"
+      }
+    }
+  ],
+  "TJ_PRECHECK_FAIL": [
+    {
+      "status": false,
+      "statusCode": 400,
+      "description": "Internal Server Error",
+      "body": {
+        "status": {
+          "success": false,
+          "httpStatus": 400
+        },
+        "errors": [
+          {
+            "message": "Requested Room is no longer available. Please try different option",
+            "details": "Requested Room is no longer available. Please try different option",
+            "errCode": "6001"
+          }
+        ],
+        "correlationId": "50addc7c-2cd5-4180-adf4-e1b4783ec70d"
+      }
+    }
+  ],
+  "RG_PRODUCTS_FAIL": [
+    {
+      "body": {
+        "products": [
+          {
+            "roomCode": "483146225",
+            "name": "DELUXE ROOM.",
+            "nativeCurrency": "USD",
+            "images": [],
+            "roomFacilities": [],
+            "rate": [
+              {
+                "rateKey": "0",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "36.90",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Room Only",
+                "boardName": "Room Only",
+                "cancellationPolicies": [
+                  {
+                    "amount": "36.90",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "36.90",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B1",
+                "status": null
+              },
+              {
+                "rateKey": "1331",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "40.10",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Breakfast",
+                "boardName": "Breakfast",
+                "cancellationPolicies": [
+                  {
+                    "amount": "40.10",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "40.10",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B2",
+                "status": null
+              },
+              {
+                "rateKey": "0",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "43.31",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Room Only",
+                "boardName": "Room Only",
+                "cancellationPolicies": [
+                  {
+                    "amount": "43.31",
+                    "from": "2026-03-29 14:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "43.31",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B0",
+                "status": null
+              },
+              {
+                "rateKey": "1331",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "46.52",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Breakfast",
+                "boardName": "Breakfast",
+                "cancellationPolicies": [
+                  {
+                    "amount": "46.52",
+                    "from": "2026-03-29 14:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "46.52",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B3",
+                "status": null
+              },
+              {
+                "rateKey": "1334",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "54.53",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Half Board",
+                "boardName": "Half Board",
+                "cancellationPolicies": [
+                  {
+                    "amount": "54.53",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "54.53",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B4",
+                "status": null
+              },
+              {
+                "rateKey": "1335",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "67.37",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Full Board",
+                "boardName": "Full Board",
+                "cancellationPolicies": [
+                  {
+                    "amount": "67.37",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "67.37",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B5",
+                "status": null
+              }
+            ]
+          },
+          {
+            "roomCode": "650645755",
+            "name": "DELUXE TWIN",
+            "nativeCurrency": "USD",
+            "images": [],
+            "roomFacilities": [],
+            "rate": [
+              {
+                "rateKey": "0",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "36.90",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Room Only",
+                "boardName": "Room Only",
+                "cancellationPolicies": [
+                  {
+                    "amount": "36.90",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "36.90",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B6",
+                "status": null
+              },
+              {
+                "rateKey": "1331",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "40.10",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Breakfast",
+                "boardName": "Breakfast",
+                "cancellationPolicies": [
+                  {
+                    "amount": "40.10",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "40.10",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B8",
+                "status": null
+              },
+              {
+                "rateKey": "0",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "43.31",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Room Only",
+                "boardName": "Room Only",
+                "cancellationPolicies": [
+                  {
+                    "amount": "43.31",
+                    "from": "2026-03-29 14:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "43.31",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B7",
+                "status": null
+              },
+              {
+                "rateKey": "1331",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "46.52",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Breakfast",
+                "boardName": "Breakfast",
+                "cancellationPolicies": [
+                  {
+                    "amount": "46.52",
+                    "from": "2026-03-29 14:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "46.52",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B9",
+                "status": null
+              },
+              {
+                "rateKey": "1334",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "54.53",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Half Board",
+                "boardName": "Half Board",
+                "cancellationPolicies": [
+                  {
+                    "amount": "54.53",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "54.53",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B10",
+                "status": null
+              },
+              {
+                "rateKey": "1335",
+                "rateCode": null,
+                "rateType": null,
+                "totalPrice": "67.37",
+                "isMandatory": false,
+                "rateName": null,
+                "allotment": 1,
+                "rateCommentsId": null,
+                "rateComments": "Rate Notes:\n\nHotel Tariff Notes:\nCompulsory Tourism Dirham to be paid by guest directly to the hotel per room per night valid from 31st March 2014 Onward.\nNo show and early departure will be subjected to 100% charge. No date, name and room changed allowed. Bookings including children will be based on sharing parents bedding, no separate bed for children is provided unless otherwise stated. Cancel and rebooking is not allowed\n\nExisting reservation cannot be cancelled and re-booked under lower promotion.\nPlease note guests are not allowed to cancel existing bookings and rebook. The hotel has the right to reject the booking.\nThe Tourism Dirham Fee charged per room per night is applicable when booking guest rooms &amp; suites and it will be collected directly at the property and is not reflected in the room rate.\nThis hotel charges according to residency; therefore, if you hold residency in the hotels country of destination, please enter your country of residency as your nationality",
+                "paymentType": null,
+                "packaging": false,
+                "boardCode": "Full Board",
+                "boardName": "Full Board",
+                "cancellationPolicies": [
+                  {
+                    "amount": "67.37",
+                    "from": "2026-04-03 11:22:46",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": false,
+                    "noShowPolicy": null
+                  },
+                  {
+                    "amount": "67.37",
+                    "from": "2026-04-04 00:00:00",
+                    "toDate": null,
+                    "amendCharge": null,
+                    "amendRestricted": null,
+                    "cancelRestricted": true,
+                    "noShowPolicy": true
+                  }
+                ],
+                "taxes": null,
+                "fees": null,
+                "rooms": 1,
+                "adults": 1,
+                "children": 0,
+                "childrenAges": "",
+                "offers": [],
+                "allocationDetails": "1775200966000001B1000B11",
+                "status": null
+              }
+            ]
+          }
+        ],
+        "propertyId": "dd0e7980-994c-4b95-8a43-98d79f1ff8ad",
+        "propertyName": "Gateway Hotel",
+        "description": "Gateway Hotel, a newly opened Dubai hotel on the strip, offers 180 modern air-conditioned rooms with flat-screen TVs, minibars, and complimentary Wi-Fi. Each room includes a private bathroom with a shower/tub combination, complimentary toiletries, and a bidet. Some rooms offer tea/coffee facilities and a refrigerator. Hotel amenities include an outdoor pool, a fitness center, a sauna, a 24-hour business center, concierge services, babysitting (surcharge), a restaurant serving international cuisine, a coffee shop/cafe, and 24-hour room service. Buffet breakfast is available daily (fee applies). Free self-parking is available. The hotel is conveniently located a 5-minute drive from the Dubai Metro Green Line, 700 meters from the Dubai Museum in Al Fahidi Fort, and within easy reach of numerous attractions including Meena Bazaar, Textile Souk, Sheikh Saeed Al Maktoum House, Grand Mosque, The Dubai Heritage Village, SMCCU Sheikh Mohammed Centre for Cultural Understanding, Dubai Creek, Spice Souk, Deira Spice Souq, BurJuman Mall, Gold Souk, Dubai Cruise Terminal, Mina Rashid Marina, and Al Seef. Dubai International Airport is 7 km away.;The Gateway Hotel is a City hotel hotel. Located in Bur Dubai area. The nightlife/restaurants are right next to the hotel.",
+        "images": null,
+        "propertyCode": "1013275",
+        "brandCode": "V0I6V0I6V0I=",
+        "countryCode": "6",
+        "countryName": null,
+        "stateCode": "System.Object",
+        "stateName": null,
+        "destinationCode": "DXB",
+        "destinationName": "DUBAI",
+        "categoryCode": null,
+        "categoryName": null,
+        "address": "AL NAHDA STREET, KHALID BIN WALID ROAD125448 BUR DUBAIDubaiUNITED ARAB EMIRATES",
+        "street": null,
+        "city": "DUBAI",
+        "postalCode": "26888",
+        "phone": "+971 439-35333",
+        "longitude": "55.291294",
+        "latitude": "25.260502",
+        "region": null,
+        "zoneName": null,
+        "hotelType": 0,
+        "hotelSegments": [],
+        "hotelBoard": [],
+        "hotelFacility": [],
+        "hotelAmenities": [
+          "Restaurant",
+          "Housekeeping-Daily",
+          "Doctor On Call",
+          "Tableware",
+          "Babysitting Services",
+          "Smoking Area",
+          "Payable Wifi",
+          "Cctv/Security",
+          "Airport Shuttle",
+          "Continental Breakfast"
+        ]
+      },
+      "status": true,
+      "description": null,
+      "statusCode": 200,
+      "totalRecord": 1
+    }
+  ],
+  "RG_PRECHECK": [
+    "--> Precheck..."
+  ],
+  "RG_PRECHECK_RES": [
+    {
+      "status": false,
+      "statusCode": 500,
+      "description": "Something went wrong while processing your request. Please try again later.",
+      "body": {
+        "status": false,
+        "description": "Something went wrong while processing your request. Please try again later.",
+        "statusCode": 500,
+        "totalRecord": 0
+      }
+    }
+  ],
+  "RG_COMMIT": [
+    "--> Commit..."
+  ],
+  "RG_COMMIT_RES": [
+    {
+      "status": false,
+      "statusCode": 500,
+      "description": "Something went wrong while processing your request. Please try again later.",
+      "body": null
+    }
+  ]
+}

@@ -10,6 +10,13 @@ export const env = {
         apiKey: process.env.RATEGAIN_API_KEY!,
         apiSecret: process.env.RATEGAIN_SECRET_KEY!,
     },
+
+    tripJack: {
+        baseUrl: process.env.TRIPJACK_BASE_URL || "https://apitest-hms.tripjack.com",
+        omsBaseUrl: process.env.TRIPJACK_OMS_BASE_URL || "https://apitest-oms.tripjack.com",
+        apiKey: process.env.TRIPJACK_API_KEY!,
+        agencyId: process.env.TRIPJACK_AGENCY_ID!,
+    },
 };
 
 if (!env.rateGain.baseUrl) {
@@ -17,4 +24,7 @@ if (!env.rateGain.baseUrl) {
 }
 if (!env.rateGain.apiKey) {
     console.error("❌ RATEGAIN_API_KEY is not set. Service will not work.");
+}
+if (!env.tripJack.apiKey) {
+    console.warn("⚠️  TRIPJACK_API_KEY is not set. TripJack bookings will fail.");
 }

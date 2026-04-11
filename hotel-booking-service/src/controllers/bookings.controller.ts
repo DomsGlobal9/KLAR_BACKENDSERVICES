@@ -20,7 +20,7 @@ export const getBookings = async (_req: Request, res: Response) => {
     }
 };
 
-export const getBookingDetails = async (req: Request, res: Response) => {
+export const getBookingDetails = async (req: any, res: Response) => {
     try {
         const id = req.params.id as string;
         const booking = await bookingsService.getBookingById(id);
@@ -30,6 +30,20 @@ export const getBookingDetails = async (req: Request, res: Response) => {
                 status: false,
                 statusCode: 404,
                 description: "Booking not found",
+                body: null
+            });
+        }
+
+        // Ownership Check
+        const agentId = req.user?.userId || req.user?.id;
+        const roles = req.user?.roles || [];
+        const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
+
+        if (!isAdmin && booking.agentId !== agentId) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                description: "Access denied. You do not own this booking.",
                 body: null
             });
         }

@@ -8,6 +8,7 @@ router.get("/health", emailController.healthCheck);
 router.get("/status", emailController.getServiceStatus);
 
 router.post("/send", emailController.sendEmail);
+router.post("/send-booking-confirmation", emailController.sendBookingConfirmation);
 router.post("/send-bulk", emailController.sendBulkEmails);
 router.post("/send-test", emailController.sendTestEmail);
 router.post("/validate", emailController.validateEmails);

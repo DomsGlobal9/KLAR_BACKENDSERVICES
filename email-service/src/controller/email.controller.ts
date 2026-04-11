@@ -13,6 +13,20 @@ class EmailController {
     }
   };
 
+  sendBookingConfirmation = async (req: Request, res: Response) => {
+    const { to, data } = req.body;
+    console.log(`[EmailController] Received booking confirmation request for: ${Array.isArray(to) ? to.join(', ') : to}`);
+    const result = await emailService.sendBookingConfirmation(to, data);
+
+    if (result.success) {
+      console.log(`[EmailController] Booking confirmation sent successfully to: ${Array.isArray(to) ? to.join(', ') : to}`);
+      res.status(200).json(result);
+    } else {
+      console.error(`[EmailController] Failed to send booking confirmation. Error: ${result.error}`);
+      res.status(500).json(result);
+    }
+  };
+
   sendBulkEmails = async (req: Request, res: Response) => {
     if (!req.body.emails || !Array.isArray(req.body.emails)) {
       return res.status(400).json({ message: "emails array required" });

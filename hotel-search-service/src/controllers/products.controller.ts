@@ -15,11 +15,11 @@ export const getProducts = async (
         const data = await productsService.getProducts(payload);
         res.status(200).json(data);
     } catch (error: any) {
-        res.status(error.response?.status || 500).json({
+        res.status(error.response?.status || error.status || 500).json({
             status: false,
-            statusCode: error.response?.status || 500,
-            description: error.response?.data?.description || error.message,
-            body: null
+            statusCode: error.response?.status || error.status || 500,
+            description: error.response?.data?.description || error.response?.data?.error?.message || error.message || "Internal Server Error",
+            body: error.response?.data || null
         });
     }
 };

@@ -1,12 +1,21 @@
 import { BookingModel, BookingStatus } from "../models/Booking.model";
 
 class ListService {
-    async list(query: { status?: string; page?: number; limit?: number }) {
+    async list(query: { status?: string; page?: number; limit?: number; agentId?: any }) {
         const filter: any = {};
 
         if (query.status && Object.values(BookingStatus).includes(query.status as BookingStatus)) {
             filter.status = query.status;
         }
+
+        if (query.agentId) {
+            filter.$or = [
+                { agentId: query.agentId },
+                { agentId: { $exists: false } },
+                { agentId: null }
+            ];
+        }
+        console.log(`[FORENSIC] ListService Filter:`, JSON.stringify(filter));
 
         const page = Math.max(query.page || 1, 1);
         const limit = Math.min(Math.max(query.limit || 20, 1), 100);

@@ -7,18 +7,26 @@ export enum BookingStatus {
     CONFIRMED = 'CONFIRMED',
     CANCELLED = 'CANCELLED',
     PENDING = 'PENDING',
-    FAILED = 'FAILED'
+    FAILED = 'FAILED',
+    HELD = 'HELD'
+}
+
+/**
+ * Provider enum - which OTA supplied this booking
+ */
+export enum BookingProvider {
+    RATEGAIN = 'rategain',
+    TRIPJACK = 'tripjack',
 }
 
 /**
  * Optional: Structured room schema (recommended)
- * Comment this out if you want fully dynamic rooms.
  */
 export interface IRoom {
     roomType?: string;
     guests?: number;
     price?: number;
-    [key: string]: any; // allows extra RateGain fields
+    [key: string]: any;
 }
 
 /**
@@ -29,21 +37,36 @@ export interface IBooking extends Document {
     reservationId: string;
     propertyId: string;
     propertyCode: string;
+    provider: BookingProvider;
     status: BookingStatus;
     checkIn: Date;
     checkOut: Date;
     totalAmount: number;
     currencyCode: string;
     guestName?: string;
-    rooms: IRoom[]; // typed rooms
+    agentId?: string;
+    agentName?: string;
+    rooms: IRoom[];
+
+    // --- Hotel display fields (shown on My Bookings & Detail pages) ---
+    hotelName?: string;
+    hotelImage?: string;
+    roomType?: string;
+    amenities?: string[];
+    images?: string[];
+
+    // --- Raw provider payloads ---
     rateGainRequest?: any;
     rateGainResponse?: any;
+    tripJackRequest?: any;
+    tripJackResponse?: any;
+
     createdAt?: Date;
     updatedAt?: Date;
 }
 
 /**
- * Room sub-schema (recommended for validation)
+ * Room sub-schema
  */
 const roomSchema = new Schema<IRoom>(
     {
@@ -51,7 +74,7 @@ const roomSchema = new Schema<IRoom>(
         guests: { type: Number },
         price: { type: Number }
     },
-    { _id: false, strict: false } // allow extra fields from RateGain
+    { _id: false, strict: false }
 );
 
 /**
@@ -69,6 +92,13 @@ const bookingSchema = new Schema<IBooking>(
         propertyId: { type: String, required: true },
         propertyCode: { type: String, required: true },
 
+        provider: {
+            type: String,
+            enum: Object.values(BookingProvider),
+            default: BookingProvider.RATEGAIN,
+            index: true,
+        },
+
         status: {
             type: String,
             enum: Object.values(BookingStatus),
@@ -83,34 +113,34 @@ const bookingSchema = new Schema<IBooking>(
         currencyCode: { type: String, required: true },
 
         guestName: { type: String },
+        agentId: { type: String, index: true },
+        agentName: { type: String },
 
-        /**
-         * ✅ FIXED: rooms array (Mongoose v8 compatible)
-         */
+        // Hotel display fields (both providers)
+        hotelName: { type: String },
+        hotelImage: { type: String },
+        roomType: { type: String },
+        amenities: { type: [String], default: [] },
+        images: { type: [String], default: [] },
+
         rooms: {
-            type: [roomSchema], // strongly typed array
+            type: [roomSchema],
             default: []
         },
 
-        /**
-         * Store raw RateGain payloads
-         */
+        // Raw provider payloads
         rateGainRequest: { type: Schema.Types.Mixed },
-        rateGainResponse: { type: Schema.Types.Mixed }
+        rateGainResponse: { type: Schema.Types.Mixed },
+        tripJackRequest: { type: Schema.Types.Mixed },
+        tripJackResponse: { type: Schema.Types.Mixed },
     },
     {
         timestamps: true
     }
 );
 
-/**
- * Useful indexes for OTA workloads
- */
 bookingSchema.index({ reservationId: 1 });
 bookingSchema.index({ propertyId: 1, checkIn: 1 });
 
-/**
- * Model export
- */
 export const BookingModel: Model<IBooking> =
     mongoose.models.Booking || mongoose.model<IBooking>('Booking', bookingSchema);

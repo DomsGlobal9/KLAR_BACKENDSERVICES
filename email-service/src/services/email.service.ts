@@ -1,5 +1,6 @@
 import { mailTransporter } from "../app";
 import { envConfig } from "../config/env.config";
+import { getBookingConfirmationTemplate, BookingTemplateData } from "./templates";
 
 export interface SendEmailPayload {
     to: string | string[];
@@ -53,6 +54,9 @@ export class EmailService {
                 replyTo: payload.replyTo || envConfig.DEFAULT_REPLY_TO,
             });
 
+            console.log(`[EmailService] Email sent successfully! MessageID: ${result.messageId}`);
+            console.log(`[EmailService] Recipients: ${to.join(', ')}`);
+
             return {
                 success: true,
                 messageId: result.messageId,
@@ -96,6 +100,15 @@ export class EmailService {
             subject: "Test Email",
             text: "Test email working ✅",
             html: "<h2>Test email working ✅</h2>",
+        });
+    }
+
+    async sendBookingConfirmation(to: string | string[], data: BookingTemplateData) {
+        const html = getBookingConfirmationTemplate(data);
+        return this.sendEmail({
+            to,
+            subject: `Booking Confirmation - ${data.hotelName} (Ref: ${data.confirmationNumber})`,
+            html
         });
     }
 
