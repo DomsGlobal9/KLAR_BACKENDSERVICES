@@ -453,6 +453,7 @@ export function getFlightList(
             flights.push({
                 flightId: `FLIGHT_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 segmentId: segments.map(s => s.id).join(','),
+                tripType: 'ONE_WAY',
                 airline: {
                     code: firstSegment?.fD?.aI?.code || '',
                     name: firstSegment?.fD?.aI?.name || '',
@@ -510,7 +511,7 @@ export function getFlightList(
         });
 
         console.log(`✅ Transformed ${flights.length} ONE_WAY flights`);
-        return flights;
+        return { type: 'ONE_WAY', data: flights };
     }
 
     // RETURN
@@ -518,58 +519,18 @@ export function getFlightList(
         console.log("🔄 Processing RETURN trip");
         console.log(`ONWARD count: ${tripInfos.ONWARD?.length || 0}, RETURN count: ${tripInfos.RETURN?.length || 0}`);
 
-        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || []);
-        const returnFlights = transformFlightSegments(tripInfos.RETURN || []);
+        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || [], true, 1);
+        const returnFlights = transformFlightSegments(tripInfos.RETURN || [], false, 2);
 
         console.log(`✈️ ONWARD flights: ${onwardFlights.length}, RETURN flights: ${returnFlights.length}`);
 
-        if (onwardFlights.length === 0 || returnFlights.length === 0) {
-            console.log("⚠️ No onward or return flights found");
-             return [];
-        }
-
-        const combinations = [];
-
-        // Note: TripJack return response often already pairs them if we used multiairflow=false
-        // but here we generate combinations if they are separate lists
-        // If they are meant to be 1:1, we can just use the index
-        const maxLength = Math.max(onwardFlights.length, returnFlights.length);
-        
-        for (let i = 0; i < maxLength; i++) {
-            const onward = onwardFlights[i] || onwardFlights[0];
-            const returnFlight = returnFlights[i] || returnFlights[0];
-            
-            if (!onward || !returnFlight) continue;
-
-            const onwardLowestFare = Math.min(...onward.fareOptions.map(f => f.netFare));
-            const returnLowestFare = Math.min(...returnFlight.fareOptions.map(f => f.netFare));
-            const onwardBestFare = onward.fareOptions.reduce((prev, current) => prev.netFare < current.netFare ? prev : current);
-            const returnBestFare = returnFlight.fareOptions.reduce((prev, current) => prev.netFare < current.netFare ? prev : current);
-
-            combinations.push({
-                combinationId: onward.flightId + "_" + returnFlight.flightId,
-                onward: {
-                    ...onward,
-                    lowestFare: onwardLowestFare,
-                    bestFare: { ...onwardBestFare, fareId: onwardBestFare.id }
-                },
-                return: {
-                    ...returnFlight,
-                    lowestFare: returnLowestFare,
-                    bestFare: { ...returnBestFare, fareId: returnBestFare.id }
-                },
-                totalFare: onwardLowestFare + returnLowestFare,
-                currency: onward.fareOptions[0]?.currency || 'INR',
-                isRefundable: onwardBestFare.refundable && returnBestFare.refundable,
-                baggage: {
-                    onward: onwardBestFare.baggage,
-                    return: returnBestFare.baggage,
-                }
-            });
-        }
-
-        console.log(`✅ Generated ${combinations.length} RETURN flight combinations`);
-        return combinations;
+        return {
+            type: 'RETURN',
+            data: {
+                onward: onwardFlights,
+                return: returnFlights
+            }
+        };
     }
 
     // MULTI_CITY
@@ -594,18 +555,24 @@ export function getFlightList(
         });
 
         console.log(`✅ Transformed ${legs.length} MULTI_CITY legs`);
-        return legs;
+        return { type: 'MULTI_CITY', data: legs };
     }
 
     console.log("⚠️ No flights found for trip type:", tripType);
-    return [];
+    return { type: tripType, data: tripType === 'RETURN' ? { onward: [], return: [] } : [] };
 }
 
-// Helper function to transform flight segments
+/**
+ * Update transformFlightSegments helper function
+ * @param tripInfoArray 
+ * @param isOutbound 
+ * @param legNumber 
+ * @returns 
+ */
 function transformFlightSegments(
     tripInfoArray: TripInfo[],
-    isOutbound?: boolean,
-    legNumber?: number
+    isOutbound: boolean = true,
+    legNumber: number = 1
 ): TransformedFlight[] {
     const flights: TransformedFlight[] = [];
 
@@ -621,6 +588,9 @@ function transformFlightSegments(
         flights.push({
             flightId: `FLIGHT_${isOutbound ? 'OUT' : 'RET'}_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             segmentId: segments.map(s => s.id).join(','),
+            tripType: 'RETURN',
+            legNumber: legNumber,
+            isOutbound: isOutbound,
             airline: {
                 code: firstSegment?.fD?.aI?.code || '',
                 name: firstSegment?.fD?.aI?.name || '',

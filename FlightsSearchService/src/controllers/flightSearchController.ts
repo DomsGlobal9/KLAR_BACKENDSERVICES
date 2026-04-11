@@ -5,7 +5,7 @@ import {
   getFlightDetailsById,
   getFlightList
 } from "../utils/flightTransformer";
-import { TripInfo } from "../interface/flight/flight.interface";
+import { TransformedFlight, TripInfo } from "../interface/flight/flight.interface";
 import { getFlightDetailsBySegmentId, getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
 import { isValidTripJackPayload } from "../middleware/flightPayloadHandler";
 import { detectTripType, getTripInfos } from "../utils/tripTypeDetector";
@@ -30,20 +30,20 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    console.log("From starting search payload", req.body);
+    
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
     const filters = FilterValidator.validateFilters(req.query);
     const paginationOptions = FlightPagination.validateOptions(req.query);
 
-    // Generate session ID for this search
+    
     const sessionId = req.headers['x-session-id'] as string || searchStorage.generateSessionId();
 
-    // Check if this is a new search or same session
+    
     const isNewSearch = req.headers['x-new-search'] === 'true' || !req.headers['x-session-id'];
 
     if (isNewSearch) {
-      // Delete old search results if they exist
+      
       const existingSession = req.headers['x-session-id'] as string;
       if (existingSession) {
         await searchStorage.deleteSearchResults(existingSession);
@@ -61,29 +61,128 @@ export const searchFlights = async (
 
     const tripType = detectTripType(payload);
     const tripInfos = getTripInfos(data, tripType);
-    let flightData = getFlightList(tripInfos, tripType);
+    const flightDataResult = getFlightList(tripInfos, tripType);
+    
+    let responseData;
 
-    if (!FilterValidator.isEmpty(filters)) {
-      flightData = filterFlights(flightData, tripType, filters);
+    
+    if (tripType === 'ONE_WAY') {
+      
+      const flights = flightDataResult.data as TransformedFlight[];
+      
+      
+      let filteredFlights = flights;
+      if (!FilterValidator.isEmpty(filters)) {
+        filteredFlights = filterFlights(filteredFlights, tripType, filters);
+      }
+      
+      const sortedFlights = sortFlights(filteredFlights, tripType, sortOptions);
+      const paginatedResult = FlightPagination.paginate(sortedFlights, tripType, paginationOptions);
+      
+      responseData = {
+        searchType: 'ONE_WAY',
+        routeCount: payload.searchQuery.routeInfos.length,
+        flights: paginatedResult.data,
+        totalFlights: paginatedResult.pagination.totalItems,
+        searchParams: extractSearchParams(payload),
+        appliedSort: sortOptions,
+        appliedFilters: filters || {},
+        pagination: paginatedResult.pagination
+      };
+      
+    } else if (tripType === 'RETURN') {
+      
+      const returnData = flightDataResult.data as { onward: TransformedFlight[], return: TransformedFlight[] };
+      
+      
+      let onwardFlights = returnData.onward;
+      let returnFlights = returnData.return;
+      
+      if (!FilterValidator.isEmpty(filters)) {
+        onwardFlights = filterFlights(onwardFlights, tripType, filters);
+        returnFlights = filterFlights(returnFlights, tripType, filters);
+      }
+      
+      onwardFlights = sortFlights(onwardFlights, tripType, sortOptions);
+      returnFlights = sortFlights(returnFlights, tripType, sortOptions);
+      
+      
+      const start = (paginationOptions.page - 1) * paginationOptions.limit;
+      const end = start + paginationOptions.limit;
+      const paginatedOnward = onwardFlights.slice(start, end);
+      const paginatedReturn = returnFlights.slice(start, end);
+      
+      responseData = {
+        searchType: 'RETURN',
+        routeCount: payload.searchQuery.routeInfos.length,
+        onwardFlights: paginatedOnward,
+        returnFlights: paginatedReturn,
+        totalOnwardFlights: onwardFlights.length,
+        totalReturnFlights: returnFlights.length,
+        searchParams: extractSearchParams(payload),
+        appliedSort: sortOptions,
+        appliedFilters: filters || {},
+        pagination: {
+          page: paginationOptions.page,
+          limit: paginationOptions.limit,
+          totalItems: onwardFlights.length + returnFlights.length,
+          totalPages: Math.ceil((onwardFlights.length + returnFlights.length) / paginationOptions.limit)
+        }
+      };
+      
+    } else if (tripType === 'MULTI_CITY') {
+      
+      const legs = flightDataResult.data as { legNumber: number; legKey: string; flights: TransformedFlight[] }[];
+      
+      
+      const processedLegs = legs.map(leg => {
+        let legFlights = leg.flights;
+        
+        if (!FilterValidator.isEmpty(filters)) {
+          legFlights = filterFlights(legFlights, tripType, filters);
+        }
+        
+        legFlights = sortFlights(legFlights, tripType, sortOptions);
+        
+        
+        const start = (paginationOptions.page - 1) * paginationOptions.limit;
+        const end = start + paginationOptions.limit;
+        const paginatedFlights = legFlights.slice(start, end);
+        
+        return {
+          legNumber: leg.legNumber,
+          legKey: leg.legKey,
+          flights: paginatedFlights
+        };
+      });
+      
+      const totalFlights = legs.reduce((sum, leg) => sum + leg.flights.length, 0);
+      
+      responseData = {
+        searchType: 'MULTI_CITY',
+        routeCount: payload.searchQuery.routeInfos.length,
+        legs: processedLegs,
+        totalLegs: legs.length,
+        totalFlights: totalFlights,
+        searchParams: extractSearchParams(payload),
+        appliedSort: sortOptions,
+        appliedFilters: filters || {},
+        pagination: {
+          page: paginationOptions.page,
+          limit: paginationOptions.limit,
+          totalItems: totalFlights,
+          totalPages: Math.ceil(totalFlights / paginationOptions.limit)
+        }
+      };
     }
 
-    flightData = sortFlights(flightData, tripType, sortOptions);
-
-    const paginatedResult = FlightPagination.paginate(
-      flightData,
-      tripType,
-      paginationOptions
-    );
-
-    const searchParams = extractSearchParams(payload);
-
-    // STORE THE RESULTS IN REDIS
+    
     await searchStorage.storeSearchResults(
       sessionId,
       tripType,
-      searchParams,
-      data, // raw TripJack response
-      flightData // transformed data
+      extractSearchParams(payload),
+      data,
+      flightDataResult
     );
 
     console.log(`🔍 Search stored with session ID: ${sessionId}`);
@@ -91,17 +190,8 @@ export const searchFlights = async (
     return res.status(200).json({
       success: true,
       message: "Flights searched successfully",
-      sessionId, // Return session ID to frontend
-      data: {
-        searchType: tripType,
-        routeCount: payload.searchQuery.routeInfos.length,
-        flights: paginatedResult.data,
-        totalFlights: paginatedResult.pagination.totalItems,
-        searchParams,
-        appliedSort: sortOptions,
-        appliedFilters: filters || {},
-        pagination: paginatedResult.pagination
-      }
+      sessionId,
+      data: responseData
     });
 
   } catch (error) {

@@ -353,13 +353,13 @@ export interface TransformedFareRule {
 }
 
 export interface MealInfo {
-    hasFreeMeal: boolean;
-    fareTypes: string[];
-    mealIncludedFares: Array<{
-        fareIdentifier: string;
-        mealIncluded: boolean;
-        perPassenger: Record<string, boolean>;
-    }>;
+  hasFreeMeal: boolean;
+  fareTypes: string[];
+  mealIncludedFares: Array<{
+    fareIdentifier: string;
+    mealIncluded: boolean;
+    perPassenger: Record<string, boolean>;
+  }>;
 }
 
 export interface FlightDetailsResponse {
@@ -399,3 +399,51 @@ export interface FlightDetailsResponse {
   flightNumbers: string[];
   mealInfo?: MealInfo;
 }
+
+export interface ReturnFlightSegments {
+  type: 'RETURN';
+  onward: TransformedFlight[];
+  return: TransformedFlight[];
+}
+
+export interface OneWaySearchResponse {
+  searchType: 'ONE_WAY';
+  routeCount: number;
+  flights: TransformedFlight[];
+  totalFlights: number;
+  searchParams: any;
+  appliedSort: any;
+  appliedFilters: any;
+  pagination: any;
+}
+
+export interface ReturnSearchResponse {
+  searchType: 'RETURN';
+  routeCount: number;
+  onwardFlights: TransformedFlight[];
+  returnFlights: TransformedFlight[];
+  totalOnwardFlights: number;
+  totalReturnFlights: number;
+  searchParams: any;
+  appliedSort: any;
+  appliedFilters: any;
+  pagination: any;
+}
+
+export interface MultiCitySearchResponse {
+  searchType: 'MULTI_CITY';
+  routeCount: number;
+  legs: {
+    legNumber: number;
+    legKey: string;
+    flights: TransformedFlight[];
+  }[];
+  totalLegs: number;
+  totalFlights: number;
+  searchParams: any;
+  appliedSort: any;
+  appliedFilters: any;
+  pagination: any;
+}
+
+export type FlightSearchResponse = OneWaySearchResponse | ReturnSearchResponse | MultiCitySearchResponse;
