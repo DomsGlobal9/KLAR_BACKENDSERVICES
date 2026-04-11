@@ -15,6 +15,7 @@ import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
 import { FilterValidator, filterFlights } from "../utils/filter";
 import FlightPagination from "../utils/pagination";
 import { searchStorage } from "../services/searchStorageService";
+import { CursorPagination } from "../utils/pagination/cursorPagination";
 
 
 /**
@@ -30,20 +31,17 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    
+
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
     const filters = FilterValidator.validateFilters(req.query);
-    const paginationOptions = FlightPagination.validateOptions(req.query);
+    const cursorOptions = CursorPagination.validateOptions(req.query);
 
-    
     const sessionId = req.headers['x-session-id'] as string || searchStorage.generateSessionId();
 
-    
     const isNewSearch = req.headers['x-new-search'] === 'true' || !req.headers['x-session-id'];
 
     if (isNewSearch) {
-      
       const existingSession = req.headers['x-session-id'] as string;
       if (existingSession) {
         await searchStorage.deleteSearchResults(existingSession);
@@ -62,121 +60,111 @@ export const searchFlights = async (
     const tripType = detectTripType(payload);
     const tripInfos = getTripInfos(data, tripType);
     const flightDataResult = getFlightList(tripInfos, tripType);
-    
+
     let responseData;
 
-    
     if (tripType === 'ONE_WAY') {
-      
       const flights = flightDataResult.data as TransformedFlight[];
-      
-      
+
       let filteredFlights = flights;
       if (!FilterValidator.isEmpty(filters)) {
         filteredFlights = filterFlights(filteredFlights, tripType, filters);
       }
-      
-      const sortedFlights = sortFlights(filteredFlights, tripType, sortOptions);
-      const paginatedResult = FlightPagination.paginate(sortedFlights, tripType, paginationOptions);
-      
+
+      const cursorResult = CursorPagination.paginateOneWay(filteredFlights, cursorOptions);
+
       responseData = {
         searchType: 'ONE_WAY',
         routeCount: payload.searchQuery.routeInfos.length,
-        flights: paginatedResult.data,
-        totalFlights: paginatedResult.pagination.totalItems,
+        flights: cursorResult.data,
+        nextCursor: cursorResult.nextCursor,
+        hasMore: cursorResult.hasMore,
+        totalFlights: cursorResult.total,
         searchParams: extractSearchParams(payload),
-        appliedSort: sortOptions,
-        appliedFilters: filters || {},
-        pagination: paginatedResult.pagination
+        appliedSort: {
+          sortBy: cursorOptions.sortBy,
+          sortOrder: cursorOptions.sortOrder
+        },
+        appliedFilters: filters || {}
       };
-      
+
     } else if (tripType === 'RETURN') {
-      
       const returnData = flightDataResult.data as { onward: TransformedFlight[], return: TransformedFlight[] };
-      
-      
+
       let onwardFlights = returnData.onward;
       let returnFlights = returnData.return;
-      
+
       if (!FilterValidator.isEmpty(filters)) {
         onwardFlights = filterFlights(onwardFlights, tripType, filters);
         returnFlights = filterFlights(returnFlights, tripType, filters);
       }
-      
-      onwardFlights = sortFlights(onwardFlights, tripType, sortOptions);
-      returnFlights = sortFlights(returnFlights, tripType, sortOptions);
-      
-      
-      const start = (paginationOptions.page - 1) * paginationOptions.limit;
-      const end = start + paginationOptions.limit;
-      const paginatedOnward = onwardFlights.slice(start, end);
-      const paginatedReturn = returnFlights.slice(start, end);
-      
+
+      const cursorResult = CursorPagination.paginateReturn(
+        onwardFlights,
+        returnFlights,
+        cursorOptions
+      );
+
       responseData = {
         searchType: 'RETURN',
         routeCount: payload.searchQuery.routeInfos.length,
-        onwardFlights: paginatedOnward,
-        returnFlights: paginatedReturn,
+        onwardFlights: cursorResult.onward.data,
+        returnFlights: cursorResult.return.data,
+        onwardNextCursor: cursorResult.onward.nextCursor,
+        returnNextCursor: cursorResult.return.nextCursor,
+        onwardHasMore: cursorResult.onward.hasMore,
+        returnHasMore: cursorResult.return.hasMore,
+        nextCursor: cursorResult.onward.nextCursor || cursorResult.return.nextCursor ?
+          Buffer.from(JSON.stringify({
+            onwardCursor: cursorResult.onward.nextCursor,
+            returnCursor: cursorResult.return.nextCursor
+          })).toString('base64') : null,
         totalOnwardFlights: onwardFlights.length,
         totalReturnFlights: returnFlights.length,
         searchParams: extractSearchParams(payload),
-        appliedSort: sortOptions,
-        appliedFilters: filters || {},
-        pagination: {
-          page: paginationOptions.page,
-          limit: paginationOptions.limit,
-          totalItems: onwardFlights.length + returnFlights.length,
-          totalPages: Math.ceil((onwardFlights.length + returnFlights.length) / paginationOptions.limit)
-        }
+        appliedSort: {
+          sortBy: cursorOptions.sortBy,
+          sortOrder: cursorOptions.sortOrder
+        },
+        appliedFilters: filters || {}
       };
-      
+
     } else if (tripType === 'MULTI_CITY') {
-      
       const legs = flightDataResult.data as { legNumber: number; legKey: string; flights: TransformedFlight[] }[];
-      
-      
+
+      // Apply filters and sorting to each leg first
       const processedLegs = legs.map(leg => {
         let legFlights = leg.flights;
-        
+
         if (!FilterValidator.isEmpty(filters)) {
           legFlights = filterFlights(legFlights, tripType, filters);
         }
-        
-        legFlights = sortFlights(legFlights, tripType, sortOptions);
-        
-        
-        const start = (paginationOptions.page - 1) * paginationOptions.limit;
-        const end = start + paginationOptions.limit;
-        const paginatedFlights = legFlights.slice(start, end);
-        
+
         return {
           legNumber: leg.legNumber,
           legKey: leg.legKey,
-          flights: paginatedFlights
+          flights: legFlights
         };
       });
-      
-      const totalFlights = legs.reduce((sum, leg) => sum + leg.flights.length, 0);
-      
+
+      const cursorResult = CursorPagination.paginateMultiCity(processedLegs, cursorOptions);
+
       responseData = {
         searchType: 'MULTI_CITY',
         routeCount: payload.searchQuery.routeInfos.length,
-        legs: processedLegs,
-        totalLegs: legs.length,
-        totalFlights: totalFlights,
+        legs: cursorResult.data,
+        nextCursor: cursorResult.nextCursor,
+        hasMore: cursorResult.hasMore,
+        totalFlights: cursorResult.total,
         searchParams: extractSearchParams(payload),
-        appliedSort: sortOptions,
-        appliedFilters: filters || {},
-        pagination: {
-          page: paginationOptions.page,
-          limit: paginationOptions.limit,
-          totalItems: totalFlights,
-          totalPages: Math.ceil(totalFlights / paginationOptions.limit)
-        }
+        appliedSort: {
+          sortBy: cursorOptions.sortBy,
+          sortOrder: cursorOptions.sortOrder
+        },
+        appliedFilters: filters || {}
       };
     }
 
-    
     await searchStorage.storeSearchResults(
       sessionId,
       tripType,
