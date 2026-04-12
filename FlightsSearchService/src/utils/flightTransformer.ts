@@ -157,9 +157,22 @@ function transformReturnFlights(tripInfos: TripInfo[], legKey: string): Transfor
 /**
  * Transform Multi-city flights
  */
-function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): TransformedFlight[] {
-    return tripInfos.map((tripInfo, index) => {
+function transformMultiCityFlights(tripInfoArray: TripInfo[], legKey: string): TransformedFlight[] {
+    if (!tripInfoArray || tripInfoArray.length === 0) {
+        console.warn(`⚠️ No tripInfoArray for leg ${legKey}`);
+        return [];
+    }
+
+    const flights: TransformedFlight[] = [];
+
+    tripInfoArray.forEach((tripInfo, index) => {
         const segments = tripInfo.sI || [];
+
+        if (segments.length === 0) {
+            console.warn(`⚠️ No segments for tripInfo ${index} in leg ${legKey}`);
+            return;
+        }
+
         const totalStops = segments.length - 1;
         const firstSegment = segments[0];
         const lastSegment = segments[segments.length - 1];
@@ -172,13 +185,13 @@ function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): Trans
         const departureDate = new Date(firstSegment.dt);
         const arrivalDate = new Date(lastSegment.at);
 
-        return {
+        flights.push({
             flightId: `${firstSegment.fD.aI.code}_${firstSegment.fD.fN}_leg${legKey}_${index}_${Date.now()}`,
             segmentId: segments.map(s => s.id).join(','),
             tripType: 'MULTI_CITY',
             legNumber: parseInt(legKey) + 1,
             legIndex: parseInt(legKey),
-            legKey,
+            legKey: legKey,
             airline: {
                 code: firstSegment.fD.aI.code,
                 name: firstSegment.fD.aI.name,
@@ -217,8 +230,10 @@ function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): Trans
             fareOptions,
             isInternational,
             isRedEye,
-        };
+        });
     });
+
+    return flights;
 }
 
 /**
@@ -533,24 +548,36 @@ export function getFlightList(
         };
     }
 
-    // MULTI_CITY
+    // MULTI_CITY - FIXED VERSION
     if (tripType === 'MULTI_CITY' && !Array.isArray(tripInfos)) {
+        console.log("🔄 Processing MULTI_CITY trip");
+
         const legs: {
             legNumber: number;
             legKey: string;
             flights: TransformedFlight[];
         }[] = [];
 
+        // Get all keys and sort them numerically
         const legKeys = Object.keys(tripInfos).sort((a, b) => parseInt(a) - parseInt(b));
+        console.log(`📊 MULTI_CITY leg keys:`, legKeys);
 
         legKeys.forEach((key) => {
-            if (key !== 'ONWARD' && key !== 'RETURN') {
-                const legFlights = transformMultiCityFlights(tripInfos[key], key);
+            const tripInfoArray = tripInfos[key];
+
+            if (Array.isArray(tripInfoArray) && tripInfoArray.length > 0) {
+                console.log(`Processing leg ${key} with ${tripInfoArray.length} flight options`);
+
+                // Transform each flight option in this leg
+                const legFlights = transformMultiCityFlights(tripInfoArray, key);
+
                 legs.push({
-                    legNumber: parseInt(key) + 1,
+                    legNumber: legs.length + 1,
                     legKey: key,
                     flights: legFlights
                 });
+            } else {
+                console.warn(`⚠️ No flights found for leg ${key}`);
             }
         });
 

@@ -26,14 +26,7 @@ export const searchFromTripJack = async (payload: any) => {
       }
     );
 
-    await TripJackRawModel.create({
-      provider: "TRIPJACK",
-      requestPayload: payload,
-      responsePayload: response.data,
-      searchKey: cacheKey,
-    }).catch((err) => {
-      console.error("Failed to store TripJack raw data", err);
-    });
+    console.log("The flight response data from tripjack", response.data);
 
     await setCache(cacheKey, JSON.stringify(response.data), envConfig.TRIPJACK.CACHE_TTL);
 

@@ -10,10 +10,8 @@ import { getFlightDetailsBySegmentId, getFlightSegmentById, getTransformedFlight
 import { isValidTripJackPayload } from "../middleware/flightPayloadHandler";
 import { detectTripType, getTripInfos } from "../utils/tripTypeDetector";
 import { extractSearchParams } from "../utils/searchParamsExtractor";
-import { formatFlightResponse } from "../utils/responseFormatter";
 import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
 import { FilterValidator, filterFlights } from "../utils/filter";
-import FlightPagination from "../utils/pagination";
 import { searchStorage } from "../services/searchStorageService";
 import { CursorPagination } from "../utils/pagination/cursorPagination";
 
@@ -172,8 +170,6 @@ export const searchFlights = async (
       data,
       flightDataResult
     );
-
-    console.log(`🔍 Search stored with session ID: ${sessionId}`);
 
     return res.status(200).json({
       success: true,
