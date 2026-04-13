@@ -7,12 +7,8 @@ class RedisConfig {
 
   static getInstance(): Redis {
     if (!this.instance) {
-      this.instance = new Redis({
-        host: envConfig.REDIS.HOST,
-        port: envConfig.REDIS.PORT,
-        password: envConfig.REDIS.PASSWORD,
-        db: envConfig.REDIS.DB,
-        retryStrategy: (times) => {
+      this.instance = new Redis(envConfig.REDIS.URL, {
+        retryStrategy: (times: number) => {
           const delay = Math.min(times * 50, 2000);
           return delay;
         },
@@ -26,7 +22,12 @@ class RedisConfig {
         this.isConnected = true;
       });
 
-      this.instance.on('error', (error) => {
+      this.instance.on('ready', () => {
+        console.log('🚀 Redis is ready to use');
+        this.isConnected = true;
+      });
+
+      this.instance.on('error', (error: Error) => {
         console.error('❌ Redis connection error:', error);
         this.isConnected = false;
       });
@@ -35,7 +36,13 @@ class RedisConfig {
         console.log('⚠️ Redis connection closed');
         this.isConnected = false;
       });
+
+      this.instance.on('reconnecting', () => {
+        console.log('🔄 Redis reconnecting...');
+        this.isConnected = false;
+      });
     }
+
     return this.instance;
   }
 
@@ -45,10 +52,11 @@ class RedisConfig {
 
   static async healthCheck(): Promise<boolean> {
     try {
-      await this.getInstance().ping();
-      return true;
+      const client = this.getInstance();
+      const response = await client.ping();
+      return response === 'PONG';
     } catch (error) {
-      console.error('Redis health check failed:', error);
+      console.error('❌ Redis health check failed:', error);
       return false;
     }
   }

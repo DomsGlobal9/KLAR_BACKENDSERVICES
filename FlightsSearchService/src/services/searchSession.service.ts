@@ -23,8 +23,8 @@ export interface SearchSessionOptions {
 export class SearchSessionManager {
   private readonly SESSION_PREFIX = 'flight_session:';
   private readonly USER_SESSIONS_PREFIX = 'user_sessions:';
-  private readonly DEFAULT_TTL = envConfig.CACHE.TTL;
-  private readonly MAX_SESSIONS_PER_USER = envConfig.CACHE.MAX_SESSIONS_PER_USER;
+  private readonly DEFAULT_TTL = envConfig.REDIS.CACHE_TTL;
+  private readonly MAX_SESSIONS_PER_USER = 5;
 
   /**
    * Create a new search session
@@ -37,7 +37,7 @@ export class SearchSessionManager {
   ): Promise<string> {
     const sessionId = uuidv4();
     const ttl = options?.ttl || this.DEFAULT_TTL;
-    
+
     const session: SearchSession = {
       id: sessionId,
       timestamp: Date.now(),
@@ -61,7 +61,7 @@ export class SearchSessionManager {
 
     // Track user's sessions
     await this.addToUserSessions(userId, sessionId, ttl);
-    
+
     // Clean up old sessions if exceeding limit
     await this.cleanupUserSessions(userId, options?.maxSessionsPerUser || this.MAX_SESSIONS_PER_USER);
 
@@ -96,7 +96,7 @@ export class SearchSessionManager {
     );
 
     if (!mapping) return null;
-    
+
     return this.getSession(mapping.sessionId);
   }
 
@@ -119,7 +119,7 @@ export class SearchSessionManager {
     if (session && userId) {
       await this.removeFromUserSessions(userId, sessionId);
     }
-    
+
     return RedisCacheService.delete(`${this.SESSION_PREFIX}${sessionId}`, { prefix: '' });
   }
 
@@ -129,7 +129,7 @@ export class SearchSessionManager {
   private async addToUserSessions(userId: string, sessionId: string, ttl: number): Promise<void> {
     const userSessionsKey = `${this.USER_SESSIONS_PREFIX}${userId}`;
     const sessions = await RedisCacheService.get<string[]>(userSessionsKey, { prefix: '' }) || [];
-    
+
     if (!sessions.includes(sessionId)) {
       sessions.push(sessionId);
       await RedisCacheService.set(userSessionsKey, sessions, { ttl, prefix: '' });
@@ -142,7 +142,7 @@ export class SearchSessionManager {
   private async removeFromUserSessions(userId: string, sessionId: string): Promise<void> {
     const userSessionsKey = `${this.USER_SESSIONS_PREFIX}${userId}`;
     const sessions = await RedisCacheService.get<string[]>(userSessionsKey, { prefix: '' }) || [];
-    
+
     const updatedSessions = sessions.filter(id => id !== sessionId);
     if (updatedSessions.length > 0) {
       await RedisCacheService.set(userSessionsKey, updatedSessions, { ttl: this.DEFAULT_TTL, prefix: '' });
@@ -157,9 +157,9 @@ export class SearchSessionManager {
   private async cleanupUserSessions(userId: string, maxSessions: number): Promise<void> {
     const userSessionsKey = `${this.USER_SESSIONS_PREFIX}${userId}`;
     const sessions = await RedisCacheService.get<string[]>(userSessionsKey, { prefix: '' }) || [];
-    
+
     if (sessions.length <= maxSessions) return;
-    
+
     // Get all sessions with their timestamps
     const sessionDetails = await Promise.all(
       sessions.map(async (sessionId) => {
@@ -167,10 +167,10 @@ export class SearchSessionManager {
         return { sessionId, timestamp: session?.timestamp || 0 };
       })
     );
-    
+
     // Sort by timestamp (oldest first)
     sessionDetails.sort((a, b) => a.timestamp - b.timestamp);
-    
+
     // Delete oldest sessions
     const toDelete = sessionDetails.slice(0, sessions.length - maxSessions);
     for (const { sessionId } of toDelete) {
@@ -184,11 +184,11 @@ export class SearchSessionManager {
   async getUserSessions(userId: string): Promise<SearchSession[]> {
     const userSessionsKey = `${this.USER_SESSIONS_PREFIX}${userId}`;
     const sessionIds = await RedisCacheService.get<string[]>(userSessionsKey, { prefix: '' }) || [];
-    
+
     const sessions = await Promise.all(
       sessionIds.map(sessionId => this.getSession(sessionId))
     );
-    
+
     return sessions.filter((session): session is SearchSession => session !== null);
   }
 

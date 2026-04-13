@@ -9,7 +9,7 @@ export interface CacheOptions {
 
 export class RedisCacheService {
   private client: Redis;
-  private defaultTTL: number = envConfig.CACHE.TTL;
+  private defaultTTL: number = envConfig.REDIS.CACHE_TTL;
 
   constructor() {
     this.client = RedisConfig.getInstance();
