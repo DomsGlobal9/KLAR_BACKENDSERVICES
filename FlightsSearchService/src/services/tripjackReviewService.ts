@@ -27,8 +27,6 @@ export const getReviewFromTripJack = async (payload: ReviewRequest): Promise<Rev
             }
         );
 
-        console.log("✅ Response:", response.data);
-
         await setCache(
             cacheKey,
             JSON.stringify(response.data),

@@ -1,13 +1,14 @@
 import { TripJackSearchPayload } from "../../interface/flight/flight.interface";
 
+
 export function isValidMultiCityPayload(payload: any): payload is TripJackSearchPayload {
     const routeInfos = payload?.searchQuery?.routeInfos;
-
+    
     return (
         payload &&
         payload.searchQuery &&
         Array.isArray(routeInfos) &&
-        routeInfos.length >= 2 && 
+        routeInfos.length >= 2 && // Multi-city needs at least 2 routes
         routeInfos.every((route: any) =>
             typeof route.fromCityOrAirport?.code === 'string' &&
             typeof route.toCityOrAirport?.code === 'string' &&
