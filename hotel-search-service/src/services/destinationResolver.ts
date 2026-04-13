@@ -101,7 +101,7 @@ export async function resolveForTJ(query: string): Promise<string[]> {
         }).select("tjHotelId").limit(300).lean();
     }
     
-    const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId))];
+    const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId).filter(Boolean))];
     console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels.`);
     
     return uniqueHids;
