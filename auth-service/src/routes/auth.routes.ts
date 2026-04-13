@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { 
-  signupB2B, 
-  loginB2B, 
-  logoutB2B, 
-  me, 
+import {
+  signupB2B,
+  loginB2B,
+  logoutB2B,
+  me,
   validateToken,
-  validateTokenForService, 
+  validateTokenForService,
 } from "../controllers/auth.controller";
 import { authenticateJWT } from "../middlewares/authentication.middleware";
 
@@ -19,7 +19,7 @@ router.get("/validate", authenticateJWT, validateToken);
 
 /**
  * endpoint for service-to-service validation 
- */ 
+ */
 router.post("/validate-token", authenticateJWT, validateTokenForService);
 
 

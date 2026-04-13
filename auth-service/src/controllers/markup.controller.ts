@@ -1,71 +1,108 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { MarkupService } from '../services/markup.service';
-import { MarkupEarning } from '../models/markup-earning.model';
-import { AuthenticatedRequest } from "../middlewares/authentication.middleware";
+import { AuthenticatedRequest } from '../middlewares/authentication.middleware';
 import { Types } from 'mongoose';
 
+console.log("✅ MarkupController file loaded successfully");
 
-
+// Reusable Async Handler (Best Practice)
+const asyncHandler = (fn: RequestHandler): RequestHandler => {
+    return (req: Request, res: Response, next: NextFunction) => {
+        Promise.resolve(fn(req, res, next)).catch(next);
+    };
+};
 export class MarkupController {
 
-  static async addMarkup(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
+    static addMarkup = asyncHandler(async (req: AuthenticatedRequest, res: Response,  next: NextFunction) => {
+        console.log("🚀 addMarkup CONTROLLER ACTUALLY CALLED via Express");
+        // console.log("Has next?", typeof n);
 
-    const markupData = req.body;
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const data = await MarkupService.upsert(
-      new Types.ObjectId(req.user.userId),
-      markupData
-    );
+        const data = await MarkupService.upsert(new Types.ObjectId(userId), req.body);
 
-    res.status(201).json({
-      success: true,
-      message: "Markup added successfully",
-      data
+        res.status(201).json({
+            success: true,
+            message: "Markup added/updated successfully",
+            data
+        });
     });
-  } catch (error) {
-    next(error);
-  }
-  }
 
-  static async getAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
 
-     if (!req.user) {
-                return res.status(401).json({ success: false, message: "Unauthorized" });
-            }
-            
-    const data = await MarkupService.getAll(new Types.ObjectId(req.user.userId));
-    res.json({ success: true, data });
-  }
+    /** GET - Get My Markups */
+    static getMyMarkups = asyncHandler(async (req: AuthenticatedRequest, res: Response,   next: NextFunction) => {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-  static async bulkUpdate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+        const data = await MarkupService.getAll(new Types.ObjectId(userId));
+        res.json({ success: true, data });
+    });
 
-     if (!req.user) {
-                return res.status(401).json({ success: false, message: "Unauthorized" });
-            }
+    /** PUT - Bulk Update */
+    static bulkUpdate = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const { markups } = req.body;
-    await MarkupService.bulkUpsert(new Types.ObjectId(req.user.userId), markups);
-    res.json({ success: true, message: 'Markups updated successfully' });
-  }
+        const { markups, appliedTo } = req.body;
 
-  static async deleteOne(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-     if (!req.user) {
-                return res.status(401).json({ success: false, message: "Unauthorized" });
-            }
-    await MarkupService.delete(new Types.ObjectId(req.user.userId), req.params.serviceType as string);
-    res.json({ success: true });
-  }
+        const data = await MarkupService.bulkUpsert(
+            new Types.ObjectId(userId),
+            { markups, appliedTo }
+        );
 
-  static async getMonthlyRevenue(req: AuthenticatedRequest, res: Response) {
-     if (!req.user) {
-                return res.status(401).json({ success: false, message: "Unauthorized" });
-            }
-    const { monthsBack = 12 } = req.query;
-    const data = await MarkupService.getMonthlyMarkupRevenue(new Types.ObjectId(req.user.userId), Number(monthsBack));
-    res.json({ success: true, data });
-  }
+        res.json({ success: true, message: 'Markups updated successfully', data });
+    });
+
+    /** DELETE - Delete One Service Markup */
+    /** DELETE - Delete One Service Markup */
+    static deleteOne = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+        // Fixed: Handle string | string[] type safely
+        let serviceType = req.params.serviceType;
+
+        if (Array.isArray(serviceType)) {
+            serviceType = serviceType[0]; // Take first value if array
+        }
+
+        if (!serviceType || typeof serviceType !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: "serviceType is required and must be a string"
+            });
+        }
+
+        const trimmedServiceType = serviceType.trim();
+
+        if (!trimmedServiceType) {
+            return res.status(400).json({
+                success: false,
+                message: "serviceType cannot be empty"
+            });
+        }
+
+        await MarkupService.delete(
+            new Types.ObjectId(userId),
+            trimmedServiceType
+        );
+
+        res.json({ success: true, message: 'Markup deleted successfully' });
+    });
+
+    /** GET - Monthly Revenue */
+    static getMonthlyRevenue = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+        const monthsBack = Number(req.query.monthsBack) || 12;
+
+        const data = await MarkupService.getMonthlyMarkupRevenue(
+            new Types.ObjectId(userId),
+            monthsBack
+        );
+
+        res.json({ success: true, data });
+    });
 }

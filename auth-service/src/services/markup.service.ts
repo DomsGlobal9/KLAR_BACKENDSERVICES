@@ -3,132 +3,172 @@ import { MarkupEarning } from '../models/markup-earning.model';
 import { Types } from 'mongoose';
 
 export class MarkupService {
-  // === CRUD ===
-  static async getAll(userId: Types.ObjectId) {
-    const markup = await Markup.findOne({ userId, isActive: true });
-    return markup ? markup.services : [];
-  }
 
-  static async getByServiceType(userId: Types.ObjectId, serviceType: string) {
-    const markup = await Markup.findOne({ userId, isActive: true });
-    if (!markup) return null;
-    return markup.services.find(s => s.serviceType === serviceType) || null;
-  }
+    // ==================== CRUD Operations ====================
 
-  static async upsert(userId: Types.ObjectId, data: any) {
-    // Determine if data contains the full services array or a single service object.
-    const markup = await Markup.findOne({ userId });
-    
-    if (data.services && Array.isArray(data.services)) {
-      // Upserting the entire array
-      return Markup.findOneAndUpdate(
-        { userId },
-        { ...data, userId, updatedBy: userId },
-        { upsert: true, new: true, runValidators: true }
-      );
-    } else if (data.serviceType) {
-      // Upserting a single service object into the array
-      if (!markup) {
-        return Markup.create({
-          userId,
-          services: [data],
-          updatedBy: userId,
-          createdBy: userId
-        });
-      }
-
-      const existingServiceIndex = markup.services.findIndex(s => s.serviceType === data.serviceType);
-      
-      if (existingServiceIndex > -1) {
-        markup.services[existingServiceIndex].percentageMarkup = data.percentageMarkup || 0;
-        markup.services[existingServiceIndex].fixedMarkup = data.fixedMarkup || 0;
-      } else {
-        markup.services.push(data);
-      }
-      
-      // Update by userId to trigger mongoose middleware for the rule
-      return markup.save();
-    }
-    
-    throw new Error('Invalid markup data provided.');
-  }
-
-  static async bulkUpsert(userId: Types.ObjectId, markups: any[]) {
-    // Ensure all services conform to the target format
-    let markup = await Markup.findOne({ userId });
-
-    if (!markup) {
-      return Markup.create({
-        userId,
-        services: markups,
-        updatedBy: userId,
-        createdBy: userId
-      });
+    /** Get all markups for a user */
+    static async getAll(userId: Types.ObjectId) {
+        return await Markup.findOne({ 
+            userId, 
+            isActive: true 
+        }).lean();
     }
 
-    // Merge new markups into existing ones
-    markups.forEach((m: any) => {
-      const idx = markup!.services.findIndex(s => s.serviceType === m.serviceType);
-      if (idx > -1) {
-        markup!.services[idx].percentageMarkup = m.percentageMarkup || 0;
-        markup!.services[idx].fixedMarkup = m.fixedMarkup || 0;
-      } else {
-        markup!.services.push(m);
-      }
-    });
+    /** Get single service markup by type */
+    static async getByServiceType(userId: Types.ObjectId, serviceType: string) {
+        const markup = await Markup.findOne({ userId, isActive: true }).lean();
+        return markup?.services.find(s => s.serviceType === serviceType) || null;
+    }
 
-    return markup.save();
-  }
+    /** Upsert - Add or Update Markup (Single or Full) */
+    static async upsert(userId: Types.ObjectId, data: any) {
+        try {
+            if (data.services && Array.isArray(data.services)) {
+                // Full services array update
+                const updateData: any = {
+                    userId,
+                    services: data.services,
+                    updatedBy: userId
+                };
 
-  static async delete(userId: Types.ObjectId, serviceType: string) {
-    return Markup.findOneAndUpdate(
-      { userId },
-      { $pull: { services: { serviceType } }, updatedBy: userId },
-      { new: true }
-    );
-  }
+                if (data.appliedTo) updateData.appliedTo = data.appliedTo;
+                if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
-  // === Monthly Revenue (Markup Profit) ===
-  static async getMonthlyMarkupRevenue(userId: Types.ObjectId, monthsBack = 12) {
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - monthsBack);
+                return await Markup.findOneAndUpdate(
+                    { userId },
+                    updateData,
+                    { upsert: true, new: true, runValidators: true }
+                );
+            } 
+            else if (data.serviceType) {
+                // Single service upsert
+                let markup = await Markup.findOne({ userId });
 
-    const result = await MarkupEarning.aggregate([
-      {
-        $match: {
-          userId,
-          type: 'MARKUP_EARNING',
-          status: 'SUCCESS',
-          createdAt: { $gte: startDate },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' },
-          },
-          totalMarkup: { $sum: '$amount' },
-          bookingCount: { $sum: 1 },
-        },
-      },
-      { $sort: { '_id.year': -1, '_id.month': -1 } },
-      {
-        $project: {
-          month: {
-            $concat: [
-              { $toString: '$_id.year' },
-              '-',
-              { $cond: { if: { $lt: ['$_id.month', 10] }, then: '0', else: '' } },
-              { $toString: '$_id.month' },
-            ],
-          },
-          totalMarkup: 1,
-          bookingCount: 1,
-        },
-      },
-    ]);
+                if (markup) {
+                    const index = markup.services.findIndex(
+                        s => s.serviceType === data.serviceType
+                    );
 
-    return result;
-  }
+                    if (index > -1) {
+                        markup.services[index] = { ...markup.services[index], ...data };
+                    } else {
+                        markup.services.push(data);
+                    }
+
+                    markup.updatedBy = userId;
+                    if (data.appliedTo) markup.appliedTo = data.appliedTo;
+
+                    return await markup.save();
+                } else {
+                    // Create new document
+                    return await Markup.create({
+                        userId,
+                        services: [data],
+                        appliedTo: data.appliedTo || 'BASE_FARE',
+                        createdBy: userId,
+                        updatedBy: userId
+                    });
+                }
+            }
+
+            throw new Error('Invalid data: Either "services" array or "serviceType" is required');
+        } catch (error: any) {
+            console.error('MarkupService.upsert Error:', error.message);
+            throw error;
+        }
+    }
+
+    /** Bulk Upsert Markups */
+    static async bulkUpsert(userId: Types.ObjectId, data: any) {
+        try {
+            const markups = Array.isArray(data) ? data : data.markups || [];
+            const appliedTo = data.appliedTo;
+
+            if (!Array.isArray(markups)) {
+                throw new Error('Markups must be an array');
+            }
+
+            const updateData: any = {
+                services: markups,
+                updatedBy: userId
+            };
+
+            if (appliedTo) updateData.appliedTo = appliedTo;
+
+            return await Markup.findOneAndUpdate(
+                { userId },
+                { $set: updateData },
+                { upsert: true, new: true, runValidators: true }
+            );
+        } catch (error: any) {
+            console.error('MarkupService.bulkUpsert Error:', error.message);
+            throw error;
+        }
+    }
+
+    /** Delete single service type markup */
+    static async delete(userId: Types.ObjectId, serviceType: string) {
+        if (!serviceType) throw new Error('serviceType is required');
+
+        return await Markup.findOneAndUpdate(
+            { userId },
+            { 
+                $pull: { services: { serviceType } },
+                $set: { updatedBy: userId }
+            },
+            { new: true }
+        );
+    }
+
+    // ==================== Revenue ====================
+
+    /** Get Monthly Markup Revenue */
+    static async getMonthlyMarkupRevenue(userId: Types.ObjectId, monthsBack: number = 12) {
+        try {
+            const startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - monthsBack);
+
+            const result = await MarkupEarning.aggregate([
+                {
+                    $match: {
+                        userId,
+                        type: 'MARKUP_EARNING',
+                        status: 'SUCCESS',
+                        createdAt: { $gte: startDate }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: '$createdAt' },
+                            month: { $month: '$createdAt' }
+                        },
+                        totalMarkup: { $sum: '$amount' },
+                        bookingCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { '_id.year': -1, '_id.month': -1 } },
+                {
+                    $project: {
+                        _id: 0,
+                        month: {
+                            $concat: [
+                                { $toString: '$_id.year' },
+                                '-',
+                                { $cond: [{ $lt: ['$_id.month', 10] }, '0', ''] },
+                                { $toString: '$_id.month' }
+                            ]
+                        },
+                        totalMarkup: 1,
+                        bookingCount: 1
+                    }
+                }
+            ]);
+
+            return result;
+        } catch (error: any) {
+            console.error('MarkupService.getMonthlyMarkupRevenue Error:', error.message);
+            throw error;
+        }
+    }
 }

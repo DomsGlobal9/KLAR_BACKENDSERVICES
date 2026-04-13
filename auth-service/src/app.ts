@@ -34,12 +34,20 @@ app.use(express.json());
 app.use(cookieParser());
 
 
-app.use(contextResolver);
+// app.use(contextResolver);
+
+// In app.ts, after app.use(contextResolver)
+// app.use((req, res, next) => {
+//     console.log('[DEBUG] After contextResolver, before routes');
+//     console.log('[DEBUG] req.clientType:', (req as any).clientType);
+//     next();
+// });
 
 
 app.use("/b2b", routes);
-app.use("/", routes);
+// app.use("/", routes);
 
-app.use(errorHandler);
+
+// app.use(errorHandler);
 
 export default app;
