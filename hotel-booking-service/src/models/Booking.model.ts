@@ -46,6 +46,8 @@ export interface IBooking extends Document {
     guestName?: string;
     agentId?: string;
     agentName?: string;
+    userId?: string;
+    userName?: string;
     rooms: IRoom[];
 
     // --- Hotel display fields (shown on My Bookings & Detail pages) ---
@@ -115,6 +117,8 @@ const bookingSchema = new Schema<IBooking>(
         guestName: { type: String },
         agentId: { type: String, index: true },
         agentName: { type: String },
+        userId: { type: String, index: true },
+        userName: { type: String },
 
         // Hotel display fields (both providers)
         hotelName: { type: String },

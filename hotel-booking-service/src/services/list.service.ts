@@ -11,6 +11,7 @@ class ListService {
         if (query.agentId) {
             filter.$or = [
                 { agentId: query.agentId },
+                { userId: query.agentId }, // Support filtering by userId as well
                 { agentId: { $exists: false } },
                 { agentId: null }
             ];
