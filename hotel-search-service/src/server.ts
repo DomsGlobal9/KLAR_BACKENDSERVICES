@@ -15,13 +15,17 @@ async function start() {
     // Connect to MongoDB first
     await connectDB();
 
-    console.log("⏳ Starting background sync processes...");
-    syncRGDestinations().catch((err) =>
-        console.error("❌ [Sync] RG Destinations sync failed:", err.message)
-    );
-    syncTJHotels().catch((err) =>
-        console.error("❌ [Sync] TJ Hotels sync failed:", err.message)
-    );
+    if (process.env.ENABLE_AUTO_SYNC === "true") {
+        console.log("⏳ Starting background sync processes...");
+        syncRGDestinations().catch((err) =>
+            console.error("❌ [Sync] RG Destinations sync failed:", err.message)
+        );
+        syncTJHotels().catch((err) =>
+            console.error("❌ [Sync] TJ Hotels sync failed:", err.message)
+        );
+    } else {
+        console.log("ℹ️  Background sync disabled (ENABLE_AUTO_SYNC is not 'true').");
+    }
 
     console.log(`⏳ Attempting to listen on port ${PORT}...`);
     const server = app.listen(Number(PORT), "0.0.0.0", () => {
@@ -41,5 +45,16 @@ async function start() {
 
 start().catch((err) => {
     console.error("❌ Failed to start server:", err);
+    process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+    // In dev, we might not want to exit, but in prod we usually do.
+    // For now, just log it clearly.
+});
+
+process.on("uncaughtException", (err) => {
+    console.error("❌ Uncaught Exception:", err);
     process.exit(1);
 });

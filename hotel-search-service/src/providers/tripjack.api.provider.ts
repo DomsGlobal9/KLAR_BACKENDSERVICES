@@ -18,8 +18,17 @@ export class TripJackApiProvider {
      * FIX #4 (partial): hid is sent here so the frontend can forward it to Review.
      */
     async getProducts(payload: any) {
-        const rawId = (payload.propertyId || payload.PropertyId || "").replace("TJ:", "");
+        const rawId = (payload.propertyId || payload.PropertyId || "").replace("TJ:", "").trim();
         const correlationId = payload.correlationId || uuidv4();
+
+        if (!rawId) {
+            console.error("[TripJack] GetProducts Error: No propertyId provided in payload:", JSON.stringify(payload));
+            throw {
+                status: 400,
+                message: "propertyId is required for TripJack detail/pricing request",
+                data: { ErrorCode: 1012, description: "propertyId is required." }
+            };
+        }
 
         const tjPayload: any = {
             correlationId,

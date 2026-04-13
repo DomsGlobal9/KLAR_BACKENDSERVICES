@@ -83,13 +83,10 @@ async function pollTripJackBookingStatus(
 
 class CommitService {
     async commit(payload: any, agentId?: string | null, agentName?: string | null) {
-        const propertyId: string =
-            payload.propertyId ||
-            payload.PropertyId ||
-            payload.BookReservation?.propertyID ||
-            "";
+        const propertyId = (payload.propertyId || payload.PropertyId || payload.BookReservation?.propertyID || "").toString();
+        const tjBookingId = (payload.bookingId || payload.ConfirmationNumber || "").toString();
 
-        if (propertyId.startsWith("TJ:")) {
+        if (propertyId.startsWith("TJ:") || tjBookingId.startsWith("TJ")) {
             return this.#commitTripJack(payload, agentId, agentName);
         }
 
