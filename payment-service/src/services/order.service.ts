@@ -7,33 +7,41 @@ import {
 import { createCashfreeOrder, getCashfreeOrder, getCashfreePaymentStatus } from './cashfree.service';
 
 export const createOrderService = async (data: {
-    amount: number;
     userId: string;
-    customerPhone: string;
-    customerEmail?: string;
-    customerName?: string;
+    userEmail: string;
+    mobile: string;
+    clientType: string;
+    amount: number;
+    currency: string;
+    environment: string;
 }) => {
     const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
+    console.log('Creating order in database:', { ...data, orderId });
+
     const dbOrder = await createOrder({
         orderId,
-        amount: data.amount,
-        currency: 'INR',
         userId: data.userId,
-        customerPhone: data.customerPhone,
-        customerEmail: data.customerEmail,
-        customerName: data.customerName,
+        userEmail: data.userEmail,
+        clientType: data.clientType,
+        amount: data.amount,
+        currency: data.currency,
+        environment: data.environment,
         status: 'CREATED',
     });
+
+    console.log('Order created in database:', dbOrder);
 
     const cfResponse = await createCashfreeOrder({
         amount: data.amount,
         customerId: data.userId,
-        customerPhone: data.customerPhone,
-        customerEmail: data.customerEmail,
-        customerName: data.customerName,
+        customerEmail: data.userEmail,
+        customer_phone: data.mobile,
         orderId: orderId,
+        environment: data.environment
     });
+
+    console.log('Cashfree order created:', cfResponse);
 
     const updatedOrder = await updateOrderByOrderId(orderId, {
         cfOrderId: cfResponse.order_id,
@@ -59,13 +67,9 @@ export const getPaymentStatusService = async (orderId: string) => {
         throw new Error('Order not found');
     }
 
-
     if (order.cfOrderId) {
         try {
-
             const paymentStatus = await getCashfreePaymentStatus(order.cfOrderId);
-
-
             let finalStatus: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' = order.status;
 
             if (paymentStatus.payments && paymentStatus.payments.length > 0) {
@@ -80,14 +84,10 @@ export const getPaymentStatusService = async (orderId: string) => {
                     finalStatus = 'PENDING';
                 }
 
-
                 if (finalStatus !== order.status) {
-                    await updateOrderStatus(orderId, finalStatus, {
-                        paymentMethod: latestPayment.payment_method?.payment_method,
-                    });
+                    await updateOrderStatus(orderId, finalStatus);
                 }
             }
-
 
             const cfOrderDetails = await getCashfreeOrder(order.cfOrderId);
 
@@ -98,7 +98,6 @@ export const getPaymentStatusService = async (orderId: string) => {
             };
         } catch (error) {
             console.error('Error fetching payment status from Cashfree:', error);
-
             return {
                 order,
                 error: 'Unable to fetch real-time status from payment gateway',
@@ -106,10 +105,8 @@ export const getPaymentStatusService = async (orderId: string) => {
         }
     }
 
-
     return { order };
 };
-
 
 export const syncOrderStatusService = async (orderId: string) => {
     const order = await getOrderByOrderId(orderId);
@@ -122,7 +119,6 @@ export const syncOrderStatusService = async (orderId: string) => {
     }
 
     const paymentStatus = await getCashfreePaymentStatus(order.cfOrderId);
-
     let finalStatus: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' = order.status;
 
     if (paymentStatus.payments && paymentStatus.payments.length > 0) {
@@ -135,11 +131,7 @@ export const syncOrderStatusService = async (orderId: string) => {
             finalStatus = 'FAILED';
         }
 
-        const updatedOrder = await updateOrderStatus(orderId, finalStatus, {
-            paymentMethod: latestPayment.payment_method?.payment_method,
-            cfOrderStatus: cfPaymentStatus,
-        });
-
+        const updatedOrder = await updateOrderStatus(orderId, finalStatus);
         return updatedOrder;
     }
 

@@ -17,30 +17,34 @@ const getHeaders = () => ({
 export const createCashfreeOrder = async (data: {
     amount: number;
     customerId: string;
-    customerPhone: string;
-    customerEmail?: string;
-    customerName?: string;
+    customer_phone: string;
+    customerEmail: string;
     orderId: string;
+    environment: string;
 }): Promise<ICashfreeOrderResponse> => {
+
+    console.log("CASHFREE: service", data);
+    const apiUrl = data.environment === 'sandbox'
+        ? 'https://sandbox.cashfree.com/pg'
+        : 'https://api.cashfree.com/pg';
+
     const payload = {
         order_id: data.orderId,
         order_amount: data.amount,
         order_currency: 'INR',
         customer_details: {
             customer_id: data.customerId,
-            customer_phone: data.customerPhone,
-            customer_email: data.customerEmail || `${data.customerId}@example.com`,
-            customer_name: data.customerName || 'Guest User',
+            customer_email: data.customerEmail,
+            customer_phone: data.customer_phone,
         },
         order_meta: {
             return_url: `${config.FRONTEND_URL}/payment-status?order_id=${data.orderId}`,
         },
-        order_note: 'Flight booking payment',
     };
 
     try {
         const response = await axios.post<ICashfreeOrderResponse>(
-            `${cashfreeConfig.apiUrl}/orders`,
+            `${apiUrl}/orders`,
             payload,
             { headers: getHeaders() }
         );
@@ -51,7 +55,6 @@ export const createCashfreeOrder = async (data: {
         throw new Error(error.response?.data?.message || 'Failed to create Cashfree order');
     }
 };
-
 
 export const getCashfreeOrder = async (cfOrderId: string): Promise<ICashfreeOrderDetailsResponse> => {
     try {
@@ -66,7 +69,6 @@ export const getCashfreeOrder = async (cfOrderId: string): Promise<ICashfreeOrde
         throw new Error('Failed to fetch Cashfree order details');
     }
 };
-
 
 export const getCashfreePaymentStatus = async (cfOrderId: string): Promise<ICashfreePaymentStatusResponse> => {
     try {
