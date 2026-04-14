@@ -7,6 +7,7 @@ import {
 import { AuthService } from "../services/auth.service";
 import { ClientType } from "../constants/clientTypes";
 import { envConfig } from "../config/env.config";
+import { UserModel } from "../models/user.model";
 
 export const signupB2B = async (
   req: Request,
@@ -197,13 +198,15 @@ export const validateToken = async (
 
   const user = (req as any).user;
 
+  const userMobile = await UserModel.findById(user.userId).select('mobile');
+
   res.status(200).json({
     success: true,
     message: "Token is valid",
     data: {
       userId: user.userId,
       email: user.email,
-      number: user.mobile,
+      mobile: userMobile,
       clientType: user.clientType,
       roles: user.roles,
     },
