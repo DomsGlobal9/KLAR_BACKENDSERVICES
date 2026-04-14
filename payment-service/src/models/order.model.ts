@@ -10,8 +10,12 @@ export interface IOrder extends Document {
     currency: string;
     userId: string;
     customerPhone: string;
+    customerEmail?: string;
+    customerName?: string;
     status: OrderStatus;
     paymentMethod?: string;
+    cfOrderStatus?: string;
+    cfPaymentSessionId?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -29,7 +33,6 @@ const OrderSchema: Schema = new Schema(
         paymentSessionId: {
             type: String,
         },
-
         amount: {
             type: Number,
             required: true,
@@ -38,7 +41,6 @@ const OrderSchema: Schema = new Schema(
             type: String,
             default: 'INR',
         },
-
         userId: {
             type: String,
             required: true,
@@ -47,14 +49,24 @@ const OrderSchema: Schema = new Schema(
             type: String,
             required: true,
         },
-
+        customerEmail: {
+            type: String,
+        },
+        customerName: {
+            type: String,
+        },
         status: {
             type: String,
             enum: ['CREATED', 'PENDING', 'SUCCESS', 'FAILED'],
             default: 'CREATED',
         },
-
         paymentMethod: {
+            type: String,
+        },
+        cfOrderStatus: {
+            type: String,
+        },
+        cfPaymentSessionId: {
             type: String,
         },
     },
@@ -62,7 +74,6 @@ const OrderSchema: Schema = new Schema(
         timestamps: true,
     }
 );
-
 
 OrderSchema.index({ orderId: 1 });
 OrderSchema.index({ cfOrderId: 1 });

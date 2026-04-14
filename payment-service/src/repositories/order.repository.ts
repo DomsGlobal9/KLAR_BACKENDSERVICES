@@ -19,13 +19,25 @@ export const getOrderByOrderId = async (orderId: string) => {
     return OrderModel.findOne({ orderId });
 };
 
+export const getOrderByCfOrderId = async (cfOrderId: string) => {
+    return OrderModel.findOne({ cfOrderId });
+};
+
 export const updateOrderStatus = async (
     orderId: string,
-    status: OrderStatus
+    status: OrderStatus,
+    additionalData?: Partial<IOrder>
 ) => {
     return OrderModel.findOneAndUpdate(
         { orderId },
-        { status },
+        { status, ...additionalData },
         { new: true }
     );
+};
+
+export const getAllOrdersByUserId = async (userId: string, limit = 10, skip = 0) => {
+    return OrderModel.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(skip);
 };

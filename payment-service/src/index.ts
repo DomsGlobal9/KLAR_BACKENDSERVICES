@@ -9,16 +9,18 @@ import cors from 'cors';
 import paymentRoutes from './routes/payment.routes';
 import { connectDB } from './config/database.config';
 import appRoute from './routes';
+import { corsOptions } from './config/cors.config';
 
 
 const app = express();
 const PORT = process.env.PORT || 5004;
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use
+
 
 app.use('/api', appRoute);
 
