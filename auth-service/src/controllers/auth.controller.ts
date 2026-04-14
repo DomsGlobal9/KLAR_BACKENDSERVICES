@@ -203,6 +203,7 @@ export const validateToken = async (
     data: {
       userId: user.userId,
       email: user.email,
+      number: user.mobile,
       clientType: user.clientType,
       roles: user.roles,
     },
