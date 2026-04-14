@@ -1,18 +1,18 @@
 interface EnvConfig {
-    // Server
     PORT: number;
     NODE_ENV: string;
-    
-    // Razorpay
+
     RAZORPAY_KEY_ID: string;
     RAZORPAY_KEY_SECRET: string;
-    
-    // Cashfree
+
     CASHFREE_APP_ID: string;
     CASHFREE_SECRET_KEY: string;
     CASHFREE_ENVIRONMENT: 'sandbox' | 'production';
-}
 
+    FRONTEND_URL: string;
+
+    MONGODB_URI: string;
+}
 
 const requiredEnvVars = [
     'PORT',
@@ -22,69 +22,52 @@ const requiredEnvVars = [
     'CASHFREE_APP_ID',
     'CASHFREE_SECRET_KEY',
     'CASHFREE_ENVIRONMENT',
+    'FRONTEND_URL',
+    'MONGODB_URI',
 ] as const;
-
 
 function validateEnv(): EnvConfig {
     const missingVars: string[] = [];
-    
-    
+
     for (const envVar of requiredEnvVars) {
         if (!process.env[envVar]) {
             missingVars.push(envVar);
         }
     }
-    
-    
+
     if (missingVars.length > 0) {
         throw new Error(
-            `\nEnvironment configuration error:\n` +
-            `Missing required environment variables:\n` +
-            missingVars.map(v => `   - ${v}`).join('\n') +
-            `\n\nPlease add these variables to your .env file.\n`
+            `Missing ENV variables:\n${missingVars.join('\n')}`
         );
     }
-    
-    
-    const cashfreeEnv = process.env.CASHFREE_ENVIRONMENT as string;
-    if (cashfreeEnv !== 'sandbox' && cashfreeEnv !== 'production') {
-        throw new Error(
-            `\nEnvironment configuration error:\n` +
-            `CASHFREE_ENVIRONMENT must be either 'sandbox' or 'production', got: '${cashfreeEnv}'\n`
-        );
-    }
-    
-    
-    const port = parseInt(process.env.PORT!);
-    if (isNaN(port)) {
-        throw new Error(
-            `\nEnvironment configuration error:\n` +
-            `PORT must be a number, got: '${process.env.PORT}'\n`
-        );
-    }
-    
-    
+
+    const port = Number(process.env.PORT);
+    if (isNaN(port)) throw new Error('PORT must be a number');
+
     const validNodeEnv = ['development', 'production', 'test'];
     if (!validNodeEnv.includes(process.env.NODE_ENV!)) {
-        throw new Error(
-            `\nEnvironment configuration error:\n` +
-            `NODE_ENV must be one of: ${validNodeEnv.join(', ')}, got: '${process.env.NODE_ENV}'\n`
-        );
+        throw new Error(`NODE_ENV must be one of ${validNodeEnv.join(', ')}`);
     }
-    
-    
+
+    const cashfreeEnv = process.env.CASHFREE_ENVIRONMENT!;
+    if (!['sandbox', 'production'].includes(cashfreeEnv)) {
+        throw new Error(`Invalid CASHFREE_ENVIRONMENT`);
+    }
+
     return {
         PORT: port,
         NODE_ENV: process.env.NODE_ENV!,
         RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID!,
         RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET!,
+
         CASHFREE_APP_ID: process.env.CASHFREE_APP_ID!,
         CASHFREE_SECRET_KEY: process.env.CASHFREE_SECRET_KEY!,
-        CASHFREE_ENVIRONMENT: cashfreeEnv as 'sandbox' | 'production'
+        CASHFREE_ENVIRONMENT: cashfreeEnv as 'sandbox' | 'production',
+
+        FRONTEND_URL: process.env.FRONTEND_URL!,
+
+        MONGODB_URI: process.env.MONGODB_URI!,
     };
 }
 
-
 export const config = validateEnv();
-
-

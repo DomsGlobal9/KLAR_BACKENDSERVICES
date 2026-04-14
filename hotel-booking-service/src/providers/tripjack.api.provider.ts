@@ -55,6 +55,19 @@ export class TripJackApiProvider {
             const res = await tripJackHmsClient.post("/hms/v3/hotel/review", tjPayload);
 
             const data = res.data;
+            
+            // Check for internal TripJack errors (False Positives)
+            if (data?.status?.success === false) {
+                const errorMsg = data.errors?.[0]?.message || data.status?.description || "TripJack Review Internal Error";
+                console.error(`[TripJack] Review Internal Failure: ${errorMsg}`, JSON.stringify(data.errors));
+                throw {
+                    response: {
+                        status: 400,
+                        data: data
+                    }
+                };
+            }
+
             // bookingId is returned at top level — needed for the Book API
             const bookingId: string = data.bookingId || "";
 
@@ -108,9 +121,12 @@ export class TripJackApiProvider {
         if (!bookingId)        throw new Error("[TripJack Book] bookingId (from Review) is required");
         if (!roomTravellerInfo?.length) throw new Error("[TripJack Book] roomTravellerInfo is required");
 
+        const rawId = (payload.propertyId || payload.PropertyId || payload.hid || "").toString().replace("TJ:", "").trim();
+        
         const tjPayload: any = {
             bookingId,
             type: "HOTEL",
+            hotelId: rawId ? (Number.isNaN(Number(rawId)) ? rawId : Number(rawId)) : undefined,
             roomTravellerInfo,
             deliveryInfo: {
                 emails:   deliveryInfo?.emails   || [],
@@ -129,6 +145,19 @@ export class TripJackApiProvider {
             const res = await tripJackOmsClient.post("/oms/v3/hotel/book", tjPayload);
 
             const data = res.data;
+
+            // Check for internal TripJack errors (False Positives)
+            if (data?.status?.success === false) {
+                const errorMsg = data.errors?.[0]?.message || data.status?.description || "TripJack Book Internal Error";
+                console.error(`[TripJack] Book Internal Failure: ${errorMsg}`, JSON.stringify(data.errors));
+                throw {
+                    response: {
+                        status: 400,
+                        data: data
+                    }
+                };
+            }
+
             return {
                 status: true,
                 statusCode: 200,
