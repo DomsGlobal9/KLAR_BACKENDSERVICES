@@ -127,6 +127,8 @@ class CommitService {
                 guestName,
                 agentId,
                 agentName,
+                userId: agentId ?? undefined,
+                userName: agentName ?? undefined,
 
                 // Hotel display fields
                 hotelName: payload.hotelName || undefined,
@@ -147,8 +149,8 @@ class CommitService {
             });
 
             const saved = await bookingRecord.save();
-            console.log(`[FORENSIC] TripJack Saved Object: ID=${saved._id}, agentId=${saved.agentId}, conf=${saved.confirmationNumber}`);
-            console.log(`✅ [TripJack] Saved PENDING booking: ${tjBookingId} for Agent: ${agentId}`);
+            console.log(`[FORENSIC] TripJack Saved Object: ID=${saved._id}, agentId=${saved.agentId}, userId=${saved.userId}, conf=${saved.confirmationNumber}`);
+            console.log(`✅ [TripJack] Saved PENDING booking: ${tjBookingId} for Agent/User: ${agentId}`);
 
             // Start async polling (non-blocking)
             pollTripJackBookingStatus(tjBookingId, (saved._id as any).toString());
@@ -213,6 +215,8 @@ class CommitService {
                     guestName,
                     agentId,
                     agentName,
+                    userId: agentId ?? undefined,
+                    userName: agentName ?? undefined,
 
                     hotelName: bookReservation.hotelName || undefined,
                     hotelImage: bookReservation.hotelImage || (images[0] || undefined),
@@ -229,8 +233,8 @@ class CommitService {
                 });
 
                 const saved = await bookingRecord.save();
-                console.log(`[FORENSIC] RateGain Saved Object: ID=${saved._id}, agentId=${saved.agentId}, conf=${saved.confirmationNumber}`);
-                console.log(`✅ [RateGain] Saved booking to DB: ${confirmationNumber} for Agent: ${agentId}`);
+                console.log(`[FORENSIC] RateGain Saved Object: ID=${saved._id}, agentId=${saved.agentId}, userId=${saved.userId}, conf=${saved.confirmationNumber}`);
+                console.log(`✅ [RateGain] Saved booking to DB: ${confirmationNumber} for Agent/User: ${agentId}`);
 
                 // Trigger automated confirmation email
                 notificationService.sendBookingConfirmation(saved);
