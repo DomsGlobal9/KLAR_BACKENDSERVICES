@@ -11,7 +11,7 @@ export const connectDB = async (): Promise<void> => {
 
     try {
         const conn = await mongoose.connect(config.MONGODB_URI, {
-            dbName: 'app_db', // 👉 change if needed
+            dbName: 'payment-service',
         });
 
         isConnected = true;
@@ -19,6 +19,6 @@ export const connectDB = async (): Promise<void> => {
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error: any) {
         console.error('MongoDB connection error:', error.message);
-        process.exit(1); // exit app on failure
+        process.exit(1);
     }
 };
