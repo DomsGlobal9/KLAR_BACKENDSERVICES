@@ -25,8 +25,6 @@ export class FlightInstantBookingService {
         try {
             const url = getTripJackEndpoint('BOOKING_CREATE');
 
-            console.log("^^^^^^^^^^^^^^^^^^ The instance booking payload we get", JSON.stringify(payload, null, 2));
-
             const response = await axios.post(
                 url,
                 payload,

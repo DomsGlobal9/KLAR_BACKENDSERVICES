@@ -24,7 +24,6 @@ export const getPriceReview = async (
         }
 
         const reviewData = await getReviewFromTripJack({ priceIds });
-        console.log("The review data we get", JSON.stringify(reviewData, null, 2));
 
         if (!reviewData.status?.success) {
             return res.status(400).json({

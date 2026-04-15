@@ -278,7 +278,10 @@ export class AuthService {
     }
 
     public async getCurrentUser(userId: string): Promise<any> {
+
         const user = await UserModel.findById(userId);
+
+        console.log("@@@@@@@@@@@@@ The User data we got", user);
         if (!user) {
             throw new UnauthorizedError('User not found');
         }
@@ -286,6 +289,7 @@ export class AuthService {
         return {
             id: user._id.toString(),
             email: user.email,
+            mobile: user.mobile,
             roles: user.roles,
             clientType: user.clientType,
             status: user.status,

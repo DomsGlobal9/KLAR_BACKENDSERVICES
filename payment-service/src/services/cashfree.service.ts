@@ -77,6 +77,8 @@ export const getCashfreePaymentStatus = async (cfOrderId: string): Promise<ICash
             { headers: getHeaders() }
         );
 
+        // console.log("THe cashfree update ");
+
         return response.data;
     } catch (error: any) {
         console.error('Cashfree Payment Status Error:', error.response?.data || error.message);

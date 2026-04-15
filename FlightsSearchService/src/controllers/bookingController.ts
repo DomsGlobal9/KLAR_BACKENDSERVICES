@@ -11,7 +11,6 @@ export const createInstantBooking = async (
 ) => {
     try {
         const userRequest = req.body;
-        console.log("The booking details we get", JSON.stringify(req.body, null, 2));
 
         const validation: ValidationResult = BookingValidator.validate(userRequest);
         if (!validation.isValid) {
@@ -24,8 +23,6 @@ export const createInstantBooking = async (
 
 
         const tripJackRequest = BookingMapper.toTripJackFormat(userRequest);
-
-        console.log("Data Sending for booking ", JSON.stringify(tripJackRequest, null, 2));
         const bookingResponse = await FlightInstantBookingService.createInstantBooking(tripJackRequest);
 
         if (!bookingResponse.status?.success) {

@@ -17,8 +17,6 @@ export const createOrderService = async (data: {
 }) => {
     const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-    console.log('Creating order in database:', { ...data, orderId });
-
     const dbOrder = await createOrder({
         orderId,
         userId: data.userId,
@@ -30,8 +28,6 @@ export const createOrderService = async (data: {
         status: 'CREATED',
     });
 
-    console.log('Order created in database:', dbOrder);
-
     const cfResponse = await createCashfreeOrder({
         amount: data.amount,
         customerId: data.userId,
@@ -40,8 +36,6 @@ export const createOrderService = async (data: {
         orderId: orderId,
         environment: data.environment
     });
-
-    console.log('Cashfree order created:', cfResponse);
 
     const updatedOrder = await updateOrderByOrderId(orderId, {
         cfOrderId: cfResponse.order_id,
@@ -110,6 +104,7 @@ export const getPaymentStatusService = async (orderId: string) => {
 
 export const syncOrderStatusService = async (orderId: string) => {
     const order = await getOrderByOrderId(orderId);
+
     if (!order) {
         throw new Error('Order not found');
     }
@@ -119,19 +114,24 @@ export const syncOrderStatusService = async (orderId: string) => {
     }
 
     const paymentStatus = await getCashfreePaymentStatus(order.cfOrderId);
-    let finalStatus: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' = order.status;
+    console.log("@@@@@@@@@@@@@@@@@@@ The payment status we get", JSON.stringify(paymentStatus, null, 2));
 
-    if (paymentStatus.payments && paymentStatus.payments.length > 0) {
-        const latestPayment = paymentStatus.payments[0];
+    let status: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' = order.status;
+
+    // Check if paymentStatus is an array and has elements
+    if (Array.isArray(paymentStatus) && paymentStatus.length > 0) {
+        const latestPayment = paymentStatus[0];
         const cfPaymentStatus = latestPayment.payment_status;
 
+        console.log("################ The payment status", JSON.stringify(cfPaymentStatus, null, 2));
+
         if (cfPaymentStatus === 'SUCCESS') {
-            finalStatus = 'SUCCESS';
+            status = 'SUCCESS';
         } else if (cfPaymentStatus === 'FAILED') {
-            finalStatus = 'FAILED';
+            status = 'FAILED';
         }
 
-        const updatedOrder = await updateOrderStatus(orderId, finalStatus);
+        const updatedOrder = await updateOrderStatus(orderId, status);
         return updatedOrder;
     }
 
