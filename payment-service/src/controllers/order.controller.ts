@@ -6,21 +6,50 @@ import {
     syncOrderStatusService
 } from '../services/order.service';
 
-
 export const createOrderController = async (req: Request, res: Response) => {
     try {
         const {
-            amount,
             userId,
-            customerPhone,
-            customerEmail,
-            customerName
+            userEmail,
+            mobile,
+            clientType,
+            amount,
+            currency,
+            environment
         } = req.body;
 
-        if (!amount || !userId || !customerPhone) {
+        if (!userId) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: amount, userId, customerPhone',
+                message: 'userId is required',
+            });
+        }
+
+        if (!userEmail) {
+            return res.status(400).json({
+                success: false,
+                message: 'userEmail is required',
+            });
+        }
+
+        if (!mobile) {
+            return res.status(400).json({
+                success: false,
+                message: 'mobile is required',
+            });
+        }
+
+        if (!clientType) {
+            return res.status(400).json({
+                success: false,
+                message: 'clientType is required',
+            });
+        }
+
+        if (!amount) {
+            return res.status(400).json({
+                success: false,
+                message: 'amount is required',
             });
         }
 
@@ -31,12 +60,35 @@ export const createOrderController = async (req: Request, res: Response) => {
             });
         }
 
+        if (!currency) {
+            return res.status(400).json({
+                success: false,
+                message: 'currency is required',
+            });
+        }
+
+        if (!environment) {
+            return res.status(400).json({
+                success: false,
+                message: 'environment is required',
+            });
+        }
+
+        if (!['sandbox', 'production'].includes(environment)) {
+            return res.status(400).json({
+                success: false,
+                message: 'environment must be either sandbox or production',
+            });
+        }
+
         const order = await createOrderService({
-            amount,
             userId,
-            customerPhone,
-            customerEmail,
-            customerName,
+            userEmail,
+            mobile,
+            clientType,
+            amount,
+            currency,
+            environment
         });
 
         return res.status(200).json({
@@ -78,7 +130,6 @@ export const getOrderController = async (req: Request, res: Response) => {
         });
     }
 };
-
 
 export const getPaymentStatusController = async (req: Request, res: Response) => {
     try {

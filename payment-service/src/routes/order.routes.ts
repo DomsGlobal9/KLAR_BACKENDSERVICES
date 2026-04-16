@@ -11,18 +11,17 @@ const router = express.Router();
 /**
  * Get payment status by orderId
 */
-router.get('/payment-status/:orderId/abc', getPaymentStatusController);
+router.get('/payment-status/:orderId', getPaymentStatusController);
 
 /**
  * Get order details by orderId
 */
-router.get('/details/:orderId/abc', getOrderController);
+router.get('/details/:orderId', getOrderController);
 
 /**
  * Create new order
 */
 router.post('/create-order', createOrderController);
-
 
 /**
  * Sync order status with Cashfree (manual sync)

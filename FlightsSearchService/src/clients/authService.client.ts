@@ -55,7 +55,7 @@ export class AuthServiceClient {
             if (error.code === 'ECONNREFUSED') {
                 throw new Error('Auth service unavailable');
             }
-            throw new Error('Failed to validate token');
+            throw new Error('AUTH: Failed to validate token');
         }
     }
 }

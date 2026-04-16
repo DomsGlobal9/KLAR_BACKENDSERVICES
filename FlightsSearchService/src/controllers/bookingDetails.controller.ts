@@ -19,7 +19,7 @@ export const storeUserDetails = async (
         if (!priceId || !bookingDetails) {
             return res.status(400).json({
                 success: false,
-                message: "Missing required fields: priceId and bookingDetails"
+                message: "12341234Missing required fields: priceId and bookingDetails"
             });
         }
 
@@ -95,7 +95,7 @@ export const updateBookingId = async (
         if (!priceId || !bookingId) {
             return res.status(400).json({
                 success: false,
-                message: "Missing required fields: priceId and bookingId"
+                message: "123412341324Missing required fields: priceId and bookingId"
             });
         }
 

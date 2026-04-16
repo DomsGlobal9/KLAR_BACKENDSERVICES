@@ -3,25 +3,49 @@ import mongoose, { Schema, Document } from 'mongoose';
 export type OrderStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED';
 
 export interface IOrder extends Document {
+    userId: string;
+    userEmail: string;
+    clientType: string;
+    amount: number;
+    currency: string;
+    environment: string;
     orderId: string;
     cfOrderId?: string;
     paymentSessionId?: string;
-    amount: number;
-    currency: string;
-    userId: string;
-    customerPhone: string;
-    customerEmail?: string;
-    customerName?: string;
     status: OrderStatus;
-    paymentMethod?: string;
     cfOrderStatus?: string;
-    cfPaymentSessionId?: string;
     createdAt: Date;
     updatedAt: Date;
 }
 
 const OrderSchema: Schema = new Schema(
     {
+        userId: {
+            type: String,
+            required: true,
+        },
+        userEmail: {
+            type: String,
+            required: true,
+        },
+        clientType: {
+            type: String,
+            required: true,
+        },
+        amount: {
+            type: Number,
+            required: true,
+        },
+        currency: {
+            type: String,
+            required: true,
+            default: 'INR',
+        },
+        environment: {
+            type: String,
+            required: true,
+            enum: ['sandbox', 'production'],
+        },
         orderId: {
             type: String,
             required: true,
@@ -33,40 +57,12 @@ const OrderSchema: Schema = new Schema(
         paymentSessionId: {
             type: String,
         },
-        amount: {
-            type: Number,
-            required: true,
-        },
-        currency: {
-            type: String,
-            default: 'INR',
-        },
-        userId: {
-            type: String,
-            required: true,
-        },
-        customerPhone: {
-            type: String,
-            required: true,
-        },
-        customerEmail: {
-            type: String,
-        },
-        customerName: {
-            type: String,
-        },
         status: {
             type: String,
             enum: ['CREATED', 'PENDING', 'SUCCESS', 'FAILED'],
             default: 'CREATED',
         },
-        paymentMethod: {
-            type: String,
-        },
         cfOrderStatus: {
-            type: String,
-        },
-        cfPaymentSessionId: {
             type: String,
         },
     },
