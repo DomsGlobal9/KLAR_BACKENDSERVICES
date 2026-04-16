@@ -10,26 +10,28 @@ export const contextResolver = (
     _res: Response,
     next: NextFunction
 ) => {
-    console.log("^^^^^^^^^ The import first path we get", req.path);
-    const path = req.path.split("/")[1];
-    console.log("1. The path we get", path);
+    console.log("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
+    const segments = req.path.split("/").filter(Boolean);
+    console.log('Path segments:', segments);
 
-    // Bypass context resolution for health check and admin routes
-    if (path === "health" || path === "admin") {
+    if (segments[0] === "health" || segments[0] === "admin") {
         return next();
     }
 
-    if (
-        path === ClientType.B2C ||
-        path === ClientType.B2B ||
-        path === ClientType.B2B2B
-    ) {
-        req.clientType = path as ClientType;
+    const client = segments.find(seg =>
+        seg === ClientType.B2C ||
+        seg === ClientType.B2B ||
+        seg === ClientType.USER ||
+        seg === ClientType.B2B2B
+    );
+
+    console.log('Found client:', client);
+
+    if (client) {
+        req.clientType = client as ClientType;
+        console.log('Set clientType:', req.clientType);
         return next();
     }
 
-    console.log("2. The path we get", path);
-
-
-    return next(new Error(`Invalid client type: ${path}`));
+    return next(new Error(`Invalid client type`));
 };

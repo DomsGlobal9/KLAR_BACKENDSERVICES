@@ -10,19 +10,14 @@ const app = express();
 
 app.use(cors(corsOptions));
 
-
-app.options("/", cors(corsOptions));
-
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
     res.status(200).json({
         message: "Auth service working fine 🚀",
         status: "ok"
     });
 });
 
-
-app.get("/health", (req, res) => {
-    console.log("Health check");
+app.get("/health", (_req, res) => {
     res.status(200).json({
         status: "healthy",
         timestamp: new Date().toISOString(),
@@ -33,12 +28,10 @@ app.get("/health", (req, res) => {
 app.use(express.json());
 app.use(cookieParser());
 
-
 app.use(contextResolver);
 
-
-app.use("/b2b", routes);
-// app.use("/", routes);
+app.use("/user", routes);
+// app.use("/b2b", routes);
 
 app.use(errorHandler);
 
