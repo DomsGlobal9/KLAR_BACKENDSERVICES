@@ -37,8 +37,8 @@ app.use(cookieParser());
 app.use(contextResolver);
 
 
+app.use("/", routes);
 app.use("/b2b", routes);
-// app.use("/", routes);
 
 app.use(errorHandler);
 
