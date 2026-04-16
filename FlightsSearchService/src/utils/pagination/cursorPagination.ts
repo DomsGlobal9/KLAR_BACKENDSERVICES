@@ -32,7 +32,7 @@ export class CursorPagination {
      */
     static generateCursor(flight: any, sortBy: string, sortOrder: string): string {
         let sortValue: any;
-        
+
         switch (sortBy) {
             case 'price':
                 sortValue = flight.fareOptions?.[0]?.netFare || flight.netFare || 0;
@@ -49,13 +49,13 @@ export class CursorPagination {
             default:
                 sortValue = flight.fareOptions?.[0]?.netFare || 0;
         }
-        
+
         const cursorData = {
             sortValue,
             flightId: flight.flightId,
             timestamp: Date.now()
         };
-        
+
         return Buffer.from(JSON.stringify(cursorData)).toString('base64');
     }
 
@@ -78,7 +78,7 @@ export class CursorPagination {
         return [...flights].sort((a, b) => {
             let valueA: any;
             let valueB: any;
-            
+
             switch (sortBy) {
                 case 'price':
                     valueA = a.fareOptions?.[0]?.netFare || 0;
@@ -100,7 +100,7 @@ export class CursorPagination {
                     valueA = a.fareOptions?.[0]?.netFare || 0;
                     valueB = b.fareOptions?.[0]?.netFare || 0;
             }
-            
+
             if (sortOrder === 'asc') {
                 return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
             } else {
@@ -120,8 +120,7 @@ export class CursorPagination {
         sortOrder: string
     ): CursorPaginatedResponse<TransformedFlight> {
         let startIndex = 0;
-        
-        // If cursor provided, find the starting point
+
         if (cursor) {
             const cursorData = this.decodeCursor(cursor);
             if (cursorData) {
@@ -131,11 +130,11 @@ export class CursorPagination {
                 }
             }
         }
-        
+
         const paginatedData = sortedFlights.slice(startIndex, startIndex + limit);
         const hasMore = startIndex + limit < sortedFlights.length;
         const nextCursor = hasMore ? this.generateCursor(paginatedData[paginatedData.length - 1], sortBy, sortOrder) : null;
-        
+
         return {
             data: paginatedData,
             nextCursor,
@@ -155,11 +154,9 @@ export class CursorPagination {
         options: CursorPaginationOptions
     ): CursorPaginatedResponse<TransformedFlight> {
         const { limit, cursor, sortBy, sortOrder } = options;
-        
-        // Sort flights first
+
         const sortedFlights = this.sortFlights(flights, sortBy!, sortOrder!);
-        
-        // Apply cursor pagination
+
         return this.applyCursor(sortedFlights, cursor, limit, sortBy!, sortOrder!);
     }
 
@@ -171,41 +168,28 @@ export class CursorPagination {
         returnFlights: TransformedFlight[],
         options: CursorPaginationOptions
     ): ReturnCursorResponse {
-        const { limit, cursor, sortBy, sortOrder } = options;
-        
-        // Parse cursor to get onward and return cursors separately
+        const { limit, sortBy, sortOrder } = options;
+
         let onwardCursor: string | undefined;
         let returnCursor: string | undefined;
-        
-        if (cursor) {
+
+        if (options.cursor) {
             try {
-                const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
+                const decoded = Buffer.from(options.cursor, 'base64').toString('utf-8');
                 const cursors = JSON.parse(decoded);
                 onwardCursor = cursors.onwardCursor;
                 returnCursor = cursors.returnCursor;
             } catch (error) {
-                // Invalid cursor, start from beginning
+                // Invalid cursor
             }
         }
-        
-        // Sort and paginate onward flights
+
         const sortedOnward = this.sortFlights(onwardFlights, sortBy!, sortOrder!);
         const onwardResult = this.applyCursor(sortedOnward, onwardCursor, limit, sortBy!, sortOrder!);
-        
-        // Sort and paginate return flights
+
         const sortedReturn = this.sortFlights(returnFlights, sortBy!, sortOrder!);
         const returnResult = this.applyCursor(sortedReturn, returnCursor, limit, sortBy!, sortOrder!);
-        
-        // Generate combined cursor for next request
-        let nextCombinedCursor: string | null = null;
-        if (onwardResult.nextCursor || returnResult.nextCursor) {
-            const combinedCursor = {
-                onwardCursor: onwardResult.nextCursor,
-                returnCursor: returnResult.nextCursor
-            };
-            nextCombinedCursor = Buffer.from(JSON.stringify(combinedCursor)).toString('base64');
-        }
-        
+
         return {
             onward: {
                 data: onwardResult.data,
@@ -230,14 +214,13 @@ export class CursorPagination {
         options: CursorPaginationOptions
     ): CursorPaginatedResponse<{ legNumber: number; legKey: string; flights: TransformedFlight[] }> {
         const { limit, cursor, sortBy, sortOrder } = options;
-        
-        // Collect all flights from all legs with their leg info
+
         interface FlightWithLeg {
             legNumber: number;
             legKey: string;
             flight: TransformedFlight;
         }
-        
+
         const allFlightsWithLeg: FlightWithLeg[] = [];
         legs.forEach(leg => {
             leg.flights.forEach(flight => {
@@ -248,11 +231,9 @@ export class CursorPagination {
                 });
             });
         });
-        
-        // Sort all flights
+
         const sortedFlightsWithLeg = this.sortFlightsWithLeg(allFlightsWithLeg, sortBy!, sortOrder!);
-        
-        // Apply cursor pagination
+
         let startIndex = 0;
         if (cursor) {
             const cursorData = this.decodeCursor(cursor);
@@ -263,13 +244,12 @@ export class CursorPagination {
                 }
             }
         }
-        
+
         const paginatedItems = sortedFlightsWithLeg.slice(startIndex, startIndex + limit);
         const hasMore = startIndex + limit < sortedFlightsWithLeg.length;
-        
-        // Group back into legs
+
         const resultMap = new Map<number, { legNumber: number; legKey: string; flights: TransformedFlight[] }>();
-        
+
         paginatedItems.forEach(item => {
             if (!resultMap.has(item.legNumber)) {
                 resultMap.set(item.legNumber, {
@@ -280,10 +260,10 @@ export class CursorPagination {
             }
             resultMap.get(item.legNumber)!.flights.push(item.flight);
         });
-        
+
         const result = Array.from(resultMap.values());
         const nextCursor = hasMore ? this.generateCursor(paginatedItems[paginatedItems.length - 1].flight, sortBy!, sortOrder!) : null;
-        
+
         return {
             data: result,
             nextCursor,
@@ -306,7 +286,7 @@ export class CursorPagination {
         return [...flightsWithLeg].sort((a, b) => {
             let valueA: any;
             let valueB: any;
-            
+
             switch (sortBy) {
                 case 'price':
                     valueA = a.flight.fareOptions?.[0]?.netFare || 0;
@@ -328,7 +308,7 @@ export class CursorPagination {
                     valueA = a.flight.fareOptions?.[0]?.netFare || 0;
                     valueB = b.flight.fareOptions?.[0]?.netFare || 0;
             }
-            
+
             if (sortOrder === 'asc') {
                 return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
             } else {

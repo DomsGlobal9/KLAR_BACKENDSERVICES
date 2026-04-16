@@ -97,40 +97,40 @@ export const searchFlights = async (
         returnFlights = filterFlights(returnFlights, tripType, filters);
       }
 
-      const cursorResult = CursorPagination.paginateReturn(
-        onwardFlights,
-        returnFlights,
-        cursorOptions
-      );
+      const onwardCursorOptions = CursorPagination.validateOptions({
+        ...req.query,
+        cursor: req.query.onwardCursor
+      });
+
+      const returnCursorOptions = CursorPagination.validateOptions({
+        ...req.query,
+        cursor: req.query.returnCursor
+      });
+
+      const onwardResult = CursorPagination.paginateOneWay(onwardFlights, onwardCursorOptions);
+      const returnResult = CursorPagination.paginateOneWay(returnFlights, returnCursorOptions);
 
       responseData = {
         searchType: 'RETURN',
         routeCount: payload.searchQuery.routeInfos.length,
-        onwardFlights: cursorResult.onward.data,
-        returnFlights: cursorResult.return.data,
-        onwardNextCursor: cursorResult.onward.nextCursor,
-        returnNextCursor: cursorResult.return.nextCursor,
-        onwardHasMore: cursorResult.onward.hasMore,
-        returnHasMore: cursorResult.return.hasMore,
-        nextCursor: cursorResult.onward.nextCursor || cursorResult.return.nextCursor ?
-          Buffer.from(JSON.stringify({
-            onwardCursor: cursorResult.onward.nextCursor,
-            returnCursor: cursorResult.return.nextCursor
-          })).toString('base64') : null,
+        onwardFlights: onwardResult.data,
+        returnFlights: returnResult.data,
+        onwardNextCursor: onwardResult.nextCursor,
+        returnNextCursor: returnResult.nextCursor,
+        onwardHasMore: onwardResult.hasMore,
+        returnHasMore: returnResult.hasMore,
         totalOnwardFlights: onwardFlights.length,
         totalReturnFlights: returnFlights.length,
         searchParams: extractSearchParams(payload),
         appliedSort: {
-          sortBy: cursorOptions.sortBy,
-          sortOrder: cursorOptions.sortOrder
+          sortBy: onwardCursorOptions.sortBy,
+          sortOrder: onwardCursorOptions.sortOrder
         },
         appliedFilters: filters || {}
       };
-
     } else if (tripType === 'MULTI_CITY') {
       const legs = flightDataResult.data as { legNumber: number; legKey: string; flights: TransformedFlight[] }[];
 
-      // Apply filters and sorting to each leg first
       const processedLegs = legs.map(leg => {
         let legFlights = leg.flights;
 
