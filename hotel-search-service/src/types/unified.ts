@@ -1,5 +1,6 @@
 export interface UnifiedSearchRequest {
   destination: string;          // free text (city name) OR lat/lng
+  destinationCode?: string;     // explicit RateGain destination code
   checkin: string;              // YYYY-MM-DD
   checkout: string;             // YYYY-MM-DD
   rooms: UnifiedRoom[];
