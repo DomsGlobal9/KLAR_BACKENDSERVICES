@@ -97,9 +97,9 @@ export class RateGainApiProvider {
      * Get room-level product details for a specific property.
      */
     async getAllProducts(payload: any) {
-        const propertyId = (payload.propertyID || payload.propertyId || payload.PropertyId || "").toString().replace("RG:", "");
+        const propertyId = (payload.PropertyId || payload.propertyID || payload.propertyId || "").toString().replace("RG:", "");
         const rateGainPayload: any = {
-            propertyID: propertyId,
+            PropertyId: propertyId,
             PropertyCode: payload.PropertyCode || payload.propertyCode,
             BrandCode: payload.BrandCode || payload.brandCode,
             checkin: payload.checkin || payload.checkIn,
@@ -128,7 +128,7 @@ export class RateGainApiProvider {
 
                 return room;
             }),
-            EchoToken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
+            Echotoken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
         };
 
         // Optional fields
