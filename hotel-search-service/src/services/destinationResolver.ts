@@ -24,7 +24,9 @@ export async function resolveForRG(query: string): Promise<string | null> {
         dest = await RGDestinationModel.findOne({ destName: words[0] });
     }
 
-    return dest?.destCode || null;
+    const result = dest?.destCode || null;
+    console.log(`[DEBUG] resolveForRG: Resolved "${query}" (normalized: "${normalizedQuery}") to ${result}`);
+    return result;
 }
 
 /**

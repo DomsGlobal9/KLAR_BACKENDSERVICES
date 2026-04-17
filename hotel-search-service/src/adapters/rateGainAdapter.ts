@@ -1,6 +1,6 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
-import { rateGainClient } from "../clients/rategain.client";
+import { rateGainProvider } from "../providers/rategain.provider";
 
 export async function searchRG(req: UnifiedSearchRequest): Promise<UnifiedHotel[]> {
   const destCode = await resolveForRG(req.destination);
@@ -23,9 +23,8 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<UnifiedHotel[
   };
 
   try {
-    const res = await rateGainClient.post("/api/SmartDistribution/bestproperties", payload);
-    const data = res.data;
-    return (data.body ?? []).map(mapRGHotel);
+    const res = await rateGainProvider.getBestProperties(payload);
+    return (res.body ?? []).map(mapRGHotel);
   } catch (error: any) {
     console.error("[RateGain Adapter] Search Error:", error.response?.data || error.message);
     throw error;

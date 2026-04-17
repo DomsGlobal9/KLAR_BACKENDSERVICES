@@ -55,8 +55,19 @@ export class RateGainApiProvider {
         };
 
         // Optional fields per spec - Ensure PropertyId is correctly named for TC3
-        if (payload.PropertyId || payload.propertyId || payload.propertyID) {
-            rateGainPayload.PropertyId = payload.PropertyId || payload.propertyId || payload.propertyID;
+        const propertyId = payload.PropertyId || payload.propertyId || payload.propertyID;
+        if (propertyId) {
+            rateGainPayload.PropertyId = propertyId;
+        }
+
+        // VALIDATION: RateGain requires at least destinationCode OR PropertyId OR Geofilter
+        if (!rateGainPayload.destinationCode && !rateGainPayload.PropertyId && !payload.Geofilter) {
+            console.warn("[RateGain] Skipping BestProperties request: Missing destinationCode and PropertyId");
+            return {
+                header: { success: true },
+                body: [],
+                description: "Skipped: No filter provided"
+            };
         }
         if (payload.CountryCode || payload.countryCode) {
             rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
