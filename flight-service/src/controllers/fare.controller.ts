@@ -21,6 +21,40 @@ class FareController {
             });
         }
     }
+
+    async getFareRule(req: Request, res: Response) {
+        try {
+            const { flowType, id } = req.body;
+
+            if (!flowType || !id) {
+                return res.status(400).json({
+                    success: false,
+                    message: "flowType and id are required"
+                });
+            }
+
+            const validFlowTypes = ["SEARCH", "REVIEW", "BOOKING_DETAIL"];
+
+            if (!validFlowTypes.includes(flowType)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "flowType must be SEARCH, REVIEW, or BOOKING_DETAIL"
+                });
+            }
+
+            const response = await FareService.getFareRule(flowType, id);
+
+            return res.status(200).json(response);
+
+        } catch (error: any) {
+            console.error("FareRule Controller Error:", error.message);
+
+            return res.status(500).json({
+                success: false,
+                message: error.message || "Internal server error"
+            });
+        }
+    }
 }
 
 export default new FareController();

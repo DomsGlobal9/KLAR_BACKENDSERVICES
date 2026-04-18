@@ -49,6 +49,16 @@ export const TRIPJACK_FIELD_MAP = {
     MF: "ManagementFee",
     OT: "OtherTaxes",
 
+    fcs: "FareComponentsSummary",
+    ARF: "AirlineRescheduleFee",
+    ARFT: "AirlineRescheduleFeeTax",
+    CRF: "TripjackRescheduleFee",
+    CRFT: "TripjackRescheduleFeeTax",
+    ACF: "AirlineCancellationFee",
+    ACFT: "AirlineCancellationFeeTax",
+    CCF: "TripjackCancellationFee",
+    CCFT: "TripjackCancellationFeeTax",
+
     sR: "SeatsRemaining",
     rT: "RefundableType",
     cc: "CabinClass",

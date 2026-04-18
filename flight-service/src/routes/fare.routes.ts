@@ -5,4 +5,6 @@ const router = Router();
 
 router.post("/", FareController.getFares);
 
+router.post("/rule", FareController.getFareRule);
+
 export default router;
