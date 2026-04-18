@@ -36,11 +36,35 @@ class ReviewService {
 
         const sessionData = await RedisCacheService.get(sessionId);
 
-        console.log("@@@@@@@@@@@@@ Session Data:", JSON.stringify(sessionData, null, 2));
-
         return {
             mappedData,
             sessionId
+        };
+    }
+
+    async beforeBookVerify(bookingIds: string) {
+
+        const env = tripjackConfig.ENV;
+        const config = TRIPJACK_URLS[env];
+        const url = `${config.BASE_URL}${config.FARE_VALIDATE}`;
+
+        const response = await axios.post(
+            url,
+            { bookingIds },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    apikey: tripjackConfig.API_KEY,
+                }
+            }
+        );
+
+        const rawData = response.data;
+
+        const mappedData = TripjackFieldMapper.map(rawData);
+
+        return {
+            mappedData
         };
     }
 }
