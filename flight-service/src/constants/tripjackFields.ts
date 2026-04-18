@@ -81,4 +81,6 @@ export const TRIPJACK_FIELD_MAP = {
     ipm: "InstantPurchaseMessage",
 
     airFlowType: "AirFlowType",
+
+    desc: "Description",
 };

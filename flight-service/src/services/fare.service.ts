@@ -47,7 +47,7 @@ class FareService {
                     "Content-Type": "application/json",
                     apikey: tripjackConfig.API_KEY,
                 },
-                timeout: 15000,
+                // timeout: 15000,
             }
         );
 
