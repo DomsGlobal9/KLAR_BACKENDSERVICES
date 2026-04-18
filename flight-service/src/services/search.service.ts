@@ -43,9 +43,6 @@ class SearchService {
             raw: rawResponse?.data?.searchResult?.tripInfos,
         }, 1800);
 
-        const storedData = await RedisCacheService.get(sessionId);
-        console.log(JSON.stringify(storedData, null, 2));
-
         return {
             sessionId,
             flights: normalized

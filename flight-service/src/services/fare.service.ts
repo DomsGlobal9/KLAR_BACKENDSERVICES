@@ -1,5 +1,6 @@
 import RedisCacheService from "../cache/redisCache.service";
 import { BaseFlightNormalizer } from "../normalizers/baseFlight.normalizer";
+import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
 
 class FareService {
 
@@ -13,13 +14,9 @@ class FareService {
 
         const flights = cachedData?.raw?.ONWARD || [];
 
-        console.log("Flights from cache:", flights);
-
         const selectedFlight = flights.find((flight: any) =>
             flight.sI.map((seg: any) => seg.id).join("-") === flightKey
         );
-
-        console.log("Selected flight:", selectedFlight);
 
         if (!selectedFlight) {
             throw new Error("Flight not found");
@@ -27,7 +24,9 @@ class FareService {
 
         const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
 
-        return fares[0];
+        const mappedResponse = TripjackFieldMapper.map(fares[0]);
+
+        return mappedResponse;
     }
 }
 
