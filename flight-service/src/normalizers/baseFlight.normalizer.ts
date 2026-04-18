@@ -1,0 +1,96 @@
+export class BaseFlightNormalizer {
+
+    static getFlightKey(segments: any[]): string {
+        return segments.map((seg: any) => seg.id).join("-");
+    }
+
+    static getTime(dt: string): string {
+        return dt?.split("T")[1]?.slice(0, 5);
+    }
+
+    static getDateParts(dt: string) {
+        const d = new Date(dt);
+
+        const day = d.toLocaleDateString("en-US", { weekday: "long" });
+
+        const parts = d.toLocaleDateString("en-GB").split("/");
+
+        const dd = parts[0];
+        const mm = parts[1];
+        const yy = parts[2]?.slice(2);
+
+        return {
+            day,
+            date: `${dd}-${mm}-${yy}`
+        };
+    }
+
+    static formatDuration(min: number): string {
+        if (!min && min !== 0) return "0h 0m";
+
+        const h = Math.floor(min / 60);
+        const m = min % 60;
+
+        return `${h}h ${m}m`;
+    }
+
+    static getCheapestFare(totalPriceList: any[]) {
+        return totalPriceList?.reduce((min, curr) => {
+            return curr.fd.ADULT.fC.TF < min.fd.ADULT.fC.TF ? curr : min;
+        });
+    }
+
+    static extractFares(flights: any[]) {
+        return flights.map((flight: any) => {
+            return {
+                flightKey: this.getFlightKey(flight.sI),
+
+                segments: flight.sI.map((seg: any) => ({
+                    ...seg
+                })),
+
+                fares: (flight.totalPriceList || []).map((fare: any) => ({
+                    ...fare,
+
+                    fareId: fare.id,
+                    fareIdentifier: fare.fareIdentifier,
+
+                    passengerBreakup: {
+                        ADULT: fare.fd?.ADULT || null,
+                        CHILD: fare.fd?.CHILD || null,
+                        INFANT: fare.fd?.INFANT || null
+                    },
+
+                    priceSummary: {
+                        ADULT: {
+                            total: fare.fd?.ADULT?.fC?.TF,
+                            baseFare: fare.fd?.ADULT?.fC?.BF,
+                            tax: fare.fd?.ADULT?.fC?.TAF,
+                            netFare: fare.fd?.ADULT?.fC?.NF
+                        },
+                        CHILD: {
+                            total: fare.fd?.CHILD?.fC?.TF,
+                            baseFare: fare.fd?.CHILD?.fC?.BF,
+                            tax: fare.fd?.CHILD?.fC?.TAF,
+                            netFare: fare.fd?.CHILD?.fC?.NF
+                        },
+                        INFANT: {
+                            total: fare.fd?.INFANT?.fC?.TF,
+                            baseFare: fare.fd?.INFANT?.fC?.BF,
+                            tax: fare.fd?.INFANT?.fC?.TAF,
+                            netFare: fare.fd?.INFANT?.fC?.NF
+                        }
+                    },
+
+                    baggageDetails: fare.tai?.tbi || null,
+
+                    meta: {
+                        isCreditCardApplicable: fare.icca,
+                        messages: fare.messages,
+                        msri: fare.msri
+                    }
+                }))
+            };
+        });
+    }
+}
