@@ -84,3 +84,47 @@ export const TRIPJACK_FIELD_MAP = {
 
     desc: "Description",
 };
+
+export const BOOKING_LEVEL_FIELD_MAP = {
+    bookingId: "BookingId",
+
+    paymentInfos: "PaymentInformations",
+    amount: "Amount",
+
+    deliveryInfo: "DeliveryInformation",
+    emails: "Emails",
+    contacts: "Contacts",
+
+    contactInfo: "EmergencyContactInformation",
+    ecn: "EmergencyContactName",
+
+    travellerInfos: "TravellerInformation",
+
+    ti: "Title",
+    pt: "PaxType",
+    fN: "FirstName",
+    lN: "LastName",
+    dob: "DateOfBirth",
+
+    pNum: "PassportNumber",
+    pNat: "PassportNationality",
+    pid: "PassportIssueDate",
+    eD: "PassportExpiryDate",
+
+    ssrBaggageInfos: "SSR_Baggage_Information",
+    ssrMealInfos: "SSR_Meal_Information",
+    ssrSeatInfos: "SSR_Seat_Information",
+    ssrExtraServiceInfos: "SSR_Extra_Service_Information",
+
+    key: "SegmentKey",
+    code: "SSRCode",
+
+    di: "DocumentId",
+
+    gstInfo: "GSTInformation",
+    gstNumber: "GSTNumber",
+    registeredName: "RegisteredName",
+    Email: "GSTEmail",
+    Mobile: "GSTMobile",
+    Address: "GSTAddress",
+};

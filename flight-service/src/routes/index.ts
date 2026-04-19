@@ -4,6 +4,7 @@ import fareRoutes from "./fare.routes";
 import reviewRoutes from "./review.route";
 import ancillaryRoutes from "./ancillary.routes";
 import seatRoutes from "./seat.routes";
+import bookingRoutes from "./booking.routes";
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use("/fare", fareRoutes);
 router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/seat", seatRoutes);
+router.use("/book", bookingRoutes);
 
 export default router;

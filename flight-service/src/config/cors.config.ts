@@ -1,21 +1,35 @@
-import cors, { CorsOptions } from "cors";
+import { CorsOptions } from "cors";
 import { envConfig } from "./env.config";
 
-const allowedOrigins = envConfig.CORS.ORIGIN;
-
-const corsOptions: CorsOptions = {
+export const corsOptions: CorsOptions = {
     origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
+        const allowedOrigins = envConfig.CORS.ORIGIN;
+
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.includes("*")) {
+            return callback(null, true);
+        }
+
         if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
-        return callback(new Error(`CORS blocked for origin: ${origin}`));
+
+        if (envConfig.NODE_ENV === "production") {
+            console.error(`❌ CORS blocked for origin: ${origin}`);
+            return callback(new Error("Not allowed by CORS"));
+        }
+
+        console.warn(`⚠️ CORS warning: ${origin} not in allowlist`);
+        return callback(null, true);
     },
 
     methods: envConfig.CORS.METHODS,
     allowedHeaders: envConfig.CORS.ALLOWED_HEADERS,
     credentials: envConfig.CORS.CREDENTIALS,
     maxAge: envConfig.CORS.MAX_AGE,
-};
 
-export const corsMiddleware = cors(corsOptions);
+    exposedHeaders: ["X-Total-Count", "X-Page", "X-Per-Page"],
+};

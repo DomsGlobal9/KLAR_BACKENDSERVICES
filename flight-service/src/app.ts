@@ -11,7 +11,7 @@ app.get("/", (_req, res) => {
   res.send("Flight Service is running 🚀");
 });
 
-app.use('/api', routes);
+app.use('/api/flight', routes);
 
 app.use((_req, res) => {
   res.status(404).json({
