@@ -24,6 +24,7 @@ export class OneWayNormalizer {
                 flightKey: BaseFlightNormalizer.getFlightKey(segments),
 
                 airline: first.fD.aI.name,
+                airlineCode: first.fD.aI.code,
                 flightNumber: `${first.fD.aI.code}-${first.fD.fN}`,
                 cabinClass: cheapest.fd.ADULT.cc,
 
