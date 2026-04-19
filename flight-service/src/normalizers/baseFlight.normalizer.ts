@@ -93,4 +93,20 @@ export class BaseFlightNormalizer {
             };
         });
     }
+
+    static getCheapestFareWithBreakdown(totalPriceList: any[]): {
+        cheapestFare: any;
+        adultPrice: number;
+        childPrice: number;
+        infantPrice: number;
+    } {
+        const cheapestFare = this.getCheapestFare(totalPriceList);
+
+        return {
+            cheapestFare,
+            adultPrice: cheapestFare?.fd?.ADULT?.fC?.TF || 0,
+            childPrice: cheapestFare?.fd?.CHILD?.fC?.TF || 0,
+            infantPrice: cheapestFare?.fd?.INFANT?.fC?.TF || 0
+        };
+    }
 }

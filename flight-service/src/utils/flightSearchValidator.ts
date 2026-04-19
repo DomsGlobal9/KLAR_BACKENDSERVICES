@@ -202,11 +202,18 @@ export class FlightSearchValidator {
 
 
         let searchType: SearchType;
+
         if (routeInfos.length === 1) {
             searchType = 'ONEWAY';
-        } else if (routeInfos.length === 2) {
+        }
+        else if (
+            routeInfos.length === 2 &&
+            routeInfos[0].fromCityOrAirport?.code === routeInfos[1].toCityOrAirport?.code &&
+            routeInfos[0].toCityOrAirport?.code === routeInfos[1].fromCityOrAirport?.code
+        ) {
             searchType = 'RETURN';
-        } else {
+        }
+        else {
             searchType = 'MULTICITY';
         }
 
@@ -268,20 +275,50 @@ export class FlightSearchValidator {
 
 
         if (searchType === 'RETURN' && travelDates.length === 2) {
-            if (travelDates[0] >= travelDates[1]) {
+            const onward = new Date(travelDates[0]);
+            const ret = new Date(travelDates[1]);
+
+            onward.setHours(0, 0, 0, 0);
+            ret.setHours(0, 0, 0, 0);
+
+            if (ret < onward) {
                 errors.push({
                     field: 'searchQuery.routeInfos[1].travelDate',
-                    message: 'Return travel date must be after onward travel date',
+                    message: 'Return travel date cannot be before onward travel date',
                     code: ERROR_CODES.DATE_NOT_ASCENDING
                 });
             }
         } else if (searchType === 'MULTICITY' && travelDates.length > 1) {
-            for (let i = 1; i < travelDates.length; i++) {
-                if (travelDates[i - 1] >= travelDates[i]) {
+
+            for (let i = 1; i < routeInfos.length; i++) {
+
+                const prevRoute = routeInfos[i - 1];
+                const currentRoute = routeInfos[i];
+
+                const prevDate = new Date(prevRoute.travelDate);
+                const currDate = new Date(currentRoute.travelDate);
+
+                prevDate.setHours(0, 0, 0, 0);
+                currDate.setHours(0, 0, 0, 0);
+
+                if (currDate < prevDate) {
                     errors.push({
                         field: `searchQuery.routeInfos[${i}].travelDate`,
-                        message: `Travel date for route ${i + 1} must be after route ${i} travel date`,
+                        message: `Travel date cannot be before previous segment date`,
                         code: ERROR_CODES.DATE_NOT_ASCENDING
+                    });
+                    break;
+                }
+
+                const isReverseRoute =
+                    prevRoute.fromCityOrAirport?.code === currentRoute.toCityOrAirport?.code &&
+                    prevRoute.toCityOrAirport?.code === currentRoute.fromCityOrAirport?.code;
+
+                if (isReverseRoute) {
+                    errors.push({
+                        field: `searchQuery.routeInfos[${i}]`,
+                        message: `Reverse route is not allowed in multicity journey`,
+                        code: ERROR_CODES.INVALID_ROUTE_SEQUENCE
                     });
                     break;
                 }
