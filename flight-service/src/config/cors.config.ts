@@ -1,7 +1,7 @@
 import { CorsOptions } from "cors";
 import { envConfig } from "./env.config";
 
-export const corsOptions: CorsOptions = {
+export const corsMiddleware: CorsOptions = {
     origin: (origin, callback) => {
         const allowedOrigins = envConfig.CORS.ORIGIN;
 

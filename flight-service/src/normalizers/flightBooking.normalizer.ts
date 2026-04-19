@@ -17,11 +17,31 @@ export function normalizeToTripJackBookingPayload(
     tripJackPayload?: TripJackBookingPayload;
     errors: string[];
 } {
+    const convertedTravellers = frontendPayload.travellers.map(traveller => ({
+        ...traveller,
+        ssrBaggage: traveller.ssrBaggage?.reduce((acc, item) => {
+            acc[item.segmentId] = item.code;
+            return acc;
+        }, {} as Record<string, string>),
+        ssrMeal: traveller.ssrMeal?.reduce((acc, item) => {
+            acc[item.segmentId] = item.code;
+            return acc;
+        }, {} as Record<string, string>),
+        ssrSeat: traveller.ssrSeat?.reduce((acc, item) => {
+            acc[item.segmentId] = item.code;
+            return acc;
+        }, {} as Record<string, string>),
+        ssrExtraService: traveller.ssrExtraService?.reduce((acc, item) => {
+            acc[item.segmentId] = item.code;
+            return acc;
+        }, {} as Record<string, string>),
+    }));
+
     const result = verifyAndTransformTripJackBookingPayload(
         {
             bookingID: frontendPayload.bookingID,
             paymentAmount: frontendPayload.paymentAmount,
-            travellers: frontendPayload.travellers,
+            travellers: convertedTravellers,
             gstInfo: frontendPayload.gstInfo,
             deliveryEmails: frontendPayload.deliveryEmails,
             deliveryContacts: frontendPayload.deliveryContacts,
