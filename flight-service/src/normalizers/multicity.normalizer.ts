@@ -5,14 +5,15 @@ type AnyObj = Record<string, any>;
 export class MultiCityNormalizer extends BaseFlightNormalizer {
 
     static normalize(searchResult: AnyObj) {
-        const tripInfos = searchResult?.searchResult?.tripInfos;
 
+        const tripInfos = searchResult?.searchResult?.tripInfos;
         if (!tripInfos) return [];
 
         const legKeys = Object.keys(tripInfos)
             .sort((a, b) => Number(a) - Number(b));
 
         return legKeys.map((key) => {
+
             const flights = tripInfos[key] || [];
 
             return {
@@ -22,75 +23,51 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
 
                     const segments = flight.sI || [];
 
+                    const first = segments[0];
+                    const last = segments[segments.length - 1];
+
                     const cheapestFare = this.getCheapestFare(
                         flight.totalPriceList || []
                     );
 
+                    const fromDate = this.getDateParts(first.dt);
+                    const toDate = this.getDateParts(last.at);
+
                     return {
                         flightKey: this.getFlightKey(segments),
 
-                        segments: segments.map((seg: AnyObj) => ({
-                            id: seg.id,
-                            airline: seg.fD?.aI?.code,
-                            airlineName: seg.fD?.aI?.name,
-                            flightNumber: seg.fD?.fN,
-                            aircraft: seg.fD?.eT,
+                        airline: first?.fD?.aI?.name,
+                        airlineCode: first?.fD?.aI?.code,
+                        flightNumber: `${first?.fD?.aI?.code}-${first?.fD?.fN}`,
 
-                            stops: seg.stops,
-                            duration: seg.duration,
+                        cabinClass: cheapestFare?.fd?.ADULT?.cc,
 
-                            departure: {
-                                code: seg.da?.code,
-                                city: seg.da?.city,
-                                terminal: seg.da?.terminal,
-                                time: seg.dt,
-                                ...this.getDateParts(seg.dt),
-                            },
+                        from: {
+                            city: first?.da?.city,
+                            airportCode: first?.da?.code,
+                            time: this.getTime(first?.dt),
+                            date: fromDate.date,
+                            day: fromDate.day
+                        },
 
-                            arrival: {
-                                code: seg.aa?.code,
-                                city: seg.aa?.city,
-                                terminal: seg.aa?.terminal,
-                                time: seg.at,
-                                ...this.getDateParts(seg.at),
-                            }
-                        })),
+                        to: {
+                            city: last?.aa?.city,
+                            airportCode: last?.aa?.code,
+                            time: this.getTime(last?.at),
+                            date: toDate.date,
+                            day: toDate.day
+                        },
 
-                        fares: (flight.totalPriceList || []).map((fare: AnyObj) => ({
-                            fareId: fare.id,
-                            fareIdentifier: fare.fareIdentifier,
+                        stops: Math.max(segments.length - 1, 0),
 
-                            price: {
-                                adult: fare.fd?.ADULT?.fC?.TF ?? 0,
-                                child: fare.fd?.CHILD?.fC?.TF ?? 0,
-                                infant: fare.fd?.INFANT?.fC?.TF ?? 0
-                            },
+                        duration: this.formatDuration(
+                            segments.reduce(
+                                (sum: number, seg: any) => sum + (seg.duration || 0),
+                                0
+                            )
+                        ),
 
-                            baseFare: {
-                                adult: fare.fd?.ADULT?.fC?.BF ?? 0,
-                                child: fare.fd?.CHILD?.fC?.BF ?? 0,
-                                infant: fare.fd?.INFANT?.fC?.BF ?? 0
-                            },
-
-                            tax: {
-                                adult: fare.fd?.ADULT?.fC?.TAF ?? 0,
-                                child: fare.fd?.CHILD?.fC?.TAF ?? 0,
-                                infant: fare.fd?.INFANT?.fC?.TAF ?? 0
-                            },
-
-                            baggage: fare.tai?.tbi || null,
-
-                            cabinClass: fare.fd?.ADULT?.cc,
-
-                            bookingClass: fare.fd?.ADULT?.cB
-                        })),
-
-                        cheapestFare: cheapestFare
-                            ? {
-                                fareId: cheapestFare.id,
-                                total: cheapestFare.fd?.ADULT?.fC?.TF ?? 0
-                            }
-                            : null
+                        price: cheapestFare?.fd?.ADULT?.fC?.TF ?? 0
                     };
                 })
             };

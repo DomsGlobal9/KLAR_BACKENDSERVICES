@@ -8,6 +8,7 @@ class FareService {
 
     async getFares(sessionId: string, flightKey: string) {
 
+
         const cachedData = await RedisCacheService.get(sessionId);
 
         if (!cachedData) {
@@ -30,6 +31,45 @@ class FareService {
 
         return mappedResponse;
     }
+
+    async getMultiCityFares(
+        sessionId: string,
+        legIndex: number,
+        flightKey: string
+    ) {
+
+        const cachedData = await RedisCacheService.get(sessionId);
+
+
+        if (!cachedData) {
+            throw new Error("Session expired or invalid sessionId");
+        }
+
+        const tripInfos = cachedData?.raw;
+
+        if (!tripInfos) {
+            throw new Error("Invalid session data");
+        }
+
+        const legFlights = tripInfos[String(legIndex)];
+
+        if (!legFlights || !legFlights.length) {
+            throw new Error("Leg not found");
+        }
+
+        const selectedFlight = legFlights.find((flight: any) =>
+            flight.sI?.map((seg: any) => seg.id).join("-") === flightKey
+        );
+
+        if (!selectedFlight) {
+            throw new Error("Flight not found for given leg");
+        }
+
+        const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
+
+        return TripjackFieldMapper.map(fares[0]);
+    }
+
 
     async getFareRule(flowType: string, id: string) {
         const env = tripjackConfig.ENV;

@@ -22,6 +22,36 @@ class FareController {
         }
     }
 
+    async getMulticityFares(req: Request, res: Response) {
+        try {
+            const { sessionId, legIndex, flightKey } = req.body;
+
+            if (legIndex === undefined || !flightKey || !sessionId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "sessionId, legIndex and flightKey are required"
+                });
+            }
+
+            const data = await FareService.getMultiCityFares(
+                sessionId,
+                Number(legIndex),
+                flightKey
+            );
+
+            return res.status(200).json({
+                success: true,
+                data
+            });
+
+        } catch (error: any) {
+            return res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
+
     async getFareRule(req: Request, res: Response) {
         try {
             const { flowType, id } = req.body;
