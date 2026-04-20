@@ -13,11 +13,9 @@ export class BaseFlightNormalizer {
 
         const day = d.toLocaleDateString("en-US", { weekday: "long" });
 
-        const parts = d.toLocaleDateString("en-GB").split("/");
-
-        const dd = parts[0];
-        const mm = parts[1];
-        const yy = parts[2]?.slice(2);
+        const dd = d.toLocaleDateString("en-GB", { day: "2-digit" });
+        const mm = d.toLocaleDateString("en-US", { month: "short" });
+        const yy = d.getFullYear().toString().slice(2);
 
         return {
             day,
