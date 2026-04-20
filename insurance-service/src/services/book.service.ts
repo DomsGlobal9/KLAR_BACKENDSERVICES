@@ -63,8 +63,12 @@ async function pollInsuranceStatus(tjBookingId: string, dbId: string): Promise<v
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function detectJourneyType(payload: any): InsuranceJourneyType {
-    const ict = (payload.pli?.[0]?.pi?.[0]?.ict || "").toUpperCase();
-    // Detect from bookingId pattern or from a hint field we attach in the proxy call
+    const ict = (payload.ict || payload.pli?.[0]?.pi?.[0]?.ict || "").toUpperCase();
+    if (ict === "STUDENT") return InsuranceJourneyType.STUDENT;
+    if (ict === "AMT")     return InsuranceJourneyType.AMT;
+    if (ict === "API_EMB" || ict === "EMBEDDED") return InsuranceJourneyType.EMBEDDED;
+
+    // Fallback to hint field
     if (payload._journeyType) {
         const jt = payload._journeyType.toUpperCase();
         if (jt === "STUDENT")  return InsuranceJourneyType.STUDENT;

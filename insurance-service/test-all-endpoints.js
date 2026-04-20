@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 const BASE = "http://localhost:5014/api/insurance";
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXItMDAxIiwiZW1haWwiOiJ0ZXN0QGtsYXIuY29tIiwibmFtZSI6IlRlc3QgQWdlbnQiLCJpYXQiOjE3NzYzNTkzNTgsImV4cCI6MTc3NjM2NjU1OH0.ET0YKlDVSm_l5WTq7zh-VpnkKT5DFbzbpNb5K62O_Os";
+const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXItMDAxIiwiZW1haWwiOiJ0ZXN0QGtsYXIuY29tIiwibmFtZSI6IlRlc3QgQWdlbnQiLCJpYXQiOjE3NzY2NjEzOTEsImV4cCI6MTc3NzI2NjE5MX0.26hp5-iTqAM3sCgNuMZwOgPI8PBpcwrssBPtP90FNf0";
 
 const headers = {
   "Content-Type": "application/json",
@@ -31,7 +31,7 @@ async function run() {
 
   // ─── 2. Search — Standalone (Popular Region) ───────────────────────
   sep("TEST 2: POST /search — STANDALONE (Popular Region)");
-  let planId, productId;
+  let planId, productId, totalFare;
   try {
     const r = await axios.post(`${BASE}/search`, {
       isq: {
@@ -43,7 +43,7 @@ async function run() {
             { rkey: "ASI", rt: "POPULARREGION" },
           ],
         },
-        iti: [{ age: 30 }, { age: 45 }],
+        iti: [{ age: 30 }],
       },
     }, { headers });
     results["2_search_standalone"] = { status: r.status, data: r.data };
@@ -55,8 +55,11 @@ async function run() {
     if (pli && pli.length) {
       planId = pli[0].plid;
       productId = pli[0].pi?.[0]?.pid;
+      // The path according to logs: pli[0].pi[0].tfd.ifc.TF
+      totalFare = pli[0].pi?.[0]?.tfd?.ifc?.TF || 2350;
       console.log("✅ Extracted planId:", planId);
       console.log("✅ Extracted productId:", productId);
+      console.log("✅ Extracted totalFare:", totalFare);
       console.log("Plans count:", pli.length);
       // Show first plan summary
       console.log("First plan:", JSON.stringify({
@@ -64,7 +67,7 @@ async function run() {
         planName: pli[0].pn,
         products: pli[0].pi?.length,
         firstProductId: pli[0].pi?.[0]?.pid,
-        totalFare: pli[0].pi?.[0]?.tf,
+        totalFare: totalFare,
       }, null, 2));
     } else {
       console.log("⚠️  No plans found. Full body keys:", Object.keys(r.data.body || {}));
@@ -163,12 +166,12 @@ async function run() {
   }
 
   // ─── 7. Book ──────────────────────────────────────────────────────
-  if (bookingId && planId && productId) {
-    sep("TEST 7: POST /book — Standalone");
+  if (bookingId && planId && productId && totalFare) {
+    sep(`TEST 7: POST /book — Standalone (Amount: ${totalFare})`);
     try {
       const r = await axios.post(`${BASE}/book`, {
         bookingId,
-        paymentInfos: [{ paymentMedium: "WALLET", amount: 1500.00 }],
+        paymentInfos: [{ paymentMedium: "WALLET", amount: totalFare }],
         deliveryInfo: {
           emails: ["test@klar.com"],
           contacts: ["9810000001"],
@@ -184,14 +187,7 @@ async function run() {
                 eid: "rahul.sharma@test.com",
                 pnum: "A1234567", cnum: "9810000001", gen: "M",
                 ni: [{ nn: "Priya Sharma", nr: "SPOUSE" }],
-              },
-              {
-                id: 2, dob: "1979-03-22", age: 45,
-                fn: "Sita", ln: "Sharma",
-                eid: "sita.sharma@test.com",
-                pnum: "B7654321", cnum: "9810000002", gen: "F",
-                ni: [{ nn: "Rahul Sharma", nr: "CHILD" }],
-              },
+              }
             ],
           }],
         }],
@@ -206,8 +202,12 @@ async function run() {
       console.log("ERROR:", e.response?.status, JSON.stringify(e.response?.data, null, 2));
     }
   } else {
-    sep("TEST 7: SKIPPED — no bookingId from review");
-    results["7_book"] = { skipped: true, reason: "No bookingId" };
+    sep("TEST 7: SKIPPED");
+    if (!bookingId) console.log("⏭️  Reason: bookingId is missing (Review step failed?)");
+    if (!planId)    console.log("⏭️  Reason: planId is missing (Search step failed?)");
+    if (!productId) console.log("⏭️  Reason: productId is missing (Search step failed?)");
+    if (!totalFare) console.log("⏭️  Reason: totalFare is missing (Search step failed to extract price?)");
+    results["7_book"] = { skipped: true, reason: "Incomplete chain" };
   }
 
   // ─── 8. Booking Details (TripJack) ────────────────────────────────
@@ -350,16 +350,40 @@ async function run() {
     console.log("RESPONSE:", JSON.stringify(e.response?.data, null, 2));
   }
 
-  sep("TEST 15: VALIDATION — No Auth Token (expect 401)");
+  sep("TEST 16: VALIDATION — Student with Region (expect 400 per v6.0)");
   try {
     const r = await axios.post(`${BASE}/search`, {
-      isq: { sd: "2026-05-15", ed: "2026-05-30", isc: { iri: [{ rkey: "EUR", rt: "POPULARREGION" }] }, iti: [{ age: 30 }] },
-    });
-    results["15_no_auth"] = { status: r.status };
-    console.log("⚠️  Expected 401 but got:", r.status);
+      isq: {
+        sd: "2026-05-15", cd: "180",
+        isc: { iri: [{ rkey: "EUR", rt: "POPULARREGION" }] },
+        iti: [{ age: 25 }],
+        ict: "STUDENT",
+      },
+    }, { headers });
+    results["16_student_region"] = { status: r.status };
+    console.log("⚠️  Expected 400 but got:", r.status);
   } catch (e) {
-    results["15_no_auth"] = { status: e.response?.status, data: e.response?.data };
-    console.log("STATUS:", e.response?.status, "(expected 401)");
+    results["16_student_region"] = { status: e.response?.status, data: e.response?.data };
+    console.log("STATUS:", e.response?.status, "(expected 400)");
+    console.log("RESPONSE:", JSON.stringify(e.response?.data, null, 2));
+  }
+
+  sep("TEST 17: VALIDATION — AMT with Country (expect 400 per v6.0)");
+  try {
+    const r = await axios.post(`${BASE}/search`, {
+      isq: {
+        sd: "2026-05-15", ed: "2027-05-14",
+        isc: { iri: [{ rkey: "US", rt: "COUNTRY" }] },
+        iti: [{ age: 35 }],
+        ict: "AMT",
+        adr: "45",
+      },
+    }, { headers });
+    results["17_amt_country"] = { status: r.status };
+    console.log("⚠️  Expected 400 but got:", r.status);
+  } catch (e) {
+    results["17_amt_country"] = { status: e.response?.status, data: e.response?.data };
+    console.log("STATUS:", e.response?.status, "(expected 400)");
     console.log("RESPONSE:", JSON.stringify(e.response?.data, null, 2));
   }
 

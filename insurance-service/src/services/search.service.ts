@@ -50,11 +50,24 @@ class SearchService {
             }
         }
 
-        // ── Blacklisted country check ───────────────────────────────────────
+        // ── Journey constraints validation (Search Matrix Page 89) ──────────
         const regions: any[] = isq.isc?.iri || [];
+        if (journeyType === "STUDENT") {
+            const hasNonCountry = regions.some(r => r.rt !== "COUNTRY");
+            if (hasNonCountry) {
+                throw { status: 400, message: "Student insurance search is allowed for COUNTRY only (rt: COUNTRY)." };
+            }
+        } else if (journeyType === "AMT") {
+            const hasNonRegion = regions.some(r => r.rt !== "POPULARREGION");
+            if (hasNonRegion) {
+                throw { status: 400, message: "AMT insurance search is allowed for REGION only (rt: POPULARREGION)." };
+            }
+        }
+
+        // ── Blacklisted country check ───────────────────────────────────────
         for (const r of regions) {
             if (r.rt === "COUNTRY" && BLACKLISTED_COUNTRIES.has((r.rkey || "").toUpperCase())) {
-                throw { status: 400, message: `Country ${r.rkey} is blacklisted for TripSafe.` };
+                throw { status: 400, message: `Country ${r.rkey} is blacklisted for TripSafe (Myanmar, Iran, North Korea).` };
             }
         }
 

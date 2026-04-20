@@ -25,10 +25,14 @@ class ReviewService {
             }
         }
         // Embedded review path
-        else if (payload.iid || payload.pid) {
-            if (!payload.pid) throw { status: 400, message: "pid is required for embedded review." };
-            if (!payload.iid) throw { status: 400, message: "iid is required for embedded review." };
-        } else {
+        else if (payload.iid || payload.pid || payload.refid) {
+            if (!payload.pid)   throw { status: 400, message: "pid is required for embedded review." };
+            if (!payload.iid)   throw { status: 400, message: "iid is required for embedded review." };
+            if (!payload.refid) throw { status: 400, message: "refid (Air Booking ID) is required for embedded review." };
+            if (!payload.iti?.length) throw { status: 400, message: "iti (traveller info) is required for embedded review." };
+            if (!payload.sd || !payload.ed) throw { status: 400, message: "sd and ed (coverage dates) are required for embedded review." };
+        }
+ else {
             throw { status: 400, message: "Review payload must include pli (standard) or iid+pid (embedded)." };
         }
 
