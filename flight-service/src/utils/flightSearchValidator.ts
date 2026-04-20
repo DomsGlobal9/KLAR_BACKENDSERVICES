@@ -26,15 +26,13 @@ export class FlightSearchValidator {
      * Main validation method for flight search
      */
     static validate(searchQuery: SearchQuery): ValidationResult {
+
         const errors: ValidationError[] = [];
         const warnings: ValidationError[] = [];
 
-
         this.validateCabinClass(searchQuery.cabinClass, errors);
 
-
         this.validatePaxInfo(searchQuery.paxInfo, errors, warnings);
-
 
         const searchType = this.validateRouteInfos(
             searchQuery.routeInfos,
@@ -42,11 +40,9 @@ export class FlightSearchValidator {
             warnings
         );
 
-
         if (searchQuery.preferredAirline) {
             this.validatePreferredAirlines(searchQuery.preferredAirline, errors);
         }
-
 
         if (searchQuery.searchModifiers) {
             this.validateSearchModifiers(
@@ -110,7 +106,6 @@ export class FlightSearchValidator {
         const child = paxInfo.CHILD || 0;
         const infant = paxInfo.INFANT || 0;
 
-
         if (adult < MIN_ADULT) {
             errors.push({
                 field: 'searchQuery.paxInfo.ADULT',
@@ -127,7 +122,6 @@ export class FlightSearchValidator {
             });
         }
 
-
         if (child < 0) {
             errors.push({
                 field: 'searchQuery.paxInfo.CHILD',
@@ -136,7 +130,6 @@ export class FlightSearchValidator {
             });
         }
 
-
         if (infant < 0) {
             errors.push({
                 field: 'searchQuery.paxInfo.INFANT',
@@ -144,7 +137,6 @@ export class FlightSearchValidator {
                 code: ERROR_CODES.INVALID_INFANT_COUNT
             });
         }
-
 
         const totalPassengers = adult + child;
         if (totalPassengers > MAX_PASSENGERS) {
@@ -155,7 +147,6 @@ export class FlightSearchValidator {
             });
         }
 
-
         if (infant > adult) {
             errors.push({
                 field: 'searchQuery.paxInfo.INFANT',
@@ -163,7 +154,6 @@ export class FlightSearchValidator {
                 code: ERROR_CODES.INFANT_MORE_THAN_ADULT
             });
         }
-
 
         if (totalPassengers >= 7) {
             warnings.push({
@@ -200,7 +190,6 @@ export class FlightSearchValidator {
             return undefined;
         }
 
-
         let searchType: SearchType;
 
         if (routeInfos.length === 1) {
@@ -217,13 +206,11 @@ export class FlightSearchValidator {
             searchType = 'MULTICITY';
         }
 
-
         const travelDates: string[] = [];
 
         for (let i = 0; i < routeInfos.length; i++) {
             const route = routeInfos[i];
             const prefix = `searchQuery.routeInfos[${i}]`;
-
 
             if (!route.fromCityOrAirport?.code) {
                 errors.push({
@@ -239,7 +226,6 @@ export class FlightSearchValidator {
                 });
             }
 
-
             if (!route.toCityOrAirport?.code) {
                 errors.push({
                     field: `${prefix}.toCityOrAirport.code`,
@@ -254,7 +240,6 @@ export class FlightSearchValidator {
                 });
             }
 
-
             if (route.fromCityOrAirport?.code && route.toCityOrAirport?.code &&
                 route.fromCityOrAirport.code === route.toCityOrAirport.code) {
                 errors.push({
@@ -264,15 +249,12 @@ export class FlightSearchValidator {
                 });
             }
 
-
             this.validateTravelDate(route.travelDate, prefix, errors);
 
-            // Collect dates for sequence validation
             if (route.travelDate) {
                 travelDates.push(route.travelDate);
             }
         }
-
 
         if (searchType === 'RETURN' && travelDates.length === 2) {
             const onward = new Date(travelDates[0]);
@@ -325,7 +307,6 @@ export class FlightSearchValidator {
             }
         }
 
-
         if (searchType === 'MULTICITY' && routeInfos.length >= 3) {
             warnings.push({
                 field: 'searchQuery.routeInfos',
@@ -376,7 +357,6 @@ export class FlightSearchValidator {
             return;
         }
 
-
         if (date < today) {
             errors.push({
                 field: `${fieldPrefix}.travelDate`,
@@ -384,7 +364,6 @@ export class FlightSearchValidator {
                 code: ERROR_CODES.INVALID_TRAVEL_DATE
             });
         }
-
 
         const nextYear = new Date();
         nextYear.setFullYear(nextYear.getFullYear() + 1);

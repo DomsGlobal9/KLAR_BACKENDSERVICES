@@ -1,72 +1,87 @@
 import { Request, Response } from "express";
 import BookingService from "../services/booking.service";
-import { SimpleFrontendBookingPayload } from "../types/flightBook.types";
-
+import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
+import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 
 class BookingController {
 
-    async bookFlight(req: Request, res: Response) {
+    async instantBook(req: Request, res: Response) {
         try {
-            const frontendPayload: SimpleFrontendBookingPayload = req.body;
-            const isInstantBook = req.query.instant === "true" || req.body.isInstantBook === true;
+            const payload = { ...req.body, isHold: false };
 
-            const result = await BookingService.bookFlight(frontendPayload, isInstantBook);
+            validateBookingPayload(payload);
 
-            res.status(200).json({
+            const mapped = mapToTripjackBooking(payload);
+
+            const response = await BookingService.book(mapped);
+
+            return res.status(200).json({
                 success: true,
-                data: result,
+                data: response.data,
             });
+
         } catch (error: any) {
-            res.status(error.status || 500).json({
+            return res.status(500).json({
                 success: false,
-                message: error.message || "Booking failed",
-                errors: error.errors || error.response?.data || error,
+                message: error.message,
             });
         }
     }
 
-    async confirmHoldBooking(req: Request, res: Response) {
+    async holdBook(req: Request, res: Response) {
         try {
-            const { bookingId } = req.body;
+            const payload = { ...req.body, isHold: true };
 
-            if (!bookingId) {
-                return res.status(400).json({ success: false, message: "bookingId is required" });
-            }
+            validateBookingPayload(payload);
 
-            const result = await BookingService.confirmHoldBooking(bookingId);
+            const mapped = mapToTripjackBooking(payload);
 
-            res.status(200).json({
+            const response = await BookingService.book(mapped);
+
+            return res.status(200).json({
                 success: true,
-                data: result,
+                data: response.data,
             });
+
         } catch (error: any) {
-            res.status(500).json({
+            return res.status(500).json({
                 success: false,
-                message: error.message || "Confirm Hold Booking failed",
-                error: error.response?.data || error,
+                message: error.message,
             });
         }
     }
 
-    async confirmFareBeforeTicketing(req: Request, res: Response) {
+    async validateFare(req: Request, res: Response) {
         try {
             const { bookingId } = req.body;
 
-            if (!bookingId) {
-                return res.status(400).json({ success: false, message: "bookingId is required" });
-            }
+            const response = await BookingService.validateFare(bookingId);
 
-            const result = await BookingService.confirmFareBeforeTicketing(bookingId);
+            return res.status(200).json(response.data);
 
-            res.status(200).json({
-                success: true,
-                data: result,
-            });
         } catch (error: any) {
-            res.status(500).json({
+            return res.status(500).json({
                 success: false,
-                message: error.message || "Fare validation failed",
-                error: error.response?.data || error,
+                message: error.message,
+            });
+        }
+    }
+
+    async confirm(req: Request, res: Response) {
+        try {
+            const { bookingId, amount } = req.body;
+
+            const response = await BookingService.confirmBooking(
+                bookingId,
+                amount
+            );
+
+            return res.status(200).json(response.data);
+
+        } catch (error: any) {
+            return res.status(500).json({
+                success: false,
+                message: error.message,
             });
         }
     }
