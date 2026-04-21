@@ -42,7 +42,7 @@ export const TRIPJACK_URLS: TripjackUrls = {
         BASE_URL: envConfig.TRIPJACK_TEST.BASE_URL,
         SEARCH: "/fms/v1/air-search-all",
         FARE_RULE: "/fms/v2/farerule",
-        REVIEW: "/fms/v2/review",
+        REVIEW: "/fms/v1/review",
         BOOK: "/oms/v1/air/book",
         FARE_VALIDATE: "/oms/v1/air/fare-validate",
         CONFIRM_BOOK: "/oms/v1/air/confirm-book",
