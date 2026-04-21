@@ -3,9 +3,6 @@ import { MarkupService } from '../services/markup.service';
 import { AuthenticatedRequest } from '../middlewares/authentication.middleware';
 import { Types } from 'mongoose';
 
-console.log("✅ MarkupController file loaded successfully");
-
-// Reusable Async Handler (Best Practice)
 const asyncHandler = (fn: RequestHandler): RequestHandler => {
     return (req: Request, res: Response, next: NextFunction) => {
         Promise.resolve(fn(req, res, next)).catch(next);
@@ -13,9 +10,7 @@ const asyncHandler = (fn: RequestHandler): RequestHandler => {
 };
 export class MarkupController {
 
-    static addMarkup = asyncHandler(async (req: AuthenticatedRequest, res: Response,  next: NextFunction) => {
-        console.log("🚀 addMarkup CONTROLLER ACTUALLY CALLED via Express");
-        // console.log("Has next?", typeof n);
+    static addMarkup = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
 
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -31,12 +26,25 @@ export class MarkupController {
 
 
     /** GET - Get My Markups */
-    static getMyMarkups = asyncHandler(async (req: AuthenticatedRequest, res: Response,   next: NextFunction) => {
+    static getMyMarkups = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-        const data = await MarkupService.getAll(new Types.ObjectId(userId));
-        res.json({ success: true, data });
+        let serviceType = req.query.serviceType as string | undefined;
+
+        if (Array.isArray(serviceType)) {
+            serviceType = serviceType[0];
+        }
+
+        const data = await MarkupService.getAll(
+            new Types.ObjectId(userId),
+            serviceType?.trim()
+        );
+
+        res.json({
+            success: true,
+            data
+        });
     });
 
     /** PUT - Bulk Update */

@@ -4,14 +4,35 @@ import { Types } from 'mongoose';
 
 export class MarkupService {
 
-    // ==================== CRUD Operations ====================
-
-    /** Get all markups for a user */
-    static async getAll(userId: Types.ObjectId) {
-        return await Markup.findOne({ 
-            userId, 
-            isActive: true 
+    /** 
+     * Get all markups for a user 
+    */
+    static async getAll(userId: Types.ObjectId, serviceType?: string) {
+        const markup = await Markup.findOne({
+            userId,
+            isActive: true
         }).lean();
+
+        if (!markup) {
+            return serviceType ? null : null;
+        }
+
+        if (!serviceType) {
+            return markup;
+        }
+
+        const service = markup.services.find(
+            s => s.serviceType === serviceType
+        );
+
+        if (!service) {
+            return {};
+        }
+
+        return {
+            ...markup,
+            services: [service]
+        };
     }
 
     /** Get single service markup by type */
@@ -39,7 +60,7 @@ export class MarkupService {
                     updateData,
                     { upsert: true, new: true, runValidators: true }
                 );
-            } 
+            }
             else if (data.serviceType) {
                 // Single service upsert
                 let markup = await Markup.findOne({ userId });
@@ -112,7 +133,7 @@ export class MarkupService {
 
         return await Markup.findOneAndUpdate(
             { userId },
-            { 
+            {
                 $pull: { services: { serviceType } },
                 $set: { updatedBy: userId }
             },

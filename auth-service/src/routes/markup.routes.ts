@@ -5,7 +5,6 @@ import { authenticateJWT } from "../middlewares/authentication.middleware";
 const route = Router();
 
 
-
 route.post('/', authenticateJWT, MarkupController.addMarkup);
 route.get('/my-markup', authenticateJWT, MarkupController.getMyMarkups);
 route.put('/bulk-update', authenticateJWT, MarkupController.bulkUpdate);
