@@ -25,7 +25,7 @@ export const envConfig = {
     BASE: {
         PORT: Number(getEnv("PORT", false) || "4000"),
         API_PREFIX: getEnv("API_PREFIX", false) || "/api",
-        BASE_URL: getEnv("BASE_URL", false) || "http://localhost:4000/api/auth",
+        BASE_URL: getEnv("BASE_URL", false) || "",
     },
 
     DATABASE: {

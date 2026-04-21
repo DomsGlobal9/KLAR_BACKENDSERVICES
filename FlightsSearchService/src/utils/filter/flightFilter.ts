@@ -66,6 +66,12 @@ export function filterOneWayFlights(
             }
         }
 
+        if (filters.airlines && filters.airlines.length > 0) {
+            if (!matchAirlineFilter(flight.airline?.code, filters.airlines)) {
+                return false;
+            }
+        }
+
         return true;
     });
 }
@@ -102,7 +108,7 @@ export function filterMultiCityFlights(
     return legs.map(leg => ({
         ...leg,
         flights: filterOneWayFlights(leg.flights, filters)
-    })).filter(leg => leg.flights.length > 0);
+    }));
 }
 
 /**
@@ -217,4 +223,11 @@ export function getFilterStats(
         availableStops,
         availableRefundTypes
     };
+}
+/**
+ * Match airline filter
+ */
+function matchAirlineFilter(flightAirlineCode: string | undefined, selectedAirlines: string[]): boolean {
+    if (!flightAirlineCode) return false;
+    return selectedAirlines.includes(flightAirlineCode);
 }

@@ -9,6 +9,12 @@ import { RGDestinationModel } from "../models/RGDestination.model";
  */
 export async function resolveForRG(query: string): Promise<string | null> {
     const normalizedQuery = query.toLowerCase().trim();
+
+    // 0. If it's already a numeric code, return it directly
+    if (/^\d+$/.test(normalizedQuery)) {
+        return normalizedQuery;
+    }
+
     const words = normalizedQuery.split(/\s+/);
 
     // 1. Try exact or regex match (handles "dubai" -> "dubai united arab emirates")
@@ -24,7 +30,9 @@ export async function resolveForRG(query: string): Promise<string | null> {
         dest = await RGDestinationModel.findOne({ destName: words[0] });
     }
 
-    return dest?.destCode || null;
+    const result = dest?.destCode || null;
+    console.log(`[DEBUG] resolveForRG: Resolved "${query}" (normalized: "${normalizedQuery}") to ${result}`);
+    return result;
 }
 
 /**

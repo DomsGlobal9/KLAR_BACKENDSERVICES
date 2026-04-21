@@ -27,7 +27,7 @@ export const getFareRules = async (fareRuleRequest: FareRuleRequest): Promise<Fa
                     "Content-Type": "application/json",
                     "apikey": envConfig.TRIPJACK.API_KEY,
                 },
-                timeout: envConfig.TRIPJACK.TIMEOUT,
+                // timeout: envConfig.TRIPJACK.TIMEOUT,
             }
         );
 

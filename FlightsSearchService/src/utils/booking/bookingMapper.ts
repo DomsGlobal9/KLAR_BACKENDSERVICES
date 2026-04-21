@@ -64,6 +64,10 @@ export interface UserFriendlyTraveller {
 
     documentId?: string;
 
+    ssrSeatInfos?: Array<{ key: string; code: string }>;
+    ssrBaggageInfos?: Array<{ key: string; code: string }>;
+    ssrMealInfos?: Array<{ key: string; code: string }>;
+
     ssrSelections?: {
         baggage?: Array<{ segmentId: string; code: string }>;
         meal?: Array<{ segmentId: string; code: string }>;
@@ -75,56 +79,92 @@ export class BookingMapper {
 
     /**
      * Convert user-friendly booking request to TripJack API format
+     * Handles both new and old data formats
      */
     static toTripJackFormat(userRequest: UserFriendlyBookingRequest): InstantBookingRequest {
-        // First, create base traveller info without SSR selections from global ssrSelections
-        const travellerInfo: TravellerInfo[] = userRequest.travellers.map((t) => {
-            const traveller: TravellerInfo = {
-                ti: t.title,
-                pt: this.mapPaxType(t.type),
-                fN: t.firstName,
-                lN: t.lastName,
+        const travellerInfo: TravellerInfo[] = userRequest.travellers.map((traveller, index) => {
+            const travellerInfoObj: TravellerInfo = {
+                ti: traveller.title,
+                pt: this.mapPaxType(traveller.type),
+                fN: traveller.firstName,
+                lN: traveller.lastName,
             };
 
-            // Add optional fields if present
-            if (t.dateOfBirth) {
-                traveller.dob = t.dateOfBirth;
+            if (traveller.dateOfBirth) {
+                travellerInfoObj.dob = traveller.dateOfBirth;
             }
 
-            if (t.passportNumber) traveller.pNum = t.passportNumber;
-            if (t.passportExpiryDate) traveller.eD = t.passportExpiryDate;
-            if (t.passportNationality) traveller.pNat = t.passportNationality;
-            if (t.passportIssueDate) traveller.pid = t.passportIssueDate;
-            if (t.documentId) traveller.di = t.documentId;
+            if (traveller.passportNumber) travellerInfoObj.pNum = traveller.passportNumber;
+            if (traveller.passportExpiryDate) travellerInfoObj.eD = traveller.passportExpiryDate;
+            if (traveller.passportNationality) travellerInfoObj.pNat = traveller.passportNationality;
+            if (traveller.passportIssueDate) travellerInfoObj.pid = traveller.passportIssueDate;
+            if (traveller.documentId) travellerInfoObj.di = traveller.documentId;
 
-            // Add traveller-specific SSR selections if present
-            if (t.ssrSelections) {
-                if (t.ssrSelections.baggage?.length) {
-                    traveller.ssrBaggageInfos = t.ssrSelections.baggage.map(b => ({
-                        key: b.segmentId,
-                        code: b.code
-                    }));
+            if (traveller.ssrSeatInfos && traveller.ssrSeatInfos.length > 0) {
+                travellerInfoObj.ssrSeatInfos = traveller.ssrSeatInfos.map(seat => ({
+                    key: seat.key,
+                    code: seat.code
+                }));
+            }
+
+            if (traveller.ssrBaggageInfos && traveller.ssrBaggageInfos.length > 0) {
+                travellerInfoObj.ssrBaggageInfos = traveller.ssrBaggageInfos.map(baggage => ({
+                    key: baggage.key,
+                    code: baggage.code
+                }));
+            }
+
+            if (traveller.ssrMealInfos && traveller.ssrMealInfos.length > 0) {
+                travellerInfoObj.ssrMealInfos = traveller.ssrMealInfos.map(meal => ({
+                    key: meal.key,
+                    code: meal.code
+                }));
+            }
+
+            if (traveller.ssrSelections) {
+                if (traveller.ssrSelections.baggage?.length) {
+                    if (!travellerInfoObj.ssrBaggageInfos) {
+                        travellerInfoObj.ssrBaggageInfos = [];
+                    }
+                    traveller.ssrSelections.baggage.forEach(b => {
+                        travellerInfoObj.ssrBaggageInfos!.push({
+                            key: b.segmentId,
+                            code: b.code
+                        });
+                    });
                 }
-                if (t.ssrSelections.meal?.length) {
-                    traveller.ssrMealInfos = t.ssrSelections.meal.map(m => ({
-                        key: m.segmentId,
-                        code: m.code
-                    }));
+
+                if (traveller.ssrSelections.meal?.length) {
+                    if (!travellerInfoObj.ssrMealInfos) {
+                        travellerInfoObj.ssrMealInfos = [];
+                    }
+                    traveller.ssrSelections.meal.forEach(m => {
+                        travellerInfoObj.ssrMealInfos!.push({
+                            key: m.segmentId,
+                            code: m.code
+                        });
+                    });
                 }
-                if (t.ssrSelections.seat?.length) {
-                    traveller.ssrSeatInfos = t.ssrSelections.seat.map(s => ({
-                        key: s.segmentId,
-                        code: s.code
-                    }));
+
+
+                if (traveller.ssrSelections.seat?.length) {
+                    if (!travellerInfoObj.ssrSeatInfos) {
+                        travellerInfoObj.ssrSeatInfos = [];
+                    }
+                    traveller.ssrSelections.seat.forEach(s => {
+                        travellerInfoObj.ssrSeatInfos!.push({
+                            key: s.segmentId,
+                            code: s.code
+                        });
+                    });
                 }
             }
 
-            return traveller;
+            return travellerInfoObj;
         });
 
-        // Then, add global SSR selections (with travellerIndex) if present
         if (userRequest.ssrSelections) {
-            // Process baggage selections
+
             if (userRequest.ssrSelections.baggage) {
                 userRequest.ssrSelections.baggage.forEach(selection => {
                     const traveller = travellerInfo[selection.travellerIndex];
@@ -140,7 +180,6 @@ export class BookingMapper {
                 });
             }
 
-            // Process meal selections
             if (userRequest.ssrSelections.meal) {
                 userRequest.ssrSelections.meal.forEach(selection => {
                     const traveller = travellerInfo[selection.travellerIndex];
@@ -156,7 +195,6 @@ export class BookingMapper {
                 });
             }
 
-            // Process seat selections
             if (userRequest.ssrSelections.seat) {
                 userRequest.ssrSelections.seat.forEach(selection => {
                     const traveller = travellerInfo[selection.travellerIndex];
@@ -173,7 +211,6 @@ export class BookingMapper {
             }
         }
 
-        // Build the complete booking request
         const bookingRequest: InstantBookingRequest = {
             bookingId: userRequest.bookingId,
             paymentInfos: [{ amount: userRequest.totalAmount }],
@@ -184,7 +221,6 @@ export class BookingMapper {
             travellerInfo
         };
 
-        // Add emergency contact if provided
         if (userRequest.emergencyContact) {
             bookingRequest.contactInfo = {
                 emails: [userRequest.emergencyContact.email],
@@ -193,7 +229,6 @@ export class BookingMapper {
             };
         }
 
-        // Add GST info if provided
         if (userRequest.gst) {
             bookingRequest.gstInfo = {
                 gstNumber: userRequest.gst.number,

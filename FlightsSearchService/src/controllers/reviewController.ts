@@ -63,7 +63,7 @@ export const getPriceReview = async (
         if (error.response?.status === 400) {
             return res.status(400).json({
                 success: false,
-                message: error.response?.data?.message || "Invalid price IDs"
+                message: error.response?.data?.message || "Fares are not available. Choose another."
             });
         }
 

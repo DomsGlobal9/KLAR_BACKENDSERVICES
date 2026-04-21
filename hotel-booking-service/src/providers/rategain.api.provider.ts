@@ -8,13 +8,13 @@ export class RateGainApiProvider {
      */
     async precheck(payload: any) {
         const booking = payload.BookReservation || {};
-        const rawPropertyId = (booking.propertyID || booking.propertyId || booking.PropertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
+        const rawPropertyId = (booking.PropertyId || booking.propertyID || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
-                propertyID: rawPropertyId,
+                PropertyId: rawPropertyId,
                 PropertyCode: booking.PropertyCode || rawPropertyId,
-                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
+                Echotoken: booking.Echotoken || booking.EchoToken || `echo-${Date.now()}`,
                 RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
                     ...rs,
                     NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
@@ -42,16 +42,16 @@ export class RateGainApiProvider {
         const booking = payload.BookReservation || {};
         const now = new Date().toISOString();
 
-        const rawPropertyId = (booking.propertyID || booking.propertyId || booking.PropertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
+        const rawPropertyId = (booking.PropertyId || booking.propertyID || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
-                propertyID: rawPropertyId,
+                PropertyId: rawPropertyId,
                 PropertyCode: booking.PropertyCode || rawPropertyId,
                 DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
                 ReservationDate: booking.ReservationDate || now,
                 TimeStamp: booking.TimeStamp || now,
-                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
+                Echotoken: booking.Echotoken || booking.EchoToken || `echo-${Date.now()}`,
                 // v1.5.3: SellingRate (capital S) for B2C Net+Commission model
                 SellingRate: booking.SellingRate || booking.sellingRate,
                 RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({

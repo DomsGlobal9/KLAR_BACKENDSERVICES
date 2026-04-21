@@ -225,33 +225,6 @@ export interface TransformedReviewPrice {
     fareRules?: any; // Can be added later
 }
 
-export interface TransformedReviewFlight {
-    segmentId: string;
-    flightNumber: string;
-    airline: {
-        code: string;
-        name: string;
-        isLcc: boolean;
-    };
-    departure: {
-        airportCode: string;
-        airportName: string;
-        time: string;
-        date: string;
-        datetime?: string;
-    };
-    arrival: {
-        airportCode: string;
-        airportName: string;
-        time: string;
-        date: string;
-        datetime?: string;
-    };
-    duration: number;
-    stops: number;
-    fareOptions: TransformedReviewFareOption[];
-}
-
 export interface TransformedReviewFareOption {
     fareId: string;
     fareIdentifier: string;
@@ -268,6 +241,9 @@ export interface TransformedReviewFareOption {
         cabin: string;
     };
     seatAvailability?: number;
+    // ✅ ADD THESE MISSING PROPERTIES
+    meals?: Record<string, Array<{ code: string; amount: number; desc: string; iswca: boolean }>>;
+    baggageOptions?: Record<string, Array<{ code: string; amount?: number; desc: string; iswca: boolean }>>;
     passengerBreakdown?: {
         adult?: {
             baseFare: number;
@@ -300,6 +276,33 @@ export interface TransformedReviewFareOption {
         airportTax?: number;
         fuelSurcharge?: number;
     };
+}
+
+export interface TransformedReviewFlight {
+    segmentId: string;
+    flightNumber: string;
+    airline: {
+        code: string;
+        name: string;
+        isLcc: boolean;
+    };
+    departure: {
+        airportCode: string;
+        airportName: string;
+        time: string;
+        date: string;
+        datetime?: string;
+    };
+    arrival: {
+        airportCode: string;
+        airportName: string;
+        time: string;
+        date: string;
+        datetime?: string;
+    };
+    duration: number;
+    stops: number;
+    fareOptions: TransformedReviewFareOption[];
 }
 
 export interface ReviewError {

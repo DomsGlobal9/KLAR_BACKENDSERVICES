@@ -19,6 +19,8 @@ export class FlightBookingController {
      */
     private async validateToken(token: string): Promise<any> {
         try {
+            // console.log("!!!!!!!!!!!!!!!!! Token we got", token);
+            console.log(`############# The url we get ${process.env.AUTHENTICATION_SERVICE}/validate-token`);
             const response = await axios.post(
                 `${this.authServiceUrl}/validate-token`,
                 {},
@@ -27,9 +29,11 @@ export class FlightBookingController {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 5000
+                    // timeout: 5000
                 }
             );
+
+            console.log("@@@@@@@@@@@@@@@ The response we got", response.data);
 
             if (response.data.success) {
                 return response.data.data;
@@ -43,7 +47,7 @@ export class FlightBookingController {
             if (error.code === 'ECONNREFUSED') {
                 throw new Error('Authentication service unavailable');
             }
-            throw new Error('Failed to validate token');
+            throw new Error('FLIGHT: Failed to validate token');
         }
     }
 
@@ -99,18 +103,6 @@ export class FlightBookingController {
                 userId: userData.id,
                 userEmail: userData.email
             };
-
-            console.log("!@!@!@!@!@!@!@!@!@ The booking details we get", JSON.stringify(bookingData, null, 2));
-
-            // const validation = await this.service.validateBookingData(bookingData);
-            // if (!validation.valid) {
-            //     res.status(400).json({
-            //         success: false,
-            //         message: 'Validation failed',
-            //         errors: validation.errors
-            //     });
-            //     return;
-            // }
 
             const booking = await this.service.createBooking(bookingData);
 

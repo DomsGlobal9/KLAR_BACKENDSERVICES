@@ -15,7 +15,7 @@ export class TripJackClient {
              "Content-Type": "application/json",
              apikey: envConfig.TRIPJACK.API_KEY,
            },
-           timeout: 20000
+          //  timeout: 20000
          }
     );
     return response.data;
@@ -34,7 +34,7 @@ export class TripJackClient {
              "Content-Type": "application/json",
              apikey: envConfig.TRIPJACK.API_KEY,
            },
-        timeout: 20000
+        // timeout: 20000
       }
     );
     return response.data;

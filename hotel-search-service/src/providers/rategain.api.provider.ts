@@ -55,8 +55,19 @@ export class RateGainApiProvider {
         };
 
         // Optional fields per spec - Ensure PropertyId is correctly named for TC3
-        if (payload.PropertyId || payload.propertyId || payload.propertyID) {
-            rateGainPayload.PropertyId = payload.PropertyId || payload.propertyId || payload.propertyID;
+        const propertyId = payload.PropertyId || payload.propertyId || payload.propertyID;
+        if (propertyId) {
+            rateGainPayload.PropertyId = propertyId;
+        }
+
+        // VALIDATION: RateGain requires at least destinationCode OR PropertyId OR Geofilter
+        if (!rateGainPayload.destinationCode && !rateGainPayload.PropertyId && !payload.Geofilter) {
+            console.warn("[RateGain] Skipping BestProperties request: Missing destinationCode and PropertyId");
+            return {
+                header: { success: true },
+                body: [],
+                description: "Skipped: No filter provided"
+            };
         }
         if (payload.CountryCode || payload.countryCode) {
             rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
@@ -86,9 +97,9 @@ export class RateGainApiProvider {
      * Get room-level product details for a specific property.
      */
     async getAllProducts(payload: any) {
-        const propertyId = (payload.propertyID || payload.propertyId || payload.PropertyId || "").toString().replace("RG:", "");
+        const propertyId = (payload.PropertyId || payload.propertyID || payload.propertyId || "").toString().replace("RG:", "");
         const rateGainPayload: any = {
-            propertyID: propertyId,
+            PropertyId: propertyId,
             PropertyCode: payload.PropertyCode || payload.propertyCode,
             BrandCode: payload.BrandCode || payload.brandCode,
             checkin: payload.checkin || payload.checkIn,
@@ -117,7 +128,7 @@ export class RateGainApiProvider {
 
                 return room;
             }),
-            EchoToken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
+            Echotoken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
         };
 
         // Optional fields

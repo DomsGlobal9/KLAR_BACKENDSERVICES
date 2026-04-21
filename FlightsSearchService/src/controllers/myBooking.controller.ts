@@ -19,7 +19,7 @@ export class BookingController {
      * Extract token from request headers
      */
     private extractToken(req: Request): string | null {
-        
+
         if (req.cookies?.token) {
             return req.cookies.token;
         }
@@ -188,9 +188,9 @@ export class BookingController {
      */
     getAllBookings = async (req: Request, res: Response): Promise<void> => {
         try {
-            // Extract and validate token
+            
             const token = this.extractToken(req);
-            console.log("Token is*****************", token);
+            
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -199,7 +199,7 @@ export class BookingController {
                 return;
             }
 
-            // Validate token and get user data
+            
             let userData: any;
             try {
                 userData = await this.validateToken(token);
@@ -212,7 +212,7 @@ export class BookingController {
                 return;
             }
 
-            // Parse query parameters
+            
             const queryParams = {
                 page: req.query.page ? Number(req.query.page) : 1,
                 limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -224,7 +224,7 @@ export class BookingController {
                 sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc'
             };
 
-            // If user is not admin, only show their own bookings
+            
             const requestingUserId = userData.role !== 'ADMIN' ? userData.id : undefined;
 
             const result = await this.bookingService.getAllBookings(queryParams, requestingUserId);
@@ -599,6 +599,10 @@ export class BookingController {
             const { bookingId } = req.params;
             const { remarks, trips } = req.body;
 
+            // console.log("The booking id we got", bookingId);
+            // console.log("The remark id we got", remarks);
+            // console.log("The trips we get", JSON.stringify(trips, null, 2));
+
             if (!bookingId) {
                 res.status(400).json({ success: false, message: 'Booking ID is required' });
                 return;
@@ -611,12 +615,13 @@ export class BookingController {
                 return;
             }
 
-            if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
-                res.status(403).json({ success: false, message: 'Access denied' });
-                return;
-            }
+            // if (booking.userId !== userData.id && userData.role !== 'ADMIN') {
+            //     res.status(403).json({ success: false, message: 'Access denied' });
+            //     return;
+            // }
 
             const charges = await getCancellationCharges(bookingId, remarks || 'Cancellation request', trips);
+            // console.log("The charges we get", JSON.stringify(charges, null, 2));
 
             res.status(200).json({
                 success: true,
@@ -624,7 +629,7 @@ export class BookingController {
                 data: charges
             });
         } catch (error: any) {
-            console.error('Get cancellation charges error:', error);
+            // console.error('Get cancellation charges error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to fetch cancellation charges'
@@ -653,21 +658,33 @@ export class BookingController {
                 return;
             }
 
+            const getBookingData = await this.bookingService.getBookingDBdataByID(bookingId);
+            console.log("THe booking data we get", JSON.stringify(getBookingData, null, 2));
 
-            if (userData.role !== 'ADMIN') {
-                res.status(403).json({ success: false, message: 'Access denied. Only admins can cancel bookings.' });
+            if (!getBookingData) {
+                res.status(404).json({ "message": "Booking Data not found" });
                 return;
             }
 
+            const bookDbId = getBookingData._id?.toString() || '';
+
             const result = await submitCancellation(bookingId, remarks || 'Cancellation request', trips);
 
+            const dbStatusUpdate = await this.bookingService.updateBooking(
+                bookDbId,
+                { status: 'CANCELLED' }
+            );
+
+            if (!dbStatusUpdate) {
+                throw new Error("Error while updating the database")
+            }
             res.status(200).json({
                 success: true,
                 message: 'Cancellation submitted successfully',
                 data: result
             });
+
         } catch (error: any) {
-            console.error('Submit cancellation error:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Failed to submit cancellation'

@@ -53,7 +53,7 @@ router.put('/:id', bookingController.updateBooking);
 /*
  * GET /api/bookings/tripjack/:bookingId/cancellation/charges - Get cancellation charges
  */
-router.get('/tripjack/:bookingId/cancellation/charges', bookingController.getCancellationCharges);
+router.post('/tripjack/:bookingId/cancellation/charges', bookingController.getCancellationCharges);
 
 /*
  * POST /api/bookings/tripjack/:bookingId/cancellation - Submit cancellation

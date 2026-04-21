@@ -25,8 +25,6 @@ export class FlightInstantBookingService {
         try {
             const url = getTripJackEndpoint('BOOKING_CREATE');
 
-            console.log("^^^^^^^^^^^^^^^^^^ The instance booking payload we get", JSON.stringify(payload, null, 2));
-
             const response = await axios.post(
                 url,
                 payload,
@@ -35,7 +33,7 @@ export class FlightInstantBookingService {
                         "Content-Type": "application/json",
                         apikey: envConfig.TRIPJACK.API_KEY,
                     },
-                    timeout: envConfig.TRIPJACK.TIMEOUT,
+                    // timeout: envConfig.TRIPJACK.TIMEOUT,
                 }
             );
 

@@ -10,7 +10,7 @@ export class AuthServiceClient {
     private constructor(baseURL: string) {
         this.client = axios.create({
             baseURL,
-            timeout: 5000,
+            // timeout: 5000,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -55,7 +55,7 @@ export class AuthServiceClient {
             if (error.code === 'ECONNREFUSED') {
                 throw new Error('Auth service unavailable');
             }
-            throw new Error('Failed to validate token');
+            throw new Error('AUTH: Failed to validate token');
         }
     }
 }

@@ -12,9 +12,6 @@ import {
     TransformedSeatRow
 } from "../interface/flight/seat.interface";
 
-/**
- * Get seat map from TripJack using booking ID
- */
 export const getSeatMapFromTripJack = async (payload: SeatMapRequest): Promise<SeatMapResponse> => {
     const cacheKey = `seat:${payload.bookingId}`;
 
@@ -37,10 +34,8 @@ export const getSeatMapFromTripJack = async (payload: SeatMapRequest): Promise<S
                     "Content-Type": "application/json",
                     apikey: envConfig.TRIPJACK.API_KEY,
                 },
-                timeout: envConfig.TRIPJACK.TIMEOUT,
             }
         );
-
 
         await TripJackRawModel.create({
             provider: "TRIPJACK",
@@ -48,10 +43,7 @@ export const getSeatMapFromTripJack = async (payload: SeatMapRequest): Promise<S
             requestPayload: payload,
             responsePayload: response.data,
             searchKey: cacheKey,
-        }).catch((err) => {
-            console.error("Failed to store TripJack raw data", err);
-        });
-
+        }).catch(() => {});
 
         await setCache(cacheKey, JSON.stringify(response.data), envConfig.TRIPJACK.CACHE_TTL);
 
@@ -68,17 +60,27 @@ export const getSeatMapFromTripJack = async (payload: SeatMapRequest): Promise<S
     }
 };
 
-/**
- * Transform seat map response to frontend-friendly format
- */
 export const transformSeatMap = (
     response: SeatMapResponse
 ): TransformedSeatMap => {
 
     const transformedFlights: TransformedFlightSeatMap[] = [];
 
+    const tripSeats = response?.tripSeatMap?.tripSeat;
 
-    Object.entries(response.tripSeatMap.tripSeat).forEach(([segmentId, tripSeat]) => {
+    if (!tripSeats) {
+        return {
+            bookingId: response.bookingId,
+            flights: [],
+            status: response.status
+        };
+    }
+
+    Object.entries(tripSeats).forEach(([segmentId, tripSeat]) => {
+
+        if (!tripSeat || !Array.isArray(tripSeat.sInfo)) {
+            return;
+        }
 
         const seatsByRow = new Map<number, TransformedSeat[]>();
         let totalSeats = 0;
@@ -91,10 +93,10 @@ export const transformSeatMap = (
         let minPrice = Infinity;
         let maxPrice = -Infinity;
 
-
         tripSeat.sInfo.forEach((seat: SeatInfo) => {
-            totalSeats++;
+            if (!seat?.seatPosition) return;
 
+            totalSeats++;
 
             if (seat.isBooked) {
                 bookedSeats++;
@@ -105,18 +107,19 @@ export const transformSeatMap = (
             if (seat.isLegroom) legroomSeats++;
             if (seat.isAisle) aisleSeats++;
 
-
             const isWindow = seat.seatPosition.column === 1 || seat.seatPosition.column === 7;
             if (isWindow) windowSeats++;
-
 
             if (seat.amount > 0) {
                 minPrice = Math.min(minPrice, seat.amount);
                 maxPrice = Math.max(maxPrice, seat.amount);
             }
 
-
             const rowNum = seat.seatPosition.row;
+            const colNum = seat.seatPosition.column;
+
+            if (rowNum === undefined || colNum === undefined) return;
+
             if (!seatsByRow.has(rowNum)) {
                 seatsByRow.set(rowNum, []);
             }
@@ -129,8 +132,8 @@ export const transformSeatMap = (
 
             seatsByRow.get(rowNum)!.push({
                 seatNo: seat.seatNo,
-                row: seat.seatPosition.row,
-                column: seat.seatPosition.column,
+                row: rowNum,
+                column: colNum,
                 isBooked: seat.isBooked,
                 isAvailable: !seat.isBooked,
                 isLegroom: seat.isLegroom,
@@ -142,7 +145,6 @@ export const transformSeatMap = (
                 features
             });
         });
-
 
         const rows: TransformedSeatRow[] = Array.from(seatsByRow.entries())
             .map(([rowNumber, seats]) => ({
@@ -179,16 +181,10 @@ export const transformSeatMap = (
     };
 };
 
-/**
- * Validate seat map request
- */
 export const validateSeatRequest = (bookingId: any): bookingId is string => {
     return typeof bookingId === 'string' && bookingId.trim().length > 0;
 };
 
-/**
- * Group seats by deck (for aircraft with multiple decks)
- */
 export const groupSeatsByDeck = (seats: TransformedSeat[]): {
     upperDeck: TransformedSeat[];
     mainDeck: TransformedSeat[];
@@ -200,9 +196,6 @@ export const groupSeatsByDeck = (seats: TransformedSeat[]): {
     return { upperDeck, mainDeck };
 };
 
-/**
- * Get available seats by type
- */
 export const getSeatsByType = (
     seats: TransformedSeat[],
     types: ('legroom' | 'aisle' | 'window' | 'exit')[]

@@ -7,6 +7,7 @@ import {
 import { AuthService } from "../services/auth.service";
 import { ClientType } from "../constants/clientTypes";
 import { envConfig } from "../config/env.config";
+import { UserModel } from "../models/user.model";
 
 export const signupB2B = async (
   req: Request,
@@ -172,6 +173,7 @@ export const me = async (
   next: NextFunction
 ) => {
   try {
+    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     const userId = (req as any).user.userId;
     const user = await AuthService.getInstance().getCurrentUser(userId);
 
@@ -197,12 +199,15 @@ export const validateToken = async (
 
   const user = (req as any).user;
 
+  const userMobile = await UserModel.findById(user.userId).select('mobile');
+
   res.status(200).json({
     success: true,
     message: "Token is valid",
     data: {
       userId: user.userId,
       email: user.email,
+      mobile: userMobile,
       clientType: user.clientType,
       roles: user.roles,
     },
@@ -216,6 +221,8 @@ export const validateTokenForService = async (
 ) => {
   try {
 
+    console.log("Token validate successfully, Getting user details");
+
     const user = (req as any).user;
 
     if (!user || !user.userId) {
@@ -226,9 +233,13 @@ export const validateTokenForService = async (
       });
     }
 
-    
+
     const authService = AuthService.getInstance();
+
+    console.log("User Id we got", user.userId);
     const fullUser = await authService.getCurrentUser(user.userId);
+
+    console.log("The full user details", fullUser);
 
     if (!fullUser) {
       return res.status(404).json({
@@ -238,7 +249,7 @@ export const validateTokenForService = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Token validated successfully",
       data: fullUser

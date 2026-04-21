@@ -5,15 +5,15 @@ import {
   getFlightDetailsById,
   getFlightList
 } from "../utils/flightTransformer";
-import { TripInfo } from "../interface/flight/flight.interface";
+import { TransformedFlight, TripInfo } from "../interface/flight/flight.interface";
 import { getFlightDetailsBySegmentId, getFlightSegmentById, getTransformedFlightSegment } from "../services/flightSegmentService";
 import { isValidTripJackPayload } from "../middleware/flightPayloadHandler";
 import { detectTripType, getTripInfos } from "../utils/tripTypeDetector";
 import { extractSearchParams } from "../utils/searchParamsExtractor";
-import { formatFlightResponse } from "../utils/responseFormatter";
 import { validateSortOptions, sortFlights } from "../utils/sort/flightSort";
 import { FilterValidator, filterFlights } from "../utils/filter";
-import FlightPagination from "../utils/pagination";
+import { searchStorage } from "../services/searchStorageService";
+import { CursorPagination } from "../utils/pagination/cursorPagination";
 
 
 /**
@@ -29,11 +29,22 @@ export const searchFlights = async (
   next: NextFunction
 ) => {
   try {
-    console.log("From starting search payload",req.body);
+
     const payload = req.body;
     const sortOptions = validateSortOptions(req.query);
     const filters = FilterValidator.validateFilters(req.query);
-    const paginationOptions = FlightPagination.validateOptions(req.query);
+    const cursorOptions = CursorPagination.validateOptions(req.query);
+
+    const sessionId = req.headers['x-session-id'] as string || searchStorage.generateSessionId();
+
+    const isNewSearch = req.headers['x-new-search'] === 'true' || !req.headers['x-session-id'];
+
+    if (isNewSearch) {
+      const existingSession = req.headers['x-session-id'] as string;
+      if (existingSession) {
+        await searchStorage.deleteSearchResults(existingSession);
+      }
+    }
 
     if (!isValidTripJackPayload(payload)) {
       return res.status(400).json({
@@ -46,44 +57,209 @@ export const searchFlights = async (
 
     const tripType = detectTripType(payload);
     const tripInfos = getTripInfos(data, tripType);
-    let flightData = getFlightList(tripInfos, tripType);
+    const flightDataResult = getFlightList(tripInfos, tripType);
 
+    let responseData;
 
-    if (!FilterValidator.isEmpty(filters)) {
-      flightData = filterFlights(flightData, tripType, filters);
+    if (tripType === 'ONE_WAY') {
+      const flights = flightDataResult.data as TransformedFlight[];
+
+      let filteredFlights = flights;
+      if (!FilterValidator.isEmpty(filters)) {
+        filteredFlights = filterFlights(filteredFlights, tripType, filters);
+      }
+
+      const cursorResult = CursorPagination.paginateOneWay(filteredFlights, cursorOptions);
+
+      responseData = {
+        searchType: 'ONE_WAY',
+        routeCount: payload.searchQuery.routeInfos.length,
+        flights: cursorResult.data,
+        nextCursor: cursorResult.nextCursor,
+        hasMore: cursorResult.hasMore,
+        totalFlights: cursorResult.total,
+        searchParams: extractSearchParams(payload),
+        appliedSort: {
+          sortBy: cursorOptions.sortBy,
+          sortOrder: cursorOptions.sortOrder
+        },
+        appliedFilters: filters || {}
+      };
+
+    } else if (tripType === 'RETURN') {
+      const returnData = flightDataResult.data as { onward: TransformedFlight[], return: TransformedFlight[] };
+
+      let onwardFlights = returnData.onward;
+      let returnFlights = returnData.return;
+
+      if (!FilterValidator.isEmpty(filters)) {
+        onwardFlights = filterFlights(onwardFlights, tripType, filters);
+        returnFlights = filterFlights(returnFlights, tripType, filters);
+      }
+
+      const cursorResult = CursorPagination.paginateReturn(
+        onwardFlights,
+        returnFlights,
+        cursorOptions
+      );
+
+      responseData = {
+        searchType: 'RETURN',
+        routeCount: payload.searchQuery.routeInfos.length,
+        onwardFlights: cursorResult.onward.data,
+        returnFlights: cursorResult.return.data,
+        onwardNextCursor: cursorResult.onward.nextCursor,
+        returnNextCursor: cursorResult.return.nextCursor,
+        onwardHasMore: cursorResult.onward.hasMore,
+        returnHasMore: cursorResult.return.hasMore,
+        nextCursor: cursorResult.onward.nextCursor || cursorResult.return.nextCursor ?
+          Buffer.from(JSON.stringify({
+            onwardCursor: cursorResult.onward.nextCursor,
+            returnCursor: cursorResult.return.nextCursor
+          })).toString('base64') : null,
+        totalOnwardFlights: onwardFlights.length,
+        totalReturnFlights: returnFlights.length,
+        searchParams: extractSearchParams(payload),
+        appliedSort: {
+          sortBy: cursorOptions.sortBy,
+          sortOrder: cursorOptions.sortOrder
+        },
+        appliedFilters: filters || {}
+      };
+
+    } else if (tripType === 'MULTI_CITY') {
+      const legs = flightDataResult.data as { legNumber: number; legKey: string; flights: TransformedFlight[] }[];
+
+      // Apply filters and sorting to each leg first
+      const processedLegs = legs.map(leg => {
+        let legFlights = leg.flights;
+
+        if (!FilterValidator.isEmpty(filters)) {
+          legFlights = filterFlights(legFlights, tripType, filters);
+        }
+
+        return {
+          legNumber: leg.legNumber,
+          legKey: leg.legKey,
+          flights: legFlights
+        };
+      });
+
+      const cursorResult = CursorPagination.paginateMultiCity(processedLegs, cursorOptions);
+
+      responseData = {
+        searchType: 'MULTI_CITY',
+        routeCount: payload.searchQuery.routeInfos.length,
+        legs: cursorResult.data,
+        nextCursor: cursorResult.nextCursor,
+        hasMore: cursorResult.hasMore,
+        totalFlights: cursorResult.total,
+        searchParams: extractSearchParams(payload),
+        appliedSort: {
+          sortBy: cursorOptions.sortBy,
+          sortOrder: cursorOptions.sortOrder
+        },
+        appliedFilters: filters || {}
+      };
     }
 
-
-    flightData = sortFlights(flightData, tripType, sortOptions);
-
-
-    const paginatedResult = FlightPagination.paginate(
-      flightData,
+    await searchStorage.storeSearchResults(
+      sessionId,
       tripType,
-      paginationOptions
+      extractSearchParams(payload),
+      data,
+      flightDataResult
     );
 
-    const searchParams = extractSearchParams(payload);
-    console.log("🔍 DEBUG - TripJack Response:", {
-      status: data.status,
-      hasONWARD: !!data.searchResult?.tripInfos?.ONWARD,
-      onwardCount: data.searchResult?.tripInfos?.ONWARD?.length || 0,
-      hasRETURN: !!data.searchResult?.tripInfos?.RETURN,
-      returnCount: data.searchResult?.tripInfos?.RETURN?.length || 0,
-      sampleOnward: data.searchResult?.tripInfos?.ONWARD?.[0] ? 'Has data' : 'No data'
+    return res.status(200).json({
+      success: true,
+      message: "Flights searched successfully",
+      sessionId,
+      data: responseData
     });
 
-    return res.status(200).json(
-      formatFlightResponse(
-        flightData,
-        tripType,
-        payload.searchQuery.routeInfos.length,
-        searchParams,
-        sortOptions,
-        filters,
-        paginatedResult
-      )
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get flight details from stored session (NEW ENDPOINT)
+ */
+export const getFlightDetailsFromSession = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { sessionId, flightId } = req.params;
+
+    if (!sessionId || !flightId) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID and Flight ID are required"
+      });
+    }
+
+    // Get flight details from stored session
+    const flightDetails = await searchStorage.getFlightDetails(sessionId, flightId);
+
+    if (!flightDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Flight not found. Session may have expired or flight ID is invalid."
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Flight details retrieved successfully",
+      data: flightDetails
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get flight by index (alternative approach)
+ */
+export const getFlightByIndex = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { sessionId, tripType, flightIndex } = req.params;
+    const legIndex = req.query.legIndex ? parseInt(req.query.legIndex as string) : undefined;
+
+    if (!sessionId || !tripType || !flightIndex) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID, Trip Type, and Flight Index are required"
+      });
+    }
+
+    const flight = await searchStorage.getFlightByIndex(
+      sessionId,
+      tripType,
+      parseInt(flightIndex),
+      legIndex
     );
+
+    if (!flight) {
+      return res.status(404).json({
+        success: false,
+        message: "Flight not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Flight retrieved successfully",
+      data: flight
+    });
 
   } catch (error) {
     next(error);

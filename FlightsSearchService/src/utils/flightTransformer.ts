@@ -157,9 +157,22 @@ function transformReturnFlights(tripInfos: TripInfo[], legKey: string): Transfor
 /**
  * Transform Multi-city flights
  */
-function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): TransformedFlight[] {
-    return tripInfos.map((tripInfo, index) => {
+function transformMultiCityFlights(tripInfoArray: TripInfo[], legKey: string): TransformedFlight[] {
+    if (!tripInfoArray || tripInfoArray.length === 0) {
+        console.warn(`⚠️ No tripInfoArray for leg ${legKey}`);
+        return [];
+    }
+
+    const flights: TransformedFlight[] = [];
+
+    tripInfoArray.forEach((tripInfo, index) => {
         const segments = tripInfo.sI || [];
+
+        if (segments.length === 0) {
+            console.warn(`⚠️ No segments for tripInfo ${index} in leg ${legKey}`);
+            return;
+        }
+
         const totalStops = segments.length - 1;
         const firstSegment = segments[0];
         const lastSegment = segments[segments.length - 1];
@@ -172,13 +185,13 @@ function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): Trans
         const departureDate = new Date(firstSegment.dt);
         const arrivalDate = new Date(lastSegment.at);
 
-        return {
+        flights.push({
             flightId: `${firstSegment.fD.aI.code}_${firstSegment.fD.fN}_leg${legKey}_${index}_${Date.now()}`,
             segmentId: segments.map(s => s.id).join(','),
             tripType: 'MULTI_CITY',
             legNumber: parseInt(legKey) + 1,
             legIndex: parseInt(legKey),
-            legKey,
+            legKey: legKey,
             airline: {
                 code: firstSegment.fD.aI.code,
                 name: firstSegment.fD.aI.name,
@@ -217,8 +230,10 @@ function transformMultiCityFlights(tripInfos: TripInfo[], legKey: string): Trans
             fareOptions,
             isInternational,
             isRedEye,
-        };
+        });
     });
+
+    return flights;
 }
 
 /**
@@ -453,6 +468,7 @@ export function getFlightList(
             flights.push({
                 flightId: `FLIGHT_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 segmentId: segments.map(s => s.id).join(','),
+                tripType: 'ONE_WAY',
                 airline: {
                     code: firstSegment?.fD?.aI?.code || '',
                     name: firstSegment?.fD?.aI?.name || '',
@@ -510,7 +526,7 @@ export function getFlightList(
         });
 
         console.log(`✅ Transformed ${flights.length} ONE_WAY flights`);
-        return flights;
+        return { type: 'ONE_WAY', data: flights };
     }
 
     // RETURN
@@ -518,122 +534,72 @@ export function getFlightList(
         console.log("🔄 Processing RETURN trip");
         console.log(`ONWARD count: ${tripInfos.ONWARD?.length || 0}, RETURN count: ${tripInfos.RETURN?.length || 0}`);
 
-        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || [], true);
-        const returnFlights = transformFlightSegments(tripInfos.RETURN || [], false);
+        const onwardFlights = transformFlightSegments(tripInfos.ONWARD || [], true, 1);
+        const returnFlights = transformFlightSegments(tripInfos.RETURN || [], false, 2);
 
         console.log(`✈️ ONWARD flights: ${onwardFlights.length}, RETURN flights: ${returnFlights.length}`);
 
-        if (onwardFlights.length === 0 || returnFlights.length === 0) {
-            console.log("⚠️ No onward or return flights found");
-            return [];
-        }
-
-        const combinations = [];
-
-        for (const onward of onwardFlights) {
-            const onwardLowestFare = Math.min(...onward.fareOptions.map(f => f.netFare));
-            const onwardBestFare = onward.fareOptions.reduce((prev, current) =>
-                prev.netFare < current.netFare ? prev : current
-            );
-
-            for (const returnFlight of returnFlights) {
-                const returnLowestFare = Math.min(...returnFlight.fareOptions.map(f => f.netFare));
-                const returnBestFare = returnFlight.fareOptions.reduce((prev, current) =>
-                    prev.netFare < current.netFare ? prev : current
-                );
-
-                combinations.push({
-                    combinationId: `${onward.flightId}_${returnFlight.flightId}`,
-                    totalFare: onwardLowestFare + returnLowestFare,
-                    currency: 'INR',
-                    onward: {
-                        flightId: onward.flightId,
-                        segmentId: onward.segmentId,
-                        airline: onward.airline,
-                        flightNumber: onward.flightNumber,
-                        aircraftType: onward.aircraftType,
-                        departure: onward.departure,
-                        arrival: onward.arrival,
-                        duration: onward.duration,
-                        stops: onward.stops,
-                        lowestFare: onwardLowestFare,
-                        bestFare: {
-                            ...onwardBestFare,
-                            fareId: onwardBestFare.id,
-                        },
-                        fareOptions: onward.fareOptions,
-                        fareOptionsCount: onward.fareOptions.length,
-                    },
-                    return: {
-                        flightId: returnFlight.flightId,
-                        segmentId: returnFlight.segmentId,
-                        airline: returnFlight.airline,
-                        flightNumber: returnFlight.flightNumber,
-                        aircraftType: returnFlight.aircraftType,
-                        departure: returnFlight.departure,
-                        arrival: returnFlight.arrival,
-                        duration: returnFlight.duration,
-                        stops: returnFlight.stops,
-                        lowestFare: returnLowestFare,
-                        bestFare: {
-                            ...returnBestFare,
-                            fareId: returnBestFare.id,
-                        },
-                        fareOptions: returnFlight.fareOptions,
-                        fareOptionsCount: returnFlight.fareOptions.length,
-                    },
-                    fareBreakdown: {
-                        baseFare: onwardBestFare.baseFare + returnBestFare.baseFare,
-                        taxesAndFees: onwardBestFare.taxesAndFees + returnBestFare.taxesAndFees,
-                        totalFare: onwardLowestFare + returnLowestFare,
-                    },
-                    baggage: {
-                        onward: onwardBestFare.baggage,
-                        return: returnBestFare.baggage,
-                    },
-                    isRefundable: onwardBestFare.refundable && returnBestFare.refundable,
-                });
+        return {
+            type: 'RETURN',
+            data: {
+                onward: onwardFlights,
+                return: returnFlights
             }
-        }
-
-        console.log(`✅ Generated ${combinations.length} RETURN flight combinations`);
-        return combinations; // Return unsorted - let sort handle it
+        };
     }
 
-    // MULTI_CITY
+    // MULTI_CITY - FIXED VERSION
     if (tripType === 'MULTI_CITY' && !Array.isArray(tripInfos)) {
+        console.log("🔄 Processing MULTI_CITY trip");
+
         const legs: {
             legNumber: number;
             legKey: string;
             flights: TransformedFlight[];
         }[] = [];
 
+        // Get all keys and sort them numerically
         const legKeys = Object.keys(tripInfos).sort((a, b) => parseInt(a) - parseInt(b));
+        console.log(`📊 MULTI_CITY leg keys:`, legKeys);
 
         legKeys.forEach((key) => {
-            if (key !== 'ONWARD' && key !== 'RETURN') {
-                const legFlights = transformMultiCityFlights(tripInfos[key], key);
+            const tripInfoArray = tripInfos[key];
+
+            if (Array.isArray(tripInfoArray) && tripInfoArray.length > 0) {
+                console.log(`Processing leg ${key} with ${tripInfoArray.length} flight options`);
+
+                // Transform each flight option in this leg
+                const legFlights = transformMultiCityFlights(tripInfoArray, key);
+
                 legs.push({
-                    legNumber: parseInt(key) + 1,
+                    legNumber: legs.length + 1,
                     legKey: key,
                     flights: legFlights
                 });
+            } else {
+                console.warn(`⚠️ No flights found for leg ${key}`);
             }
         });
 
         console.log(`✅ Transformed ${legs.length} MULTI_CITY legs`);
-        return legs;
+        return { type: 'MULTI_CITY', data: legs };
     }
 
     console.log("⚠️ No flights found for trip type:", tripType);
-    return [];
+    return { type: tripType, data: tripType === 'RETURN' ? { onward: [], return: [] } : [] };
 }
 
-// Helper function to transform flight segments
+/**
+ * Update transformFlightSegments helper function
+ * @param tripInfoArray 
+ * @param isOutbound 
+ * @param legNumber 
+ * @returns 
+ */
 function transformFlightSegments(
     tripInfoArray: TripInfo[],
-    isOutbound: boolean,
-    legNumber: number = 0
+    isOutbound: boolean = true,
+    legNumber: number = 1
 ): TransformedFlight[] {
     const flights: TransformedFlight[] = [];
 
@@ -649,6 +615,9 @@ function transformFlightSegments(
         flights.push({
             flightId: `FLIGHT_${isOutbound ? 'OUT' : 'RET'}_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             segmentId: segments.map(s => s.id).join(','),
+            tripType: 'RETURN',
+            legNumber: legNumber,
+            isOutbound: isOutbound,
             airline: {
                 code: firstSegment?.fD?.aI?.code || '',
                 name: firstSegment?.fD?.aI?.name || '',
@@ -701,10 +670,6 @@ function transformFlightSegments(
             }),
             isInternational,
             isRedEye,
-            isOutbound,
-            legNumber,
-            legKey: isOutbound ? 'ONWARD' : 'RETURN',
-            legIndex: index,
         });
     });
 
