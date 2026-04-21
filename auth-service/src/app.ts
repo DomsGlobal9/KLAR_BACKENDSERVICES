@@ -31,8 +31,5 @@ app.use(cookieParser());
 app.use(contextResolver);
 
 app.use("/user", routes);
-// app.use("/b2b", routes);
-
-app.use(errorHandler);
 
 export default app;

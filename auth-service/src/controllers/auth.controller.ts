@@ -173,7 +173,6 @@ export const me = async (
   next: NextFunction
 ) => {
   try {
-    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     const userId = (req as any).user.userId;
     const user = await AuthService.getInstance().getCurrentUser(userId);
 
