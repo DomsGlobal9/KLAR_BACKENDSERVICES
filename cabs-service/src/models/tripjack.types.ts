@@ -83,6 +83,7 @@ export interface BookingRequest {
     consent: string;
     serviceRequest?: string;
     vendorId?: number;
+    correlationId?: string;
 }
 
 export interface EmbeddedBookingRequest {
@@ -101,4 +102,5 @@ export interface CancellationRequest {
     bookingId: string;
     reason?: string;
     amendmentType: "CANCELLATION";
+    correlationId?: string;
 }

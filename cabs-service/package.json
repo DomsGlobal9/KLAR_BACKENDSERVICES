@@ -9,7 +9,11 @@
     "start": "node dist/server.js",
     "clean": "rm -rf dist node_modules"
   },
-  "keywords": ["cabs", "tripjack", "klar"],
+  "keywords": [
+    "cabs",
+    "tripjack",
+    "klar"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -18,11 +22,13 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "mongoose": "^9.5.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/mongoose": "^5.11.96",
     "@types/node": "^25.0.5",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",

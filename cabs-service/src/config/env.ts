@@ -10,5 +10,5 @@ export const env = {
         agencyId: process.env.TRIPJACK_AGENCY_ID || "",
         baseUrl: process.env.TRIPJACK_BASE_URL || "https://apitest-cabs.tripjack.com",
     },
-    enableMocks: process.env.ENABLE_MOCKS === "true",
+    mongoUri: process.env.MONGODB_URI || "",
 };

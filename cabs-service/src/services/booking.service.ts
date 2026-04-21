@@ -1,6 +1,7 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { BookingRequest, EmbeddedBookingRequest } from "../models/tripjack.types";
 import { env } from "../config/env";
+import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
 
 class BookingService {
     private getAgentDetail() {
@@ -33,9 +34,51 @@ class BookingService {
         };
 
         console.log("[BookingService] Final Payload to TripJack:", JSON.stringify(finalPayload, null, 2));
-        require('fs').writeFileSync('payload-debug.json', JSON.stringify(finalPayload, null, 2));
 
-        return await tripJackCabsProvider.createBooking(finalPayload);
+        const response = await tripJackCabsProvider.createBooking(finalPayload);
+
+        // PERSISTENCE: Save to MongoDB
+        if (response?.data?.bookingId) {
+            try {
+                const opt = payload.quotationInfo;
+                const pricing = payload.pricingInfo;
+                
+                await CabBookingModel.create({
+                    bookingId: response.data.bookingId,
+                    correlationId: finalPayload.correlationId,
+                    status: CabBookingStatus.CONFIRMED,
+                    pickupDate: new Date(payload.journeyInfo.pickupDate),
+                    origin: {
+                        displayAddress: payload.routeDetail?.origin?.displayAddress || payload.routeDetail?.source?.displayAddress || "Unknown",
+                        lat: payload.routeDetail?.origin?.lat || payload.routeDetail?.source?.lat,
+                        long: payload.routeDetail?.origin?.long || payload.routeDetail?.source?.long
+                    },
+                    destination: {
+                        displayAddress: payload.routeDetail?.destination?.displayAddress || "Unknown",
+                        lat: payload.routeDetail?.destination?.lat,
+                        long: payload.routeDetail?.destination?.long
+                    },
+                    vehicleType: opt?.vehicleType || "Unknown",
+                    vehicleCategory: opt?.vehicleCategory || "Unknown",
+                    totalAmount: pricing?.grossAmount || 0,
+                    currency: pricing?.currency || "INR",
+                    passenger: {
+                        firstName: payload.passengerDetail.firstName,
+                        lastName: payload.passengerDetail.lastName,
+                        email: payload.passengerDetail.email,
+                        phone: payload.passengerDetail.phone
+                    },
+                    tripJackRequest: finalPayload,
+                    tripJackResponse: response
+                });
+                console.log(`✅ [BookingService] Saved booking ${response.data.bookingId} to DB.`);
+            } catch (dbError) {
+                console.error("❌ [BookingService] Failed to save booking to DB:", dbError);
+                // We don't throw here to avoid failing a successful TripJack booking
+            }
+        }
+
+        return response;
     }
 
     async embeddedBook(payload: EmbeddedBookingRequest) {

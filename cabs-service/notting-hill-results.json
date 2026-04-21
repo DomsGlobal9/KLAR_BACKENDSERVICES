@@ -1,0 +1,159 @@
+[
+  {
+    "step": "Location Search (Source)",
+    "endpoint": "/cabs/v1/google-places",
+    "payload": {
+      "input": "London Heathrow Airport"
+    },
+    "response": {
+      "success": true,
+      "message": "Successfully fetched Google Places",
+      "data": {
+        "places": [
+          {
+            "id": "ChIJ6W3FzTRydkgRZ0H2Q1VT548",
+            "displayLabel": "London Heathrow Airport (LHR), Hounslow, UK",
+            "name": "London Heathrow Airport (LHR), Hounslow, UK",
+            "value": "ChIJ6W3FzTRydkgRZ0H2Q1VT548",
+            "order": 1
+          },
+          {
+            "id": "ChIJQWMXZDBydkgREAsPHvAcVVk",
+            "displayLabel": "Leonardo Hotel London Heathrow Airport, Bath Road, Sipson, West Drayton, UK",
+            "name": "Leonardo Hotel London Heathrow Airport, Bath Road, Sipson, West Drayton, UK",
+            "value": "ChIJQWMXZDBydkgREAsPHvAcVVk",
+            "order": 2
+          },
+          {
+            "id": "ChIJSaagjcxzdkgRX26pQeByxAE",
+            "displayLabel": "Premier Inn London Heathrow Airport Terminal 4 hotel, Sheffield Road, Heathrow UK",
+            "name": "Premier Inn London Heathrow Airport Terminal 4 hotel, Sheffield Road, Heathrow UK",
+            "value": "ChIJSaagjcxzdkgRX26pQeByxAE",
+            "order": 3
+          },
+          {
+            "id": "ChIJ84yk0ldydkgRMGvz9oQkRDo",
+            "displayLabel": "Premier Inn London Heathrow Airport Terminal 5 hotel, Bath Road, Longford, West Drayton, UK",
+            "name": "Premier Inn London Heathrow Airport Terminal 5 hotel, Bath Road, Longford, West Drayton, UK",
+            "value": "ChIJ84yk0ldydkgRMGvz9oQkRDo",
+            "order": 4
+          },
+          {
+            "id": "ChIJ84yk0ldydkgRnRcgjY5m8h0",
+            "displayLabel": "Premier Inn London Heathrow Airport T2 & T3 (Bath Road) hotel, Bath Road, London, UK",
+            "name": "Premier Inn London Heathrow Airport T2 & T3 (Bath Road) hotel, Bath Road, London, UK",
+            "value": "ChIJ84yk0ldydkgRnRcgjY5m8h0",
+            "order": 5
+          }
+        ]
+      }
+    }
+  },
+  {
+    "step": "Location Search (Destination)",
+    "endpoint": "/cabs/v1/google-places",
+    "payload": {
+      "input": "Notting Hill, London, UK"
+    },
+    "response": {
+      "success": true,
+      "message": "Successfully fetched Google Places",
+      "data": {
+        "places": [
+          {
+            "id": "ChIJoaPN0OIPdkgRSuo08uDmIJA",
+            "displayLabel": "Notting Hill, London, UK",
+            "name": "Notting Hill, London, UK",
+            "value": "ChIJoaPN0OIPdkgRSuo08uDmIJA",
+            "order": 1
+          },
+          {
+            "id": "ChIJJZ1sHSQRdkgR0bhbbUsJPuA",
+            "displayLabel": "Notting Hill, Lancaster Road, London, UK",
+            "name": "Notting Hill, Lancaster Road, London, UK",
+            "value": "ChIJJZ1sHSQRdkgR0bhbbUsJPuA",
+            "order": 2
+          },
+          {
+            "id": "Eh1Ob3R0aW5nIEhpbGwgR2F0ZSwgTG9uZG9uLCBVSyIuKiwKFAoSCdWRVYL7D3ZIESimJsK47jhcEhQKEgnz8xe3Wxt2SBEKsgA5eS6RSQ",
+            "displayLabel": "Notting Hill Gate, London, UK",
+            "name": "Notting Hill Gate, London, UK",
+            "value": "Eh1Ob3R0aW5nIEhpbGwgR2F0ZSwgTG9uZG9uLCBVSyIuKiwKFAoSCdWRVYL7D3ZIESimJsK47jhcEhQKEgnz8xe3Wxt2SBEKsgA5eS6RSQ",
+            "order": 3
+          },
+          {
+            "id": "ChIJJanq9vwPdkgRNIvrQPJeDxE",
+            "displayLabel": "Notting Hill Hotel, Pembridge Square, London, UK",
+            "name": "Notting Hill Hotel, Pembridge Square, London, UK",
+            "value": "ChIJJanq9vwPdkgRNIvrQPJeDxE",
+            "order": 4
+          },
+          {
+            "id": "ChIJu0D-3h0QdkgRlrCwV-Em_-Q",
+            "displayLabel": "Ukai, Portobello Road, London, UK",
+            "name": "Ukai, Portobello Road, London, UK",
+            "value": "ChIJu0D-3h0QdkgRlrCwV-Em_-Q",
+            "order": 5
+          }
+        ]
+      }
+    }
+  },
+  {
+    "step": "Get LatLong (Source)",
+    "endpoint": "/cabs/v1/get-lat-long",
+    "payload": {
+      "placeId": "ChIJ6W3FzTRydkgRZ0H2Q1VT548"
+    },
+    "response": {
+      "success": true,
+      "message": "Successfully fetched Google Place details",
+      "data": {
+        "location": {
+          "lat": 51.4679903,
+          "lng": -0.4550471
+        },
+        "address": {
+          "city": "Hounslow",
+          "country": "United Kingdom"
+        }
+      }
+    }
+  },
+  {
+    "step": "Get LatLong (Destination)",
+    "endpoint": "/cabs/v1/get-lat-long",
+    "payload": {
+      "placeId": "ChIJoaPN0OIPdkgRSuo08uDmIJA"
+    },
+    "response": {
+      "success": true,
+      "message": "Successfully fetched Google Place details",
+      "data": {
+        "location": {
+          "lat": 51.5160125,
+          "lng": -0.2090148
+        },
+        "address": {
+          "subLocality": "Notting Hill",
+          "city": "London",
+          "country": "United Kingdom"
+        }
+      }
+    }
+  },
+  {
+    "step": "Error",
+    "endpoint": "N/A",
+    "payload": null,
+    "response": {
+      "message": "No Cabs Found!",
+      "data": {
+        "success": false,
+        "error": {
+          "message": "No Cabs Found!"
+        }
+      }
+    }
+  }
+]
