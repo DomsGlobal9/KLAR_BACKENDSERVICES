@@ -2,6 +2,7 @@ import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { BookingRequest, EmbeddedBookingRequest } from "../models/tripjack.types";
 import { env } from "../config/env";
 import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
+import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
 
 class BookingService {
     private getAgentDetail() {
@@ -24,8 +25,29 @@ class BookingService {
 
         const agent = this.getAgentDetail();
 
+        const routeDetail = {
+            ...payload.routeDetail,
+            origin: {
+                ...payload.routeDetail?.origin,
+                type: "location",
+                address: payload.routeDetail?.origin?.address || {
+                    city: getCityFromAddress(payload.routeDetail?.origin?.displayAddress),
+                    country: getCountryFromAddress(payload.routeDetail?.origin?.displayAddress)
+                }
+            },
+            destination: {
+                ...payload.routeDetail?.destination,
+                type: "location",
+                address: payload.routeDetail?.destination?.address || {
+                    city: getCityFromAddress(payload.routeDetail?.destination?.displayAddress),
+                    country: getCountryFromAddress(payload.routeDetail?.destination?.displayAddress)
+                }
+            }
+        };
+
         const finalPayload: BookingRequest = {
             ...payload,
+            routeDetail,
             agentId:    Number(payload.agentId    || agent.agentId),
             agentEmail: String(payload.agentEmail || agent.agentEmail),
             agentPhone: String(payload.agentPhone || agent.agentPhone),

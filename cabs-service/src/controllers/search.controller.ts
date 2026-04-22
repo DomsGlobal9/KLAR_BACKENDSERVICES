@@ -23,9 +23,12 @@ export const getLatLong = async (req: Request, res: Response, next: NextFunction
 
 export const getQuotes = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        console.log("[Cabs][Controller] getQuotes request body:", JSON.stringify(req.body, null, 2));
         const result = await searchService.getQuotes(req.body);
+        console.log("[Cabs][Controller] getQuotes success result:", JSON.stringify(result, null, 2).substring(0, 200) + "...");
         res.status(200).json(result);
     } catch (error) {
+        console.error("[Cabs][Controller] getQuotes error:", error);
         next(error);
     }
 };

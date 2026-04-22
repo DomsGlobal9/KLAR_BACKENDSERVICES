@@ -41,7 +41,6 @@ export class TripJackCabsProvider {
     // ─── Quote API ──────────────────────────────────────────────────────────
 
     async getQuotes(payload: any): Promise<any> {
-
         // Add correlationId for real-world tracking
         const requestPayload = {
             ...payload,
@@ -49,9 +48,29 @@ export class TripJackCabsProvider {
         };
 
         try {
+            console.log(`[Cabs][GetQuotes] Request Payload:`, JSON.stringify(requestPayload, null, 2));
             const res = await tripJackCabsClient.post("/cabs/v2/quotes", requestPayload);
+            console.log(`[Cabs][GetQuotes] Response: SUCCESS, found ${res.data?.data?.quotesInfo?.length || 0} categories.`);
             return res.data;
         } catch (err: any) {
+            // Handle 404 "No Cabs Found!" as a graceful empty result
+            const status = err.response?.status;
+            const data = err.response?.data;
+            const message = data?.message || data?.error?.message;
+
+            console.error(`[Cabs][GetQuotes] Error Status: ${status}, Message: ${message}`);
+            if (data) console.error(`[Cabs][GetQuotes] Error Data:`, JSON.stringify(data, null, 2));
+
+            if (status === 404 && message === "No Cabs Found!") {
+                console.log("[Cabs][GetQuotes] No cabs found. Returning empty results.");
+                return {
+                    success: true,
+                    data: {
+                        quotesInfo: []
+                    }
+                };
+            }
+
             this.normaliseError(err, "GetQuotes");
         }
     }
