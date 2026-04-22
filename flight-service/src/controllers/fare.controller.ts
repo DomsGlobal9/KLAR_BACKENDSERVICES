@@ -22,6 +22,25 @@ class FareController {
         }
     }
 
+    async getReturnFares(req: Request, res: Response) {
+        try {
+            const { sessionId, flightKey, segment } = req.body;
+
+            const data = await FareService.getReturnFares(sessionId, flightKey, segment);
+
+            res.status(200).json({
+                success: true,
+                data
+            });
+
+        } catch (error: any) {
+            res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
+
     async getMulticityFares(req: Request, res: Response) {
         try {
             const { sessionId, legIndex, flightKey } = req.body;

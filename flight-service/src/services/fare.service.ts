@@ -15,7 +15,7 @@ class FareService {
             throw new Error("Session expired or invalid sessionId");
         }
 
-        const flights = cachedData?.raw?.ONWARD || [];
+        const flights = cachedData?.raw?.ONWARD || cachedData?.raw?.RETURN;
 
         const selectedFlight = flights.find((flight: any) =>
             flight.sI.map((seg: any) => seg.id).join("-") === flightKey
@@ -30,6 +30,42 @@ class FareService {
         const mappedResponse = TripjackFieldMapper.map(fares[0]);
 
         return mappedResponse;
+    }
+
+    async getReturnFares(sessionId: string, flightKey: string, segment: string) {
+
+        const cachedData = await RedisCacheService.get(sessionId);
+
+        if (!cachedData) {
+            throw new Error("Session expired or invalid sessionId");
+        }
+
+        if (segment !== "RETURN" && segment !== "ONWARD") {
+            return null;
+        }
+
+        const flights = cachedData?.raw?.[segment];
+
+        if (!Array.isArray(flights) || flights.length === 0) {
+            throw new Error("No flights available for selected segment");
+        }
+
+        const selectedFlight = flights.find((flight: any) =>
+            Array.isArray(flight?.sI) &&
+            flight.sI.map((seg: any) => seg?.id).join("-") === flightKey
+        );
+
+        if (!selectedFlight) {
+            throw new Error("Flight not found");
+        }
+
+        const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
+
+        if (!fares || fares.length === 0) {
+            throw new Error("Fare extraction failed");
+        }
+
+        return TripjackFieldMapper.map(fares[0]);
     }
 
     async getMultiCityFares(

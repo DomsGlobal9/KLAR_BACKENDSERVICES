@@ -3,7 +3,8 @@ import FareController from "../controllers/fare.controller";
 
 const router = Router();
 
-router.post("/", FareController.getFares);
+router.post("/oneway", FareController.getFares);
+router.post("/return", FareController.getReturnFares);
 router.post("/multicity", FareController.getMulticityFares);
 router.post("/rule", FareController.getFareRule);
 
