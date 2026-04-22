@@ -25,7 +25,7 @@ class SeatService {
             }
         );
 
-        console.log(response);
+        console.log("@@@@@@@@@@@@@@@@@@@@@@@@@ The Seat response we get", response);
 
         const rawData = response.data;
 

@@ -5,6 +5,7 @@ class SeatController {
 
     async getSeats(req: Request, res: Response) {
         try {
+            console.log("$^%$^%$^$^%$^%$^%$^%$^%$^%$^%$^$");
             const { bookingId } = req.body;
 
             if (!bookingId) {
@@ -14,6 +15,7 @@ class SeatController {
                 });
             }
 
+            console.log("SEAT - controller", bookingId);
             const result = await SeatService.getSeats(bookingId);
 
             return res.json({
