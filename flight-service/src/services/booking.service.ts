@@ -19,10 +19,15 @@ class BookingService {
     async book(payload: any) {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
-        // return axios.post(`${baseUrl}${endpoints.BOOK}`, payload, { headers });
-        const instantBook = axios.post(`${baseUrl}${endpoints.BOOK}`, payload, { headers });
-        console.log("The tripjack book details @@@@@@@@@@@\n", instantBook);
-        return instantBook;
+        const response = await axios.post(
+            `${baseUrl}${endpoints.BOOK}`,
+            payload,
+            { headers }
+        );
+
+        console.log("Tripjack response >>>", response.data);
+
+        return response;
     }
 
     async validateFare(bookingId: string) {
