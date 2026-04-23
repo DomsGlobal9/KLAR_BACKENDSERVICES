@@ -219,9 +219,9 @@ class BookingService {
 
         const response = await TripjackBookingService.book(mapped);
 
-        this.bookingRepo.updateBookingStatus(
+        await this.bookingRepo.updateBookingStatus(
             bookingId,
-            "PENDING"
+            "CONFIRMED"
         );
 
         return response.data;
