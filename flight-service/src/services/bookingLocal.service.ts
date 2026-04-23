@@ -5,6 +5,7 @@ import { BookingRepository } from "../repositories/bookingLocal.repository";
 import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
+import { FrontendBookingPayload } from "../types/booking.types";
 
 class BookingService {
 
@@ -198,16 +199,19 @@ class BookingService {
             throw new Error("Failed to update booking");
         }
 
-        const tripjackPayload = {
+        const tripjackPayload: FrontendBookingPayload = {
             bookingId: updatedBooking.bookingId,
             email: updatedBooking.email,
             phone: updatedBooking.phone,
             travellers: updatedBooking.travellers,
             amount: updatedBooking.totalPrice || 0,
             isHold: false,
-            gstInfo: updatedBooking.gstInfo,
             emergencyContact: updatedBooking.emergencyContact
         };
+
+        if (updatedBooking.gstInfo?.gstNumber) {
+            tripjackPayload.gstInfo = updatedBooking.gstInfo;
+        }
 
         validateBookingPayload(tripjackPayload);
 
