@@ -21,7 +21,8 @@ class BookingService {
             isHold: false,
             travellers: data.travellers,
             status: "INITIATED",
-            ...(data.gstInfo && { gstInfo: data.gstInfo })
+            ...(data.gstInfo && { gstInfo: data.gstInfo }),
+            ...(data.emergencyContact && { emergencyContact: data.emergencyContact })
         };
 
         return await this.bookingRepo.createBooking(payload);
