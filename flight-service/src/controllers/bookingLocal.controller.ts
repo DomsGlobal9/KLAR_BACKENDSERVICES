@@ -96,6 +96,19 @@ class BookingLocalController {
                 totalPrice
             } = req.body;
 
+            const missingFields = [];
+            if (!bookingId) missingFields.push("bookingId");
+            if (!tripjackPrice) missingFields.push("tripjackPrice");
+            if (!markupPrice) missingFields.push("markupPrice");
+            if (!totalPrice) missingFields.push("totalPrice");
+
+            if (missingFields.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Missing required fields: ${missingFields.join(", ")}`
+                });
+            }
+
             if (!bookingId) {
                 return res.status(400).json({
                     success: false,
