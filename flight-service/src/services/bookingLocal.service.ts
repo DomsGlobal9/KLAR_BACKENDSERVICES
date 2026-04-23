@@ -204,7 +204,7 @@ class BookingService {
             email: updatedBooking.email,
             phone: updatedBooking.phone,
             travellers: updatedBooking.travellers,
-            amount: updatedBooking.totalPrice || 0,
+            amount: updatedBooking.tripjackPrice || 0,
             isHold: false,
             emergencyContact: updatedBooking.emergencyContact
         };
@@ -215,19 +215,15 @@ class BookingService {
 
         validateBookingPayload(tripjackPayload);
 
-        console.log("111111111111111111111111111111111111111");
         const mapped = mapToTripjackBooking(tripjackPayload);
 
-        console.log("2222222222222222222222222222222222222222222");
         const response = await TripjackBookingService.book(mapped);
 
-        console.log("333333333333333333333333333333");
         this.bookingRepo.updateBookingStatus(
             bookingId,
             "PENDING"
         );
 
-        console.log("44444444444444444444444444444");
         return response.data;
     }
 
