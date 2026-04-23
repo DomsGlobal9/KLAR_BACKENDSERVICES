@@ -109,13 +109,6 @@ class BookingLocalController {
                 });
             }
 
-            if (!bookingId) {
-                return res.status(400).json({
-                    success: false,
-                    message: "bookingId is required"
-                });
-            }
-
             const result = await BookingService.updateBookingDetails({
                 bookingId,
                 travellers,
@@ -134,6 +127,120 @@ class BookingLocalController {
             return res.status(400).json({
                 success: false,
                 message: error.message
+            });
+        }
+    };
+
+    public updateAndBook = async (req: Request, res: Response) => {
+        try {
+            const {
+                bookingId,
+                travellers,
+                tripjackPrice,
+                markupPrice,
+                totalPrice
+            } = req.body;
+
+            if (!bookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "bookingId is required"
+                });
+            }
+
+            const result = await BookingService.updateAndTriggerBooking({
+                bookingId,
+                travellers,
+                tripjackPrice,
+                markupPrice,
+                totalPrice
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Booking updated & TripJack triggered",
+                data: result
+            });
+
+        } catch (error: any) {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+    };
+
+    public getUserBookings = async (req: Request, res: Response) => {
+        try {
+            const token = this.extractToken(req);
+
+            if (!token) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Authorization token missing",
+                });
+            }
+
+            const userData = await this.validateToken(token);
+
+            if (!userData?.id) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid user data",
+                });
+            }
+
+            const bookings = await BookingService.getBookingsByUserId(userData.id);
+
+            return res.status(200).json({
+                success: true,
+                data: bookings,
+            });
+
+        } catch (error: any) {
+            return res.status(400).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    };
+
+    public getBookingById = async (req: Request, res: Response) => {
+        try {
+            const token = this.extractToken(req);
+
+            if (!token) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Authorization token missing",
+                });
+            }
+
+            const userData = await this.validateToken(token);
+
+            if (!userData?.id) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid user data",
+                });
+            }
+
+            const { bookingId } = req.params;
+
+            const booking = await BookingService.getBookingDetails(
+                bookingId as string,
+                userData.id
+            );
+
+            return res.status(200).json({
+                success: true,
+                data: booking,
+            });
+
+        } catch (error: any) {
+            return res.status(400).json({
+                success: false,
+                message: error.message,
             });
         }
     };

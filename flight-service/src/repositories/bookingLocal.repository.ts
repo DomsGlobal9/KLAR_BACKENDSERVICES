@@ -73,4 +73,17 @@ export class BookingRepository {
             { new: true }
         );
     }
+
+    async getBookingsByUserId(userId: string) {
+        return await BookingModel.find({
+            "userInfo.id": userId
+        }).sort({ createdAt: -1 });
+    }
+
+    async getBookingByIdAndUser(bookingId: string, userId: string) {
+        return await BookingModel.findOne({
+            bookingId,
+            "userInfo.id": userId
+        });
+    }
 }
