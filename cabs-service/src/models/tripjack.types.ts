@@ -37,9 +37,6 @@ export interface PassengerDetail {
     lastName: string;
     email: string;
     phone: string;
-    flightDetails?: {
-        number: string;
-    };
 }
 
 export interface AgentDetail {
@@ -86,11 +83,6 @@ export interface BookingRequest {
     correlationId?: string;
 }
 
-export interface EmbeddedBookingRequest {
-    sourceBookingId: string;
-    productType: "AIR" | "HOTEL";
-    bookingRequestList: BookingRequest[];
-}
 
 export interface PaymentRequest {
     bookingId: string;

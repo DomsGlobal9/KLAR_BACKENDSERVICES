@@ -14,6 +14,7 @@ router.get("/health", (_req, res) => {
 router.use("/auth", authRoutes);
 router.use("/admin/verifications", adminRoutes);
 router.use("/wallet", walletRoutes);
+router.use("/book", walletRoutes); // Map /book to walletRoutes for now, or create a specific one
 router.use("/markup", markupRoutes );
 router.use("/dashboard", dashboardRoutes );
 

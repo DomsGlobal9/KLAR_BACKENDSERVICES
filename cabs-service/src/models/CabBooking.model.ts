@@ -10,6 +10,7 @@ export enum CabBookingStatus {
 export interface ICabBooking extends Document {
     bookingId: string;
     correlationId?: string;
+    userId?: string;
     status: CabBookingStatus;
     
     // Journey Details
@@ -51,6 +52,7 @@ const CabBookingSchema = new Schema<ICabBooking>(
     {
         bookingId: { type: String, required: true, unique: true, index: true },
         correlationId: { type: String, index: true },
+        userId: { type: String, index: true },
         status: {
             type: String,
             enum: Object.values(CabBookingStatus),

@@ -13,10 +13,10 @@ router.post("/search/quotes",   searchController.getQuotes);
 
 // ─── Booking Routes ─────────────────────────────────────────────────────
 router.post("/booking/create",   bookingController.createBooking);
-router.post("/booking/embedded", bookingController.createEmbeddedBooking);
 
 // ─── Order Routes ───────────────────────────────────────────────────────
 router.get("/booking/details",   orderController.getBookingDetails);
+router.get("/booking/my-bookings", orderController.getUserBookings);
 router.post("/payment/create",   orderController.createPayment);
 
 // ─── Amendment Routes ────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
-import { BookingRequest, EmbeddedBookingRequest } from "../models/tripjack.types";
+import { BookingRequest } from "../models/tripjack.types";
 import { env } from "../config/env";
 import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
 import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
@@ -68,6 +68,7 @@ class BookingService {
                 await CabBookingModel.create({
                     bookingId: response.data.bookingId,
                     correlationId: finalPayload.correlationId,
+                    userId: payload.userId, // Save userId from payload
                     status: CabBookingStatus.CONFIRMED,
                     pickupDate: new Date(payload.journeyInfo.pickupDate),
                     origin: {
@@ -103,30 +104,6 @@ class BookingService {
         return response;
     }
 
-    async embeddedBook(payload: EmbeddedBookingRequest) {
-        if (!payload.sourceBookingId || !payload.bookingRequestList || !payload.bookingRequestList.length) {
-            throw { status: 400, message: "Missing sourceBookingId or bookingRequestList" };
-        }
-
-        const agent = this.getAgentDetail();
-
-        // Inject mandatory fields for each booking request in the list
-        const processedList = payload.bookingRequestList.map(req => ({
-            ...req,
-            agentId:    req.agentId    || agent.agentId,
-            agentEmail: req.agentEmail || agent.agentEmail,
-            agentPhone: req.agentPhone || agent.agentPhone,
-            consent:    req.consent    || "yes",
-            vendorId:   req.vendorId   || req.quotationInfo?.vendorId
-        }));
-
-        const finalPayload: EmbeddedBookingRequest = {
-            ...payload,
-            bookingRequestList: processedList
-        };
-
-        return await tripJackCabsProvider.createEmbeddedBooking(finalPayload);
-    }
 }
 
 export const bookingService = new BookingService();

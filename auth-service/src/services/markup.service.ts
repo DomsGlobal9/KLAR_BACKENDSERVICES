@@ -4,9 +4,13 @@ import { Types } from 'mongoose';
 
 export class MarkupService {
   // === CRUD ===
-  static async getAll(userId: Types.ObjectId) {
+  static async getAll(userId: Types.ObjectId, serviceType?: string) {
     const markup = await Markup.findOne({ userId, isActive: true });
-    return markup ? markup.services : [];
+    if (!markup) return [];
+    if (serviceType) {
+      return markup.services.filter(s => s.serviceType === serviceType);
+    }
+    return markup.services;
   }
 
   static async getByServiceType(userId: Types.ObjectId, serviceType: string) {

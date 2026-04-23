@@ -32,7 +32,7 @@ export class AuthServiceClient {
     async validateToken(token: string): Promise<ValidatedUser> {
         console.log("Entered into validate token function for api call........", token);
         try {
-            
+
             const response = await this.client.post<TokenValidationResponse>(
                 '/validate-token',
                 {},

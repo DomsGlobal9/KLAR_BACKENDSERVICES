@@ -37,7 +37,8 @@ export class MarkupController {
                 return res.status(401).json({ success: false, message: "Unauthorized" });
             }
             
-    const data = await MarkupService.getAll(new Types.ObjectId(req.user.userId));
+    const { serviceType } = req.query;
+    const data = await MarkupService.getAll(new Types.ObjectId(req.user.userId), serviceType as string);
     res.json({ success: true, data });
   }
 

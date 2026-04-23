@@ -6,12 +6,34 @@ class SearchService {
         if (!input || input.trim().length < 2) {
             throw { status: 400, message: "Search input must be at least 2 characters" };
         }
-        return await tripJackCabsProvider.googlePlaces(input);
+        
+        let lastError;
+        for (let i = 0; i < 2; i++) {
+            try {
+                return await tripJackCabsProvider.googlePlaces(input);
+            } catch (err) {
+                lastError = err;
+                console.warn(`[SearchService] Location search retry ${i + 1} for: ${input}`);
+                await new Promise(resolve => setTimeout(resolve, 500)); // sleep 500ms
+            }
+        }
+        throw lastError;
     }
 
     async getLatLong(placeId: string) {
         if (!placeId) throw { status: 400, message: "placeId is required" };
-        return await tripJackCabsProvider.getLatLong(placeId);
+        
+        let lastError;
+        for (let i = 0; i < 2; i++) {
+            try {
+                return await tripJackCabsProvider.getLatLong(placeId);
+            } catch (err) {
+                lastError = err;
+                console.warn(`[SearchService] GetLatLong retry ${i + 1} for: ${placeId}`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        throw lastError;
     }
 
     async getQuotes(payload: any) {
@@ -28,10 +50,9 @@ class SearchService {
         payload.journeyType = payload.journeyType || "airport_transfer";
         payload.tripType = payload.tripType || "oneway";
 
-        const pax = Number(payload.passengers);
-        if (isNaN(pax) || pax < 1 || pax > 10) {
-            payload.passengers = 1;
-        }
+        const pax = Number(payload.passengers) || 1;
+        payload.passengers = pax;
+        payload.quoteFilter = { paxCount: pax };
 
         // Format for TripJack
         const tripjackPayload = {
@@ -42,8 +63,8 @@ class SearchService {
                 long: String(payload.origin.long),
                 displayAddress: payload.from || "Pickup Location",
                 address: { 
-                    city: getCityFromAddress(payload.from), 
-                    country: getCountryFromAddress(payload.from) 
+                    city: payload.origin.address?.city || getCityFromAddress(payload.from), 
+                    country: payload.origin.address?.country || getCountryFromAddress(payload.from) || "India"
                 }
             },
             destination: {
@@ -52,8 +73,8 @@ class SearchService {
                 long: String(payload.destination.long),
                 displayAddress: payload.to || "Drop Location",
                 address: { 
-                    city: getCityFromAddress(payload.to), 
-                    country: getCountryFromAddress(payload.to) 
+                    city: payload.destination.address?.city || getCityFromAddress(payload.to), 
+                    country: payload.destination.address?.country || getCountryFromAddress(payload.to) || "India"
                 }
             }
         };

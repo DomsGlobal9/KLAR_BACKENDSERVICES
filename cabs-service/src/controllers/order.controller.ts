@@ -19,3 +19,16 @@ export const createPayment = async (req: Request, res: Response, next: NextFunct
         next(error);
     }
 };
+
+export const getUserBookings = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.query.userId || req.body.userId;
+        const result = await orderService.getUserBookings(userId as string);
+        res.status(200).json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
