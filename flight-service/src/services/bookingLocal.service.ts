@@ -53,6 +53,96 @@ class BookingService {
 
         return await this.bookingRepo.createBooking(payload);
     }
+
+    async updateTravellerSSR(data: {
+        bookingId: string;
+        travellerId: string;
+        ssrSeatInfos?: any[];
+        ssrMealInfos?: any[];
+        ssrBaggageInfos?: any[];
+    }) {
+        if (!data.bookingId || !data.travellerId) {
+            throw new Error("bookingId and travellerId required");
+        }
+
+        return await this.bookingRepo.updateTravellerSSR(
+            data.bookingId,
+            data.travellerId,
+            data
+        );
+    }
+
+    async updateBookingPrices(data: {
+        bookingId: string;
+        tripjackPrice?: number;
+        markupPrice?: number;
+        totalPrice?: number;
+    }) {
+        if (!data.bookingId) {
+            throw new Error("bookingId required");
+        }
+
+        const priceData = {
+            ...(data.tripjackPrice !== undefined && { tripjackPrice: data.tripjackPrice }),
+            ...(data.markupPrice !== undefined && { markupPrice: data.markupPrice }),
+            ...(data.totalPrice !== undefined && { totalPrice: data.totalPrice })
+        };
+
+        return await this.bookingRepo.updatePrices(data.bookingId, priceData);
+    }
+
+    async updateBookingDetails(data: {
+        bookingId: string;
+        travellers?: any[];
+        tripjackPrice?: number;
+        markupPrice?: number;
+        totalPrice?: number;
+    }) {
+        const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice } = data;
+
+        const updateQuery: any = {};
+        
+        if (travellers && travellers.length > 0) {
+            const existingBooking = await this.bookingRepo.getBookingById(bookingId);
+
+            if (!existingBooking) {
+                throw new Error("Booking not found");
+            }
+
+            const updatedTravellers = existingBooking.travellers.map((t: any) => {
+                const incoming = travellers.find(
+                    (tr: any) => tr.travellerId === t.travellerId
+                );
+
+                if (incoming) {
+                    return {
+                        ...t,
+                        ssrSeatInfos: incoming.ssrSeatInfos || t.ssrSeatInfos,
+                        ssrMealInfos: incoming.ssrMealInfos || t.ssrMealInfos,
+                        ssrBaggageInfos: incoming.ssrBaggageInfos || t.ssrBaggageInfos
+                    };
+                }
+
+                return t;
+            });
+
+            updateQuery.travellers = updatedTravellers;
+        }
+
+        if (tripjackPrice !== undefined) {
+            updateQuery.tripjackPrice = tripjackPrice;
+        }
+
+        if (markupPrice !== undefined) {
+            updateQuery.markupPrice = markupPrice;
+        }
+
+        if (totalPrice !== undefined) {
+            updateQuery.totalPrice = totalPrice;
+        }
+
+        return await this.bookingRepo.updateBooking(bookingId, updateQuery);
+    }
 }
 
 export default new BookingService();

@@ -46,7 +46,11 @@ export interface EmergencyContact {
 
 export interface Booking {
     bookingId: string;
+
     amount?: number;
+    tripjackPrice?: number;
+    markupPrice?: number;
+    totalPrice?: number;
 
     email: string;
     phone: string;

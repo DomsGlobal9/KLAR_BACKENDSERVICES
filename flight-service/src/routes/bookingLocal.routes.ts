@@ -4,5 +4,6 @@ import BookingLocalController from "../controllers/bookingLocal.controller";
 const router = Router();
 
 router.post("/init", BookingLocalController.createLocalBooking);
+router.post("/update", BookingLocalController.updateBookingDetails);
 
 export default router;

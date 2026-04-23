@@ -38,6 +38,9 @@ const BookingSchema = new Schema<BookingDocument>(
     {
         bookingId: { type: String, required: true, unique: true },
         amount: Number,
+        tripjackPrice: Number,
+        markupPrice: Number,
+        totalPrice: Number,
 
         email: String,
         phone: String,

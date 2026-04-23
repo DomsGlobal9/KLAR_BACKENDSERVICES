@@ -41,4 +41,36 @@ export class BookingRepository {
             { new: true }
         );
     }
+
+    async updateTravellerSSR(
+        bookingId: string,
+        travellerId: string,
+        updateData: any
+    ) {
+        return await BookingModel.findOneAndUpdate(
+            {
+                bookingId,
+                "travellers.travellerId": travellerId
+            },
+            {
+                $set: {
+                    "travellers.$.ssrSeatInfos": updateData.ssrSeatInfos,
+                    "travellers.$.ssrMealInfos": updateData.ssrMealInfos,
+                    "travellers.$.ssrBaggageInfos": updateData.ssrBaggageInfos
+                }
+            },
+            { new: true }
+        );
+    }
+
+    async updatePrices(
+        bookingId: string,
+        priceData: any
+    ) {
+        return await BookingModel.findOneAndUpdate(
+            { bookingId },
+            { $set: priceData },
+            { new: true }
+        );
+    }
 }

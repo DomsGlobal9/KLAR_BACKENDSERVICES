@@ -63,7 +63,7 @@ class BookingLocalController {
             }
 
             const userData = await this.validateToken(token);
-            if(!userData){
+            if (!userData) {
                 return res.status(400).json({
                     success: false,
                     message: "User Data not found",
@@ -82,6 +82,45 @@ class BookingLocalController {
             return res.status(400).json({
                 success: false,
                 message: error.message,
+            });
+        }
+    };
+
+    public updateBookingDetails = async (req: Request, res: Response) => {
+        try {
+            const {
+                bookingId,
+                travellers,
+                tripjackPrice,
+                markupPrice,
+                totalPrice
+            } = req.body;
+
+            if (!bookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "bookingId is required"
+                });
+            }
+
+            const result = await BookingService.updateBookingDetails({
+                bookingId,
+                travellers,
+                tripjackPrice,
+                markupPrice,
+                totalPrice
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Booking updated successfully",
+                data: result
+            });
+
+        } catch (error: any) {
+            return res.status(400).json({
+                success: false,
+                message: error.message
             });
         }
     };
