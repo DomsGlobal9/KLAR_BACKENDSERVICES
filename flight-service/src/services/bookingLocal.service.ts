@@ -222,7 +222,7 @@ class BookingService {
         const response = await TripjackBookingService.book(mapped);
 
         console.log("333333333333333333333333333333");
-        await this.bookingRepo.updateBookingStatus(
+        this.bookingRepo.updateBookingStatus(
             bookingId,
             "PENDING"
         );

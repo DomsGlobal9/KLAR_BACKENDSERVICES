@@ -19,15 +19,26 @@ class BookingService {
     async book(payload: any) {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
-        const response = await axios.post(
-            `${baseUrl}${endpoints.BOOK}`,
-            payload,
-            { headers }
-        );
+        const url = `${baseUrl}${endpoints.BOOK}`;
 
-        console.log("Tripjack response >>>", response.data);
+        console.log("Tripjack URL >>>", url);
+        console.log("Tripjack Payload >>>", payload);
 
-        return response;
+        try {
+            const response = await axios.post(url, payload, { headers });
+
+            console.log("Tripjack SUCCESS >>>", response.data);
+
+            return response;
+        } catch (error: any) {
+            console.error("Tripjack ERROR >>>", {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            throw error;
+        }
     }
 
     async validateFare(bookingId: string) {
