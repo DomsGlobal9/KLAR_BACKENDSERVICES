@@ -27,15 +27,19 @@ class BookingService {
         try {
             const response = await axios.post(url, payload, { headers });
 
+            console.log("Tripjack SUCCESS >>>", response);
             console.log("Tripjack SUCCESS >>>", response.data);
 
             return response;
         } catch (error: any) {
-            console.error("Tripjack ERROR >>>", {
-                status: error.response?.status,
-                data: error.response?.data,
-                message: error.message
-            });
+            console.error("Tripjack ERROR STATUS >>>", error.response?.status);
+
+            console.error(
+                "Tripjack ERROR DATA >>>",
+                JSON.stringify(error.response?.data, null, 2)
+            );
+
+            console.error("Tripjack ERROR MESSAGE >>>", error.message);
 
             throw error;
         }
