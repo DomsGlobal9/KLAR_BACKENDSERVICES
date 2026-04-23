@@ -50,7 +50,15 @@ export interface Booking {
     gstInfo?: GSTInfo;
     emergencyContact?: EmergencyContact;
 
-    status: "INITIATED" | "PENDING" | "CONFIRMED" | "FAILED";
+    status:
+    | "INITIATED"
+    | "PENDING"
+    | "CONFIRMED"
+    | "FAILED"
+    | "CANCEL_REQUESTED"
+    | "CANCELLED";
+
+    amendmentId?: string;
 
     createdAt?: Date;
     updatedAt?: Date;

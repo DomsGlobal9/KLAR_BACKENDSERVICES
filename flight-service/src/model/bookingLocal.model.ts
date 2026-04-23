@@ -60,9 +60,18 @@ const BookingSchema = new Schema<BookingDocument>(
 
         status: {
             type: String,
-            enum: ["INITIATED", "PENDING", "CONFIRMED", "FAILED"],
+            enum: [
+                "INITIATED",
+                "PENDING",
+                "CONFIRMED",
+                "FAILED",
+                "CANCEL_REQUESTED",
+                "CANCELLED"
+            ],
             default: "INITIATED"
-        }
+        },
+        
+        amendmentId: { type: String }
     },
     { timestamps: true }
 );

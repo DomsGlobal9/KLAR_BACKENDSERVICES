@@ -2,6 +2,7 @@ import { BookingRepository } from "../repositories/bookingLocal.repository";
 import { Booking } from "../types/bookingLocal.types";
 
 class BookingService {
+    
     private bookingRepo = new BookingRepository();
 
     async createInitialBooking(data: Partial<Booking>) {
@@ -21,7 +22,8 @@ class BookingService {
             isHold: false,
             travellers: data.travellers,
             status: "INITIATED",
-            ...(data.gstInfo && { gstInfo: data.gstInfo })
+            ...(data.gstInfo && { gstInfo: data.gstInfo }),
+            ...(data.emergencyContact && { emergencyContact: data.emergencyContact })
         };
 
         return await this.bookingRepo.createBooking(payload);
