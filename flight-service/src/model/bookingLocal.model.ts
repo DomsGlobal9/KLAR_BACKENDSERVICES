@@ -14,6 +14,8 @@ const SSRSchema = new Schema(
 
 const TravellerSchema = new Schema(
     {
+        travellerId: { type: String, required: true },
+
         title: String,
         paxType: { type: String, enum: ["ADULT", "CHILD", "INFANT"] },
         firstName: String,
@@ -58,6 +60,13 @@ const BookingSchema = new Schema<BookingDocument>(
             name: String
         },
 
+        userInfo: {
+            id: String,
+            email: String,
+            role: String,
+            clientType: String
+        },
+
         status: {
             type: String,
             enum: [
@@ -70,7 +79,7 @@ const BookingSchema = new Schema<BookingDocument>(
             ],
             default: "INITIATED"
         },
-        
+
         amendmentId: { type: String }
     },
     { timestamps: true }

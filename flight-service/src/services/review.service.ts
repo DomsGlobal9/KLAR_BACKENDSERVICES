@@ -27,7 +27,6 @@ class ReviewService {
         );
 
         const rawData = response.data;
-        console.log("@@@@@@@@@@@@@@@@@ The review response we get", rawData);
 
         const mappedData = TripjackFieldMapper.map(rawData);
 

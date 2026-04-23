@@ -1,11 +1,19 @@
 export type PaxType = "ADULT" | "CHILD" | "INFANT";
 
+export interface UserInfo {
+    id: string;
+    email: string;
+    role: string;
+    clientType: string;
+}
+
 export interface SSRInfo {
     key: string;
     code: string;
 }
 
 export interface Traveller {
+    travellerId: string;
     title: string;
     paxType: PaxType;
     firstName: string;
@@ -49,6 +57,7 @@ export interface Booking {
 
     gstInfo?: GSTInfo;
     emergencyContact?: EmergencyContact;
+    userInfo?: UserInfo;
 
     status:
     | "INITIATED"

@@ -7,6 +7,7 @@ import seatRoutes from "./seat.routes";
 import bookingRoutes from "./booking.routes";
 import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
+import updateRoute from "./update.route";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use("/search", searchRoutes);
 router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
+router.use("/update", updateRoute);
 
 export default router;
