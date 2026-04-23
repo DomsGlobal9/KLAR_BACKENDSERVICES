@@ -30,4 +30,15 @@ export class BookingRepository {
             { new: true }
         );
     }
+
+    async updateAmendment(
+        bookingId: string,
+        amendmentId: string
+    ) {
+        return await BookingModel.findOneAndUpdate(
+            { bookingId },
+            { amendmentId, status: "CANCEL_REQUESTED" },
+            { new: true }
+        );
+    }
 }

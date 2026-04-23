@@ -2,6 +2,7 @@ import { BookingRepository } from "../repositories/bookingLocal.repository";
 import { Booking } from "../types/bookingLocal.types";
 
 class BookingService {
+    
     private bookingRepo = new BookingRepository();
 
     async createInitialBooking(data: Partial<Booking>) {
