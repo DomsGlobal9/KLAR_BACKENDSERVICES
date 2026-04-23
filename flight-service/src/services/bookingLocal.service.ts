@@ -223,7 +223,7 @@ class BookingService {
             bookingId,
             "CONFIRMED"
         );
-
+        
         return response.data;
     }
 

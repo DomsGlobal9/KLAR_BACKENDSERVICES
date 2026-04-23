@@ -1,5 +1,6 @@
 import axios from "axios";
 import { TRIPJACK_URLS, tripjackConfig } from "../config";
+import { TripjackFieldMapper } from "../utils/mappers/tripJackBooking.mapper";
 
 class BookingService {
     private getConfig() {
@@ -66,6 +67,35 @@ class BookingService {
             },
             { headers }
         );
+    }
+
+    async getBookingDetails(bookingId: string) {
+        const { baseUrl, headers, endpoints } = this.getConfig();
+
+        const url = `${baseUrl}${endpoints.BOOKING_DETAILS}`;
+
+        console.log("Tripjack Booking Details URL >>>", url);
+        console.log("BookingId >>>", bookingId);
+
+        try {
+            const response = await axios.post(
+                url,
+                { bookingId, "requirePaxPricing": true },
+                { headers }
+            );
+
+            const mappedResponse = TripjackFieldMapper.map(response.data);
+
+            return mappedResponse;
+        } catch (error: any) {
+            console.error("Booking Details ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
     }
 }
 
