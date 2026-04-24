@@ -19,11 +19,24 @@ class UpdateService {
     async update(payload: any) {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
-        return axios.post(
-            `${baseUrl}${endpoints.SUBMIT_AMENDMENT}`,
-            payload,
-            { headers }
-        );
+        try {
+            const response = await axios.post(
+                `${baseUrl}${endpoints.SUBMIT_AMENDMENT}`,
+                payload,
+                { headers }
+            );
+
+            return response;
+
+        } catch (error: any) {
+            console.error("Update Service ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
     }
 }
 

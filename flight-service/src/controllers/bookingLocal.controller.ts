@@ -12,6 +12,7 @@ class BookingLocalController {
     }
 
     private extractToken = (req: Request): string | null => {
+
         const authHeader = req.headers.authorization;
 
         if (authHeader?.startsWith("Bearer ")) {
@@ -28,7 +29,7 @@ class BookingLocalController {
     private validateToken = async (token: string): Promise<any> => {
         try {
             const response = await axios.post(
-                `${this.authServiceUrl}/validate-token`,
+                `${this.authServiceUrl}/auth/validate-token`,
                 {},
                 {
                     headers: {
@@ -40,6 +41,29 @@ class BookingLocalController {
             if (response.data.success) {
                 return response.data.data;
             }
+
+            throw new Error("Token validation failed");
+        } catch (error: any) {
+            throw new Error(
+                error.response?.data?.message ||
+                error.message ||
+                "Token validation failed"
+            );
+        }
+    };
+
+    private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
+        try {
+            console.log("Wallet balance call");
+            const response = await axios.post(
+                `${this.authServiceUrl}/book/pay`,
+                { bookingId, totalPrice }
+            );
+            console.log("Wallet balance response we got", response);
+
+            // if (response.data.success) {
+            //     return response.data;
+            // }
 
             throw new Error("Token validation failed");
         } catch (error: any) {
@@ -155,6 +179,15 @@ class BookingLocalController {
                 markupPrice,
                 totalPrice
             });
+
+            if (!result) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Error while perform updating or booking"
+                });
+            }
+
+            await this.deductWalletBalance(bookingId, totalPrice);
 
             return res.status(200).json({
                 success: true,

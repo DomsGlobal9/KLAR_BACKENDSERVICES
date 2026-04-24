@@ -6,6 +6,7 @@ class ReviewController {
     async review(req: Request, res: Response) {
         try {
             const { priceIds } = req.body;
+            console.log("CONTROLLER: !!!!!!!!!!!!!!!!!!!! Price ids we got\n", priceIds);
 
             if (!priceIds || !Array.isArray(priceIds) || priceIds.length === 0) {
                 return res.status(400).json({

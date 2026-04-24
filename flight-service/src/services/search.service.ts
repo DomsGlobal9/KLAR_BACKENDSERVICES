@@ -7,90 +7,92 @@ import RedisCacheService from "../cache/redisCache.service";
 import { ReturnNormalizer } from "../normalizers/return.normalizer";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
 
-
 class SearchService {
 
-    /**
-     * OneWay Search Service
-     * @param payload 
-     * @returns 
-     */
     async searchOneWay(payload: any) {
 
         const sessionId = uuidv4();
 
         const env = tripjackConfig.ENV;
-
         const config = TRIPJACK_URLS[env];
-
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
-        const rawResponse = await axios.post(
-            url,
-            {
-                searchQuery: payload
-            },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    apikey: tripjackConfig.API_KEY,
-                },
-                // timeout: 15000,
-            }
-        );
+        try {
+            const rawResponse = await axios.post(
+                url,
+                { searchQuery: payload },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    },
+                }
+            );
 
-        const normalized = OneWayNormalizer.transform(rawResponse);
+            const normalized = OneWayNormalizer.transform(rawResponse);
 
-        await RedisCacheService.set(sessionId, {
-            raw: rawResponse?.data?.searchResult?.tripInfos,
-        }, 1800);
+            await RedisCacheService.set(sessionId, {
+                raw: rawResponse?.data?.searchResult?.tripInfos,
+            }, 1800);
 
-        return {
-            sessionId,
-            flights: normalized
-        };
+            return {
+                sessionId,
+                flights: normalized
+            };
+
+        } catch (error: any) {
+            console.error("OneWay Search ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
     }
 
-    /**
-     * Return Search Service
-     * @param payload 
-     * @returns 
-     */
     async searchReturn(payload: any) {
+
         const sessionId = uuidv4();
 
         const env = tripjackConfig.ENV;
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
-        const rawResponse = await axios.post(
-            url,
-            { searchQuery: payload },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    apikey: tripjackConfig.API_KEY,
-                },
-            }
-        );
+        try {
+            const rawResponse = await axios.post(
+                url,
+                { searchQuery: payload },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    },
+                }
+            );
 
-        const normalized = ReturnNormalizer.transform(rawResponse);
+            const normalized = ReturnNormalizer.transform(rawResponse);
 
-        await RedisCacheService.set(sessionId, {
-            raw: rawResponse?.data?.searchResult?.tripInfos,
-        }, 1800);
+            await RedisCacheService.set(sessionId, {
+                raw: rawResponse?.data?.searchResult?.tripInfos,
+            }, 1800);
 
-        return {
-            sessionId,
-            flights: normalized
-        };
+            return {
+                sessionId,
+                flights: normalized
+            };
+
+        } catch (error: any) {
+            console.error("Return Search ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
     }
 
-    /**
-     * MultiCity Search Service
-     * @param payload 
-     * @returns 
-     */
     async searchMulticity(payload: any) {
 
         const sessionId = uuidv4();
@@ -99,31 +101,42 @@ class SearchService {
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
-        const rawResponse = await axios.post(
-            url,
-            { searchQuery: payload },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    apikey: tripjackConfig.API_KEY,
+        try {
+            const rawResponse = await axios.post(
+                url,
+                { searchQuery: payload },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    },
+                }
+            );
+
+            const normalized = MultiCityNormalizer.normalize(rawResponse.data);
+
+            await RedisCacheService.set(
+                sessionId,
+                {
+                    raw: rawResponse?.data?.searchResult?.tripInfos,
                 },
-            }
-        );
+                1800
+            );
 
-        const normalized = MultiCityNormalizer.normalize(rawResponse.data);
+            return {
+                sessionId,
+                flights: normalized
+            };
 
-        await RedisCacheService.set(
-            sessionId,
-            {
-                raw: rawResponse?.data?.searchResult?.tripInfos,
-            },
-            1800
-        );
+        } catch (error: any) {
+            console.error("MultiCity Search ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
 
-        return {
-            sessionId,
-            flights: normalized
-        };
+            throw error;
+        }
     }
 }
 
