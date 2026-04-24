@@ -594,7 +594,7 @@ export class BookingController {
                 res.status(401).json({ success: false, message: 'Authentication required' });
                 return;
             }
-
+            
             const userData = await this.validateToken(token);
             const { bookingId } = req.params;
             const { remarks, trips } = req.body;
@@ -669,6 +669,7 @@ export class BookingController {
             const bookDbId = getBookingData._id?.toString() || '';
 
             const result = await submitCancellation(bookingId, remarks || 'Cancellation request', trips);
+            console.log("@$@$%^&*^%$#$&*",JSON.stringify(result, null, 2));
 
             const dbStatusUpdate = await this.bookingService.updateBooking(
                 bookDbId,
