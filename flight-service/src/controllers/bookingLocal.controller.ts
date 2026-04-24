@@ -6,6 +6,7 @@ import axios from "axios";
 class BookingLocalController {
 
     private authServiceUrl: string;
+    private currentToken: string | null = null;
 
     constructor() {
         this.authServiceUrl = envConfig.AUTH_SERVICE;
@@ -16,10 +17,15 @@ class BookingLocalController {
         const authHeader = req.headers.authorization;
 
         if (authHeader?.startsWith("Bearer ")) {
+            const token = authHeader.split(" ")[1];
+            console.log("1. BOOKING-LOCAL: Token", authHeader.split(" ")[1]);
+            this.currentToken = token;
             return authHeader.split(" ")[1];
         }
 
         if (req.cookies?.token) {
+            console.log("2. BOOKING-LOCAL: Token", req.cookies.token);
+            this.currentToken = req.cookies.token;
             return req.cookies.token;
         }
 
@@ -55,22 +61,34 @@ class BookingLocalController {
     private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
             console.log("Wallet balance call");
+
+            const token = this.currentToken;
+
+            console.log({bookingId, totalPrice, token});
+
+            if (!token) {
+                throw new Error("Token missing for wallet deduction");
+            }
+
             const response = await axios.post(
                 `${this.authServiceUrl}/book/pay`,
-                { bookingId, totalPrice }
+                { bookingId, totalPrice },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                }
             );
-            console.log("Wallet balance response we got", response);
 
-            // if (response.data.success) {
-            //     return response.data;
-            // }
+            console.log("Wallet balance response we got", response.data);
 
-            throw new Error("Token validation failed");
+            return response.data;
+
         } catch (error: any) {
             throw new Error(
                 error.response?.data?.message ||
                 error.message ||
-                "Token validation failed"
+                "Wallet deduction failed"
             );
         }
     };

@@ -15,10 +15,10 @@ router.use("/fare", fareRoutes);
 router.use("/seat", seatRoutes);
 router.use("/book", bookingRoutes);
 router.use("/cancel", cancelRoute);
+router.use("/update", updateRoute);
 router.use("/search", searchRoutes);
 router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
-router.use("/update", updateRoute);
 
 export default router;

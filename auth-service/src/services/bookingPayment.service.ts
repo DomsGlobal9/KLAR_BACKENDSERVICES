@@ -6,7 +6,7 @@ export class BookingPaymentService {
     static async payForBooking(
         userId: Types.ObjectId,
         bookingId: string,
-        amount: number
+        totalPrice: number
     ) {
         /**
          * Wallet fetch
@@ -31,7 +31,7 @@ export class BookingPaymentService {
          */
         const updatedWallet = await BookingPaymentRepository.deductBalance(
             wallet._id,
-            amount
+            totalPrice
         );
 
         if (!updatedWallet) {
@@ -48,7 +48,7 @@ export class BookingPaymentService {
             userId,
             type: "DEBIT",
             direction: "DEBIT",
-            amount,
+            amount: totalPrice,
             paymentMethod: "WALLET",
             referenceType: "BOOKING",
             referenceId: bookingId,

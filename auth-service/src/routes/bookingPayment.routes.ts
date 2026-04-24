@@ -6,4 +6,5 @@ const router = Router();
 
 router.post("/pay", authenticateJWT, BookingPaymentController.pay);
 
+
 export default router;
