@@ -10,13 +10,11 @@ class OrderService {
 
     async getUserBookings(userId: string) {
         if (!userId) throw { status: 400, message: "userId is required" };
-        const now = new Date();
-        // Return confirmed bookings where pickup is in the future
+        
+        // Return all bookings for the user, newest first
         return await CabBookingModel.find({
-            userId,
-            status: CabBookingStatus.CONFIRMED,
-            pickupDate: { $gte: now }
-        }).sort({ pickupDate: 1 }).lean();
+            userId
+        }).sort({ createdAt: -1 }).lean();
     }
 
     async createPayment(payload: PaymentRequest) {

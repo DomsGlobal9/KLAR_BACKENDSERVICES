@@ -14,7 +14,24 @@ class AmendmentService {
             ...payload,
             amendmentType: "CANCELLATION" as const
         };
-        return await tripJackCabsProvider.processAmendment(finalPayload);
+        
+        const result = await tripJackCabsProvider.processAmendment(finalPayload);
+        
+        // If cancellation is successful at provider level, update our internal status
+        if (result?.success || result?.data?.amendStatus === "SUCCESS") {
+            try {
+                await CabBookingModel.findOneAndUpdate(
+                    { bookingId: payload.bookingId },
+                    { status: CabBookingStatus.CANCELLED },
+                    { new: true }
+                );
+                console.log(`✅ [AmendmentService] Updated status to CANCELLED for ${payload.bookingId}`);
+            } catch (dbError) {
+                console.error(`❌ [AmendmentService] Failed to update DB status for ${payload.bookingId}:`, dbError);
+            }
+        }
+        
+        return result;
     }
 }
 
