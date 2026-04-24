@@ -1,38 +1,68 @@
 import axios from "axios";
 import { HotelModel } from "../models/Hotel.model";
 import { env } from "../config/env";
+import fs from "fs/promises";
+import path from "path";
 
-// Static data endpoint uses a different base URL than the search/listing APIs
 const TJ_STATIC_BASE_URL = "https://apitest.tripjack.com";
+const PROGRESS_FILE = path.join(process.cwd(), "sync_progress_tj_hotels.json");
+
+async function saveProgress(token: string, totalSynced: number) {
+    try {
+        await fs.writeFile(PROGRESS_FILE, JSON.stringify({ token, totalSynced, updatedAt: new Date() }, null, 2));
+    } catch (err: any) {
+        console.error(`[Sync] Failed to save progress: ${err.message}`);
+    }
+}
+
+async function loadProgress() {
+    try {
+        const data = await fs.readFile(PROGRESS_FILE, "utf-8");
+        return JSON.parse(data);
+    } catch {
+        return null;
+    }
+}
 
 export async function syncTJHotels() {
-    // Optimization: Skip sync if we already have hotels to avoid hitting memory/quota limits
-    const existingCount = await HotelModel.countDocuments();
-    if (existingCount > 0) {
-        console.log(`[Sync] Skip TripJack Hotels Sync: DB already has ${existingCount} hotels.`);
-        return;
+    console.log("[Sync] Initializing TripJack Hotels Sync...");
+
+    const progress = await loadProgress();
+    let nextToken: string | undefined = progress?.token;
+    let totalCount = progress?.totalSynced || 0;
+    let pageCount = 0;
+    let hasNext = true;
+
+    if (nextToken) {
+        console.log(`[Sync] Resuming from last token (Total already synced: ${totalCount})`);
+    } else {
+        // Only skip if no token AND we have a lot of hotels (optional, but keep it safe)
+        const dbCount = await HotelModel.countDocuments();
+        if (dbCount > 1000000) { // If we have 1M+ hotels and no token, maybe we are done?
+             console.log(`[Sync] DB already has ${dbCount} hotels. Skipping initial sync.`);
+             // return; // Uncomment if we want to skip. User said "enable", so we'll proceed.
+        }
     }
 
-    console.log("[Sync] Starting TripJack Hotels Sync...");
+    const startTime = Date.now();
+    let lastLogTime = Date.now();
+    let hotelsSinceLastLog = 0;
 
-    let hasNext = true;
-    let nextToken: string | undefined = undefined;
-    let totalCount = 0;
-    let pageCount = 0;
+    // Concurrency control for DB writes
+    const pendingWrites: Promise<any>[] = [];
+    const MAX_CONCURRENT_WRITES = 5;
 
     try {
         while (hasNext) {
             const payload: any = {
                 next: nextToken || undefined,
+                pageSize: 1000 // Maximize page size
             };
 
-            if (nextToken) {
-                console.log(`[Sync] Requesting next page (v1 top-level) with token: ${nextToken.substring(0, 20)}...`);
-            }
-
+            // 1. Fetch next page (Wait for network)
             let res: any;
             let retryCount = 0;
-            const maxRetries = 3;
+            const maxRetries = 5;
 
             while (retryCount < maxRetries) {
                 try {
@@ -46,103 +76,127 @@ export async function syncTJHotels() {
                                 "Accept": "application/json",
                                 "Accept-Encoding": "gzip",
                             },
-                            timeout: 60000,
+                            timeout: 120000, // 2 mins timeout for large pages
                         }
                     );
-                    break; // Success, exit retry loop
+                    break;
                 } catch (err: any) {
                     retryCount++;
                     const status = err.response?.status;
-                    if (retryCount < maxRetries && (status >= 500 || !status)) {
-                        const delay = retryCount * 2000;
-                        console.warn(`[Sync] TripJack API ${status || 'Error'} (Page ${pageCount + 1}). Retrying in ${delay}ms... (Attempt ${retryCount}/${maxRetries})`);
-                        await new Promise(r => setTimeout(r, delay));
-                    } else {
-                        throw err; // Re-throw if exhausted or not a retryable error
-                    }
+                    const delay = Math.min(retryCount * 5000, 30000);
+                    console.warn(`[Sync] TripJack API Error ${status || err.message} (Attempt ${retryCount}/${maxRetries}). Retrying in ${delay / 1000}s...`);
+                    await new Promise(r => setTimeout(r, delay));
+                    if (retryCount === maxRetries) throw err;
                 }
             }
 
             const data = res.data;
             const hotels = data.hotelOpInfos || data.hotels || [];
+            
             if (hotels.length === 0) {
-                console.log("[Sync] No hotels found in current page. Stopping.");
+                console.log("[Sync] No more hotels found. Sync complete.");
                 hasNext = false;
                 break;
             }
 
             pageCount++;
+            nextToken = data.next;
 
-            // Build bulk operations for this page
-            const bulkOps = [];
-            for (const hotel of hotels) {
-                if (hotel.isDeleted || !hotel.tjHotelId) continue;
-
-                // TJ v1 mapping: geolocation is { lt, ln }
+            // 2. Map hotels to bulk operations
+            const bulkOps = hotels.filter((h: any) => !h.isDeleted && h.tjHotelId).map((hotel: any) => {
                 const lat = parseFloat(hotel.geolocation?.lt) || 0;
                 const lng = parseFloat(hotel.geolocation?.ln) || 0;
-
-                // TJ v1 mapping: city and country are in the address object
                 const cityName = (hotel.address?.city?.name || hotel.cityName || "").toLowerCase().trim();
-                const countryName = hotel.address?.country?.name || hotel.countryName || "";
                 const addressStr = hotel.address?.adr || hotel.address || "";
-
-                // TJ v1 mapping: images are objects with url
                 const imageUrls = Array.isArray(hotel.images)
                     ? hotel.images.map((img: any) => typeof img === 'string' ? img : img.url).filter(Boolean)
                     : [];
 
-                bulkOps.push({
+                return {
                     updateOne: {
                         filter: { tjHotelId: String(hotel.tjHotelId) },
                         update: {
                             $set: {
                                 name: hotel.name || "",
                                 cityName,
-                                countryName,
+                                countryName: hotel.address?.country?.name || hotel.countryName || "",
                                 starRating: parseInt(hotel.rating) || parseInt(hotel.starCategory) || 0,
                                 address: addressStr,
-                                location: {
-                                    type: "Point",
-                                    coordinates: [lng, lat],
-                                },
+                                location: { type: "Point", coordinates: [lng, lat] },
                                 images: imageUrls,
                                 lastUpdated: new Date(),
                             },
                         },
                         upsert: true,
                     },
-                });
+                };
+            });
 
-                totalCount++;
-            }
-
+            // 3. Save to DB (Fire and partial forget with concurrency limit)
             if (bulkOps.length > 0) {
-                await HotelModel.bulkWrite(bulkOps, { ordered: false });
+                const writePromise = HotelModel.bulkWrite(bulkOps, { ordered: false })
+                    .then(() => {
+                        totalCount += bulkOps.length;
+                        hotelsSinceLastLog += bulkOps.length;
+                    })
+                    .catch(err => console.error(`[Sync] DB Write Error: ${err.message}`));
+                
+                pendingWrites.push(writePromise);
+
+                // Wait if we have too many pending writes
+                if (pendingWrites.length >= MAX_CONCURRENT_WRITES) {
+                    await Promise.race(pendingWrites);
+                    // Remove resolved promises
+                    for (let i = pendingWrites.length - 1; i >= 0; i--) {
+                        // This is a bit crude but works to keep the array lean
+                        // @ts-ignore
+                        if (pendingWrites[i].status !== 'pending') { 
+                             // Filter doesn't work well with Promise array without checking status
+                        }
+                    }
+                    // Clean up array
+                    while(pendingWrites.length >= MAX_CONCURRENT_WRITES) {
+                        await pendingWrites.shift();
+                    }
+                }
             }
 
-            console.log(
-                `[Sync] Page ${pageCount}: Upserted ${bulkOps.length} hotels (total: ${totalCount})`
-            );
+            // 4. Periodically save progress and log stats
+            const now = Date.now();
+            if (now - lastLogTime > 10000) { // Every 10 seconds
+                const elapsedTotal = (now - startTime) / 1000;
+                const speed = hotelsSinceLastLog / ((now - lastLogTime) / 1000);
+                const avgSpeed = totalCount / elapsedTotal;
+                
+                console.log(
+                    `[Sync] Page ${pageCount} | Total: ${totalCount} | Current Speed: ${speed.toFixed(1)} h/s | Avg: ${avgSpeed.toFixed(1)} h/s`
+                );
 
-            if (data.next) {
-                nextToken = data.next;
-                // Small delay to avoid rate limiting
-                await new Promise((r) => setTimeout(r, 500));
-            } else {
+                if (nextToken) {
+                    await saveProgress(nextToken, totalCount);
+                }
+
+                lastLogTime = now;
+                hotelsSinceLastLog = 0;
+            }
+
+            if (!nextToken) {
                 hasNext = false;
+            } else {
+                // Small sleep to be polite, but much shorter
+                await new Promise((r) => setTimeout(r, 50));
             }
         }
 
-        // Log final stats from DB
-        const dbCount = await HotelModel.countDocuments();
-        const cityCount = await HotelModel.distinct("cityName").then(
-            (cities) => cities.length
-        );
-        console.log(
-            `[Sync] TripJack Hotels Sync Complete. DB has ${dbCount} hotels across ${cityCount} cities.`
-        );
+        // Wait for final writes
+        await Promise.all(pendingWrites);
+        
+        if (nextToken) await saveProgress(nextToken, totalCount);
+        
+        console.log(`[Sync] Success! Finished syncing. Total hotels in DB: ${totalCount}`);
     } catch (error: any) {
-        console.error(`[Sync] TripJack Sync Failed:`, error.message);
+        console.error(`[Sync] CRITICAL FAILURE:`, error.message);
+        if (nextToken) await saveProgress(nextToken, totalCount);
     }
 }
+

@@ -102,7 +102,12 @@ class HotelsService {
             }))
         ];
 
-        return suggestions;
+        // Deduplicate suggestions by name to fix "multiple times same location" issue
+        const uniqueSuggestions = Array.from(
+            new Map(suggestions.map(item => [item.name.toLowerCase(), item])).values()
+        );
+
+        return uniqueSuggestions;
     }
 }
 
