@@ -17,8 +17,6 @@ export const authenticateJWT = (
     try {
         const token = extractTokenFromRequest(req);
 
-        console.log("Token found", token);
-
         if (!token) {
             return res.status(401).json({
                 success: false,
@@ -28,7 +26,6 @@ export const authenticateJWT = (
         }
 
         const decoded = JWTUtil.getInstance().verifyAccessToken(token);
-        console.log("The decode data we got", JSON.stringify(decoded, null, 2));
 
         if (!decoded || !decoded.userId || !decoded.email) {
             return res.status(401).json({

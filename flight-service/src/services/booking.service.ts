@@ -23,14 +23,9 @@ class BookingService {
         const url = `${baseUrl}${endpoints.BOOK}`;
 
         console.log("Tripjack URL >>>", url);
-        console.log("Tripjack Payload >>>", payload);
 
         try {
             const response = await axios.post(url, payload, { headers });
-
-            console.log("Tripjack SUCCESS >>>", response);
-            console.log("Tripjack SUCCESS >>>", response.data);
-
             return response;
         } catch (error: any) {
             console.error("Tripjack ERROR STATUS >>>", error.response?.status);

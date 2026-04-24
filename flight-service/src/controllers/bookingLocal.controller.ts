@@ -18,13 +18,11 @@ class BookingLocalController {
 
         if (authHeader?.startsWith("Bearer ")) {
             const token = authHeader.split(" ")[1];
-            console.log("1. BOOKING-LOCAL: Token", authHeader.split(" ")[1]);
             this.currentToken = token;
             return authHeader.split(" ")[1];
         }
 
         if (req.cookies?.token) {
-            console.log("2. BOOKING-LOCAL: Token", req.cookies.token);
             this.currentToken = req.cookies.token;
             return req.cookies.token;
         }

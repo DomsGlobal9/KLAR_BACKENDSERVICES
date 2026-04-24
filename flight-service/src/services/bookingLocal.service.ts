@@ -218,13 +218,26 @@ class BookingService {
         const mapped = mapToTripjackBooking(tripjackPayload);
 
         const response = await TripjackBookingService.book(mapped);
+        console.log("Response:", response.data);
 
-        await this.bookingRepo.updateBookingStatus(
-            bookingId,
-            "CONFIRMED"
-        );
-        
-        return response.data;
+        if (response.data.status.success === true) {
+            
+            const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
+
+            console.log("TRIP-JACK-BOOKING-STATUS", tripjackBookingStatus);
+
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@ BOOKING TRIPJACK STATUS:\n", tripjackBookingStatus?.order?.status);
+            
+            await this.bookingRepo.updateBookingStatus(
+                bookingId,
+                tripjackBookingStatus?.order?.status
+            );
+
+            return response.data;
+        }
+
+        return null;
+
     }
 
     async getBookingsByUserId(userId: string) {
