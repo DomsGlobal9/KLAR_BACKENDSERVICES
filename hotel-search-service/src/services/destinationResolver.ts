@@ -64,7 +64,7 @@ export async function resolveForTJ(query: string): Promise<string[]> {
             }
         })
         .select("tjHotelId")
-        .limit(300)
+        .limit(5000)
         .lean();
 
         return [...new Set(hotels.map((h) => h.tjHotelId))];
@@ -94,7 +94,7 @@ export async function resolveForTJ(query: string): Promise<string[]> {
         if (andConditions.length > 0) {
             hotels = await HotelModel.find({ $and: andConditions })
                 .select("tjHotelId")
-                .limit(300)
+                .limit(5000)
                 .lean();
         }
     }

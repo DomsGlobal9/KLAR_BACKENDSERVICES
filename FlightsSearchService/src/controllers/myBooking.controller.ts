@@ -188,9 +188,9 @@ export class BookingController {
      */
     getAllBookings = async (req: Request, res: Response): Promise<void> => {
         try {
-            
+
             const token = this.extractToken(req);
-            
+
             if (!token) {
                 res.status(401).json({
                     success: false,
@@ -199,7 +199,7 @@ export class BookingController {
                 return;
             }
 
-            
+
             let userData: any;
             try {
                 userData = await this.validateToken(token);
@@ -212,7 +212,7 @@ export class BookingController {
                 return;
             }
 
-            
+
             const queryParams = {
                 page: req.query.page ? Number(req.query.page) : 1,
                 limit: req.query.limit ? Number(req.query.limit) : 10,
@@ -224,7 +224,7 @@ export class BookingController {
                 sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc'
             };
 
-            
+
             const requestingUserId = userData.role !== 'ADMIN' ? userData.id : undefined;
 
             const result = await this.bookingService.getAllBookings(queryParams, requestingUserId);

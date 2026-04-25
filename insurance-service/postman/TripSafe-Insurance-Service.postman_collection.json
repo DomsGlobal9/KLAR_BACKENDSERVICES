@@ -1,0 +1,395 @@
+{
+  "info": {
+    "name": "TripSafe Insurance Service",
+    "description": "Full test suite for Klar Insurance Service (TripJack TripSafe API v6.0)\n\nFlow:\n1. Auth → get JWT token from auth-service\n2. Search (choose journey type)\n3. Review → captures bookingId\n4. Book → purchase policy\n5. Booking Details → check status\n6. Amendment Raise → get amendmentId\n7. Amendment Cancel → confirm cancellation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:5014/api/insurance", "type": "string" },
+    { "key": "authToken",     "value": "", "type": "string" },
+    { "key": "planId",        "value": "", "type": "string" },
+    { "key": "productId",     "value": "", "type": "string" },
+    { "key": "bookingId",     "value": "", "type": "string" },
+    { "key": "amendmentId",   "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔑 Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health",
+        "description": "Verify the service is UP and MongoDB is connected."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Status UP', () => pm.response.to.have.status(200));",
+          "pm.test('DB Connected', () => {",
+          "  const json = pm.response.json();",
+          "  pm.expect(json.database).to.eql('CONNECTED');",
+          "});"
+        ]}
+      }]
+    },
+    {
+      "name": "📦 1. STANDALONE — Search (Popular Region)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2026-05-30\",\n    \"isc\": {\n      \"iri\": [\n        { \"rkey\": \"EUR\", \"rt\": \"POPULARREGION\" },\n        { \"rkey\": \"ASI\", \"rt\": \"POPULARREGION\" }\n      ]\n    },\n    \"iti\": [\n      { \"age\": 30 },\n      { \"age\": 45 },\n      { \"age\": 65 }\n    ]\n  }\n}"
+        },
+        "description": "TC01: Standalone search — 2 popular regions, 3 travellers."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Search returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "pm.test('Has search result', () => pm.expect(json.body).to.exist);",
+          "// Extract first planId and productId for Review step",
+          "try {",
+          "  const pli = json.body?.isr?.iinfo?.pli;",
+          "  if (pli && pli.length) {",
+          "    pm.collectionVariables.set('planId', pli[0].plid);",
+          "    pm.collectionVariables.set('productId', pli[0].pi[0].pid);",
+          "    console.log('planId:', pli[0].plid, 'productId:', pli[0].pi[0].pid);",
+          "  }",
+          "} catch(e) { console.log('Could not extract plan:', e.message); }"
+        ]}
+      }]
+    },
+    {
+      "name": "📦 1b. STANDALONE — Search (Country)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2026-06-12\",\n    \"isc\": {\n      \"iri\": [\n        { \"rkey\": \"US\", \"rt\": \"COUNTRY\" },\n        { \"rkey\": \"GB\", \"rt\": \"COUNTRY\" }\n      ]\n    },\n    \"iti\": [\n      { \"age\": 22 },\n      { \"age\": 5 },\n      { \"age\": 3 },\n      { \"age\": 45 },\n      { \"age\": 56 },\n      { \"age\": 67 }\n    ]\n  }\n}"
+        },
+        "description": "TC02: Standalone + 2 countries + 6 travellers including minors."
+      }
+    },
+    {
+      "name": "📦 2. STUDENT — Search",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"cd\": \"180\",\n    \"isc\": {\n      \"iri\": [\n        { \"rkey\": \"AU\", \"rt\": \"COUNTRY\" }\n      ]\n    },\n    \"iti\": [\n      { \"age\": 20 },\n      { \"age\": 24 }\n    ],\n    \"ict\": \"STUDENT\"\n  }\n}"
+        },
+        "description": "TC03: Student search — Australia, 180 days, 2 travellers (age 18–45). Note: no ed, use cd instead."
+      }
+    },
+    {
+      "name": "📦 3. AMT — Search (Annual Multi-Trip)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2027-05-14\",\n    \"isc\": {\n      \"iri\": [\n        { \"rkey\": \"MDE\", \"rt\": \"POPULARREGION\" },\n        { \"rkey\": \"EUR\", \"rt\": \"POPULARREGION\" },\n        { \"rkey\": \"ASI\", \"rt\": \"POPULARREGION\" }\n      ]\n    },\n    \"iti\": [\n      { \"age\": 35 },\n      { \"age\": 40 }\n    ],\n    \"isef\": false,\n    \"ict\": \"AMT\",\n    \"adr\": \"45\"\n  }\n}"
+        },
+        "description": "TC05: AMT search — 3 popular regions, adr=45 days, 2 travellers."
+      }
+    },
+    {
+      "name": "📦 4. EMBEDDED (API_EMB) — Search",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2026-06-15\",\n    \"isc\": {\n      \"iri\": [\n        { \"rkey\": \"MDE\", \"rt\": \"POPULARREGION\" }\n      ]\n    },\n    \"iti\": [\n      { \"age\": 35 },\n      { \"age\": 40 },\n      { \"age\": 60 }\n    ],\n    \"ict\": \"API_EMB\"\n  }\n}"
+        },
+        "description": "TC04: External Embedded (non-TJ flight) — no bid required. ict=API_EMB. 3 travellers, MDE region."
+      }
+    },
+    {
+      "name": "🔍 5. Review",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/review",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pli\": [\n    {\n      \"plid\": \"{{planId}}\",\n      \"pi\": [\n        { \"pid\": \"{{productId}}\" }\n      ]\n    }\n  ]\n}"
+        },
+        "description": "Review the selected plan. planId and productId are auto-set from Search response. Returns bookingId (bid)."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Review returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "const bid = json.bookingId || json.body?.bid;",
+          "if (bid) {",
+          "  pm.collectionVariables.set('bookingId', bid);",
+          "  console.log('✅ bookingId set to:', bid);",
+          "} else {",
+          "  console.log('⚠️ No bookingId found in review response. Check body manually.');",
+          "}"
+        ]}
+      }]
+    },
+    {
+      "name": "💳 6. Book — Standalone",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/book",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"paymentInfos\": [\n    { \"paymentMedium\": \"WALLET\", \"amount\": 1500.00 }\n  ],\n  \"deliveryInfo\": {\n    \"emails\": [\"test@klar.com\"],\n    \"contacts\": [\"9810000001\"]\n  },\n  \"pli\": [\n    {\n      \"plid\": \"{{planId}}\",\n      \"pi\": [\n        {\n          \"pid\": \"{{productId}}\",\n          \"iti\": [\n            {\n              \"id\": 1,\n              \"dob\": \"1994-06-15\",\n              \"age\": 30,\n              \"fn\": \"Rahul\",\n              \"ln\": \"Sharma\",\n              \"eid\": \"rahul.sharma@test.com\",\n              \"pnum\": \"A1234567\",\n              \"cnum\": \"9810000001\",\n              \"gen\": \"M\",\n              \"ni\": [\n                { \"nn\": \"Priya Sharma\", \"nr\": \"SPOUSE\" }\n              ]\n            },\n            {\n              \"id\": 2,\n              \"dob\": \"1979-03-22\",\n              \"age\": 45,\n              \"fn\": \"Sita\",\n              \"ln\": \"Sharma\",\n              \"eid\": \"sita.sharma@test.com\",\n              \"pnum\": \"B7654321\",\n              \"cnum\": \"9810000002\",\n              \"gen\": \"F\",\n              \"ni\": [\n                { \"nn\": \"Rahul Sharma\", \"nr\": \"CHILD\" }\n              ]\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+        },
+        "description": "Book insurance using bookingId from Review. Traveller count must exactly match the search. Amount must equal TF from review response."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Book returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "pm.test('Has bookingId', () => pm.expect(json.bookingId).to.exist);",
+          "console.log('TJ Booking ID:', json.bookingId);"
+        ]}
+      }]
+    },
+    {
+      "name": "💳 6b. Book — Student",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/book",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"paymentInfos\": [\n    { \"paymentMedium\": \"WALLET\", \"amount\": 8200.00 }\n  ],\n  \"deliveryInfo\": {\n    \"emails\": [\"student@klar.com\"],\n    \"contacts\": [\"9090909090\"]\n  },\n  \"_journeyType\": \"STUDENT\",\n  \"pli\": [\n    {\n      \"plid\": \"{{planId}}\",\n      \"pi\": [\n        {\n          \"pid\": \"{{productId}}\",\n          \"iti\": [\n            {\n              \"id\": 1,\n              \"dob\": \"2004-03-25\",\n              \"age\": 22,\n              \"fn\": \"Deepa\",\n              \"ln\": \"Verma\",\n              \"eid\": \"deepa.verma@test.com\",\n              \"pnum\": \"C9876543\",\n              \"cnum\": \"9090909090\",\n              \"gen\": \"F\",\n              \"ti\": \"Ms\",\n              \"ni\": [\n                { \"nn\": \"Legal Heir\", \"nr\": \"LEGAL HEIR\" }\n              ],\n              \"sc\": {\n                \"cn\": \"Computer Science\",\n                \"cdm\": 24,\n                \"un\": \"University of Melbourne\",\n                \"uc\": \"Melbourne\",\n                \"sn\": \"Ramesh Verma\",\n                \"sdob\": \"1972-05-10\",\n                \"sr\": \"PARENT\",\n                \"se\": \"ramesh.verma@test.com\"\n              }\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+        },
+        "description": "Student plan booking — requires sc (studentCourse) block for each traveller."
+      }
+    },
+    {
+      "name": "📋 7. Booking Details (TripJack)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/booking-details",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{bookingId}}\"\n}"
+        },
+        "description": "Fetch booking status from TripJack. Poll until status becomes SUCCESS/CANCELLED/FAILED."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Details returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "const status = json.body?.order?.status || json.body?.itemInfos?.INSURANCE?.ios;",
+          "console.log('Insurance Status:', status);"
+        ]}
+      }]
+    },
+    {
+      "name": "📋 8. My Bookings (DB List)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/bookings?page=1&limit=10",
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "10" },
+            { "key": "status", "value": "SUCCESS", "disabled": true },
+            { "key": "journeyType", "value": "STANDALONE", "disabled": true }
+          ]
+        },
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "description": "List your insurance bookings from MongoDB. Optional filters: ?status=SUCCESS&journeyType=STUDENT"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('List returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "pm.test('Has bookings array', () => pm.expect(json.body.bookings).to.be.an('array'));",
+          "pm.test('Has pagination', () => pm.expect(json.body.pagination).to.exist);"
+        ]}
+      }]
+    },
+    {
+      "name": "🔙 9. Amendment — Raise Cancellation",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/amendment/raise",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amendmentId\": \"\",\n  \"bookingId\": \"{{bookingId}}\",\n  \"type\": \"CANCELLATION\",\n  \"travellerKeys\": {\n    \"{{planId}}\": {\n      \"{{productId}}\": [\n        { \"id\": 1 }\n      ]\n    }\n  }\n}"
+        },
+        "description": "Raise a cancellation request. Must be raised ≥ 24h before coverage start. Returns amendmentId."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Raise returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "if (json.amendmentId) {",
+          "  pm.collectionVariables.set('amendmentId', json.amendmentId);",
+          "  console.log('✅ amendmentId:', json.amendmentId);",
+          "}"
+        ]}
+      }]
+    },
+    {
+      "name": "❌ 10. Amendment — Confirm Cancellation",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/amendment/cancel",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amendmentId\": \"{{amendmentId}}\",\n  \"bookingId\": \"{{bookingId}}\",\n  \"type\": \"INSURANCE_CANCELLATION\",\n  \"travellerKeys\": {\n    \"{{planId}}\": {\n      \"{{productId}}\": [\n        { \"id\": 1 }\n      ]\n    }\n  }\n}"
+        },
+        "description": "Confirm cancellation using amendmentId from Raise step. Status becomes CANCELLED on success."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Cancel returned 200', () => pm.response.to.have.status(200));",
+          "const json = pm.response.json();",
+          "console.log('Cancellation status:', json.cancellationStatus);"
+        ]}
+      }]
+    },
+    {
+      "name": "🚫 VALIDATION — Blacklisted Country (should 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2026-05-30\",\n    \"isc\": {\n      \"iri\": [\n        { \"rkey\": \"IR\", \"rt\": \"COUNTRY\" }\n      ]\n    },\n    \"iti\": [{ \"age\": 30 }]\n  }\n}"
+        },
+        "description": "Should return 400 — Iran (IR) is a blacklisted country."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Blacklisted country returns 400', () => pm.response.to.have.status(400));"
+        ]}
+      }]
+    },
+    {
+      "name": "🚫 VALIDATION — Too Many Travellers (should 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2026-05-30\",\n    \"isc\": { \"iri\": [{ \"rkey\": \"EUR\", \"rt\": \"POPULARREGION\" }] },\n    \"iti\": [\n      {\"age\":20},{\"age\":21},{\"age\":22},{\"age\":23},{\"age\":24},\n      {\"age\":25},{\"age\":26},{\"age\":27},{\"age\":28},{\"age\":29},{\"age\":30}\n    ]\n  }\n}"
+        },
+        "description": "Should return 400 — 11 travellers exceeds the 10-person limit."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Too many travellers returns 400', () => pm.response.to.have.status(400));"
+        ]}
+      }]
+    },
+    {
+      "name": "🚫 VALIDATION — Student Age Out of Range (should 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"cd\": \"180\",\n    \"isc\": { \"iri\": [{ \"rkey\": \"AU\", \"rt\": \"COUNTRY\" }] },\n    \"iti\": [{ \"age\": 50 }],\n    \"ict\": \"STUDENT\"\n  }\n}"
+        },
+        "description": "Should return 400 — Student plans are only for ages 18–45."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Student age out of range returns 400', () => pm.response.to.have.status(400));"
+        ]}
+      }]
+    },
+    {
+      "name": "🚫 VALIDATION — AMT Invalid Duration (should 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/search",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isq\": {\n    \"sd\": \"2026-05-15\",\n    \"ed\": \"2027-05-14\",\n    \"isc\": { \"iri\": [{ \"rkey\": \"ASI\", \"rt\": \"POPULARREGION\" }] },\n    \"iti\": [{ \"age\": 35 }],\n    \"ict\": \"AMT\",\n    \"adr\": \"90\"\n  }\n}"
+        },
+        "description": "Should return 400 — AMT adr must be 30, 45, or 60. 90 is invalid."
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Invalid AMT duration returns 400', () => pm.response.to.have.status(400));"
+        ]}
+      }]
+    }
+  ]
+}

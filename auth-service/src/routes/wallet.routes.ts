@@ -10,6 +10,7 @@ const router = Router();
 router.get("/", authMiddleware, WalletController.getWallet);
 router.post("/credit", authMiddleware, WalletController.creditWallet);
 router.post("/debit", authMiddleware, WalletController.debitWallet);
+router.post("/pay", authMiddleware, WalletController.debitWallet);
 router.get("/transactions", authMiddleware, WalletController.getTransactions);
 router.patch("/settings", authMiddleware, WalletController.updateSettings);
 

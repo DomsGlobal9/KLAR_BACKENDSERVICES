@@ -38,7 +38,7 @@ export class BookingService {
             const bookingResult = retrieveBookingFromTripJack(bookingId, requirePaxPricing);
             if (!bookingResult) {
                 throw new Error("Error: while getting booking details from 3rd party");
-            }            
+            }
             return bookingResult;
         } catch (error) {
             console.error('Error in getBookingByBookingId service:', error);
@@ -193,13 +193,13 @@ export class BookingService {
     /**
      * Get bookings from DB
      */
-    async getBookingDBdataByID(bookingId: string){
+    async getBookingDBdataByID(bookingId: string) {
         try {
             if (bookingId) {
                 return await this.bookingRepository.findByBookingId(bookingId)
             }
         }
-        catch(error) {
+        catch (error) {
             throw new Error("Some error while get booking data");
         }
     }

@@ -38,10 +38,15 @@ router.get("/health", (_req, res) => {
 // List bookings from DB
 router.get("/bookings", authenticateJWT, listController);
 
+import { getModificationPolicy, getModificationPricing, commitModification } from "../controllers/amend.controller";
+
 // RateGain booking flow — now protected
 router.post("/precheck", authenticateJWT, precheckController);
 router.post("/commit", authenticateJWT, commitController);
 router.post("/cancel", authenticateJWT, cancelController);
+router.get("/amend/policy", authenticateJWT, getModificationPolicy);
+router.post("/amend/price", authenticateJWT, getModificationPricing);
+router.post("/amend/commit", authenticateJWT, commitModification);
 router.get("/special-requests", specialRequestsController);
 
 // New booking management routes
