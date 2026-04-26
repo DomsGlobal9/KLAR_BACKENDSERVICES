@@ -2,7 +2,7 @@
 export function validateCancellationPayload(payload: any) {
     if (!payload.bookingId) throw new Error("bookingId is required");
     if (!payload.remarks) throw new Error("remarks is required");
-    if (payload.type !== "CANCEL") throw new Error("Invalid type");
+    if (payload.type !== "CANCELLATION") throw new Error("Invalid type");
 
     if (payload.trips) {
         payload.trips.forEach((trip: any, index: number) => {

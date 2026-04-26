@@ -178,7 +178,8 @@ class BookingLocalController {
                 travellers,
                 tripjackPrice,
                 markupPrice,
-                totalPrice
+                totalPrice,
+                isHold
             } = req.body;
 
             if (!bookingId) {
@@ -193,7 +194,8 @@ class BookingLocalController {
                 travellers,
                 tripjackPrice,
                 markupPrice,
-                totalPrice
+                totalPrice,
+                isHold
             });
 
             if (!result) {

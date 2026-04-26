@@ -154,8 +154,9 @@ class BookingService {
         tripjackPrice?: number;
         markupPrice?: number;
         totalPrice?: number;
+        isHold: boolean;
     }) {
-        const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice } = data;
+        const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
 
         const updateQuery: any = {};
 
@@ -189,6 +190,7 @@ class BookingService {
         if (tripjackPrice !== undefined) updateQuery.tripjackPrice = tripjackPrice;
         if (markupPrice !== undefined) updateQuery.markupPrice = markupPrice;
         if (totalPrice !== undefined) updateQuery.totalPrice = totalPrice;
+        if (isHold !== undefined) updateQuery.isHold = isHold;
 
         const updatedBooking = await this.bookingRepo.updateBooking(
             bookingId,
@@ -205,13 +207,15 @@ class BookingService {
             phone: updatedBooking.phone,
             travellers: updatedBooking.travellers,
             amount: updatedBooking.tripjackPrice || 0,
-            isHold: false,
+            isHold: updatedBooking.isHold,
             emergencyContact: updatedBooking.emergencyContact
         };
 
         if (updatedBooking.gstInfo?.gstNumber) {
             tripjackPayload.gstInfo = updatedBooking.gstInfo;
         }
+
+        console.log("@@@@@@@@@@@@@@@@@ The reipjack payload\n", JSON.stringify(tripjackPayload, null, 2));
 
         validateBookingPayload(tripjackPayload);
 
@@ -221,13 +225,10 @@ class BookingService {
         console.log("Response:", response.data);
 
         if (response.data.status.success === true) {
-            
+
             const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
 
-            console.log("TRIP-JACK-BOOKING-STATUS", tripjackBookingStatus);
 
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@ BOOKING TRIPJACK STATUS:\n", tripjackBookingStatus?.order?.status);
-            
             await this.bookingRepo.updateBookingStatus(
                 bookingId,
                 tripjackBookingStatus?.order?.status
