@@ -1,0 +1,44 @@
+{
+  "name": "insurance-service",
+  "version": "1.0.0",
+  "description": "TripSafe Insurance microservice — wraps TripJack TripSafe API v6.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "clean": "rm -rf dist node_modules",
+    "pm2:start": "pm2 start dist/server.js --name klar-insurance-service",
+    "pm2:start:dev": "pm2 start src/server.ts --name klar-insurance-service-dev --interpreter ts-node",
+    "pm2:stop": "pm2 stop klar-insurance-service",
+    "pm2:restart": "pm2 restart klar-insurance-service",
+    "pm2:delete": "pm2 delete klar-insurance-service",
+    "pm2:logs": "pm2 logs klar-insurance-service",
+    "pm2:status": "pm2 status",
+    "deploy": "git pull && npm install && npm run build && pm2 restart klar-insurance-service"
+  },
+  "keywords": ["insurance", "tripsafe", "tripjack", "klar"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "axios": "^1.13.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^7.1.5",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.23.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.5",
+    "@types/uuid": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}

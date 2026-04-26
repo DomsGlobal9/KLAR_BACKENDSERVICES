@@ -219,4 +219,33 @@ export class TripJackApiProvider {
             throw error;
         }
     }
+
+    /**
+     * POST /oms/v3/hotel/amend-charges
+     */
+    async getAmendCharges(payload: any): Promise<any> {
+        try {
+            console.log(`[TripJack] Fetching Amendment Charges for: ${payload.bookingId}`);
+            const res = await tripJackOmsClient.post("/oms/v3/hotel/amend-charges", payload);
+            return res.data;
+        } catch (error: any) {
+            console.error("[TripJack] AmendCharges Error:", error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * POST /oms/v3/hotel/amend
+     * Commit the amendment request.
+     */
+    async amend(payload: any): Promise<any> {
+        try {
+            console.log(`[TripJack] Committing Amendment for: ${payload.bookingId}`);
+            const res = await tripJackOmsClient.post("/oms/v3/hotel/amend", payload);
+            return res.data;
+        } catch (error: any) {
+            console.error("[TripJack] Amend Commit Error:", error.response?.data || error.message);
+            throw error;
+        }
+    }
 }

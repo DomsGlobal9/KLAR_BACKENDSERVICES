@@ -1,0 +1,2525 @@
+[
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:50:40.864Z",
+    "data": {
+      "url": "http://localhost:5012/",
+      "method": "POST",
+      "body": {
+        "destinationCode": "DXB",
+        "checkin": "2026-09-10",
+        "checkout": "2026-09-12",
+        "rooms": [
+          {
+            "adults": 2,
+            "children": 1,
+            "childAges": [
+              5
+            ]
+          }
+        ],
+        "countryCode": "IN"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:50:41.443Z",
+    "data": {
+      "url": "http://localhost:5012/",
+      "status": 200,
+      "data": {
+        "results": [],
+        "meta": {
+          "rgCount": 0,
+          "tjCount": 0,
+          "errors": [
+            {
+              "message": "Request failed with status code 401",
+              "name": "AxiosError",
+              "stack": "AxiosError: Request failed with status code 401\n    at settle (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\node_modules\\axios\\lib\\core\\settle.js:20:7)\n    at IncomingMessage.handleStreamEnd (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\node_modules\\axios\\lib\\adapters\\http.js:844:13)\n    at IncomingMessage.emit (node:events:520:35)\n    at endReadableNT (node:internal/streams/readable:1729:12)\n    at processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\node_modules\\axios\\lib\\core\\Axios.js:46:41)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at RateGainApiProvider.getBestProperties (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\providers\\rategain.api.provider.ts:87:25)\n    at searchRG (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\adapters\\rateGainAdapter.ts:50:17)\n    at async Promise.allSettled (index 0)\n    at HotelsService.searchHotels (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\services\\hotels.service.ts:27:29)\n    at searchHotels (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\controllers\\hotels.controller.ts:10:22)",
+              "config": {
+                "transitional": {
+                  "silentJSONParsing": true,
+                  "forcedJSONParsing": true,
+                  "clarifyTimeoutError": false,
+                  "legacyInterceptorReqResOrdering": true
+                },
+                "adapter": [
+                  "xhr",
+                  "http",
+                  "fetch"
+                ],
+                "transformRequest": [
+                  null
+                ],
+                "transformResponse": [
+                  null
+                ],
+                "timeout": 0,
+                "xsrfCookieName": "XSRF-TOKEN",
+                "xsrfHeaderName": "X-XSRF-TOKEN",
+                "maxContentLength": -1,
+                "maxBodyLength": -1,
+                "env": {},
+                "headers": {
+                  "Accept": "application/json",
+                  "Content-Type": "application/json",
+                  "apikey": "TZLUV3CLTB5X",
+                  "apisecret": "HSVY4XMLP3FHAH8A",
+                  "User-Agent": "axios/1.13.6",
+                  "Content-Length": "240",
+                  "Accept-Encoding": "gzip, compress, deflate, br"
+                },
+                "baseURL": "https://sandbox-smartdistribution.rategain.com",
+                "method": "post",
+                "url": "/api/SmartDistribution/bestproperties",
+                "data": "{\"destinationCode\":\"DXB\",\"checkin\":\"2026-09-10\",\"checkout\":\"2026-09-12\",\"Echotoken\":\"echo-1777024240928\",\"Rooms\":[{\"NumberOfRoom\":1,\"Adults\":2,\"Children\":1,\"paxes\":[{\"type\":\"Child\",\"age\":5}]}],\"pageNo\":1,\"CountryCode\":\"IN\",\"Currency\":\"INR\"}",
+                "allowAbsoluteUrls": true
+              },
+              "code": "ERR_BAD_REQUEST",
+              "status": 401
+            },
+            {}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:50:41.444Z",
+    "data": {
+      "url": "http://localhost:5012/",
+      "method": "POST",
+      "body": {
+        "destination": "Monaco",
+        "checkin": "2026-09-10",
+        "checkout": "2026-09-12",
+        "rooms": [
+          {
+            "adults": 2,
+            "children": 1,
+            "childAges": [
+              5
+            ]
+          }
+        ],
+        "countryCode": "IN"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:14.709Z",
+    "data": {
+      "url": "http://localhost:5012/",
+      "status": 200,
+      "data": {
+        "results": [
+          {
+            "hotelId": "TJ:100000357762",
+            "source": "TJ",
+            "name": "La Fattoria dei Sibillini",
+            "address": "Via Colle Regnone",
+            "city": "montemonaco",
+            "starRating": 3,
+            "images": [
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/34f9948c_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/1cfc9e64_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/8fd31a90_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/057f5f0a_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/94f30adf_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/41f30263_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/f4da96b3_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/11c0d6e0_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/80acd825_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/a6accdbb_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/5ba1d4d4_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/34e27d1b_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/3d0ef7f1_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/92c45907_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/c01f7916_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/ef6bf758_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/6a4658e3_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/c8fb2eb5_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/aa37fe47_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/ea73c9a8_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/60fbd1bf_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/9cd4eccc_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/02c66bfe_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/d669d1d6_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/92e16533_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/5119e67a_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/7138deee_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/3957e04c_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/3d4712d1_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/41187943_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/d93be3fe_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/a2ae9b08_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/8f40d251_z.jpg",
+              "https://i.travelapi.com/lodging/39000000/38500000/38494400/38494337/2c931703_z.jpg"
+            ],
+            "price": 25177.100000000002,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": true,
+            "amenities": [],
+            "propertyCode": "100000357762",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000357762",
+              "name": "La Fattoria dei Sibillini",
+              "options": [
+                {
+                  "optionId": "a4380b3d-965d-4764-82d2-8f49b127cb73",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Apartment, 2 Bedrooms"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 25177.100000000002,
+                    "basePrice": 18167.38,
+                    "discount": 0,
+                    "taxes": 7009.72,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": true,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-06T23:59:59",
+                        "amount": 0
+                      },
+                      {
+                        "from": "2026-09-06T23:59:59",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 25129.9
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          },
+          {
+            "hotelId": "TJ:100000155542",
+            "source": "TJ",
+            "name": "Hotel Novotel Monte Carlo",
+            "address": "16 Boulevard Princesse Charlotte",
+            "city": "monaco",
+            "starRating": 3,
+            "images": [
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e9d2863b_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5906306b_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/dabf8d1d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/7c450de9_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/6b86eee0_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/48913a3d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/59059e5f_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/cdc48fa5_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/98a38a92_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/57c54255_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/cd820b23_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/11ddb327_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/02defa47_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/28c04479_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2e82a1a4_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/0382dfd3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3e6449dd_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/186cb730_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c69e8df4_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/8c7f580d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/bcf5e3c5_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/1158c995_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f9c1ef49_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a5321706_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/ea4ff79c_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/439ac8d5_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/9ea07cac_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/73cf35a3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5f7c772e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/463bec9e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/742e54d0_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/b1e9474f_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/0c67a529_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/d9234c44_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/300785c6_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/984db7fe_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/10ae2863_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/26145966_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/1c2b1b88_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a7cad0b3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/1fd91f8a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e3bb57fb_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/bd1c390b_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f3f65cd0_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a9a72f42_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/ebe44ad9_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5e4debf8_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/20b36e09_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/9656b2ec_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/6cba4672_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/0268c62d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/4d821472_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/166b2019_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/93482fcc_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/360a092e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/ba965015_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/40808ba1_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a4723638_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/92bba895_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/546ee4f5_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f8d74d0a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/134547f2_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/4e8641c8_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/24bc3656_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/31bb8408_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c2408483_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/d8707e45_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/38244f5b_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/74409da4_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/4c4be2a9_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f68d0fd7_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/cbe8f72c_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/888b87dc_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/0f3430bd_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/96cc039e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2738dc31_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/4c9bc9ed_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5272071e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/62d88347_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3087f3a1_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/511868e6_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2f7eb820_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/68705ae7_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/0bde1722_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/b1aea188_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a44b71e1_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/62e5d7ce_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/39d666ee_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c9e6f487_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/da069730_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/353c5700_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3320c026_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/abe2695e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/d7934b9f_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3fa408f1_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/6143d5e6_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a67a40d3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e46944ca_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/7c5fd833_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/778fce13_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e54db2dd_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/36f47a48_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/d8d5488e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/75ff058a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2086b167_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/82b64abd_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/d343508b_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/25045c0f_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/688474a9_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e18df66a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f86ce606_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/bac030a6_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/66d3eefe_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e0fabd80_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e39c2c8a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c69245aa_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/27bf11a0_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f21bba26_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2c61d158_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/7b43f1c3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/17b295fa_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3fabc5b1_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/43bfe828_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3cd4cde7_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5bcb45c7_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/86558632_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/17a0492e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c0b1734f_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/bbcee617_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e277b7c4_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/b5d8d016_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/8fcf128e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/1b3efb3d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/e84f3194_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/37cf5693_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/b1f026e3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5044a931_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/8cb4d93c_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c90b355f_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/28c029e0_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/ae43b2a8_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/cdff30a6_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/76cb70ec_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/52095415_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/6e0e860a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/7e764f5d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/03dc229c_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/79090529_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/0af72bbf_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/362cde77_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/dcf2b455_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2c71f189_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/a0c319c4_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/83fcccb2_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/9e4969ad_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/32e8ef44_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/742893b9_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/d25da302_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/c8d1b291_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/w3000h2034x0y0-ca47c7fd_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/fefb4e8c_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3384f337_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/cc73d2db_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/916b7142_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/5bdc243e_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/1211da9a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/4a50621a_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/58bcf35d_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/24dac426_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/1c4a239c_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/9b7a0ebd_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/b04db114_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/82281de6_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/3b4a4dbf_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/792e2a77_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/732a2cb3_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/f87a6bdf_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/46f7e536_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/2a1940c4_z.jpg",
+              "https://i.travelapi.com/lodging/2000000/1600000/1590600/1590531/39a589c7_z.jpg"
+            ],
+            "price": 75191.73999999999,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": false,
+            "amenities": [],
+            "propertyCode": "100000155542",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000155542",
+              "name": "Hotel Novotel Monte Carlo",
+              "options": [
+                {
+                  "optionId": "0423a2f5-51a3-459c-b8c3-ab6bfa6af0f6",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Superior Room, 1 Double Bed with Sofa bed (Riviera)"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 75191.73999999999,
+                    "basePrice": 67740.40999999999,
+                    "discount": 0,
+                    "taxes": 7451.330000000001,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": false,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 75144.54000000001
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          },
+          {
+            "hotelId": "TJ:100000221923",
+            "source": "TJ",
+            "name": "Le Meridien Beach Plaza",
+            "address": "22 Avenue Princesse Grace",
+            "city": "monaco",
+            "starRating": 4,
+            "images": [
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/64dd7cb4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/1193c8b0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/534dbdd0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/6b4bf998_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a75315df_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/019e3dde_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/69b75c71_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/b3c24f91_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/5202f4a9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/4682e9c8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d07fd475_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/7becd88f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/efbf68b7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/28c0f1e9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/51eafc9b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/48ee22f2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/177ea595_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d443e283_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c20d2b0c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/7c5a1afc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/171a3d69_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/06fb8ea0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/14da4c8e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/06eec352_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c7e93232_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c7d56db6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/363541d2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c81c02d6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2a4c27e0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/1c77e746_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3f373c97_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/9698e220_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/18b9691d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/423d18d8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/693b9bab_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ca6e0a4a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3e189bee_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/36db9936_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/de0226be_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ec6c17fb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/7c6f5e17_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/60129ade_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/e5eb65c3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0ddb2ce5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/032e80ca_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/cf6bff12_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/38c2393c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8d3e920e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/28ca5357_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/183e2fa0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/4815607a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/1e06111b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/853d67ba_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a5ae4461_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0468f54c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/5e6a57f7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0de4682a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/5fada507_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d12327b8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3030fe78_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/5cfd523d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/b486810b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/1842e28d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/46e7b65b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a03a8af8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/99ccb099_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3afd494b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8820b63e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0e2c105f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/5f84c30a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/69268cbd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/65fae91c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2d252f31_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3f7739f1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3e653768_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ab8f3512_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/b0b4839f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/w4000h2663x0y0-9a9524d9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/9b5a5512_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/dbb802c7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c9d91912_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/bfec178c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/60c0789e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/7dd5e2a4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/357d4c08_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/9d53f65b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/b769d901_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/9b4abcd0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/fcab46ee_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0e248596_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d38b7fc3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/4b21981e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/6ce65043_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a815822e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/333edc53_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/w2662h4000x0y0-8e726dc7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8cd5f514_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/359c697b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/81428c92_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/4fb2007f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0631cbad_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/56e31b44_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/fecf271c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/da7f9602_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d272d4c6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/59fe4831_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c072f74f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c6fe4466_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3e436691_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/80da14e3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a1411883_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0c7d5ab1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/08429cf2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d6969f98_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ca044945_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/5bee58c2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/aafb944d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/f34f8fd7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/acf66f06_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/w4000h2662x0y0-d963493e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/df3941c7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2197a07c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a202fe89_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/24c9a7b9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/818ea3bd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a28522ac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2b980ac4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c7071c3c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3c19ef2c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/e3a0220b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/w4000h2663x0y0-f86c8ec1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/77ab61c6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/eeb12fbe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/b989fe9c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/w4000h2663x0y0-79e98e7e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ddc1b461_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c8359335_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/40d8a85a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/99af5715_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8c216bc4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/cd989f8c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/59ae1604_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d2262c7a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a92b1c7c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2fdd1048_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c262ca23_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/84689d1f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/f0372f70_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/929f14ac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/3f63140d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/f605400e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/550ac4b8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/feebd462_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/22213d61_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/42f1e154_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8242a4e7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/fce9b1c8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/07db0227_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/0d4ca8a3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/858e5fdb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/971a0581_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/103c34d3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/717267f1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/77f1b25a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/f786c133_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/59b732a3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/1ad97756_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/fdb764a3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ab74188c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/6f6bec3d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2aed2d18_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/89f26a69_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/447a2137_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/4944a7e4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/18545739_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/db7cff9d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8b3203b4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/946af3eb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/c67e8c68_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d03cbf11_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/e83a74bc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/f620ba62_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/ac0b1426_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/w2664h4000x0y0-a600cb2e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/96f96f54_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a220ce17_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/a6d3b156_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/af0eec83_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/632b4a83_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/cbda049f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/9376f86d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2851d424_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/08a3e25b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/9c398cbe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/2d49aa44_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/dd976640_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/8fef4870_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/93893db2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/99e8aa60_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/d1644e84_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/22200/22133/98961f9f_z.jpg"
+            ],
+            "price": 94761.12,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": true,
+            "amenities": [],
+            "propertyCode": "100000221923",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000221923",
+              "name": "Le Meridien Beach Plaza",
+              "options": [
+                {
+                  "optionId": "3786ebf8-754c-41d5-8874-75ee398ec624",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Classic Room, 2 Double Beds, City View"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 94761.12,
+                    "basePrice": 76498.13999999998,
+                    "discount": 0,
+                    "taxes": 18262.980000000003,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": true,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-05T23:59:59",
+                        "amount": 0
+                      },
+                      {
+                        "from": "2026-09-05T23:59:59",
+                        "to": "2026-09-09T00:00:00",
+                        "amount": 47356.96
+                      },
+                      {
+                        "from": "2026-09-09T00:00:00",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 94713.92
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          },
+          {
+            "hotelId": "TJ:100000154136",
+            "source": "TJ",
+            "name": "Columbus Hotel Monte-Carlo, Curio Collection by Hilton",
+            "address": "23 Avenue Des Papalins",
+            "city": "monaco",
+            "starRating": 3,
+            "images": [
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/a35d46b5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/41229333_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/64f70f31_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/90daa705_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/bf119743_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/43d859fd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/a534a04d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3f18ef12_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/64d55e60_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/80038345_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3253d242_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3becdee9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/6bc8472e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/fcdde8e1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/23340618_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/d4c6b958_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/22a114c6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/f5bb0830_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/w3837h2560x3y0-a8216110_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/301edabe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/d43b590d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/130e6995_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/c4a13afc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/0229981b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/706c85c1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/af05a58f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/9c70e88e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/9dff5826_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/4bcb2ee6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3708b73e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/778cda94_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/0c0419f9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/f66059d2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/8f692211_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/9b6a7a89_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/b6c1eebe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/cc857939_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/cb26aea2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/9a57d0a6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/e4b2ba7a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/e01f44b9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/994eea8f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/71cf2f18_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/00547320_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/860b2a93_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/0a75a7d2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/53468341_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/015fb4dd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/d88cacd8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/6e4f7412_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/25a5aa9b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/16e92d47_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/ac80bca1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/6df67298_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/b1d5de66_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/6ee130ad_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/b7f5fabf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/38f4f100_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/8d90dff1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/c8f3ee49_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/8acc4136_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/f541d4ca_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/5ed0d849_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/5afc5e6a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/e5987581_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/21c9c387_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/8f310c82_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3409b0f5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/8ddbd462_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/dad6ce5d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/d4d46088_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/8591e9f0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3154be5a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/432d7736_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/390d1c35_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/78133757_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/60e5d9cf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/93fc52f6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/d461a174_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3eec8f48_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/c363d896_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/2c1a9c21_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/5756aeb3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/w3840h2549x0y11-99a2ae8a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/3e20fa9f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/93e74465_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/abed4e8f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/29f3e1a4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/2d73b4ed_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/aeb6d6c1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/10000/1600/1579/f4572bce_z.jpg"
+            ],
+            "price": 98111.74,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": false,
+            "amenities": [],
+            "propertyCode": "100000154136",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000154136",
+              "name": "Columbus Hotel Monte-Carlo, Curio Collection by Hilton",
+              "options": [
+                {
+                  "optionId": "f45c6346-dc5e-4cc8-a1f1-60dd349008eb",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Deluxe Room, 1 King Bed with Sofa bed"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 98111.74,
+                    "basePrice": 86402.08,
+                    "discount": 0,
+                    "taxes": 11709.66,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": false,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-09T00:00:00",
+                        "amount": 98064.54
+                      },
+                      {
+                        "from": "2026-09-09T00:00:00",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 98064.54000000001
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          },
+          {
+            "hotelId": "TJ:100000605251",
+            "source": "TJ",
+            "name": "Hotel Port Palace",
+            "address": "7 Avenue J.F. Kennedy",
+            "city": "monaco",
+            "starRating": 4,
+            "images": [
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/edab694a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/1a1f0c04_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/dbe0828f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/9caab91f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/1f3f34c5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/e1fab640_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/w1186h2208x0y0-54d79b0e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/c1e754c7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/e7d015c3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/dd58be63_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/2251214c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/1ef7e83e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/e5c8c13c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/15d91a48_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/6f9399f9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/51f36c51_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/14e817c5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/69870e5f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/e7e1527b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/50d92648_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/387a47d3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/fba80503_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/d0ca9866_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/a9f0d1c2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/232e2658_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/25e0b42f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/61ba90a9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/d2ff7fcf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/7ddba64f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/35a973be_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/a51bf66d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/51319e87_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/31b3b1a0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/96659a39_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/c8b87d24_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/1000000/994600/994536/916e5dc3_z.jpg"
+            ],
+            "price": 106290.63999999998,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": false,
+            "amenities": [],
+            "propertyCode": "100000605251",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000605251",
+              "name": "Hotel Port Palace",
+              "options": [
+                {
+                  "optionId": "7bb1ff57-7511-4dd2-92fe-17d78f9c1221",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Junior Suite"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 106290.63999999998,
+                    "basePrice": 95718.53999999998,
+                    "discount": 0,
+                    "taxes": 10572.1,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": false,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 106243.43999999999
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          },
+          {
+            "hotelId": "TJ:100000271370",
+            "source": "TJ",
+            "name": "Fairmont Monte Carlo",
+            "address": "12 Avenue de Spélugues",
+            "city": "monaco",
+            "starRating": 4,
+            "images": [
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/56d0ad51_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/6c1466ac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/809251fd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/405cbcf3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/41c81287_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/921883f0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/490a9898_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/6f14173f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/6492eecb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/db76924a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/ce2682c5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9058b26f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/ee9aaa12_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9a9584e3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/41ff96ae_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/26f1b8fe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/a64b5aa8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/13bf76df_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/c8823b85_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/ee08c3a9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/bc07f880_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/5b2175f2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/e08ac8f2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/009f263a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/dd831083_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/19ea0300_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/f130dea9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/2c6733db_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/c4fbffa9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/30dce3c2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/40fb477a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/d42d6a78_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/a668679a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/46fc0eaa_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/fdb1c164_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/cbf52c50_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/b09bda7c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/ee0c896b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/99c5ffbf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/75b27ffe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/fc95c0a6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1ab38cf9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/f6974e23_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/f21571e8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/779d9828_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/7ef2b236_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/a2e8047f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1e6d8e30_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/a9e420a9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1148e13a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/87883c26_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/de15166e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/41a69d4f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/27549cc3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/5c25dbec_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/e7c7c935_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/0bfc08ab_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/2229caa8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/2a0760ed_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/d1ae8f2f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/41511ead_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/229262db_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1bd02ddc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9aa6da49_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/95dd7d79_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/6b3f85ad_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/fb66ecee_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/e6d8fe0f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/15aa9838_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9cc487cf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/c7ff4b01_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/c4ce8bd1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/cc1b93a0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/5074d8db_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/fea954ba_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/50727691_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/06d02bcd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/56a28156_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1dd0c0a2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1db710b1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/6cd0c0e7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9a178c6e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/29d7ec7f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1d23b8c6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/18b8c1a5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/5ba0aba0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/b6c11250_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1a51f76c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/16ad1825_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/83a8953a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/7b6722fe_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/73f08703_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/96947bf2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/de888195_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/c0ee88d7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/771c51c0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/0d7d5adb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/683f2b9d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/w2464h1848x268y200-e258998a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/4b57366a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/7166eb3b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9186b6d6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/d35503ba_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/4b1ba6af_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/fc88ea65_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/w3000h2247x0y0-23f2b5ed_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/bbd9e750_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/e370847c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1e83ed5b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/dadfa922_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/3ed01c5b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/50b185e0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/7b4f754c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1c09e6dc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/54f07952_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/ecfcfa7f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/w3000h2249x0y1-ca46eba6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/w3000h1994x0y0-a03121d8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/5f6d6ac7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/bb356f67_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/bf0fd854_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/b3fd804e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/3c21fe72_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/b735974f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/84de35bf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/a87cf3cc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/5987adac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/c48aa89a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/8c5b13d9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/2276715d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/d975c61c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/d5ff51a7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/9ff94f56_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/0caceef3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/a990338c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/caa75203_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/09463c13_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/ea73231d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/30000/27300/27281/1d36ec18_z.jpg"
+            ],
+            "price": 108353.66999999998,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": false,
+            "amenities": [],
+            "propertyCode": "100000271370",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000271370",
+              "name": "Fairmont Monte Carlo",
+              "options": [
+                {
+                  "optionId": "5b3a4fe4-5fd2-40a9-a3d4-5b8bb62f994e",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Fairmont Garden View, Twin double beds"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 108353.66999999998,
+                    "basePrice": 97617.21999999999,
+                    "discount": 0,
+                    "taxes": 10736.45,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": false,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 108306.47
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          },
+          {
+            "hotelId": "TJ:100000196801",
+            "source": "TJ",
+            "name": "Hôtel Métropole Monte Carlo – Spa Guerlain",
+            "address": "4, Avenue de la Madone",
+            "city": "monaco",
+            "starRating": 5,
+            "images": [
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0d84a906_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/947a3bf8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1d9f0746_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/249fec74_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/db50da26_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/e7462e37_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/be4f8923_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/6f568163_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/27a88f18_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5821d8fb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1a8a502b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/6d9efa98_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f14193f4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/acdb098c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/cc5ae40d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/7e456491_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/09490aa3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2c618826_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/dd6639dd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5976dca5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/3f6acf06_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0360326c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/636d3907_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b6a5f2ab_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4891c752_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/7f70a20c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/dd6ffcad_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/58caa79e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/fccd6ac3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/157a0aef_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c80b146f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/469bba49_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/eeabfd15_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c9bc751d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/6ea14e85_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/a375fa57_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f5f24759_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0e4ec0a4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5e9b51cd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/ca4b030c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c02539f4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/069ea10b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c8ecd5ed_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c8cbfb5d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/7515a41c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/925a1e0a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/e7b22bfd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5aae7f41_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/fefc6006_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/22a9d2a0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/a74222a2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/29442d3f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/a25ca1e6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/825573f7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/deceeb4d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/676330fc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/ef4c61f7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1644248f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/550c31d1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/64acfe62_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/55fcd7b7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f7755479_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/62063212_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/abe4549f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/919fd6d3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f80419e2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/3747fc8d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5e2b4370_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/27f403ec_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/3b0c107f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0d5ddf5b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/069ea850_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9d60d669_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/db5becb7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/120d8306_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2b653cd6_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2f782f64_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c8f39afd_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b28583c3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/72ce8995_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/45d018a0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/587eca5e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1a677a2a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/963ebecc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0822c228_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5cf03301_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2514578f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/ae2ce859_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/ad0f3e65_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2f6d48a5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1318a48e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/798f0d3c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/279866f8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/11939084_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b02ed4ed_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/e5acb7bc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/92bc0579_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/a52f5b1e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b6861fcb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/70383214_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/59e5172f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b92829e0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/fa28da8a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/371ed587_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4a4c53de_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/d2e7bbb9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9e530b6b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c5de498d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f830c26d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c9536d8a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/aa5675ce_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c697a52a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0b153079_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/bc0a0593_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/cc524327_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c8a29947_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/ecb8cc48_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/ef3b3cda_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c70e1539_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9fa1aa2f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9fc3d8f3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/75c0d654_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/30f89953_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/fcd9c262_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1e5e86ac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4d103dff_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/e421752d_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1b223563_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/e769dc15_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/389bf4c3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9d393154_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/646cefab_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/29a21d18_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/7201cd52_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1a2991a8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2bbf8b88_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/1261ad42_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/85de86bc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0966167e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f447bca2_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5c46b9e3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4a0908b7_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/6e28afc1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/3b4ecbaf_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/d4b7b920_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5849ab2f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5859f12b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/59b0063b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/476d13ac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2fc10ecb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/d99dfe75_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/bce9f328_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5f20f5ac_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/d07c1ea8_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/cb263a4c_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b9de3b37_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/d1e194ff_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/7ab06c34_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c18021ee_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4606e9c9_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/abcf3678_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/3ccf999a_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9c42f154_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/589049c1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/346338fb_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c2591282_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0f7e3a99_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/b57354d4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/e74437cc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4e2f1e82_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/53a7a086_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2e0bf80f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5e5aad44_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/9fb9ee40_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2e7c4e04_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f70fd493_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/c9ef7d40_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/8138a542_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0ebcc7c4_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/027f61cc_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/172f8987_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/8d14bdc3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/646983a0_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/0274ace1_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/81c59760_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/00495f83_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/25c42f20_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/90a0bfff_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/50c25816_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/a4cdddd5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/d4bdba5e_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/5af49d40_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/40bfd3c3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/76c55b5f_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/26511e25_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/f40a9df3_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/073670b5_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/2d495537_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/4ef5161b_z.jpg",
+              "https://i.travelapi.com/lodging/1000000/20000/19500/19442/w2885h2330x0y0-48e5ee5a_z.jpg"
+            ],
+            "price": 240934.38000000003,
+            "currency": "INR",
+            "mealBasis": "Room Only",
+            "isRefundable": false,
+            "amenities": [],
+            "propertyCode": "100000196801",
+            "brandCode": "",
+            "rawPayload": {
+              "hotelId": "100000196801",
+              "name": "Hôtel Métropole Monte Carlo – Spa Guerlain",
+              "options": [
+                {
+                  "optionId": "72e167f9-0730-459e-9ea3-3506ca6915a7",
+                  "optionType": "SRSM",
+                  "roomInfo": [
+                    {
+                      "name": "Deluxe junior suite"
+                    }
+                  ],
+                  "inclusions": [],
+                  "mealBasis": "Room Only",
+                  "pricing": {
+                    "totalPrice": 240934.38000000003,
+                    "basePrice": 217623.42000000004,
+                    "discount": 0,
+                    "taxes": 23310.960000000003,
+                    "mf": 0,
+                    "mft": 0,
+                    "currency": "INR"
+                  },
+                  "commercial": {
+                    "type": "NET",
+                    "commission": 0
+                  },
+                  "compliance": {
+                    "gstType": "NA",
+                    "panRequired": false,
+                    "passportRequired": false
+                  },
+                  "cancellation": {
+                    "isRefundable": false,
+                    "penalties": [
+                      {
+                        "from": "2026-04-24T09:51:00",
+                        "to": "2026-09-09T00:00:00",
+                        "amount": 240887.18000000005
+                      },
+                      {
+                        "from": "2026-09-09T00:00:00",
+                        "to": "2026-09-12T00:00:00",
+                        "amount": 240887.18000000002
+                      }
+                    ]
+                  }
+                }
+              ],
+              "_correlationId": "7194032c-31dd-420e-930c-7cfda52a64c1"
+            }
+          }
+        ],
+        "meta": {
+          "rgCount": 0,
+          "tjCount": 7,
+          "errors": [
+            {
+              "message": "Request failed with status code 401",
+              "name": "AxiosError",
+              "stack": "AxiosError: Request failed with status code 401\n    at settle (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\node_modules\\axios\\lib\\core\\settle.js:20:7)\n    at IncomingMessage.handleStreamEnd (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\node_modules\\axios\\lib\\adapters\\http.js:844:13)\n    at IncomingMessage.emit (node:events:520:35)\n    at endReadableNT (node:internal/streams/readable:1729:12)\n    at processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios.request (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\node_modules\\axios\\lib\\core\\Axios.js:46:41)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at RateGainApiProvider.getBestProperties (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\providers\\rategain.api.provider.ts:87:25)\n    at searchRG (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\adapters\\rateGainAdapter.ts:50:17)\n    at async Promise.allSettled (index 0)\n    at HotelsService.searchHotels (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\services\\hotels.service.ts:27:29)\n    at searchHotels (C:\\Users\\Sudhe\\OneDrive\\Desktop\\Klar\\KLAR_BACKENDSERVICES\\hotel-search-service\\src\\controllers\\hotels.controller.ts:10:22)",
+              "config": {
+                "transitional": {
+                  "silentJSONParsing": true,
+                  "forcedJSONParsing": true,
+                  "clarifyTimeoutError": false,
+                  "legacyInterceptorReqResOrdering": true
+                },
+                "adapter": [
+                  "xhr",
+                  "http",
+                  "fetch"
+                ],
+                "transformRequest": [
+                  null
+                ],
+                "transformResponse": [
+                  null
+                ],
+                "timeout": 0,
+                "xsrfCookieName": "XSRF-TOKEN",
+                "xsrfHeaderName": "X-XSRF-TOKEN",
+                "maxContentLength": -1,
+                "maxBodyLength": -1,
+                "env": {},
+                "headers": {
+                  "Accept": "application/json",
+                  "Content-Type": "application/json",
+                  "apikey": "TZLUV3CLTB5X",
+                  "apisecret": "HSVY4XMLP3FHAH8A",
+                  "User-Agent": "axios/1.13.6",
+                  "Content-Length": "243",
+                  "Accept-Encoding": "gzip, compress, deflate, br"
+                },
+                "baseURL": "https://sandbox-smartdistribution.rategain.com",
+                "method": "post",
+                "url": "/api/SmartDistribution/bestproperties",
+                "data": "{\"destinationCode\":\"268705\",\"checkin\":\"2026-09-10\",\"checkout\":\"2026-09-12\",\"Echotoken\":\"echo-1777024241500\",\"Rooms\":[{\"NumberOfRoom\":1,\"Adults\":2,\"Children\":1,\"paxes\":[{\"type\":\"Child\",\"age\":5}]}],\"pageNo\":1,\"CountryCode\":\"IN\",\"Currency\":\"INR\"}",
+                "allowAbsoluteUrls": true
+              },
+              "code": "ERR_BAD_REQUEST",
+              "status": 401
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:14.709Z",
+    "data": {
+      "url": "http://localhost:5013/precheck",
+      "method": "POST",
+      "body": {
+        "hid": "100000357762",
+        "optionId": "test-opt-123",
+        "reviewHash": "test-hash-456",
+        "correlationId": "test-corr-789",
+        "source": "TJ"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "ERROR",
+    "timestamp": "2026-04-24T09:51:14.712Z",
+    "data": {
+      "url": "http://localhost:5013/precheck",
+      "error": "fetch failed"
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:14.712Z",
+    "data": {
+      "url": "http://localhost:5013/commit",
+      "method": "POST",
+      "body": {
+        "bookingId": "MOCK-TJ-PRE-ID",
+        "roomTravellerInfo": [
+          {
+            "travellerInfo": [
+              {
+                "fN": "Test",
+                "lN": "User",
+                "ti": "Mr",
+                "pt": "ADULT"
+              }
+            ]
+          }
+        ],
+        "deliveryInfo": {
+          "emails": [
+            "test@klar.com"
+          ],
+          "contacts": [
+            "9876543210"
+          ],
+          "code": [
+            "+91"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "ERROR",
+    "timestamp": "2026-04-24T09:51:14.713Z",
+    "data": {
+      "url": "http://localhost:5013/commit",
+      "error": "fetch failed"
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:14.713Z",
+    "data": {
+      "url": "http://localhost:5013/amend/commit",
+      "method": "POST",
+      "body": {
+        "confirmationNumber": "SIM-RG-12345",
+        "checkIn": "2026-10-10",
+        "checkOut": "2026-10-12"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "ERROR",
+    "timestamp": "2026-04-24T09:51:14.714Z",
+    "data": {
+      "url": "http://localhost:5013/amend/commit",
+      "error": "fetch failed"
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:14.714Z",
+    "data": {
+      "url": "http://localhost:5013/cancel",
+      "method": "POST",
+      "body": {
+        "ConfirmationNumber": "SIM-RG-12345"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "ERROR",
+    "timestamp": "2026-04-24T09:51:14.715Z",
+    "data": {
+      "url": "http://localhost:5013/cancel",
+      "error": "fetch failed"
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:14.715Z",
+    "data": {
+      "url": "http://localhost:8084/search/quotes",
+      "method": "POST",
+      "body": {
+        "pickupDate": "2026-09-15 10:00",
+        "origin": {
+          "type": "location",
+          "displayAddress": "Delhi Airport",
+          "lat": "28.5",
+          "long": "77.1",
+          "address": {
+            "city": "Delhi",
+            "country": "India"
+          }
+        },
+        "destination": {
+          "type": "location",
+          "displayAddress": "Delhi Hotel",
+          "lat": "28.6",
+          "long": "77.2",
+          "address": {
+            "city": "Delhi Hotel",
+            "country": "India"
+          }
+        },
+        "journeyType": "airport_transfer",
+        "tripType": "oneway",
+        "passengers": 2
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:16.686Z",
+    "data": {
+      "url": "http://localhost:8084/search/quotes",
+      "status": 200,
+      "data": {
+        "success": true,
+        "message": "Successfully fetched quotes",
+        "data": {
+          "journeyInfo": {
+            "journeyType": "AIRPORT_TRANSFER",
+            "tripType": "ONEWAY",
+            "pickupDateTime": "2026-09-15T10:00:00",
+            "distance": "22 Km",
+            "duration": 39
+          },
+          "routeDetails": {
+            "isDomestic": true,
+            "origin": {
+              "displayAddress": "Pickup Location",
+              "lat": "28.5",
+              "type": "location",
+              "long": "77.1",
+              "address": {
+                "city": "Delhi",
+                "country": "India"
+              }
+            },
+            "destination": {
+              "displayAddress": "Drop Location",
+              "lat": "28.6",
+              "type": "location",
+              "long": "77.2",
+              "address": {
+                "city": "Delhi Hotel",
+                "country": "India"
+              }
+            }
+          },
+          "quotesInfo": [
+            {
+              "vehicleType": "Private Van",
+              "vehicleCategory": "Standard",
+              "label": "Standard Private Van",
+              "modelName": null,
+              "paxCapacity": "4",
+              "luggageCapacity": "4",
+              "vehicleImages": [
+                "https://copy-leamigo-cms-bucket.s3.ap-south-1.amazonaws.com/sedan_etios_b5ebc16a18.png"
+              ],
+              "similarType": "Toyota Etios or similar",
+              "quotes": [
+                {
+                  "vendorId": 1,
+                  "quotationId": "2368cf40-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "542835",
+                  "fareBreakup": {
+                    "totalFare": 1886,
+                    "totalTax": 40
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "90 minutes of free waiting time for airport pickups",
+                      "Complimentary Meet and Greet for airport pickups",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "60 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 7,
+                  "luggageCount": 7,
+                  "model": "V class or similar"
+                },
+                {
+                  "vendorId": 1,
+                  "quotationId": "2368cf40-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "485177",
+                  "fareBreakup": {
+                    "totalFare": 1886,
+                    "totalTax": 40
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "90 minutes of free waiting time for airport pickups",
+                      "Complimentary Meet and Greet for airport pickups",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "60 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 7,
+                  "luggageCount": 7,
+                  "model": "V class or similar"
+                }
+              ]
+            },
+            {
+              "vehicleType": "Limo",
+              "vehicleCategory": "Executive",
+              "label": "Executive Limo",
+              "modelName": null,
+              "paxCapacity": "4",
+              "luggageCapacity": "4",
+              "vehicleImages": [
+                "https://copy-leamigo-cms-bucket.s3.ap-south-1.amazonaws.com/sedan_etios_b5ebc16a18.png"
+              ],
+              "similarType": "Toyota Etios or similar",
+              "quotes": [
+                {
+                  "vendorId": 1,
+                  "quotationId": "2368cf40-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "908803",
+                  "fareBreakup": {
+                    "totalFare": 5953,
+                    "totalTax": 106
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "90 minutes of free waiting time for airport pickups",
+                      "Complimentary Meet and Greet for airport pickups",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "60 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 3,
+                  "luggageCount": 2,
+                  "model": "E class or similar"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:16.686Z",
+    "data": {
+      "url": "http://localhost:8084/booking/create",
+      "method": "POST",
+      "body": {
+        "bookingId": "MOCK-CAB-airport_transfer",
+        "provider": "tripjack",
+        "type": "airport_transfer",
+        "status": "SUCCESS"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:16.695Z",
+    "data": {
+      "url": "http://localhost:8084/booking/create",
+      "status": 400,
+      "data": {
+        "success": false,
+        "message": "Missing journeyInfo or passengerDetail"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:16.695Z",
+    "data": {
+      "url": "http://localhost:8084/search/quotes",
+      "method": "POST",
+      "body": {
+        "pickupDate": "2026-09-15 10:00",
+        "origin": {
+          "type": "location",
+          "displayAddress": "Delhi",
+          "lat": "28.5",
+          "long": "77.1",
+          "address": {
+            "city": "Delhi",
+            "country": "India"
+          }
+        },
+        "destination": {
+          "type": "location",
+          "displayAddress": "Agra",
+          "lat": "28.6",
+          "long": "77.2",
+          "address": {
+            "city": "Agra",
+            "country": "India"
+          }
+        },
+        "journeyType": "outstation",
+        "tripType": "oneway",
+        "passengers": 2
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:17.311Z",
+    "data": {
+      "url": "http://localhost:8084/search/quotes",
+      "status": 200,
+      "data": {
+        "success": true,
+        "message": "Successfully fetched quotes",
+        "data": {
+          "journeyInfo": {
+            "journeyType": "OUTSTATION",
+            "tripType": "ONEWAY",
+            "pickupDateTime": "2026-09-15T10:00:00",
+            "distance": "22 Km",
+            "duration": 39
+          },
+          "routeDetails": {
+            "isDomestic": true,
+            "origin": {
+              "displayAddress": "Pickup Location",
+              "lat": "28.5",
+              "type": "location",
+              "long": "77.1",
+              "address": {
+                "city": "Delhi",
+                "country": "India"
+              }
+            },
+            "destination": {
+              "displayAddress": "Drop Location",
+              "lat": "28.6",
+              "type": "location",
+              "long": "77.2",
+              "address": {
+                "city": "Agra",
+                "country": "India"
+              }
+            }
+          },
+          "quotesInfo": [
+            {
+              "vehicleType": "Private Van",
+              "vehicleCategory": "Standard",
+              "label": "Standard Private Van",
+              "modelName": null,
+              "paxCapacity": "4",
+              "luggageCapacity": "4",
+              "vehicleImages": [
+                "https://copy-leamigo-cms-bucket.s3.ap-south-1.amazonaws.com/sedan_etios_b5ebc16a18.png"
+              ],
+              "similarType": "Toyota Etios or similar",
+              "quotes": [
+                {
+                  "vendorId": 1,
+                  "quotationId": "246d46f0-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "279293",
+                  "fareBreakup": {
+                    "totalFare": 1886,
+                    "totalTax": 40
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "30 minutes of free waiting time",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "30 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 7,
+                  "luggageCount": 7,
+                  "model": "V class or similar"
+                },
+                {
+                  "vendorId": 1,
+                  "quotationId": "246d46f0-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "505987",
+                  "fareBreakup": {
+                    "totalFare": 1886,
+                    "totalTax": 40
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "30 minutes of free waiting time",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "30 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 7,
+                  "luggageCount": 7,
+                  "model": "V class or similar"
+                }
+              ]
+            },
+            {
+              "vehicleType": "Limo",
+              "vehicleCategory": "Executive",
+              "label": "Executive Limo",
+              "modelName": null,
+              "paxCapacity": "4",
+              "luggageCapacity": "4",
+              "vehicleImages": [
+                "https://copy-leamigo-cms-bucket.s3.ap-south-1.amazonaws.com/sedan_etios_b5ebc16a18.png"
+              ],
+              "similarType": "Toyota Etios or similar",
+              "quotes": [
+                {
+                  "vendorId": 1,
+                  "quotationId": "246d46f0-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "956629",
+                  "fareBreakup": {
+                    "totalFare": 5953,
+                    "totalTax": 106
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "30 minutes of free waiting time",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "30 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 3,
+                  "luggageCount": 2,
+                  "model": "E class or similar"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:17.312Z",
+    "data": {
+      "url": "http://localhost:8084/booking/create",
+      "method": "POST",
+      "body": {
+        "bookingId": "MOCK-CAB-outstation",
+        "provider": "tripjack",
+        "type": "outstation",
+        "status": "SUCCESS"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:17.316Z",
+    "data": {
+      "url": "http://localhost:8084/booking/create",
+      "status": 400,
+      "data": {
+        "success": false,
+        "message": "Missing journeyInfo or passengerDetail"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:17.316Z",
+    "data": {
+      "url": "http://localhost:8084/search/quotes",
+      "method": "POST",
+      "body": {
+        "pickupDate": "2026-09-15 10:00",
+        "origin": {
+          "type": "location",
+          "displayAddress": "Bangalore",
+          "lat": "28.5",
+          "long": "77.1",
+          "address": {
+            "city": "Delhi",
+            "country": "India"
+          }
+        },
+        "destination": {
+          "type": "location",
+          "displayAddress": "Bangalore Local",
+          "lat": "28.6",
+          "long": "77.2",
+          "address": {
+            "city": "Bangalore Local",
+            "country": "India"
+          }
+        },
+        "journeyType": "local",
+        "tripType": "oneway",
+        "passengers": 2
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:17.904Z",
+    "data": {
+      "url": "http://localhost:8084/search/quotes",
+      "status": 200,
+      "data": {
+        "success": true,
+        "message": "Successfully fetched quotes",
+        "data": {
+          "journeyInfo": {
+            "journeyType": "LOCAL",
+            "tripType": "ONEWAY",
+            "pickupDateTime": "2026-09-15T10:00:00",
+            "distance": "22 Km",
+            "duration": 39
+          },
+          "routeDetails": {
+            "isDomestic": true,
+            "origin": {
+              "displayAddress": "Pickup Location",
+              "lat": "28.5",
+              "type": "location",
+              "long": "77.1",
+              "address": {
+                "city": "Delhi",
+                "country": "India"
+              }
+            },
+            "destination": {
+              "displayAddress": "Drop Location",
+              "lat": "28.6",
+              "type": "location",
+              "long": "77.2",
+              "address": {
+                "city": "Bangalore Local",
+                "country": "India"
+              }
+            }
+          },
+          "quotesInfo": [
+            {
+              "vehicleType": "Private Van",
+              "vehicleCategory": "Standard",
+              "label": "Standard Private Van",
+              "modelName": null,
+              "paxCapacity": "4",
+              "luggageCapacity": "4",
+              "vehicleImages": [
+                "https://copy-leamigo-cms-bucket.s3.ap-south-1.amazonaws.com/sedan_etios_b5ebc16a18.png"
+              ],
+              "similarType": "Toyota Etios or similar",
+              "quotes": [
+                {
+                  "vendorId": 1,
+                  "quotationId": "24c8fb80-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "544581",
+                  "fareBreakup": {
+                    "totalFare": 1886,
+                    "totalTax": 40
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "30 minutes of free waiting time",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "15 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 7,
+                  "luggageCount": 7,
+                  "model": "V class or similar"
+                },
+                {
+                  "vendorId": 1,
+                  "quotationId": "24c8fb80-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "984413",
+                  "fareBreakup": {
+                    "totalFare": 1886,
+                    "totalTax": 40
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "30 minutes of free waiting time",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "15 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 7,
+                  "luggageCount": 7,
+                  "model": "V class or similar"
+                }
+              ]
+            },
+            {
+              "vehicleType": "Limo",
+              "vehicleCategory": "Executive",
+              "label": "Executive Limo",
+              "modelName": null,
+              "paxCapacity": "4",
+              "luggageCapacity": "4",
+              "vehicleImages": [
+                "https://copy-leamigo-cms-bucket.s3.ap-south-1.amazonaws.com/sedan_etios_b5ebc16a18.png"
+              ],
+              "similarType": "Toyota Etios or similar",
+              "quotes": [
+                {
+                  "vendorId": 1,
+                  "quotationId": "24c8fb80-3fc3-11f1-823e-85da9552b299",
+                  "quoteChildId": "956646",
+                  "fareBreakup": {
+                    "totalFare": 5953,
+                    "totalTax": 106
+                  },
+                  "benefits": [],
+                  "policies": {
+                    "amendmentPolicy": "Please contact us at +91 79692 88007 or cabs@tripjack.com for any amendments or modifications to the booking. Extra charges may apply.",
+                    "cancellationPolicy": [
+                      {
+                        "minHours": 0,
+                        "refundPercentage": 0,
+                        "description": "Within 24 hours before departure"
+                      },
+                      {
+                        "minHours": 24,
+                        "refundPercentage": 100,
+                        "description": "Upto 24 hours before departure"
+                      }
+                    ],
+                    "inclusions": [
+                      "30 minutes of free waiting time",
+                      "All inclusive pricing"
+                    ],
+                    "exclusions": [
+                      "Charges for changes or extra stops",
+                      "Meals or refreshments",
+                      "Any paid add-ons"
+                    ],
+                    "baggagePolicy": [
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance."
+                    ],
+                    "waitingTime": "15 mins free waiting time",
+                    "termsAndPolicies": [
+                      "Complimentary Meet and Greet for airport pickups.",
+                      "Please contact your travel agent for any amendments or modifications to the booking. Extra charges may apply.",
+                      "Excess luggage requires guests to either arrange a separate vehicle or upgrade the vehicle in advance.",
+                      "Cross-border bookings may incur extra fees, communicated in advance, and payable separately.",
+                      "Any extra stops or changes to the route once the trip starts may incur extra charges, payable separately."
+                    ],
+                    "meetAndGreet": {
+                      "type": "Included",
+                      "description": "Driver meets with placard at Arrivals Gate"
+                    }
+                  },
+                  "paxCount": 3,
+                  "luggageCount": 2,
+                  "model": "E class or similar"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "REQUEST",
+    "timestamp": "2026-04-24T09:51:17.904Z",
+    "data": {
+      "url": "http://localhost:8084/booking/create",
+      "method": "POST",
+      "body": {
+        "bookingId": "MOCK-CAB-local",
+        "provider": "tripjack",
+        "type": "local",
+        "status": "SUCCESS"
+      }
+    }
+  },
+  {
+    "step": "API_CALL",
+    "type": "RESPONSE",
+    "timestamp": "2026-04-24T09:51:17.906Z",
+    "data": {
+      "url": "http://localhost:8084/booking/create",
+      "status": 400,
+      "data": {
+        "success": false,
+        "message": "Missing journeyInfo or passengerDetail"
+      }
+    }
+  }
+]

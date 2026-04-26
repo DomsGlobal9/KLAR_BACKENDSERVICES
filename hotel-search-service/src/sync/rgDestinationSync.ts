@@ -2,14 +2,8 @@ import { rateGainProvider } from "../providers/rategain.provider";
 import { RGDestinationModel } from "../models/RGDestination.model";
 
 export async function syncRGDestinations() {
-    // Optimization: Skip sync if we already have destinations to avoid hitting memory/quota limits
-    const existingCount = await RGDestinationModel.countDocuments();
-    if (existingCount > 0) {
-        console.log(`[Sync] Skip RateGain Destinations Sync: DB already has ${existingCount} destinations.`);
-        return;
-    }
++    console.log("[Sync] Starting RateGain Destinations Sync...");
 
-    console.log("[Sync] Starting RateGain Destinations Sync...");
     try {
         const data = await rateGainProvider.getDestinations();
         const destinations = data.body || data.destinations || [];

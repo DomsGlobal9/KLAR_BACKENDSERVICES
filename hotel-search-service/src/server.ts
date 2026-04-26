@@ -16,7 +16,7 @@ async function start() {
     await connectDB();
 
     if (process.env.ENABLE_AUTO_SYNC === "true") {
-        console.log("⏳ Starting background sync processes...");
+        console.log("⏳ Starting background sync processes (RateGain + TripJack)...");
         syncRGDestinations().catch((err) =>
             console.error("❌ [Sync] RG Destinations sync failed:", err.message)
         );
@@ -24,8 +24,9 @@ async function start() {
             console.error("❌ [Sync] TJ Hotels sync failed:", err.message)
         );
     } else {
-        console.log("ℹ️  Background sync disabled (ENABLE_AUTO_SYNC is not 'true').");
+        console.log("ℹ️  Background sync disabled (ENABLE_AUTO_SYNC is not 'true'). Set it to 'true' in .env to sync 1.6M hotels.");
     }
+
 
     console.log(`⏳ Attempting to listen on port ${PORT}...`);
     const server = app.listen(Number(PORT), "0.0.0.0", () => {

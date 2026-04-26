@@ -1,5 +1,5 @@
 import dns from "node:dns/promises";
-dns.setServers(["1.1.1.1", "1.0.0.1", "0.0.0.0", "149.88.103.51"]);
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 import app from "./app";
 import { envConfig } from "./src/config/env";
