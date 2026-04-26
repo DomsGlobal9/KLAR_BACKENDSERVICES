@@ -30,15 +30,23 @@ class CancellationService {
                 { headers }
             );
 
-            return response;
+            return response.data;
         } catch (error: any) {
+
+            const apiError = error.response?.data;
+
             console.error("Get Charges ERROR >>>", {
                 status: error.response?.status,
-                data: JSON.stringify(error.response?.data, null, 2),
+                data: JSON.stringify(apiError, null, 2),
                 message: error.message
             });
-
-            throw error;
+            
+            throw {
+                success: false,
+                httpStatus: error.response?.status || 500,
+                error: apiError?.errors?.[0] || null,
+                raw: apiError
+            };
         }
     }
 

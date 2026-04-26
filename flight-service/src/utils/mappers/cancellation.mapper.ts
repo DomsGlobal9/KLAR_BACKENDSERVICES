@@ -1,7 +1,7 @@
 export function mapToAmendmentPayload(payload: any) {
     const result: any = {
         bookingId: payload.bookingId,
-        type: "CANCEL",
+        type: "CANCELLATION",
         remarks: payload.remarks,
     };
 

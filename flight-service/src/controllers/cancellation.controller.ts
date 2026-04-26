@@ -14,12 +14,24 @@ class CancellationController {
 
             return res.status(200).json({
                 success: true,
-                data: response.data,
+                data: response,
             });
+
         } catch (error: any) {
+            console.error("Controller ERROR >>>", error);
+
+            // ✅ Handle your custom thrown error from service
+            if (error?.httpStatus) {
+                return res.status(error.httpStatus).json({
+                    success: false,
+                    ...error.raw   // 🔥 send full Tripjack response
+                });
+            }
+
+            // fallback
             return res.status(500).json({
                 success: false,
-                message: error.message,
+                message: error.message || "Internal Server Error",
             });
         }
     }

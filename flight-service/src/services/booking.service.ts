@@ -23,6 +23,7 @@ class BookingService {
         const url = `${baseUrl}${endpoints.BOOK}`;
 
         console.log("Tripjack URL >>>", url);
+        console.log("@@@@@@@@@@@@@@ The Booking payload", JSON.stringify(payload, null, 2));
 
         try {
             const response = await axios.post(url, payload, { headers });

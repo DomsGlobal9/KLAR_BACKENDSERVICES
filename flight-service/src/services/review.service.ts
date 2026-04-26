@@ -8,9 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 class ReviewService {
 
     async reviewFare(priceIds: string[]) {
-
         const sessionId = uuidv4();
-
         const env = tripjackConfig.ENV;
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.REVIEW}`;
@@ -28,14 +26,11 @@ class ReviewService {
             );
 
             const rawData = response.data;
-
             const mappedData = TripjackFieldMapper.map(rawData);
 
             await RedisCacheService.set(sessionId, {
                 raw: mappedData,
             }, 1800);
-
-            const sessionData = await RedisCacheService.get(sessionId);
 
             return {
                 mappedData,
@@ -49,6 +44,20 @@ class ReviewService {
                 message: error.message
             });
 
+            // Extract and format the error from TripJack response
+            const tripjackError = error.response?.data;
+
+            if (tripjackError && tripjackError.errors && tripjackError.errors.length > 0) {
+                const firstError = tripjackError.errors[0];
+                const customError = new Error(firstError.message);
+                (customError as any).statusCode = error.response?.status || 400;
+                (customError as any).errorCode = firstError.errCode;
+                (customError as any).details = firstError.details;
+                (customError as any).referenceId = firstError.id;
+                throw customError;
+            }
+
+            // If no specific error from TripJack, throw generic error
             throw error;
         }
     }
