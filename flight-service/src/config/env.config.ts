@@ -48,6 +48,11 @@ export const envConfig = {
     AUTH_SERVICE: process.env.AUTHENTICATION_SERVICE || "",
 
     /**
+     * Email Service
+     */
+    EMAIL_SERVICE: process.env.EMAIL_SERVICE || "",
+
+    /**
      * CORS
      */
     CORS: {

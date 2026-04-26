@@ -1,4 +1,6 @@
+import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
+import { envConfig } from "../config/env.config";
 import { Booking } from "../types/bookingLocal.types";
 import { formatPhoneNumber } from "../utils/helper/phoneFormater.helper";
 import { BookingRepository } from "../repositories/bookingLocal.repository";
@@ -6,10 +8,35 @@ import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
 import { FrontendBookingPayload } from "../types/booking.types";
+import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
+
 
 class BookingService {
 
     private bookingRepo = new BookingRepository();
+
+    private async sendEmail(
+        to: string,
+        subject: string,
+        html: string
+    ) {
+        try {
+
+            console.log("BOOKING SERVICE:\n", { to, subject, html });
+            await axios.post(`${envConfig.EMAIL_SERVICE}/send`, {
+                to,
+                subject,
+                html
+            });
+
+            console.log("Email sent successfully");
+        } catch (error: any) {
+            console.error(
+                "Email send failed:",
+                error.response?.data || error.message
+            );
+        }
+    }
 
     async createInitialBooking(data: Partial<Booking>, userData: any) {
 
@@ -158,49 +185,42 @@ class BookingService {
     }) {
         const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
 
-        const updateQuery: any = {};
-
+        // First, update the SSR data using the specific repository method
         if (travellers?.length) {
-            const existingBooking = await this.bookingRepo.getBookingById(bookingId);
-
-            if (!existingBooking) {
-                throw new Error("Booking not found");
-            }
-
-            const updatedTravellers = existingBooking.travellers.map((t: any) => {
-                const incoming = travellers.find(
-                    (tr: any) => tr.travellerId === t.travellerId
+            for (const traveller of travellers) {
+                await this.bookingRepo.updateTravellerSSR(
+                    bookingId,
+                    traveller.travellerId,
+                    {
+                        ssrSeatInfos: traveller.ssrSeatInfos || [],
+                        ssrMealInfos: traveller.ssrMealInfos || [],
+                        ssrBaggageInfos: traveller.ssrBaggageInfos || []
+                    }
                 );
-
-                if (incoming) {
-                    return {
-                        ...t,
-                        ssrSeatInfos: incoming.ssrSeatInfos || t.ssrSeatInfos,
-                        ssrMealInfos: incoming.ssrMealInfos || t.ssrMealInfos,
-                        ssrBaggageInfos: incoming.ssrBaggageInfos || t.ssrBaggageInfos
-                    };
-                }
-
-                return t;
-            });
-
-            updateQuery.travellers = updatedTravellers;
+            }
         }
 
-        if (tripjackPrice !== undefined) updateQuery.tripjackPrice = tripjackPrice;
-        if (markupPrice !== undefined) updateQuery.markupPrice = markupPrice;
-        if (totalPrice !== undefined) updateQuery.totalPrice = totalPrice;
-        if (isHold !== undefined) updateQuery.isHold = isHold;
+        // Then update prices separately
+        const priceUpdateQuery: any = {};
+        if (tripjackPrice !== undefined) priceUpdateQuery.tripjackPrice = tripjackPrice;
+        if (markupPrice !== undefined) priceUpdateQuery.markupPrice = markupPrice;
+        if (totalPrice !== undefined) priceUpdateQuery.totalPrice = totalPrice;
+        if (isHold !== undefined) priceUpdateQuery.isHold = isHold;
 
-        const updatedBooking = await this.bookingRepo.updateBooking(
-            bookingId,
-            updateQuery
-        );
+        if (Object.keys(priceUpdateQuery).length > 0) {
+            await this.bookingRepo.updatePrices(bookingId, priceUpdateQuery);
+        }
+
+        // Get the updated booking
+        const updatedBooking = await this.bookingRepo.getBookingById(bookingId);
 
         if (!updatedBooking) {
-            throw new Error("Failed to update booking");
+            throw new Error("Failed to get updated booking");
         }
 
+        console.log("FINAL UPDATED BOOKING TRAVELLERS:", JSON.stringify(updatedBooking.travellers, null, 2));
+
+        // Prepare payload for Tripjack
         const tripjackPayload: FrontendBookingPayload = {
             bookingId: updatedBooking.bookingId,
             email: updatedBooking.email,
@@ -215,30 +235,45 @@ class BookingService {
             tripjackPayload.gstInfo = updatedBooking.gstInfo;
         }
 
-        console.log("@@@@@@@@@@@@@@@@@ The reipjack payload\n", JSON.stringify(tripjackPayload, null, 2));
-
         validateBookingPayload(tripjackPayload);
 
         const mapped = mapToTripjackBooking(tripjackPayload);
 
+        console.log("MAPPED PAYLOAD:", JSON.stringify(mapped, null, 2));
+
         const response = await TripjackBookingService.book(mapped);
-        console.log("Response:", response.data);
 
         if (response.data.status.success === true) {
-
             const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
-
 
             await this.bookingRepo.updateBookingStatus(
                 bookingId,
                 tripjackBookingStatus?.order?.status
             );
 
+            const to =
+                tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
+                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+                updatedBooking?.email || "";
+
+            if (!to) {
+                console.warn("No email found for booking:", updatedBooking.bookingId);
+                return response.data;
+            } else {
+                const html = flightConfirmationTemplate(tripjackBookingStatus);
+
+                await this.sendEmail(
+                    to,
+                    `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
+                    html
+                );
+            }
+
             return response.data;
+        } else {
+            console.error("Tripjack booking failed:", response.data);
+            return null;
         }
-
-        return null;
-
     }
 
     async getBookingsByUserId(userId: string) {

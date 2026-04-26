@@ -30,6 +30,7 @@ export class EmailService {
     }
 
     async sendEmail(payload: SendEmailPayload): Promise<EmailResponse> {
+        console.log("EMAIL-SERVICE:", {payload});
         try {
             if (!payload.to || !payload.subject) {
                 throw new Error("to and subject are required");

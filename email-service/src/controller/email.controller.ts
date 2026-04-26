@@ -4,6 +4,7 @@ import { emailService } from "../services/email.service";
 
 class EmailController {
   sendEmail = async (req: Request, res: Response) => {
+    console.log("EMAIL-CONTROLLER", req.body);
     const result = await emailService.sendEmail(req.body);
 
     if (result.success) {
