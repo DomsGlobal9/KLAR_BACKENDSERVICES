@@ -40,16 +40,18 @@ class HotelsService {
             if (s.status === "fulfilled") {
                 let { type, value, total } = s.value;
 
+                console.log(`[DEBUG] ${type} raw results: ${value.length} (Total available: ${total})`);
+
                 // SAFETY FILTER: If we have a resolved geo-center, prune results far away (>100km)
                 if (geoCenter) {
                     const originalCount = value.length;
                     value = value.filter(h => {
-                        if (!h.latitude || !h.longitude) return true; // keep if no coords to avoid missing data, though geofilter usually handles this
+                        if (!h.latitude || !h.longitude) return true; // keep if no coords to avoid missing data
                         const dist = calculateDistance(geoCenter.lat, geoCenter.lng, h.latitude, h.longitude);
                         return dist <= 100; // 100km safety radius
                     });
                     if (value.length < originalCount) {
-                        console.log(`[FILTER] Pruned ${originalCount - value.length} properties too far from ${searchPayload.destination}`);
+                        console.log(`[FILTER] Pruned ${originalCount - value.length} properties too far from resolved center of "${searchPayload.destination}" at [${geoCenter.lat}, ${geoCenter.lng}]`);
                     }
                 }
 
@@ -63,12 +65,15 @@ class HotelsService {
                     tjTotal = total;
                 }
             } else {
+                console.error(`[DEBUG] Provider Error:`, s.reason);
                 errors.push(s.reason);
             }
         });
 
+        console.log(`[DEBUG] Array size before deduplication: ${hotels.length}`);
         // Deduplicate all results to ensure consistency across providers
         const finalResults = deduplicateHotels(hotels);
+        console.log(`[DEBUG] Array size after deduplication: ${finalResults.length}`);
 
         // Sort by price ascending
         finalResults.sort((a, b) => a.price - b.price);

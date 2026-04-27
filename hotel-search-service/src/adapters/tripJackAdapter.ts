@@ -70,8 +70,8 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         console.log(`
 ┌─────────── TRIPJACK SEARCH STATS ───────────┐
 │ 📍 Location: ${req.destination}
-│ 🔍 Total HIDs in DB: ${hids.length} ${hids.length >= 300 ? '(Limited to 300)' : ''}
-│ 🚀 Hitting API with: ${Math.min(hids.length, 300)} hotels
+│ 🔍 Total HIDs in DB: ${hids.length}
+│ 🚀 Hitting API with: ${hids.length} hotels
 │ ✅ API returned: ${allHotels.length} hotels
 └─────────────────────────────────────────────┘
         `);
@@ -108,7 +108,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
         return {
             hotels: mapped,
-            total: mapped.length // TJ search already returns all matching hotels up to 300
+            total: mapped.length // TJ search returns all matching hotels for the provided HIDs
         };
     } catch (error: any) {
         console.error("[TripJack Adapter] Search Error:", error.response?.data || error.message);

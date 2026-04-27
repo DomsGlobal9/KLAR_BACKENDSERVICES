@@ -113,7 +113,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
 }
 
 /**
- * Resolve a city query to an array of TripJack hotel IDs (max 300).
+ * Resolve a city query to an array of TripJack hotel IDs.
  */
 export async function resolveForTJ(query: string): Promise<string[]> {
     const normalizedQuery = query.trim();
@@ -138,7 +138,6 @@ export async function resolveForTJ(query: string): Promise<string[]> {
             }
         })
         .select("tjHotelId")
-        .limit(300)
         .lean();
 
         return [...new Set(hotels.map((h) => h.tjHotelId))];
@@ -152,7 +151,6 @@ export async function resolveForTJ(query: string): Promise<string[]> {
         $text: { $search: normalizedQuery }
     })
     .select("tjHotelId")
-    .limit(300)
     .lean();
 
     console.log(`[DEBUG] resolveForTJ: Text search found ${hotels.length} hotels.`);
@@ -161,7 +159,7 @@ export async function resolveForTJ(query: string): Promise<string[]> {
     if (hotels.length < 5) {
         const regexHotels = await HotelModel.find({
             cityName: { $regex: new RegExp(normalizedQuery, "i") }
-        }).select("tjHotelId").limit(300).lean();
+        }).select("tjHotelId").lean();
         
         if (regexHotels.length > hotels.length) {
             hotels = regexHotels;
@@ -181,15 +179,12 @@ export async function resolveForTJ(query: string): Promise<string[]> {
             }));
             hotels = await HotelModel.find({ $and: andConditions })
                 .select("tjHotelId")
-                .limit(300)
                 .lean();
         }
     }
     
     const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId).filter(Boolean))];
-    const limitReached = uniqueHids.length >= 300 ? " (Max limit reached: 300)" : "";
-    
-    console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels${limitReached}`);
+    console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels`);
     
     return uniqueHids;
 }
