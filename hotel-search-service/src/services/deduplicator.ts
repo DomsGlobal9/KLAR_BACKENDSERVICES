@@ -20,8 +20,13 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
             if (hotel.latitude && hotel.longitude && existing.latitude && existing.longitude) {
                 const latDiff = Math.abs(hotel.latitude - existing.latitude);
                 const lngDiff = Math.abs(hotel.longitude - existing.longitude);
-                // Within ~100m
-                if (latDiff < 0.001 && lngDiff < 0.001) {
+                
+                // If EXACT same coordinates (within practically zero range), assume same property
+                if (latDiff === 0 && lngDiff === 0) {
+                    isGeoSame = true;
+                } 
+                // Or within ~100m AND similar names
+                else if (latDiff < 0.001 && lngDiff < 0.001) {
                     isGeoSame = isNameSimilar(hotel.name, existing.name);
                 }
             }

@@ -10,9 +10,10 @@ import { syncRGDestinations } from "../sync/rgDestinationSync";
 
 const router = Router();
 
-router.post("/sync/destinations", async (_req, res) => {
-    res.json({ status: "started", message: "RateGain destination sync triggered in background" });
-    syncRGDestinations().catch((err) =>
+router.post("/sync/destinations", async (req, res) => {
+    const force = req.query.force === "true";
+    res.json({ status: "started", message: `RateGain destination sync triggered (force: ${force})` });
+    syncRGDestinations(force).catch((err) =>
         console.error("[Sync] Manual RG sync failed:", err.message)
     );
 });

@@ -24,6 +24,9 @@ const rgDestinationSchema = new Schema<IRGDestination>(
     }
 );
 
+// Text index for fuzzy destination search
+rgDestinationSchema.index({ destName: "text" });
+
 export const RGDestinationModel: Model<IRGDestination> =
     mongoose.models.RGDestination ||
     mongoose.model<IRGDestination>("RGDestination", rgDestinationSchema);

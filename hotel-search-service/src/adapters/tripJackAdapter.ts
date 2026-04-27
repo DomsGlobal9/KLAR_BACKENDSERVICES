@@ -32,7 +32,7 @@ function toTjNationality(isoCode: string): string {
 
 import { HotelModel } from "../models/Hotel.model";
 
-export async function searchTJ(req: UnifiedSearchRequest): Promise<UnifiedHotel[]> {
+export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: UnifiedHotel[]; total: number }> {
     const hids = await resolveForTJ(req.destination);
     if (!hids.length) return [];
 
@@ -67,6 +67,15 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<UnifiedHotel[
         const results = await Promise.all(searchPromises);
         const allHotels = results.flat();
         
+        console.log(`
+┌─────────── TRIPJACK SEARCH STATS ───────────┐
+│ 📍 Location: ${req.destination}
+│ 🔍 Total HIDs in DB: ${hids.length} ${hids.length >= 300 ? '(Limited to 300)' : ''}
+│ 🚀 Hitting API with: ${Math.min(hids.length, 300)} hotels
+│ ✅ API returned: ${allHotels.length} hotels
+└─────────────────────────────────────────────┘
+        `);
+
         let mapped: UnifiedHotel[] = allHotels.map((h: any) =>
             mapTJHotel(h, correlationId)
         );
@@ -87,6 +96,8 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<UnifiedHotel[
                         city: bh.city || sh.cityName || "",
                         starRating: bh.starRating || sh.starRating || 0,
                         images: (bh.images && bh.images.length > 0) ? bh.images : (sh.images || []),
+                        latitude: bh.latitude || (sh.location?.coordinates?.[1]),
+                        longitude: bh.longitude || (sh.location?.coordinates?.[0]),
                     };
                 }
                 return bh;
@@ -95,7 +106,10 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<UnifiedHotel[
             console.warn("[TripJack Adapter] DB Enrichment Failed:", dbError);
         }
 
-        return mapped;
+        return {
+            hotels: mapped,
+            total: mapped.length // TJ search already returns all matching hotels up to 300
+        };
     } catch (error: any) {
         console.error("[TripJack Adapter] Search Error:", error.response?.data || error.message);
         throw error;

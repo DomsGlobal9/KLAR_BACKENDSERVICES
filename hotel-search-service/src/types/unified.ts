@@ -6,6 +6,7 @@ export interface UnifiedSearchRequest {
   rooms: UnifiedRoom[];
   currency?: string;            // default USD
   countryCode?: string;         // default US
+  pageNo?: number;              // 1-indexed pagination
 }
 
 export interface UnifiedRoom {

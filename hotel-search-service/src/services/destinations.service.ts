@@ -1,8 +1,17 @@
-import { rateGainProvider } from "../providers/rategain.provider";
+import { RGDestinationModel } from "../models/RGDestination.model";
 
 class DestinationsService {
     async getDestinations() {
-        return rateGainProvider.getDestinations();
+        const destinations = await RGDestinationModel.find().lean();
+        
+        return {
+            status: true,
+            body: destinations.map(dest => ({
+                destCode: dest.destCode,
+                destName: dest.destName,
+                countryName: "" // Optional, can be added if available in model
+            }))
+        };
     }
 }
 
