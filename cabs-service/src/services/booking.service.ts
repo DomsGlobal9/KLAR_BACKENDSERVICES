@@ -68,18 +68,18 @@ class BookingService {
                 await CabBookingModel.create({
                     bookingId: response.data.bookingId,
                     correlationId: finalPayload.correlationId,
-                    userId: payload.userId, // Save userId from payload
+                    userId: payload.userId || "guest", // Save userId from payload
                     status: CabBookingStatus.CONFIRMED,
                     pickupDate: new Date(payload.journeyInfo.pickupDate),
                     origin: {
                         displayAddress: payload.routeDetail?.origin?.displayAddress || payload.routeDetail?.source?.displayAddress || "Unknown",
-                        lat: payload.routeDetail?.origin?.lat || payload.routeDetail?.source?.lat,
-                        long: payload.routeDetail?.origin?.long || payload.routeDetail?.source?.long
+                        lat: String(payload.routeDetail?.origin?.lat || payload.routeDetail?.source?.lat || "0"),
+                        long: String(payload.routeDetail?.origin?.long || payload.routeDetail?.source?.long || "0")
                     },
                     destination: {
                         displayAddress: payload.routeDetail?.destination?.displayAddress || "Unknown",
-                        lat: payload.routeDetail?.destination?.lat,
-                        long: payload.routeDetail?.destination?.long
+                        lat: String(payload.routeDetail?.destination?.lat || "0"),
+                        long: String(payload.routeDetail?.destination?.long || "0")
                     },
                     vehicleType: opt?.vehicleType || "Unknown",
                     vehicleCategory: opt?.vehicleCategory || "Unknown",

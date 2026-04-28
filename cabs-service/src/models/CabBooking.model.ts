@@ -62,13 +62,13 @@ const CabBookingSchema = new Schema<ICabBooking>(
         pickupDate: { type: Date, required: true },
         origin: {
             displayAddress: { type: String, required: true },
-            lat: { type: String, required: true },
-            long: { type: String, required: true }
+            lat: { type: String },
+            long: { type: String }
         },
         destination: {
             displayAddress: { type: String, required: true },
-            lat: { type: String, required: true },
-            long: { type: String, required: true }
+            lat: { type: String },
+            long: { type: String }
         },
         vehicleType: { type: String, required: true },
         vehicleCategory: { type: String },

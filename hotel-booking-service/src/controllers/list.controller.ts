@@ -23,6 +23,7 @@ export const listController = async (req: any, res: Response) => {
             status: false,
             statusCode: 500,
             description: error.message || "Internal Server Error",
+            stack: error.stack,
             body: null,
         });
     }
