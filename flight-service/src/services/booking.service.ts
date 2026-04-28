@@ -55,14 +55,34 @@ class BookingService {
     async confirmBooking(bookingId: string, amount: number) {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
-        return axios.post(
-            `${baseUrl}${endpoints.CONFIRM_BOOK}`,
-            {
-                bookingId,
-                paymentInfos: [{ amount }],
-            },
-            { headers }
+        console.log(
+            "BookingId:#############", bookingId,
+            "Amount:************", amount
         );
+
+        try {
+            const response = await axios.post(
+                `${baseUrl}${endpoints.CONFIRM_BOOK}`,
+                {
+                    bookingId,
+                    paymentInfos: [{ amount }],
+                },
+                { headers }
+            );
+
+            return response;
+        } catch (error: any) {
+            console.error("Confirm Booking ERROR STATUS >>>", error.response?.status);
+
+            console.error(
+                "Confirm Booking ERROR DATA >>>",
+                JSON.stringify(error.response?.data, null, 2)
+            );
+
+            console.error("Confirm Booking ERROR MESSAGE >>>", error.message);
+
+            throw error;
+        }
     }
 
     async getBookingDetails(bookingId: string) {

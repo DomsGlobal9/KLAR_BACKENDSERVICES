@@ -75,7 +75,6 @@ class BookingController {
                 bookingId,
                 amount
             );
-
             return res.status(200).json(response.data);
 
         } catch (error: any) {
