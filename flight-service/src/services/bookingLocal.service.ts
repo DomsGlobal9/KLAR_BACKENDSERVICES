@@ -149,97 +149,105 @@ class BookingService {
     }
 
     async updateAndTriggerBooking(data: {
-        bookingId: string;
-        travellers?: any[];
-        tripjackPrice?: number;
-        markupPrice?: number;
-        totalPrice?: number;
-        isHold: boolean;
-    }) {
-        const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
+    bookingId: string;
+    travellers?: any[];
+    tripjackPrice?: number;
+    markupPrice?: number;
+    totalPrice?: number;
+    isHold: boolean;
+}) {
+    const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
 
-        const updateQuery: any = {};
-
-        if (travellers?.length) {
-            const existingBooking = await this.bookingRepo.getBookingById(bookingId);
-
-            if (!existingBooking) {
-                throw new Error("Booking not found");
-            }
-
-            const updatedTravellers = existingBooking.travellers.map((t: any) => {
-                const incoming = travellers.find(
-                    (tr: any) => tr.travellerId === t.travellerId
-                );
-
-                if (incoming) {
-                    return {
-                        ...t,
-                        ssrSeatInfos: incoming.ssrSeatInfos || t.ssrSeatInfos,
-                        ssrMealInfos: incoming.ssrMealInfos || t.ssrMealInfos,
-                        ssrBaggageInfos: incoming.ssrBaggageInfos || t.ssrBaggageInfos
-                    };
+    // First, update the SSR data using the specific repository method
+    if (travellers?.length) {
+        for (const traveller of travellers) {
+            await this.bookingRepo.updateTravellerSSR(
+                bookingId,
+                traveller.travellerId,
+                {
+                    ssrSeatInfos: traveller.ssrSeatInfos || [],
+                    ssrMealInfos: traveller.ssrMealInfos || [],
+                    ssrBaggageInfos: traveller.ssrBaggageInfos || []
                 }
-
-                return t;
-            });
-
-            updateQuery.travellers = updatedTravellers;
+            );
         }
+    }
 
-        if (tripjackPrice !== undefined) updateQuery.tripjackPrice = tripjackPrice;
-        if (markupPrice !== undefined) updateQuery.markupPrice = markupPrice;
-        if (totalPrice !== undefined) updateQuery.totalPrice = totalPrice;
-        if (isHold !== undefined) updateQuery.isHold = isHold;
+    // Then update prices separately
+    const priceUpdateQuery: any = {};
+    if (tripjackPrice !== undefined) priceUpdateQuery.tripjackPrice = tripjackPrice;
+    if (markupPrice !== undefined) priceUpdateQuery.markupPrice = markupPrice;
+    if (totalPrice !== undefined) priceUpdateQuery.totalPrice = totalPrice;
+    if (isHold !== undefined) priceUpdateQuery.isHold = isHold;
 
-        const updatedBooking = await this.bookingRepo.updateBooking(
+    if (Object.keys(priceUpdateQuery).length > 0) {
+        await this.bookingRepo.updatePrices(bookingId, priceUpdateQuery);
+    }
+
+    // Get the updated booking
+    const updatedBooking = await this.bookingRepo.getBookingById(bookingId);
+
+    if (!updatedBooking) {
+        throw new Error("Failed to get updated booking");
+    }
+
+    console.log("FINAL UPDATED BOOKING TRAVELLERS:", JSON.stringify(updatedBooking.travellers, null, 2));
+
+    // Prepare payload for Tripjack
+    const tripjackPayload: FrontendBookingPayload = {
+        bookingId: updatedBooking.bookingId,
+        email: updatedBooking.email,
+        phone: updatedBooking.phone,
+        travellers: updatedBooking.travellers,
+        amount: updatedBooking.tripjackPrice || 0,
+        isHold: updatedBooking.isHold,
+        emergencyContact: updatedBooking.emergencyContact
+    };
+
+    if (updatedBooking.gstInfo?.gstNumber) {
+        tripjackPayload.gstInfo = updatedBooking.gstInfo;
+    }
+
+    validateBookingPayload(tripjackPayload);
+
+    const mapped = mapToTripjackBooking(tripjackPayload);
+
+    console.log("MAPPED PAYLOAD:", JSON.stringify(mapped, null, 2));
+
+    const response = await TripjackBookingService.book(mapped);
+
+    if (response.data.status.success === true) {
+        const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
+
+        await this.bookingRepo.updateBookingStatus(
             bookingId,
-            updateQuery
+            tripjackBookingStatus?.order?.status
         );
 
-        if (!updatedBooking) {
-            throw new Error("Failed to update booking");
-        }
+        const to =
+            tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
+            tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+            updatedBooking?.email || "";
 
-        const tripjackPayload: FrontendBookingPayload = {
-            bookingId: updatedBooking.bookingId,
-            email: updatedBooking.email,
-            phone: updatedBooking.phone,
-            travellers: updatedBooking.travellers,
-            amount: updatedBooking.tripjackPrice || 0,
-            isHold: updatedBooking.isHold,
-            emergencyContact: updatedBooking.emergencyContact
-        };
+        // if (!to) {
+        //     console.warn("No email found for booking:", updatedBooking.bookingId);
+        //     return response.data;
+        // } else {
+        //     const html = flightConfirmationTemplate(tripjackBookingStatus);
 
-        if (updatedBooking.gstInfo?.gstNumber) {
-            tripjackPayload.gstInfo = updatedBooking.gstInfo;
-        }
+        //     await this.sendEmail(
+        //         to,
+        //         `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
+        //         html
+        //     );
+        // }
 
-        console.log("@@@@@@@@@@@@@@@@@ The reipjack payload\n", JSON.stringify(tripjackPayload, null, 2));
-
-        validateBookingPayload(tripjackPayload);
-
-        const mapped = mapToTripjackBooking(tripjackPayload);
-
-        const response = await TripjackBookingService.book(mapped);
-        console.log("Response:", response.data);
-
-        if (response.data.status.success === true) {
-
-            const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
-
-
-            await this.bookingRepo.updateBookingStatus(
-                bookingId,
-                tripjackBookingStatus?.order?.status
-            );
-
-            return response.data;
-        }
-
+        return response.data;
+    } else {
+        console.error("Tripjack booking failed:", response.data);
         return null;
-
     }
+}
 
     async getBookingsByUserId(userId: string) {
         if (!userId) {
