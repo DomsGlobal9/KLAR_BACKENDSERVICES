@@ -47,47 +47,57 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
   console.log(`[RateGain Adapter] Request Payload for ${req.destination}:`, JSON.stringify(payload, null, 2));
 
   try {
-    const firstPageRes = await rateGainProvider.getBestProperties(payload);
-    let hotels = firstPageRes.body ?? [];
-    const total = parseInt(firstPageRes.totalRecord) || hotels.length;
+    const pageNo = req.pageNo || 1;
 
-    // If there are more results, fetch all other pages in parallel
-    if (total > hotels.length && !req.pageNo) {
-      const pageSize = hotels.length || 20;
-      const totalPages = Math.ceil(total / pageSize);
-      const remainingPages = [];
-      
-      for (let p = 2; p <= totalPages; p++) {
-        remainingPages.push(p);
-      }
+    // Page 1: 30 items for fast first render (~2 API pages of 15-20 each)
+    // Scroll pages: 20 items (~2 API pages)
+    const targetCount = pageNo === 1 ? 30 : 20;
 
-      console.log(`[RateGain Adapter] Total results: ${total}. Fetching remaining ${remainingPages.length} pages...`);
+    // OFFSET FORMULA (avg ~15 hotels per RG API page):
+    //   Page 1 → API pages 1,2    (2 pages → ~30 hotels → keep 30)
+    //   Page N → API pages (3 + 2*(N-2))
+    const batchSize = 2;
+    const apiPageStart = pageNo === 1 ? 1 : (3 + (pageNo - 2) * 2);
 
-      const pagePromises = remainingPages.map(page => 
-        rateGainProvider.getBestProperties({ ...payload, pageNo: page })
-      );
+    const apiPages = Array.from({ length: batchSize }, (_, i) => apiPageStart + i);
 
-      const pageResults = await Promise.all(pagePromises);
-      pageResults.forEach(res => {
-        if (res.body && Array.isArray(res.body)) {
-          hotels = [...hotels, ...res.body];
-        }
-      });
+    console.log(`[RateGain] Page ${pageNo}: fetching API pages [${apiPages.join(',')}] for ~${targetCount} hotels`);
+
+    const batchPromises = apiPages.map(page =>
+      rateGainProvider.getBestProperties({ ...payload, pageNo: page })
+        .then(res => ({
+          hotels: (res.body || []).map(mapRGHotel),
+          total: parseInt(res.totalRecord) || 0
+        }))
+        .catch(err => {
+          console.error(`[RateGain] API page ${page} failed: ${err.message}`);
+          return { hotels: [], total: 0 };
+        })
+    );
+
+    const batchResults = await Promise.all(batchPromises);
+
+    let allHotels: UnifiedHotel[] = [];
+    let maxTotal = 0;
+
+    batchResults.forEach(r => {
+      allHotels.push(...r.hotels);
+      if (r.total > maxTotal) maxTotal = r.total;
+    });
+
+    // Cap to target
+    if (allHotels.length > targetCount) {
+      allHotels = allHotels.slice(0, targetCount);
     }
-    
-    console.log(`
-┌─────────── RATEGAIN SEARCH STATS ───────────┐
-│ 📍 Location: ${req.destination}
-│ 🔢 Dest Code: ${destCode || 'Geofilter Coords'}
-│ 💰 Currency: ${payload.Currency} / ${payload.CountryCode}
-│ 📊 Total Results: ${total}
-│ ✅ API returned: ${hotels.length} hotels (All pages merged)
-└─────────────────────────────────────────────┘
-    `);
-    
+
+    // If we got fewer than target, we've probably exhausted inventory
+    const finalTotal = allHotels.length < targetCount ? allHotels.length : maxTotal;
+
+    console.log(`[RateGain] Done. Found: ${allHotels.length} hotels (total avail: ${maxTotal})`);
+
     return {
-        hotels: hotels.map(mapRGHotel),
-        total
+      hotels: allHotels,
+      total: finalTotal || maxTotal
     };
   } catch (error: any) {
     console.error("[RateGain Adapter] Search Error:", error.response?.data || error.message);

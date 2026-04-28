@@ -72,25 +72,34 @@ class HotelsService {
 
         console.log(`[DEBUG] Array size before deduplication: ${hotels.length}`);
         // Deduplicate all results to ensure consistency across providers
-        const finalResults = deduplicateHotels(hotels);
+        const { items: finalResults, meta: dedupMeta } = deduplicateHotels(hotels);
         console.log(`[DEBUG] Array size after deduplication: ${finalResults.length}`);
 
         // Sort by price ascending
         finalResults.sort((a, b) => a.price - b.price);
 
-        // The total should be the maximum reported total from any provider (since it represents search breadth)
-        // Or if we aggregate, we might need a better heuristic. 
-        // For now, use the max of provided totals.
-        const total = Math.max(rgTotal, tjTotal, finalResults.length);
+        // Use the actual combined unique result count as the UI-facing total.
+        // Only incorporate a provider's "total available" if that provider actually returned real results.
+        // This stops TJ's 6446 phantom total showing when TJ is completely down.
+        const activeTjTotal = tjCount > 0 ? tjTotal : 0;
+        const activeRgTotal = rgCount > 0 ? rgTotal : 0;
+        const total = Math.max(activeRgTotal + activeTjTotal, finalResults.length);
 
         console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏨 FINAL SEARCH SUMMARY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TJ Results: ${tjCount} / Total: ${tjTotal}
-RG Results: ${rgCount} / Total: ${rgTotal}
-Combined & Deduplicated Items: ${finalResults.length}
-Reported Total to UI: ${total}
+TJ Search Results: ${tjCount} / Provider Total: ${tjTotal}
+RG Search Results: ${rgCount} / Provider Total: ${rgTotal}
+----------------------------------------------------
+Total Combined Pre-Dedup:  ${hotels.length}
+Deduplicated Items Reoved: ${dedupMeta.duplicatedCount}
+  ├─ By Exact Hotel ID:    ${dedupMeta.byExactId}
+  ├─ By Exact Geo Match:   ${dedupMeta.byExactGeo}
+  └─ By Geo + Name Match:  ${dedupMeta.bySimilarGeoAndName}
+Total Unique Items:        ${finalResults.length}
+----------------------------------------------------
+Reported Total to UI:      ${total}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         `);
 
