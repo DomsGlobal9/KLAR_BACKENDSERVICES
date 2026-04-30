@@ -4,7 +4,7 @@ import ReviewService from "../services/review.service";
 class ReviewController {
 
     async review(req: Request, res: Response) {
-        
+
         try {
             const { priceIds } = req.body;
 
@@ -79,6 +79,43 @@ class ReviewController {
             return res.status(500).json({
                 success: false,
                 message: error.message || "Verify API failed"
+            });
+        }
+    }
+
+    // Add this method inside your existing ReviewController class
+
+    async reissueReview(req: Request, res: Response) {
+        try {
+            const { priceIds, oldBookingId } = req.body;
+
+            if (!priceIds || !Array.isArray(priceIds) || priceIds.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "priceIds is required and must be a non-empty array"
+                });
+            }
+
+            if (!oldBookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "oldBookingId is required for reissue"
+                });
+            }
+
+            const data = await ReviewService.reissueReview(priceIds, oldBookingId);
+
+            return res.status(200).json({
+                success: true,
+                data
+            });
+
+        } catch (error: any) {
+            console.error("Reissue Review ERROR >>>", error?.response?.data || error.message);
+
+            return res.status(500).json({
+                success: false,
+                message: error.response?.data?.message || error.message || "Reissue review failed"
             });
         }
     }

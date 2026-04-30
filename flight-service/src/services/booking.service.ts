@@ -113,6 +113,26 @@ class BookingService {
             throw error;
         }
     }
+
+
+    async reissueBook(payload: any) {
+        const { baseUrl, headers, endpoints } = this.getConfig();
+
+        const url = `${baseUrl}/oms/v1/air/amendment/auto-reissue`;
+
+        console.log("Reissue Book URL >>>", url);
+        console.log("Reissue Book Payload >>>", JSON.stringify(payload, null, 2));
+
+        try {
+            const response = await axios.post(url, payload, { headers });
+            return response;
+        } catch (error: any) {
+            console.error("Reissue Book ERROR STATUS >>>", error.response?.status);
+            console.error("Reissue Book ERROR DATA >>>", JSON.stringify(error.response?.data, null, 2));
+            console.error("Reissue Book ERROR MESSAGE >>>", error.message);
+            throw error;
+        }
+    }
 }
 
 export default new BookingService();

@@ -98,6 +98,59 @@ class ReviewService {
             throw error;
         }
     }
+
+    // 🔹 REISSUE REVIEW
+    async reissueReview(priceIds: string[], oldBookingId: string) {
+        const sessionId = uuidv4();
+
+        const env = tripjackConfig.ENV;
+        const config = TRIPJACK_URLS[env];
+        const url = `${config.BASE_URL}/fms/v1/reissue/review`;
+
+        try {
+            const response = await axios.post(
+                url,
+                {
+                    priceIds: priceIds,
+                    oldBookingId: oldBookingId,
+                    priceValidation: true
+                },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    }
+                }
+            );
+
+            const rawData = response.data;
+            const mappedData = TripjackFieldMapper.map(rawData);
+
+            const sessionTTL = mappedData.conditions?.st || 1800;
+
+            await RedisCacheService.set(sessionId, {
+                raw: mappedData,
+                oldBookingId: oldBookingId,
+                bookingId: mappedData.bookingId,
+                totalPrice: mappedData.totalPriceInfo?.totalFareDetail?.fc?.TF,
+            }, sessionTTL);
+
+            return {
+                sessionId,
+                reviewData: mappedData,
+                sessionValidFor: sessionTTL
+            };
+
+        } catch (error: any) {
+            console.error("Reissue Review ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
+    }
 }
 
 export default new ReviewService();

@@ -5,5 +5,6 @@ const router = Router();
 
 router.post("/", ReviewController.review);
 router.post("/verify", ReviewController.reviewVerify);
+router.post("/reissue", ReviewController.reissueReview);
 
 export default router;
