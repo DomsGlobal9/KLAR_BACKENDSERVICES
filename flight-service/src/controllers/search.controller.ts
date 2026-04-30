@@ -113,3 +113,42 @@ export const searchMulticityController = async (req: Request, res: Response) => 
         });
     }
 };
+
+export const reissueSearchInitController = async (req: Request, res: Response) => {
+    try {
+        const data = await searchService.reissueSearchInit(req.body);
+
+        return res.status(200).json({
+            success: true,
+            data
+        });
+
+    } catch (error: any) {
+        console.error("FULL ERROR >>>", error.response?.data || error.message);
+
+        return res.status(500).json({
+            success: false,
+            message: error.response?.data || error.message
+        });
+    }
+};
+
+
+export const reissueSearchResultController = async (req: Request, res: Response) => {
+    try {
+        const { requestId } = req.body;
+
+        const data = await searchService.reissueSearchResult(requestId);
+
+        return res.status(200).json({
+            success: true,
+            data
+        });
+
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: "Reissue search result failed"
+        });
+    }
+};

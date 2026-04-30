@@ -138,6 +138,73 @@ class SearchService {
             throw error;
         }
     }
+
+    // 🔹 REISSUE SEARCH INIT
+    async reissueSearchInit(payload: any) {
+
+        const env = tripjackConfig.ENV;
+        const config = TRIPJACK_URLS[env];
+
+        const url = `${config.BASE_URL}/fms/v1/reissue/poll/searchquery-list`;
+
+        try {
+
+            const finalPayload = payload.searchQuery;
+
+            console.log("FINAL PAYLOAD >>>", JSON.stringify(finalPayload, null, 2));
+
+            const response = await axios.post(
+                url,
+                finalPayload,
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    },
+                }
+            );
+
+            return response.data;
+
+        } catch (error: any) {
+            console.error("Reissue Search Init ERROR >>>", error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+
+    // 🔹 REISSUE SEARCH RESULT (POLLING)
+    async reissueSearchResult(requestId: string) {
+
+        const env = tripjackConfig.ENV;
+        const config = TRIPJACK_URLS[env];
+
+        const url = `${config.BASE_URL}/fms/v1/reissue/poll/search`;
+
+        try {
+            const response = await axios.post(
+                url,
+                { requestId },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    },
+                }
+            );
+
+            return response.data;
+
+        } catch (error: any) {
+            console.error("Reissue Search Result ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
+    }
 }
 
 export default new SearchService();
