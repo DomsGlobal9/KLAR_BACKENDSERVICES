@@ -38,6 +38,7 @@ app.use(contextResolver);
 
 
 app.use("/b2b", routes);
+app.use("/user", routes);
 app.use("/", routes);
 
 app.use(errorHandler);

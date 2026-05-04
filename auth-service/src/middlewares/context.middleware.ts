@@ -22,7 +22,8 @@ export const contextResolver = (
     if (
         path === ClientType.B2C ||
         path === ClientType.B2B ||
-        path === ClientType.B2B2B
+        path === ClientType.B2B2B ||
+        path === ClientType.USER
     ) {
         req.clientType = path as ClientType;
         return next();
