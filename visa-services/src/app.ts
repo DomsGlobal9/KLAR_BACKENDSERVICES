@@ -25,9 +25,16 @@ const app = express();
 app.use(express.json());
 
 // ✅ CORS (correct syntax)
+// app.use(
+//   cors({
+//     origin: "http://localhost:5173",
+//     credentials: true,
+//   })
+// );
+
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "http://localhost:5009"],
     credentials: true,
   })
 );
