@@ -7,6 +7,7 @@ export interface UnifiedSearchRequest {
   currency?: string;            // default USD
   countryCode?: string;         // default US
   pageNo?: number;              // 1-indexed pagination
+  _geoCenter?: { lat: number; lng: number } | null; // internal: pre-resolved coords
 }
 
 export interface UnifiedRoom {

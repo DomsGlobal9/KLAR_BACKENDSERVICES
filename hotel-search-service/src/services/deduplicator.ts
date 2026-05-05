@@ -47,7 +47,39 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): { items: UnifiedHotel
                 }
             }
 
+            // Senior Dev: Only merge if they come from DIFFERENT providers.
+            // As requested, we allow duplicates from the SAME provider.
+            if (hotel.source === existing.source) continue;
+
             if (isSameId || isGeoSame) {
+                const reason = isSameId ? "ID_MATCH" : geoMatchReason;
+                
+                console.log(`[DEDUP] 🤝 Merge Detected!`);
+                console.log(`   ├─ New:      "${hotel.name}" (${hotel.source}, ₹${hotel.price})`);
+                console.log(`   ├─ Existing: "${existing.name}" (${existing.source}, ₹${existing.price})`);
+                console.log(`   ├─ Reason:   ${reason}`);
+
+                const currentPrice = hotel.price || 0;
+                const existingPrice = existing.price || 0;
+                let winnerName = "";
+
+                if (currentPrice > 0 && (currentPrice < existingPrice || existingPrice === 0)) {
+                    winnerName = hotel.name;
+                    const merged = { ...hotel };
+                    if (hotel.source !== existing.source) {
+                        merged.altDeal = { source: existing.source, price: existing.price };
+                    }
+                    collapsed[i] = merged as UnifiedHotel;
+                } else {
+                    winnerName = existing.name;
+                    if (hotel.source !== existing.source) {
+                        existing.altDeal = { source: hotel.source, price: hotel.price };
+                    }
+                }
+
+                const geoInfo = isSameId ? `ID: ${hotel.hotelId}` : `Pin-to-Pin: [${hotel.latitude}, ${hotel.longitude}] vs [${existing.latitude}, ${existing.longitude}]`;
+                console.log(`   └─ UI WINNER: "${winnerName}" (Cheaper) | ${geoInfo}`);
+
                 // Tracking stats
                 meta.duplicatedCount++;
                 if (isSameId) {
@@ -58,24 +90,6 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): { items: UnifiedHotel
                     meta.bySimilarGeoAndName++;
                 }
 
-                // Merge: keep the cheaper one as the lead deal
-                const currentPrice = hotel.price || 0;
-                const existingPrice = existing.price || 0;
-
-                if (currentPrice > 0 && (currentPrice < existingPrice || existingPrice === 0)) {
-                    // Current hotel is cheaper
-                    const merged = { ...hotel };
-                    // Only show alt deal if sources are different (e.g. RG vs TJ)
-                    if (hotel.source !== existing.source) {
-                        merged.altDeal = { source: existing.source, price: existing.price };
-                    }
-                    collapsed[i] = merged as UnifiedHotel;
-                } else if (existingPrice > 0) {
-                    // Existing is cheaper or same
-                    if (hotel.source !== existing.source) {
-                        existing.altDeal = { source: hotel.source, price: hotel.price };
-                    }
-                }
                 matched = true;
                 break;
             }

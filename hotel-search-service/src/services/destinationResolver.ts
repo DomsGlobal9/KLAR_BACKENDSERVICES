@@ -115,10 +115,10 @@ export async function resolveForRG(query: string): Promise<string | null> {
 /**
  * Resolve a city query to an array of TripJack hotel IDs.
  */
-export async function resolveForTJ(query: string): Promise<string[]> {
+export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number; lng: number } | null): Promise<string[]> {
     const normalizedQuery = query.trim();
     
-    const geo = await resolveCityToCoords(normalizedQuery);
+    const geo = preResolvedGeo !== undefined ? preResolvedGeo : await resolveCityToCoords(normalizedQuery);
 
     if (geo) {
         const { lat, lng } = geo;
