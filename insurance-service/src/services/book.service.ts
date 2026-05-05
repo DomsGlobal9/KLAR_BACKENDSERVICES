@@ -127,6 +127,7 @@ class BookService {
         const tjResponse = await tripJackInsuranceProvider.book(payload);
 
         // ── Persist to MongoDB ──────────────────────────────────────────────
+        let savedRecordId = null;
         try {
             const tjBookingId: string = tjResponse?.order?.bookingId || payload.bookingId;
 
@@ -171,6 +172,7 @@ class BookService {
             });
 
             const saved = await record.save();
+            savedRecordId = saved._id;
             console.log(`✅ [TripSafe] Saved PENDING booking: ${tjBookingId} (DB: ${saved._id})`);
 
             // Start fire-and-forget status polling
@@ -184,6 +186,7 @@ class BookService {
             status: true,
             statusCode: 200,
             bookingId: tjResponse?.order?.bookingId || payload.bookingId,
+            recordId: savedRecordId,
             body: tjResponse,
         };
     }

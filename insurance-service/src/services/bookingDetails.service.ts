@@ -12,7 +12,7 @@ class BookingDetailsService {
         }
 
         const result = await tripJackInsuranceProvider.bookingDetails(bookingId);
-
+        
         // Optionally sync to DB (best-effort, non-blocking)
         InsuranceBookingModel.findOneAndUpdate(
             { bookingId },
