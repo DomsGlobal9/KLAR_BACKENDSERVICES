@@ -120,17 +120,22 @@ Reported Total to UI:      ${totalToUI}
                 type: "city",
                 source: "RG"
             })),
-            ...hotels.map((h: any) => ({
-                id: h.tjHotelId,
-                label: `${h.name}, ${h.cityName}`,
-                type: "hotel",
-                source: "TJ"
-            }))
+            ...hotels.map((h: any) => {
+                const hotelId = h.tjHotelId.startsWith("TJ:") ? h.tjHotelId : `TJ:${h.tjHotelId}`;
+                return {
+                    id: hotelId,
+                    hotelId: hotelId,
+                    label: `${h.name}, ${h.cityName}`,
+                    type: "hotel",
+                    source: "TJ",
+                    city: h.cityName
+                };
+            })
         ];
 
         // Deduplicate suggestions by name to fix "multiple times same location" issue
         const uniqueSuggestions = Array.from(
-            new Map(suggestions.map(item => [item.name.toLowerCase(), item])).values()
+            new Map(suggestions.map(item => [item.label.toLowerCase(), item])).values()
         );
 
         return uniqueSuggestions;

@@ -98,7 +98,7 @@ export class RateGainApiProvider {
 
                 let paxes = r.paxes || [];
                 if (childrenCount > 0 && paxes.length === 0) {
-                    const childrenAges: number[] = r.childrenAges || [];
+                    const childrenAges: number[] = r.childrenAges || r.childAges || [];
                     if (childrenAges.length > 0) {
                         paxes = childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }));
                     } else {
@@ -126,6 +126,20 @@ export class RateGainApiProvider {
             return res.data;
         } catch (error: any) {
             console.error("[RateGain] GetProducts Error:", error.response?.status, error.response?.data?.description || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * GET /api/SmartDistribution/getSpecialRequests
+     * Returns list of predefined special requests.
+     */
+    async getSpecialRequests() {
+        try {
+            const res = await rateGainClient.get("/api/SmartDistribution/getSpecialRequests");
+            return res.data;
+        } catch (error: any) {
+            console.error("[RateGain] GetSpecialRequests Error:", error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
     }

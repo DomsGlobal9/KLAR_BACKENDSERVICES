@@ -38,7 +38,7 @@ export class TripJackApiProvider {
         if (!hid)           throw new Error("[TripJack Review] hid is required");
         if (!correlationId) throw new Error("[TripJack Review] correlationId is required for v3 state tracking");
 
-        const cleanHid = typeof hid === 'string' ? hid.replace("TJ:", "").trim() : hid;
+        const cleanHid = typeof hid === 'string' ? hid.replace("TJ:", "").replace("RG:", "").trim() : hid;
         const isNumericHid = typeof cleanHid === 'string' && /^\d+$/.test(cleanHid);
         const finalHid = isNumericHid ? Number(cleanHid) : cleanHid;
 
@@ -121,7 +121,7 @@ export class TripJackApiProvider {
         if (!bookingId)        throw new Error("[TripJack Book] bookingId (from Review) is required");
         if (!roomTravellerInfo?.length) throw new Error("[TripJack Book] roomTravellerInfo is required");
 
-        const rawId = (payload.propertyId || payload.PropertyId || payload.hid || "").toString().replace("TJ:", "").trim();
+        const rawId = (payload.propertyId || payload.PropertyId || payload.hid || "").toString().replace("TJ:", "").replace("RG:", "").trim();
         
         const tjPayload: any = {
             bookingId,

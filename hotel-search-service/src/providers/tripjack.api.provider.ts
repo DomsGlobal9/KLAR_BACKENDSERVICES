@@ -18,7 +18,7 @@ export class TripJackApiProvider {
      * FIX #4 (partial): hid is sent here so the frontend can forward it to Review.
      */
     async getProducts(payload: any) {
-        const rawId = (payload.propertyId || payload.PropertyId || "").replace("TJ:", "").trim();
+        const rawId = (payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
         const correlationId = payload.correlationId || uuidv4();
 
         if (!rawId) {
@@ -55,7 +55,11 @@ export class TripJackApiProvider {
                 tripJackClient.post("/hms/v3/hotel/pricing", tjPayload)
             ]);
 
+            if (staticRes.status === "rejected") {
+                console.error(`[TripJack] Static Detail Failed for ${rawId}:`, staticRes.reason?.message, staticRes.reason?.response?.data);
+            }
             if (pricingRes.status === "rejected") {
+                console.error(`[TripJack] Pricing Request Failed for ${rawId}:`, pricingRes.reason?.message, pricingRes.reason?.response?.data);
                 throw pricingRes.reason;
             }
 

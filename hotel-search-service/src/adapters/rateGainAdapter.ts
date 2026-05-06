@@ -6,6 +6,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
   let destCode = (req.destinationCode || "").toString().trim() || null;
   if (!destCode && req.destination) {
     destCode = await resolveForRG(req.destination);
+    console.log(`[RateGain] Resolved destination "${req.destination}" to code: ${destCode}`);
   }
 
   const geo = req._geoCenter;
@@ -36,40 +37,60 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
   }
 
   try {
+    console.log(`[RateGain] Preparing search with payload:`, JSON.stringify(payload, null, 2));
     const pageNo = req.pageNo || 1;
     const batchSize = 1; 
     const apiPageStart = ((pageNo - 1) * batchSize) + 1;
     const apiPages = Array.from({ length: batchSize }, (_, i) => apiPageStart + i);
 
-    console.log(`[RateGain] Requesting pages [${apiPages.join(',')}] for search Page ${pageNo}`);
+    console.log(`[RateGain] Requesting pages [${apiPageStart}] for search Page ${pageNo}`);
 
     let allHotels: UnifiedHotel[] = [];
     let maxTotal = 0;
 
-    for (const page of apiPages) {
-        try {
-            const res = await rateGainProvider.getBestProperties({ ...payload, pageNo: page });
-            
-            // VERY LOOSE STATUS CHECK (as requested by spec 1.5.3)
-            const isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
-            
-            if (isSuccess) {
-                const hotels = (res.body || []).map(mapRGHotel);
-                allHotels.push(...hotels);
-                const total = parseInt(res.totalRecord || res.header?.totalRecord) || 0;
-                if (total > maxTotal) maxTotal = total;
-                
-                console.log(`[RateGain] Page ${page} Success: Found ${hotels.length} hotels (Total: ${total})`);
-                
-                if (hotels.length === 0) break;
-            } else {
-                console.warn(`[RateGain] Page ${page} Non-Success:`, JSON.stringify({ status: res.status, code: res.statusCode, desc: res.description }, null, 2));
-            }
-            
-            await new Promise(r => setTimeout(r, 100));
-        } catch (err: any) {
-            console.error(`[RateGain] Page ${page} API Error:`, err.message);
+    try {
+        // Step 1: Attempt search with destinationCode
+        let searchPayload = { ...payload, destinationCode: destCode, pageNo: apiPageStart };
+        console.log(`[RateGain] Requesting Page ${apiPageStart} with destCode: ${destCode}`);
+        
+        let res = await rateGainProvider.getBestProperties(searchPayload);
+        let isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
+        let total = parseInt(res.totalRecord || res.header?.totalRecord) || 0;
+
+        // Step 2: Fallback to Geofilter if no results and geo available
+        if (isSuccess && total === 0 && geo) {
+            console.log(`[RateGain] Zero results for destCode ${destCode}. Falling back to Geofilter.`);
+            searchPayload = { 
+                ...payload, 
+                Geofilter: {
+                    latitude: geo.lat.toFixed(6),
+                    longitude: geo.lng.toFixed(6),
+                    radius: 50 // Integer as per 1.5.3 spec
+                },
+                pageNo: apiPageStart
+            };
+            res = await rateGainProvider.getBestProperties(searchPayload);
+            isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
+            total = parseInt(res.totalRecord || res.header?.totalRecord) || 0;
         }
+
+        if (isSuccess) {
+            const hotels = (res.body || []).map(mapRGHotel);
+            allHotels.push(...hotels);
+            if (total > maxTotal) maxTotal = total;
+            
+            console.log(`[RateGain] Success: Found ${hotels.length} hotels (Total: ${total})`);
+            
+            if (hotels.length === 0) {
+                console.log(`[DEBUG] RateGain returned empty body. Raw response:`, JSON.stringify(res, null, 1).substring(0, 500));
+            }
+        } else {
+            console.warn(`[RateGain] Non-Success:`, JSON.stringify({ status: res.status, code: res.statusCode, header: res.header, desc: res.description }, null, 2));
+        }
+            
+        await new Promise(r => setTimeout(r, 100));
+    } catch (err: any) {
+        console.error(`[RateGain] API Error:`, err.message);
     }
 
     return {
