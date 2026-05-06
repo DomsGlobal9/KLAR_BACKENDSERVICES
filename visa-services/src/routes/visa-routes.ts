@@ -4,6 +4,8 @@ import {
   getAllVisas,
   getVisaByType,
   getVisaById,
+  deleteVisa,
+  updateVisa,
 } from "../controllers/visa-controller";
 
 
@@ -19,6 +21,13 @@ router.post("/apply", applyVisaController);
 router.get("/all", getAllVisas);
 router.get("/type/:type", getVisaByType);
 router.get("/:id", getVisaById);
+
+//Delete
+router.delete("/:id", deleteVisa);
+
+//update
+
+router.put("/:id", updateVisa);
 
 
 export default router;  

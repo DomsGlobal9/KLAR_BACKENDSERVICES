@@ -99,6 +99,11 @@ const visaSchema = new Schema(
     intakeDate: String,
     admissionLetter: String,
     sponsorDetails: String,
+
+    status: {
+      type: String,
+      default: "Pending",
+    },
   },
   { timestamps: true }
 );
