@@ -11,44 +11,58 @@ import { RGDestinationModel } from "../models/RGDestination.model";
  * Attempt to find coordinates for a given city query using the existing hotel database.
  * This helps "geo-tag" a search even when the user just types a name.
  */
-export async function resolveCityToCoords(query: string): Promise<{ lat: number, lng: number } | null> {
+export async function resolveCityToCoords(query: string): Promise<{ lat: number; lng: number } | null> {
+    if (!query || query.length < 2) return null;
     const normalizedQuery = query.toLowerCase().trim();
 
-    // Check if query is already coordinates
-    const coordRegex = /^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/;
-    const match = normalizedQuery.match(coordRegex);
-    if (match) {
-        return { lat: parseFloat(match[1]), lng: parseFloat(match[3]) };
-    }
-
-    // Try to find a hotel in this city to get a representative point
+    // Strategy 1: Look for an exact city name match in our database (Fastest)
+    // We strictly use anchors ^...$ to avoid "Goa" matching "Goettingen"
     const hotel = await HotelModel.findOne({
-        $or: [
-            { cityName: { $regex: new RegExp(`^${normalizedQuery}$`, "i") } },
-            { cityName: { $regex: new RegExp(normalizedQuery, "i") } }
-        ]
+        cityName: { $regex: new RegExp(`^${normalizedQuery}$`, "i") }
     }).select("location").lean();
 
     if (hotel?.location?.coordinates) {
         const [lng, lat] = hotel.location.coordinates;
-        console.log(`[GEO] Resolved city "${query}" to coordinates [${lat}, ${lng}] from DB`);
+        console.log(`[GEO] Resolved city "${query}" to coordinates [${lat}, ${lng}] from DB (Exact Match)`);
         return { lat, lng };
     }
 
-    // fallback: External geocoding via Nominatim (Free, no key required for low volume)
-    try {
-        const axios = require('axios');
-        const response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
-            headers: { 'User-Agent': 'Klar-Hotel-Search-Service' }
-        });
-        const data = response.data;
-        if (data && data.length > 0) {
-            const { lat, lon } = data[0];
-            console.log(`[GEO] Resolved city "${query}" to coordinates [${lat}, ${lon}] via Nominatim`);
-            return { lat: parseFloat(lat), lng: parseFloat(lon) };
+    // Sub-strategy: If query is multi-word (e.g. "Goa, India"), try matching the first part
+    const parts = normalizedQuery.split(/[\s,]+/);
+    if (parts.length > 1) {
+        const firstPart = parts[0];
+        const partialHotel = await HotelModel.findOne({
+            cityName: { $regex: new RegExp(`^${firstPart}$`, "i") }
+        }).select("location").lean();
+
+        if (partialHotel?.location?.coordinates) {
+            const [lng, lat] = partialHotel.location.coordinates;
+            console.log(`[GEO] Resolved part "${firstPart}" from "${query}" to [${lat}, ${lng}] from DB`);
+            return { lat, lng };
         }
-    } catch (e) {
-        console.warn(`[GEO] Nominatim geocoding failed for "${query}":`, (e as any).message);
+    }
+
+    // Strategy 2: External geocoding via Nominatim (Reliable global fallback)
+    try {
+        console.log(`[GEO] No exact DB match for "${query}". Fetching from Nominatim...`);
+        const axios = require('axios');
+        // We append "country=IN" or similar if we detect India-specific intent to aid resolution
+        const q = normalizedQuery.includes("india") ? normalizedQuery : `${normalizedQuery}, India`;
+        
+        const response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
+            headers: { 'User-Agent': 'Klar-Hotel-Search-Service/1.0' },
+            timeout: 5000
+        });
+
+        if (response.data && response.data.length > 0) {
+            const result = response.data[0];
+            const lat = parseFloat(result.lat);
+            const lng = parseFloat(result.lon);
+            console.log(`[GEO] Nominatim resolved "${query}" to [${lat}, ${lng}] (${result.display_name})`);
+            return { lat, lng };
+        }
+    } catch (error: any) {
+        console.error(`[GEO] Nominatim error for "${query}":`, error.message);
     }
 
     return null;
@@ -117,28 +131,37 @@ export async function resolveForRG(query: string): Promise<string | null> {
  */
 export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number; lng: number } | null): Promise<string[]> {
     const normalizedQuery = query.trim();
+    const isIndianQuery = normalizedQuery.toLowerCase().includes("india") || normalizedQuery.toLowerCase().includes("goa");
 
     const geo = preResolvedGeo !== undefined ? preResolvedGeo : await resolveCityToCoords(normalizedQuery);
 
     if (geo) {
         const { lat, lng } = geo;
+        console.log(`[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] for "${normalizedQuery}"`);
 
-        console.log(`[DEBUG] resolveForTJ: Using coordinates [${lat}, ${lng}] for search.`);
-
-        // Find hotels within 50km radius, sorted by distance
-        const hotels = await HotelModel.find({
+        // Find hotels within 50km radius
+        let hotels = await HotelModel.find({
             location: {
                 $near: {
                     $geometry: {
                         type: "Point",
-                        coordinates: [lng, lat] // MongoDB uses [lng, lat]
+                        coordinates: [lng, lat]
                     },
                     $maxDistance: 50000 // 50km
                 }
             }
         })
-            .select("tjHotelId")
+            .select("tjHotelId countryName")
             .lean();
+
+        // Sanity Check: If searching for India but resolved to Germany (or vice versa), filter out
+        if (isIndianQuery) {
+            hotels = hotels.filter(h => 
+                !h.countryName || 
+                h.countryName.toLowerCase().includes("india") || 
+                !h.countryName.toLowerCase().includes("germany")
+            );
+        }
 
         return [...new Set(hotels.map((h) => h.tjHotelId))];
     }
@@ -146,41 +169,31 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
     // 2. City/Hotel Name Search (Fallback if no Geo available)
     console.log(`[DEBUG] resolveForTJ: Performing hierarchical fuzzy search for "${normalizedQuery}"`);
 
-    // Step A: Attempt Text Search (True Fuzzy-like matching via MongoDB index)
+    // Step A: Attempt Text Search
     let hotels = await HotelModel.find({
         $text: { $search: normalizedQuery }
     })
-        .select("tjHotelId")
+        .select("tjHotelId countryName")
         .lean();
 
-    console.log(`[DEBUG] resolveForTJ: Text search found ${hotels.length} hotels.`);
-
-    // Step B: Fallback to Phrase Regex (if text search fails or too few results)
+    // Step B: Fallback to Phrase Regex
     if (hotels.length < 5) {
         const regexHotels = await HotelModel.find({
-            cityName: { $regex: new RegExp(normalizedQuery, "i") }
-        }).select("tjHotelId").lean();
+            cityName: { $regex: new RegExp(`^${normalizedQuery}$`, "i") }
+        }).select("tjHotelId countryName").lean();
 
         if (regexHotels.length > hotels.length) {
             hotels = regexHotels;
-            console.log(`[DEBUG] resolveForTJ: Regex fallback improved count to ${hotels.length}`);
         }
     }
 
-    // Step C: Fallback for very short or no-match queries (AND-based search across Name, City)
-    if (hotels.length === 0) {
-        const words = normalizedQuery.split(/\s+/).filter(w => w.length > 2);
-        if (words.length > 0) {
-            const andConditions = words.map(word => ({
-                $or: [
-                    { cityName: { $regex: new RegExp(word, "i") } },
-                    { name: { $regex: new RegExp(word, "i") } }
-                ]
-            }));
-            hotels = await HotelModel.find({ $and: andConditions })
-                .select("tjHotelId")
-                .lean();
-        }
+    // Geographic filtering for text/regex results too
+    if (isIndianQuery) {
+        hotels = hotels.filter(h => 
+            !h.countryName || 
+            h.countryName.toLowerCase().includes("india") || 
+            !h.countryName.toLowerCase().includes("germany")
+        );
     }
 
     const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId).filter(Boolean))];
@@ -188,6 +201,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
 
     return uniqueHids;
 }
+
 
 /**
  * Get static hotel data for a TripJack hotel ID (for enrichment).

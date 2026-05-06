@@ -103,6 +103,24 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
         let mapped: UnifiedHotel[] = finalHotels.map((h: any) => mapTJHotel(h, correlationId));
 
+        // Geographic Sanity Check: Ensure results match the intended region
+        const isIndiaTarget = req.destination.toLowerCase().includes("india") || req.destination.toLowerCase().includes("goa") || (req.countryCode === "IN");
+        if (isIndiaTarget) {
+            const initialCount = mapped.length;
+            mapped = mapped.filter(h => {
+                const addr = (h.address || "").toLowerCase();
+                const country = (h.country || "").toLowerCase();
+                // Filter out German hotels if we are targeting India
+                if (addr.includes("germany") || country.includes("germany") || country.includes("deutschland")) {
+                    return false;
+                }
+                return true;
+            });
+            if (mapped.length < initialCount) {
+                console.log(`[TripJack] Filtered out ${initialCount - mapped.length} cross-region hotels (Germany -> India).`);
+            }
+        }
+
         // ASYNC ENRICHMENT (don't wait for DB if it's too slow, but here we do it fast)
         try {
             const tjIds = mapped.map(h => h.hotelId.replace("TJ:", ""));
