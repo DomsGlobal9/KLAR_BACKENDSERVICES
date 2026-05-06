@@ -32,9 +32,9 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     const correlationId = uuidv4();
     const page = req.pageNo || 1;
 
-    // REDUCED TARGET FOR SPEED: 100 hotels is more than enough for a single page view.
-    // If we try for 300+, it will take 40+ seconds.
-    const targetCount = page === 1 ? 100 : 50;
+    // REDUCED TARGET FOR SPEED: 50 hotels is more than enough for a single page view.
+    // Fetching 50 hotels takes ~3-5 seconds.
+    const targetCount = 50;
 
     const CHUNK_SIZE = 10; // Smaller chunks are less likely to timeout
     const chunks: string[][] = [];
@@ -42,16 +42,22 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
 
-    let currentIdx = (page - 1) * 8; // Start at the current page's index
+    // Since batchSize is 5 and CHUNK_SIZE is 10, we consume 5 chunks per page (50 items)
+    const batchSize = 5;
+    let currentIdx = (page - 1) * batchSize; // Start at the current page's index
 
     try {
         let collectedHotels: any[] = [];
         console.log(`[TripJack] Fast Scavenging Page ${page}: Target ${targetCount} using chunks of ${CHUNK_SIZE}`);
 
-        // Increase parallelism to 4 chunks at once (100 hotels in one batch!)
-        // This should take ~10-15 seconds instead of 40.
-        while (collectedHotels.length < targetCount && currentIdx < chunks.length) {
-            const batchSize = 8; // More parallel requests
+        // Limit the maximum number of batches to prevent infinite scavenging (e.g. searching 11,000 hotels taking 113s)
+        const maxBatches = 4; // Scan at most 4 batches * 50 hotels = 200 hotels per request
+        let batchesProcessed = 0;
+
+        // Increase parallelism to fetch the target in a single sweep
+        while (collectedHotels.length < targetCount && currentIdx < chunks.length && batchesProcessed < maxBatches) {
+            batchesProcessed++;
+            // More parallel requests
             const batch = chunks.slice(currentIdx, currentIdx + batchSize);
 
             const promises = batch.map(chunk => {

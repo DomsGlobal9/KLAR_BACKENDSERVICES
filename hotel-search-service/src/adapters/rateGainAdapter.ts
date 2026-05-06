@@ -37,7 +37,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
   try {
     const pageNo = req.pageNo || 1;
-    const batchSize = 2; 
+    const batchSize = 1; 
     const apiPageStart = ((pageNo - 1) * batchSize) + 1;
     const apiPages = Array.from({ length: batchSize }, (_, i) => apiPageStart + i);
 
