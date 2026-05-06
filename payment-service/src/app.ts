@@ -10,6 +10,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api', appRoute);
+app.use('/api/pay', appRoute);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', service: 'payment-service' });
