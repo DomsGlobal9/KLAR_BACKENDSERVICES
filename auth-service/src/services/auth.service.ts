@@ -281,7 +281,6 @@ export class AuthService {
 
         const user = await UserModel.findById(userId);
 
-        console.log("@@@@@@@@@@@@@ The User data we got", user);
         if (!user) {
             throw new UnauthorizedError('User not found');
         }
@@ -294,6 +293,47 @@ export class AuthService {
             clientType: user.clientType,
             status: user.status,
             verificationStatus: user.verification?.status,
+        };
+    }
+
+    public async getUserFullDetails(userId: string): Promise<any> {
+
+        const user = await UserModel.findById(userId).lean();
+
+        if (!user) {
+            throw new UnauthorizedError('User not found');
+        }
+
+        const wallet = await Wallet.findOne({ userId: user._id }).lean();
+
+        return {
+            id: user._id.toString(),
+
+            email: user.email,
+            mobile: user.mobile,
+            roles: user.roles,
+            clientType: user.clientType,
+
+            status: user.status,
+            verificationStatus: user.verification?.status,
+            blockReason: user.blockReason,
+            pendingReason: user.pendingReason,
+            rejectedReason: user.rejectedReason,
+
+            businessProfile: user.businessProfile || null,
+
+            wallet: wallet
+                ? {
+                    balance: wallet.balance,
+                    currency: wallet.currency,
+                    status: wallet.status,
+                    emailAlerts: wallet.emailAlerts,
+                    smsAlerts: wallet.smsAlerts,
+                }
+                : null,
+
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
         };
     }
 }

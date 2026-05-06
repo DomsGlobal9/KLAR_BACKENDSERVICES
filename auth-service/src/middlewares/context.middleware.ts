@@ -10,9 +10,7 @@ export const contextResolver = (
     _res: Response,
     next: NextFunction
 ) => {
-    console.log("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
     const segments = req.path.split("/").filter(Boolean);
-    console.log('Path segments:', segments);
 
     if (segments[0] === "health" || segments[0] === "admin") {
         return next();

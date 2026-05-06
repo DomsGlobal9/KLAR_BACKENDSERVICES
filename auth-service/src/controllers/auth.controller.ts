@@ -152,6 +152,15 @@ export const logoutB2B = async (
   res: Response,
   _next: NextFunction
 ) => {
+  // Use maxAge: 0 to force-expire the cookie immediately (most reliable cross-browser)
+  res.cookie("token", "", {
+    httpOnly: envConfig.COOKIE.HTTP_ONLY,
+    secure: envConfig.COOKIE.SECURE,
+    sameSite: envConfig.COOKIE.SAME_SITE,
+    maxAge: 0,
+    expires: new Date(0),
+  });
+  // Also call clearCookie as a belt-and-suspenders measure
   res.clearCookie("token", {
     httpOnly: envConfig.COOKIE.HTTP_ONLY,
     secure: envConfig.COOKIE.SECURE,
@@ -173,7 +182,6 @@ export const me = async (
   next: NextFunction
 ) => {
   try {
-    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     const userId = (req as any).user.userId;
     const user = await AuthService.getInstance().getCurrentUser(userId);
 

@@ -1,0 +1,57 @@
+export type PaxType = "ADULT" | "CHILD" | "INFANT";
+
+export interface SSRInfo {
+    key: string;
+    code: string;
+}
+
+export interface Traveller {
+    title: string;
+    paxType: PaxType;
+    firstName: string;
+    lastName: string;
+    dob: string;
+
+    passportNumber?: string;
+    passportNationality?: string;
+    passportIssueDate?: string;
+    passportExpiryDate?: string;
+
+    ssrSeatInfos?: SSRInfo[];
+    ssrMealInfos?: SSRInfo[];
+    ssrBaggageInfos?: SSRInfo[];
+}
+
+export interface GSTInfo {
+    gstNumber: string;
+    registeredName: string;
+    email: string;
+    mobile: string;
+    address: string;
+}
+
+export interface EmergencyContact {
+    email: string;
+    phone: string;
+    name: string;
+}
+
+export interface Booking {
+    bookingId: string;
+    amount?: number;
+
+    email: string;
+    phone: string;
+
+    isHold: boolean;
+
+    travellers: Traveller[];
+
+    gstInfo?: GSTInfo;
+    emergencyContact?: EmergencyContact;
+
+    status: "INITIATED" | "PENDING" | "CONFIRMED" | "FAILED";
+
+    createdAt?: Date;
+    updatedAt?: Date;
+}

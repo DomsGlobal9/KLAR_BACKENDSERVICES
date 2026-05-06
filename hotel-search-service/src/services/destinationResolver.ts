@@ -13,7 +13,7 @@ import { RGDestinationModel } from "../models/RGDestination.model";
  */
 export async function resolveCityToCoords(query: string): Promise<{ lat: number, lng: number } | null> {
     const normalizedQuery = query.toLowerCase().trim();
-    
+
     // Check if query is already coordinates
     const coordRegex = /^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/;
     const match = normalizedQuery.match(coordRegex);
@@ -89,7 +89,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
             const firstResult = results[0]!;
             const resNameLower = firstResult.destName.toLowerCase();
             const queryWords = normalizedQuery.split(/\s+/);
-            
+
             // If the query has multiple words, the first word should ideally be in the result name
             if (queryWords.length > 1 && !resNameLower.includes(queryWords[0]!)) {
                 console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}" (missing first word "${queryWords[0]}")`);
@@ -102,8 +102,8 @@ export async function resolveForRG(query: string): Promise<string | null> {
     // 3. First Word Fallback - Only as a last resort and if it's not a generic word
     const GENERIC_WORDS = ['india', 'china', 'usa', 'united', 'states', 'kingdom', 'arab', 'emirates'];
     if (!dest && words.length > 0 && !GENERIC_WORDS.includes(words[0]!)) {
-        dest = await RGDestinationModel.findOne({ 
-            destName: { $regex: new RegExp(`^${words[0]}`, "i") } 
+        dest = await RGDestinationModel.findOne({
+            destName: { $regex: new RegExp(`^${words[0]}`, "i") }
         }).sort({ updatedAt: -1 });
     }
 
@@ -117,14 +117,14 @@ export async function resolveForRG(query: string): Promise<string | null> {
  */
 export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number; lng: number } | null): Promise<string[]> {
     const normalizedQuery = query.trim();
-    
+
     const geo = preResolvedGeo !== undefined ? preResolvedGeo : await resolveCityToCoords(normalizedQuery);
 
     if (geo) {
         const { lat, lng } = geo;
-        
+
         console.log(`[DEBUG] resolveForTJ: Using coordinates [${lat}, ${lng}] for search.`);
-        
+
         // Find hotels within 50km radius, sorted by distance
         const hotels = await HotelModel.find({
             location: {
@@ -137,21 +137,21 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
                 }
             }
         })
-        .select("tjHotelId")
-        .lean();
+            .select("tjHotelId")
+            .lean();
 
         return [...new Set(hotels.map((h) => h.tjHotelId))];
     }
 
     // 2. City/Hotel Name Search (Fallback if no Geo available)
     console.log(`[DEBUG] resolveForTJ: Performing hierarchical fuzzy search for "${normalizedQuery}"`);
-    
+
     // Step A: Attempt Text Search (True Fuzzy-like matching via MongoDB index)
     let hotels = await HotelModel.find({
         $text: { $search: normalizedQuery }
     })
-    .select("tjHotelId")
-    .lean();
+        .select("tjHotelId")
+        .lean();
 
     console.log(`[DEBUG] resolveForTJ: Text search found ${hotels.length} hotels.`);
 
@@ -160,7 +160,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
         const regexHotels = await HotelModel.find({
             cityName: { $regex: new RegExp(normalizedQuery, "i") }
         }).select("tjHotelId").lean();
-        
+
         if (regexHotels.length > hotels.length) {
             hotels = regexHotels;
             console.log(`[DEBUG] resolveForTJ: Regex fallback improved count to ${hotels.length}`);
@@ -182,10 +182,10 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
                 .lean();
         }
     }
-    
+
     const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId).filter(Boolean))];
     console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels`);
-    
+
     return uniqueHids;
 }
 
