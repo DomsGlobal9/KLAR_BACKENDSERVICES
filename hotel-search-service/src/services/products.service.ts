@@ -5,19 +5,24 @@ class ProductsService {
     async getProducts(payload: any) {
         const propertyId = (payload.propertyId || payload.PropertyId || "").toString();
         
-        // Robust routing: 
-        // 1. Explicit TJ prefix
-        // 2. UUID format (TripJack uses UUIDs, RateGain uses numeric IDs)
-        const isRg = propertyId.startsWith("RG:");
-        const isTj = propertyId.startsWith("TJ:") || 
-                     (!isRg && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId.replace("TJ:", "").replace("RG:", "")));
-        
-        if (isTj) {
+        if (this.isTripJack(propertyId)) {
             return tripJackProvider.getProducts(payload);
         }
 
-        // Default to RateGain for numeric and RG prefixed IDs
+        // Default to RateGain
         return rateGainProvider.getAllProducts(payload);
+    }
+
+    private isTripJack(propertyId: string): boolean {
+        // 1. Explicit TJ prefix
+        if (propertyId.startsWith("TJ:")) return true;
+        
+        // 2. RG prefix is definitely not TripJack
+        if (propertyId.startsWith("RG:")) return false;
+
+        // 3. UUID format is unique to TripJack (RateGain uses numeric IDs)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(propertyId);
     }
 }
 
