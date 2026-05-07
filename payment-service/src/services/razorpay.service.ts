@@ -5,7 +5,8 @@ import {
     createOrder,
     updateOrderByOrderId,
     getOrderByOrderId,
-    updateOrderStatus
+    updateOrderStatus,
+    getOrderByRazorpayOrderId
 } from '../repositories/order.repository';
 import {
     ICreateRazorpayOrderParams,
@@ -242,4 +243,52 @@ export const refundRazorpayPaymentService = async (
         console.error('Razorpay refund error:', error);
         throw new Error(error.message || 'Failed to process refund');
     }
+};
+
+export const razorpayWebhookService = async (
+    payload: any,
+    signature: string
+): Promise<boolean> => {
+
+    const expectedSignature = crypto
+        .createHmac('sha256', config.RAZORPAY_WEBHOOK_SECRET!)
+        .update(JSON.stringify(payload))
+        .digest('hex');
+
+    if (expectedSignature !== signature) {
+        throw new Error('Invalid webhook signature');
+    }
+
+    const event = payload.event;
+
+    if (event === 'payment.captured') {
+
+        const paymentEntity = payload.payload.payment.entity;
+
+        const razorpayOrderId = paymentEntity.order_id;
+        const razorpayPaymentId = paymentEntity.id;
+
+        const order = await getOrderByRazorpayOrderId(
+            razorpayOrderId
+        );
+
+        if (!order) {
+            throw new Error('Order not found');
+        }
+
+        await updateOrderStatus(
+            order.orderId,
+            'SUCCESS',
+            {
+                razorpayPaymentId
+            }
+        );
+
+        console.log(
+            'Webhook payment captured:',
+            razorpayPaymentId
+        );
+    }
+
+    return true;
 };

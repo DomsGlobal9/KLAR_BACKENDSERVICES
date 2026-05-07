@@ -5,7 +5,8 @@ import {
     getRazorpayOrderService,
     syncRazorpayOrderStatusService,
     getRazorpayPaymentStatusService,
-    getRazorpayOrderDetailsService
+    getRazorpayOrderDetailsService,
+    razorpayWebhookService
 } from '../services/razorpay.service';
 
 import {
@@ -156,6 +157,40 @@ export const getRazorpayOrderDetailsController = async (req: Request, res: Respo
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch order details',
+        });
+    }
+};
+
+export const razorpayWebhookController = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const signature = req.headers[
+            'x-razorpay-signature'
+        ] as string;
+
+        await razorpayWebhookService(
+            req.body,
+            signature
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Webhook processed successfully'
+        });
+
+    } catch (error: any) {
+
+        console.error(
+            'Razorpay webhook controller error:',
+            error
+        );
+
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Webhook failed'
         });
     }
 };

@@ -41,3 +41,9 @@ export const getAllOrdersByUserId = async (userId: string, limit = 10, skip = 0)
         .limit(limit)
         .skip(skip);
 };
+
+export const getOrderByRazorpayOrderId = async (
+    razorpayOrderId: string
+) => {
+    return OrderModel.findOne({ razorpayOrderId });
+};

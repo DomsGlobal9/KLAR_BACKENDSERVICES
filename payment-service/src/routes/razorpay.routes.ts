@@ -5,7 +5,8 @@ import {
     getRazorpayOrderController,
     syncRazorpayOrderStatusController,
     getRazorpayPaymentStatusController,
-    getRazorpayOrderDetailsController
+    getRazorpayOrderDetailsController,
+    razorpayWebhookController
 } from '../controllers/razorpay.controller';
 
 const router = express.Router();
@@ -21,6 +22,12 @@ router.post('/create-order', createRazorpayOrderController);
  * POST /api/razorpay/verify-payment
  */
 router.post('/verify-payment', verifyRazorpayPaymentController);
+
+/**
+ * Razorpay webhook endpoint
+ * POST /api/razorpay/webhook
+ */
+router.post('/webhook', razorpayWebhookController);
 
 /**
  * Get order details by our orderId
