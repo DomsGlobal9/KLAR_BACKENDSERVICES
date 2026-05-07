@@ -99,9 +99,9 @@ const OrderSchema: Schema = new Schema(
     }
 );
 
-OrderSchema.index({ orderId: 1 });
-OrderSchema.index({ cfOrderId: 1 });
-OrderSchema.index({ razorpayOrderId: 1 });
+// OrderSchema.index({ orderId: 1 });
+// OrderSchema.index({ cfOrderId: 1 });
+// OrderSchema.index({ razorpayOrderId: 1 });
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ paymentGateway: 1 });
 
