@@ -19,6 +19,26 @@ export class HotelsService {
         const geoCenter = await resolveCityToCoords(searchPayload.destination);
         searchPayload._geoCenter = geoCenter;
 
+        // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
+        const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
+        
+        // Secondary Check: If it matches a specific hotel name in our DB
+        let isDirectHotelName = false;
+        if (!isDirectHotelId) {
+            const { HotelModel } = require("../models/Hotel.model");
+            const nameToSearch = searchPayload.destination.split(',')[0].trim();
+            if (nameToSearch.length > 5) {
+                const directMatch = await HotelModel.findOne({ name: { $regex: new RegExp(`^${nameToSearch}$`, "i") } }).select("_id").lean();
+                if (directMatch) isDirectHotelName = true;
+            }
+        }
+
+        const isDirectSearch = isDirectHotelId || isDirectHotelName;
+
+        if (isDirectSearch) {
+             console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
+        }
+
         const finalResults: UnifiedHotel[] = [];
         let rgTotal = 0;
         let tjTotal = 0;
@@ -28,7 +48,7 @@ export class HotelsService {
         // 2. Define Providers based on Mode
         const providers: { name: string; task: Promise<void> }[] = [];
         
-        if (mode === "UNIFIED" || mode === "RG_ONLY") {
+        if ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) {
             providers.push({
                 name: "RG",
                 task: searchRG(searchPayload).then(res => {

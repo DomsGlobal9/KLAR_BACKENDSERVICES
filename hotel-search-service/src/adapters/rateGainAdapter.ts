@@ -60,8 +60,12 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         // Step 2: Fallback to Geofilter if no results and geo available
         if (isSuccess && total === 0 && geo) {
             console.log(`[RateGain] Zero results for destCode ${destCode}. Falling back to Geofilter.`);
+            
+            // SENIOR DEV: Explicitly remove destinationCode so the API prioritizes coordinates
+            const { destinationCode, ...cleanPayload } = payload;
+            
             searchPayload = { 
-                ...payload, 
+                ...cleanPayload, 
                 Geofilter: {
                     latitude: geo.lat.toFixed(6),
                     longitude: geo.lng.toFixed(6),

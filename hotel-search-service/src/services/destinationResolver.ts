@@ -4,6 +4,8 @@
 import { HotelModel, IHotelData } from "../models/Hotel.model";
 import { RGDestinationModel } from "../models/RGDestination.model";
 
+const GENERIC_WORDS = ['india', 'china', 'usa', 'united', 'states', 'kingdom', 'arab', 'emirates', 'san', 'city', 'by', 'the', 'house', 'hotel', 'resort'];
+
 /**
  * Resolve a city query to a RateGain destination code.
  */
@@ -46,13 +48,21 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
     try {
         console.log(`[GEO] No exact DB match for "${query}". Fetching from Nominatim...`);
         const axios = require('axios');
-        // We append "country=IN" or similar if we detect India-specific intent to aid resolution
-        const q = normalizedQuery.includes("india") ? normalizedQuery : `${normalizedQuery}, India`;
         
-        const response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
+        // Step 1: Try the exact query as provided
+        let response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery)}&limit=1`, {
             headers: { 'User-Agent': 'Klar-Hotel-Search-Service/1.0' },
             timeout: 5000
         });
+
+        // Step 2: If no result, and it doesn't look like it has a country, try appending India
+        if ((!response.data || response.data.length === 0) && !normalizedQuery.includes(",")) {
+             console.log(`[GEO] No results for "${normalizedQuery}", retrying with India suffix...`);
+             response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery + ", India")}&limit=1`, {
+                headers: { 'User-Agent': 'Klar-Hotel-Search-Service/1.0' },
+                timeout: 5000
+            });
+        }
 
         if (response.data && response.data.length > 0) {
             const result = response.data[0];
@@ -99,13 +109,22 @@ export async function resolveForRG(query: string): Promise<string | null> {
 
         if (results.length > 0) {
             // Only accept if the name is reasonably similar to the query
-            // If query is "shangqiu china" and we match "china", it's suspicious if shangqiu is not in the name
             const firstResult = results[0]!;
             const resNameLower = firstResult.destName.toLowerCase();
             const queryWords = normalizedQuery.split(/\s+/);
 
-            // If the query has multiple words, the first word should ideally be in the result name
-            if (queryWords.length > 1 && !resNameLower.includes(queryWords[0]!)) {
+            // IMPROVEMENT: Filter out generic words to find "meaningful" words
+            const meaningfulWords = queryWords.filter(w => !GENERIC_WORDS.includes(w));
+            
+            if (meaningfulWords.length > 0) {
+                // If we have meaningful words (like "francisco" in "San Francisco"), they MUST be in the result
+                if (!resNameLower.includes(meaningfulWords[0]!)) {
+                    console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}" (missing meaningful word "${meaningfulWords[0]}")`);
+                } else {
+                    dest = firstResult;
+                }
+            } else if (queryWords.length > 1 && !resNameLower.includes(queryWords[0]!)) {
+                // Fallback for when all words are technically "generic" but we want a match
                 console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}" (missing first word "${queryWords[0]}")`);
             } else {
                 dest = firstResult;
@@ -113,8 +132,20 @@ export async function resolveForRG(query: string): Promise<string | null> {
         }
     }
 
+    // 2.5. Comma Fallback (Hotel + City searches)
+    if (!dest && normalizedQuery.includes(",")) {
+        const parts = normalizedQuery.split(",");
+        const cityPart = parts[parts.length - 1].trim();
+        if (cityPart.length > 2) {
+            console.log(`[DEBUG] resolveForRG: Query has comma, falling back to city part: "${cityPart}"`);
+            // Recursion safety: only recurse if we haven't already tried this part
+            if (cityPart !== normalizedQuery) {
+                return resolveForRG(cityPart);
+            }
+        }
+    }
+
     // 3. First Word Fallback - Only as a last resort and if it's not a generic word
-    const GENERIC_WORDS = ['india', 'china', 'usa', 'united', 'states', 'kingdom', 'arab', 'emirates'];
     if (!dest && words.length > 0 && !GENERIC_WORDS.includes(words[0]!)) {
         dest = await RGDestinationModel.findOne({
             destName: { $regex: new RegExp(`^${words[0]}`, "i") }
@@ -131,7 +162,33 @@ export async function resolveForRG(query: string): Promise<string | null> {
  */
 export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number; lng: number } | null): Promise<string[]> {
     const normalizedQuery = query.trim();
+
+    // 0. Direct ID match (e.g. "TJ:1000123")
+    if (normalizedQuery.startsWith("TJ:")) {
+        return [normalizedQuery.replace("TJ:", "")];
+    }
+
+    // 0.1. Direct numeric ID match (e.g. "100000010138")
+    if (/^\d{8,15}$/.test(normalizedQuery)) {
+        console.log(`[TripJack] Detected direct numeric HID: ${normalizedQuery}`);
+        return [normalizedQuery];
+    }
+
     const isIndianQuery = normalizedQuery.toLowerCase().includes("india") || normalizedQuery.toLowerCase().includes("goa");
+
+    // NEW: Direct Hotel Name Lookup (Speed Optimization)
+    // If user searches "Hotel Name, City" or just "Hotel Name"
+    const nameToSearch = normalizedQuery.split(',')[0].trim();
+    if (nameToSearch.length > 5) {
+        const directMatch = await HotelModel.findOne({
+            name: { $regex: new RegExp(`^${nameToSearch}$`, "i") }
+        }).select("tjHotelId").lean();
+
+        if (directMatch) {
+            console.log(`[DEBUG] resolveForTJ: Direct hotel name match for "${nameToSearch}": ${directMatch.tjHotelId}`);
+            return [directMatch.tjHotelId];
+        }
+    }
 
     const geo = preResolvedGeo !== undefined ? preResolvedGeo : await resolveCityToCoords(normalizedQuery);
 

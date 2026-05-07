@@ -30,14 +30,16 @@ export class TripJackApiProvider {
             };
         }
 
+        const hidValue = rawId;
         const tjPayload: any = {
             correlationId,
-            hid: rawId,                         // FIX: single string, not array
+            hid: hidValue,
+            hotelId: hidValue,
             checkIn:  payload.checkin  || payload.checkIn,
             checkOut: payload.checkout || payload.checkOut,
             rooms: (payload.Rooms || payload.rooms || []).map((r: any) => ({
                 adults:   r.Adults   || r.adults   || 2,
-                children: r.Children || r.children || undefined,
+                children: (r.Children || r.children) ? Number(r.Children || r.children) : undefined,
                 childAge: (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age) || []).length
                     ? (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age))
                     : undefined,
@@ -47,11 +49,11 @@ export class TripJackApiProvider {
         };
 
         try {
-            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}`);
+            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
             
             // Call both APIs in parallel
             const [staticRes, pricingRes] = await Promise.allSettled([
-                tripJackClient.post("/hms/v3/hotel/static-detail", { hid: rawId }),
+                tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue }),
                 tripJackClient.post("/hms/v3/hotel/pricing", tjPayload)
             ]);
 

@@ -53,6 +53,9 @@ export interface IBooking extends Document {
     // --- Hotel display fields (shown on My Bookings & Detail pages) ---
     hotelName?: string;
     hotelImage?: string;
+    hotelAddress?: string;
+    city?: string;
+    starRating?: number;
     roomType?: string;
     amenities?: string[];
     images?: string[];
@@ -123,6 +126,9 @@ const bookingSchema = new Schema<IBooking>(
         // Hotel display fields (both providers)
         hotelName: { type: String },
         hotelImage: { type: String },
+        hotelAddress: { type: String },
+        city: { type: String },
+        starRating: { type: Number },
         roomType: { type: String },
         amenities: { type: [String], default: [] },
         images: { type: [String], default: [] },

@@ -71,7 +71,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                     })),
                     currency: req.currency ?? "INR",
                     nationality: toTjNationality(req.countryCode ?? "IN"),
-                    hids: chunk,
+                    hids: chunk.map(id => parseInt(id)),
                     correlationId,
                 };
                 return tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 30000 }) // Higher timeout for slow sandbox
@@ -172,6 +172,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         currency: opt?.pricing?.currency ?? "INR",
         mealBasis: opt?.mealBasis,
         isRefundable: opt?.cancellation?.isRefundable,
+        onHoldAllowed: opt?.onHoldAllowed ?? h.onHoldAllowed ?? false,
         amenities: h.amenities || [],
         propertyCode: hotelId.toString(),
         brandCode: "",

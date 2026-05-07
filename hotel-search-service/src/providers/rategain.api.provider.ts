@@ -25,7 +25,7 @@ export class RateGainApiProvider {
             destinationCode: payload.destinationCode || payload.destCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
-            echotoken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
+            Echotoken: payload.Echotoken || payload.echotoken || payload.echoToken || `echo-${Date.now()}`, // v1.5.3 Search uses Echotoken (Capital E)
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;
@@ -107,13 +107,13 @@ export class RateGainApiProvider {
                 }
 
                 return {
-                    numberOfRoom: r.numberOfRoom || r.NumberOfRoom || 1, // v1.5.3 spec uses numberOfRoom (lowercase n)
-                    adults: adultsCount, // v1.5.3 spec uses adults (lowercase a)
-                    children: childrenCount, // v1.5.3 spec uses children (lowercase c)
+                    numberOfRoom: r.numberOfRoom || r.NumberOfRoom || 1, // v1.5.3 details uses numberOfRoom
+                    adults: adultsCount, // v1.5.3 details uses adults
+                    children: childrenCount, // v1.5.3 details uses children
                     paxes: paxes,
                 };
             }),
-            echoToken: payload.echoToken || payload.echotoken || payload.Echotoken || `echo-${Date.now()}`, // v1.5.3 spec uses echoToken (lowercase e, capital T)
+            echoToken: payload.echoToken || payload.echotoken || payload.Echotoken || `echo-${Date.now()}`, // v1.5.3 Details uses echoToken (CamelCase)
         };
 
         if (payload.destinationCode || payload.destCode) {

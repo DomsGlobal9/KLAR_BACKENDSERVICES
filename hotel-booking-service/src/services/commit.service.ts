@@ -133,6 +133,9 @@ class CommitService {
                 // Hotel display fields
                 hotelName: payload.hotelName || undefined,
                 hotelImage: payload.hotelImage || (images[0] || undefined),
+                hotelAddress: payload.hotelAddress || undefined,
+                city: payload.city || undefined,
+                starRating: payload.starRating || undefined,
                 roomType: payload.roomName || payload.roomType || undefined,
                 amenities,
                 images,
@@ -220,6 +223,9 @@ class CommitService {
 
                     hotelName: bookReservation.hotelName || undefined,
                     hotelImage: bookReservation.hotelImage || (images[0] || undefined),
+                    hotelAddress: bookReservation.hotelAddress || undefined,
+                    city: bookReservation.city || undefined,
+                    starRating: bookReservation.starRating || undefined,
                     roomType: bookReservation.roomName || undefined,
                     amenities,
                     images,

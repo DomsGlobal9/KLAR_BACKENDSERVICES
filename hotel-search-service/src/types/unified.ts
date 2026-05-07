@@ -31,6 +31,7 @@ export interface UnifiedHotel {
   currency: string;
   mealBasis?: string;           // "Room Only", "Breakfast", etc.
   isRefundable?: boolean;
+  onHoldAllowed?: boolean;
   amenities: string[];
   propertyCode?: string;
   brandCode?: string;
