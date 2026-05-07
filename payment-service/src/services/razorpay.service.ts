@@ -1,6 +1,7 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { config } from '../config/env.config';
+import { razorpayConfig } from '../config/razorpay.config';
 import {
     createOrder,
     updateOrderByOrderId,
@@ -17,13 +18,13 @@ import {
 } from '../types/razorpay.types';
 
 const getRazorpayInstance = (): Razorpay => {
-    if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
+    if (!razorpayConfig.keyId || !razorpayConfig.keySecret) {
         throw new Error('Razorpay credentials are not configured');
     }
 
     return new Razorpay({
-        key_id: config.RAZORPAY_KEY_ID,
-        key_secret: config.RAZORPAY_KEY_SECRET,
+        key_id: razorpayConfig.keyId,
+        key_secret: razorpayConfig.keySecret,
     });
 };
 
@@ -42,7 +43,7 @@ export const createRazorpayOrderService = async (
             clientType: data.clientType,
             amount: data.amount,
             currency: currency,
-            environment: config.RAZORPAY_ENVIRONMENT,
+            environment: razorpayConfig.environment,
             status: 'CREATED',
             paymentGateway: 'razorpay',
         });
@@ -63,7 +64,6 @@ export const createRazorpayOrderService = async (
             payment_capture: true,
         });
 
-
         const razorpayOrder = razorpayOrderResponse as unknown as IRazorpayOrderResponse;
 
         const updatedOrder = await updateOrderByOrderId(orderId, {
@@ -78,12 +78,11 @@ export const createRazorpayOrderService = async (
         return {
             order: updatedOrder,
             razorpayOrderId: razorpayOrder.id,
-            razorpayKeyId: config.RAZORPAY_KEY_ID,
+            razorpayKeyId: razorpayConfig.keyId,
             amount: data.amount,
             currency: currency,
         };
     } catch (error: any) {
-        console.error('Create Razorpay order service error:', error);
         throw new Error(error.message || 'Failed to create Razorpay order');
     }
 };
@@ -93,7 +92,7 @@ export const verifyRazorpayPaymentService = async (
 ): Promise<any> => {
     try {
         const generatedSignature = crypto
-            .createHmac('sha256', config.RAZORPAY_KEY_SECRET)
+            .createHmac('sha256', razorpayConfig.keySecret)
             .update(`${data.razorpayOrderId}|${data.razorpayPaymentId}`)
             .digest('hex');
 
@@ -127,7 +126,6 @@ export const verifyRazorpayPaymentService = async (
 
         return updatedOrder;
     } catch (error: any) {
-        console.error('Verify Razorpay payment service error:', error);
         throw new Error(error.message || 'Failed to verify Razorpay payment');
     }
 };
@@ -146,7 +144,6 @@ export const getRazorpayOrderService = async (orderId: string): Promise<any> => 
 
         return order;
     } catch (error: any) {
-        console.error('Get Razorpay order service error:', error);
         throw new Error(error.message || 'Failed to fetch Razorpay order');
     }
 };
@@ -158,7 +155,6 @@ export const getRazorpayPaymentStatusService = async (paymentId: string): Promis
         const payment = paymentResponse as unknown as IRazorpayPaymentResponse;
         return payment;
     } catch (error: any) {
-        console.error('Get Razorpay payment status error:', error);
         throw new Error(error.message || 'Failed to fetch payment status from Razorpay');
     }
 };
@@ -170,7 +166,6 @@ export const getRazorpayOrderDetailsService = async (razorpayOrderId: string): P
         const order = orderResponse as unknown as IRazorpayOrderResponse;
         return order;
     } catch (error: any) {
-        console.error('Get Razorpay order details error:', error);
         throw new Error(error.message || 'Failed to fetch order details from Razorpay');
     }
 };
@@ -212,7 +207,6 @@ export const syncRazorpayOrderStatusService = async (orderId: string): Promise<a
 
         return order;
     } catch (error: any) {
-        console.error('Sync Razorpay order status error:', error);
         throw new Error(error.message || 'Failed to sync order status from Razorpay');
     }
 };
@@ -240,7 +234,6 @@ export const refundRazorpayPaymentService = async (
         const refund = await razorpay.payments.refund(paymentId, refundData);
         return refund;
     } catch (error: any) {
-        console.error('Razorpay refund error:', error);
         throw new Error(error.message || 'Failed to process refund');
     }
 };
@@ -249,7 +242,6 @@ export const razorpayWebhookService = async (
     payload: any,
     signature: string
 ): Promise<boolean> => {
-
     const expectedSignature = crypto
         .createHmac('sha256', config.RAZORPAY_WEBHOOK_SECRET!)
         .update(JSON.stringify(payload))
@@ -262,15 +254,11 @@ export const razorpayWebhookService = async (
     const event = payload.event;
 
     if (event === 'payment.captured') {
-
         const paymentEntity = payload.payload.payment.entity;
-
         const razorpayOrderId = paymentEntity.order_id;
         const razorpayPaymentId = paymentEntity.id;
 
-        const order = await getOrderByRazorpayOrderId(
-            razorpayOrderId
-        );
+        const order = await getOrderByRazorpayOrderId(razorpayOrderId);
 
         if (!order) {
             throw new Error('Order not found');
@@ -282,11 +270,6 @@ export const razorpayWebhookService = async (
             {
                 razorpayPaymentId
             }
-        );
-
-        console.log(
-            'Webhook payment captured:',
-            razorpayPaymentId
         );
     }
 
