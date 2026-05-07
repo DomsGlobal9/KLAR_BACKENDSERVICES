@@ -22,7 +22,7 @@ class SeatService {
                     // timeout: 15000,
                 }
             );
-            console.log("SEAT Response:", response);
+            
 
             const rawData = response.data;
 

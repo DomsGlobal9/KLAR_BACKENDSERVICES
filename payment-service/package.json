@@ -17,7 +17,7 @@
     "pm2:delete": "pm2 delete payment-service",
     "pm2:logs": "pm2 logs payment-service",
     "pm2:status": "pm2 status",
-    "deploy": "git pull && npm install && npm run build && pm2 restart payment-service"
+    "deploy": "git pull origin main && npm install && npm run build && pm2 restart payment-service"
   },
   "keywords": [],
   "author": "",
