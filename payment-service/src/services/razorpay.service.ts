@@ -242,35 +242,65 @@ export const razorpayWebhookService = async (
     payload: any,
     signature: string
 ): Promise<boolean> => {
+    // Verify webhook signature
     const expectedSignature = crypto
         .createHmac('sha256', config.RAZORPAY_WEBHOOK_SECRET!)
         .update(JSON.stringify(payload))
         .digest('hex');
 
     if (expectedSignature !== signature) {
+        console.error('Webhook signature mismatch');
         throw new Error('Invalid webhook signature');
     }
 
     const event = payload.event;
+    console.log(`Received webhook event: ${event}`);
 
     if (event === 'payment.captured') {
         const paymentEntity = payload.payload.payment.entity;
         const razorpayOrderId = paymentEntity.order_id;
         const razorpayPaymentId = paymentEntity.id;
+        const paymentMethod = paymentEntity.method;
+        const paymentStatus = paymentEntity.status;
+
+        console.log(`Payment captured - Order: ${razorpayOrderId}, Method: ${paymentMethod}, Status: ${paymentStatus}`);
 
         const order = await getOrderByRazorpayOrderId(razorpayOrderId);
 
         if (!order) {
+            console.error(`Order not found for razorpayOrderId: ${razorpayOrderId}`);
             throw new Error('Order not found');
         }
 
-        await updateOrderStatus(
+        if (order.status === 'SUCCESS') {
+            console.log(`Order ${order.orderId} already marked as SUCCESS. Skipping update.`);
+            return true;
+        }
+
+        const updatedOrder = await updateOrderStatus(
             order.orderId,
             'SUCCESS',
             {
-                razorpayPaymentId
+                razorpayPaymentId: razorpayPaymentId
             }
         );
+
+        console.log(`Order ${order.orderId} updated to SUCCESS with payment ${razorpayPaymentId}`);
+    }
+    
+    else if (event === 'payment.failed') {
+        const paymentEntity = payload.payload.payment.entity;
+        const razorpayOrderId = paymentEntity.order_id;
+        const errorReason = paymentEntity.error_description || 'Payment failed';
+
+        console.log(`Payment failed - Order: ${razorpayOrderId}, Reason: ${errorReason}`);
+
+        const order = await getOrderByRazorpayOrderId(razorpayOrderId);
+
+        if (order && order.status !== 'SUCCESS') {
+            await updateOrderStatus(order.orderId, 'FAILED');
+            console.log(`Order ${order.orderId} marked as FAILED`);
+        }
     }
 
     return true;
