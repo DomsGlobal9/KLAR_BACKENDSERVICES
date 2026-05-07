@@ -4,8 +4,9 @@ import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.
 
 class CancelService {
     async cancel(payload: any) {
-        const confirmationNumber = payload.ConfirmationNumber;
-        const reservationId = payload.ReservationId;
+        const confirmationNumber = payload.ConfirmationNumber || payload.bookingId;
+        const reservationId = payload.ReservationId || payload.bookingId;
+        const bookingId = payload.bookingId;
 
         console.log(`🚫 Cancel service called with:`, JSON.stringify(payload, null, 2));
 
@@ -14,6 +15,7 @@ class CancelService {
             const query: any = {};
             if (confirmationNumber) query.confirmationNumber = confirmationNumber;
             else if (reservationId)  query.reservationId = reservationId;
+            else if (bookingId) query.confirmationNumber = bookingId;
 
             if (Object.keys(query).length > 0) {
                 const booking = await BookingModel.findOne(query).lean();

@@ -25,7 +25,7 @@ export class RateGainApiProvider {
             destinationCode: payload.destinationCode || payload.destCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
-            Echotoken: payload.Echotoken || payload.echotoken || payload.echoToken || `echo-${Date.now()}`,
+            echotoken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;

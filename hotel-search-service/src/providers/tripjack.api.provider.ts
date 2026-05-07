@@ -134,6 +134,7 @@ export class TripJackApiProvider {
                     taxes:           opt.pricing?.taxes,
                     managementFee:   opt.pricing?.mf,
                     managementFeeTax: opt.pricing?.mft,
+                    pricing:         opt.pricing, // Pass the whole object for frontend breakup
                     strikethrough:   opt.pricing?.strikethrough,
                     currency:        opt.pricing?.currency,
 
@@ -144,6 +145,7 @@ export class TripJackApiProvider {
                     passportRequired: opt.compliance?.passportRequired ?? false,
                     gstType:          opt.compliance?.gstType,
 
+                    onHoldAllowed:       opt.onHoldAllowed ?? pricingData.onHoldAllowed ?? false,
                     isRefundable:        opt.cancellation?.isRefundable,
                     cancellationPolicies: opt.cancellation?.penalties || [],
 

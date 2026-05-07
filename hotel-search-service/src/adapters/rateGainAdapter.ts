@@ -21,7 +21,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
       Children: r.children,
       paxes: (r.childAges || []).map(age => ({ type: "Child", age: age || 5 }))
     })),
-    Echotoken: `echo-${Date.now()}`
+    echoToken: `echo-${Date.now()}`
   };
 
   if (destCode) {
@@ -30,7 +30,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     payload.Geofilter = {
       latitude: geo.lat.toFixed(6),
       longitude: geo.lng.toFixed(6),
-      radius: "50"
+      radius: 50
     };
   } else {
     return { hotels: [], total: 0 };
@@ -49,9 +49,9 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     let maxTotal = 0;
 
     try {
-        // Step 1: Attempt search with destinationCode
-        let searchPayload = { ...payload, destinationCode: destCode, pageNo: apiPageStart };
-        console.log(`[RateGain] Requesting Page ${apiPageStart} with destCode: ${destCode}`);
+        // Step 1: Attempt search with payload as constructed
+        let searchPayload = { ...payload, pageNo: apiPageStart };
+        console.log(`[RateGain] Requesting Page ${apiPageStart} with ${destCode ? 'destCode: ' + destCode : 'Geofilter'}`);
         
         let res = await rateGainProvider.getBestProperties(searchPayload);
         let isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
