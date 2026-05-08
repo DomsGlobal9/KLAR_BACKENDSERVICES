@@ -109,4 +109,31 @@ export class BookingRepository {
 
         return result;
     }
+
+    async deleteExpiredInitiatedBookings() {
+
+        /**
+         * Current time
+         */
+        const now = new Date();
+
+        /**
+         * 24 hours before current time
+         */
+        const before24hr = new Date(
+            now.getTime() - 24 * 60 * 60 * 1000
+        );
+
+        /**
+         * Delete bookings
+         */
+        const result = await BookingModel.deleteMany({
+            status: "INITIATED",
+            createdAt: {
+                $lte: before24hr
+            }
+        });
+
+        return result.deletedCount;
+    }
 }
