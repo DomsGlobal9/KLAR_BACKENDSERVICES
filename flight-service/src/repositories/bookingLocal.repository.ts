@@ -86,4 +86,27 @@ export class BookingRepository {
             "userInfo.id": userId
         });
     }
+
+    async getPendingStatusBookings() {
+        const result = await BookingModel.find({
+            status: {
+                $nin: [
+                    "SUCCESS",
+                    "FAILED",
+                    "CANCELLED",
+                    "ABORTED",
+                    // "UNCONFIRMED",
+                    "REJECTED",
+                    "INITIATED"
+                ]
+            }
+        })
+            .select({
+                bookingId: 1,
+                status: 1,
+                _id: 0
+            });
+
+        return result;
+    }
 }
