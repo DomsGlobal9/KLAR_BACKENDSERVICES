@@ -1,4 +1,5 @@
 import { cronConfig } from "../config/corn.config";
+import { deleteExpiredInitiatedBookingsJob } from "../repositories/deleteExpiredInitiatedBookings.job";
 import { checkBookingStatusJob } from "./jobs/checkBookingStatus.job";
 
 export const initializeCrons = () => {
@@ -11,6 +12,8 @@ export const initializeCrons = () => {
     console.log("Initializing cron jobs...");
 
     checkBookingStatusJob();
+
+    deleteExpiredInitiatedBookingsJob();
 
     console.log("Cron jobs initialized");
 };
