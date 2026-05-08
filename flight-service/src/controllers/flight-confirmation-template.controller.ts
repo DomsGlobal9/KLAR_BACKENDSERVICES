@@ -16,7 +16,8 @@ class BookingController {
 
             // 1. Convert Logo to Base64
             // Ensure the path points to your actual logo file in src/assets/images/
-            const logoPath = path.join(__dirname, '../../assets/images/logo.png'); 
+            // const logoPath = path.join(__dirname, '../../assets/images/logo.png'); 
+            const logoPath = path.join(__dirname, '../assets/images/klar-travels-logo.png'); 
             let logoBase64 = '';
             
             if (fs.existsSync(logoPath)) {
