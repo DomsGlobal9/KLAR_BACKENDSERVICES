@@ -1,5 +1,5 @@
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
-import { FlightBookingRepository } from "../repositories/flight-booking.repository";
+import { FlightBookingRepository } from "../repositories/flight-confirmation-template.repository";
 
 export class FlightBookingService {
     private repo = new FlightBookingRepository();
