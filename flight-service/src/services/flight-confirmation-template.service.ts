@@ -4,8 +4,13 @@ import { FlightBookingRepository } from "../repositories/flight-confirmation-tem
 export class FlightBookingService {
     private repo = new FlightBookingRepository();
 
-    async getConfirmationHtml(bookingId: string): Promise<string> {
+    // This is a method, not a standalone function
+    async getConfirmationHtml(bookingId: string): Promise<any> {
         const data = await this.repo.getBookingById(bookingId);
-        return flightBookingConfirmationTemplate(data);
+        // Return the raw data here so the controller can pass it to the template/pdf logic
+        return data;
     }
 }
+
+// Add this export
+export default new FlightBookingService();
