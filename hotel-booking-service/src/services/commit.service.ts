@@ -96,8 +96,30 @@ class CommitService {
     // ── TripJack Booking ──────────────────────────────────────────────────
 
     async #commitTripJack(payload: any, agentId?: string | null, agentName?: string | null) {
-        // Calls POST /oms/v3/hotel/book with corrected schema
+        // Check if this is an attempt to confirm an existing HELD booking
+        const existingBookingId = payload.bookingId;
+        if (existingBookingId) {
+            const existing = await BookingModel.findOne({ confirmationNumber: existingBookingId });
+            if (existing && existing.status === BookingStatus.HELD) {
+                console.log(`[TripJack] Detected confirmation request for HELD booking: ${existingBookingId}`);
+                const confirmRes = await tripJackProvider.confirmBook({
+                    bookingId: existingBookingId,
+                    paymentInfos: payload.paymentInfos || [{ amount: existing.totalAmount }]
+                });
+
+                if (confirmRes?.status?.success) {
+                    existing.status = BookingStatus.PENDING; // Set to pending while we poll for final success
+                    await existing.save();
+                    pollTripJackBookingStatus(existingBookingId, (existing._id as any).toString());
+                    return { status: true, bookingId: existingBookingId, body: confirmRes };
+                }
+                throw new Error(confirmRes?.status?.description || "Failed to confirm hold booking");
+            }
+        }
+
+        // Standard booking flow (Instant or Hold)
         const tjResponse = await tripJackProvider.commit(payload);
+
 
         try {
             const body = tjResponse.body || {};

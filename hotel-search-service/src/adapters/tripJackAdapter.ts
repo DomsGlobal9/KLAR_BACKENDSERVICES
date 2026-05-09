@@ -4,14 +4,25 @@ import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 import { HotelModel } from "../models/Hotel.model";
 
+import { NationalityModel } from "../models/Nationality.model";
+
 const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
     IN: "106", US: "232", GB: "235", AE: "231", SG: "200", MY: "131",
     AU: "14", CA: "40", DE: "83", FR: "76", JP: "112", CN: "45", NZ: "157", ZA: "204",
 };
 
-function toTjNationality(isoCode: string): string {
+async function toTjNationality(isoCode: string): Promise<string> {
+    try {
+        if (!isoCode) return "106";
+        const code = isoCode.toUpperCase();
+        const found = await NationalityModel.findOne({ code }).select("countryId").lean();
+        if (found) return found.countryId;
+    } catch (err) {
+        console.warn("[TripJack Search] Nationality DB lookup failed, using fallback.");
+    }
     return ISO_TO_TJ_COUNTRY_ID[isoCode?.toUpperCase()] ?? "106";
 }
+
 
 // ─── TripJack Circuit Breaker ────────────────────────────────────────────────
 let tjCircuitOpenUntil = 0;
@@ -60,7 +71,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
             // More parallel requests
             const batch = chunks.slice(currentIdx, currentIdx + batchSize);
 
-            const promises = batch.map(chunk => {
+            const promises = batch.map(async (chunk) => {
                 const payload = {
                     checkIn: req.checkin,
                     checkOut: req.checkout,
@@ -70,7 +81,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         childAge: r.childAges?.length ? r.childAges : undefined,
                     })),
                     currency: req.currency ?? "INR",
-                    nationality: toTjNationality(req.countryCode ?? "IN"),
+                    nationality: await toTjNationality(req.countryCode ?? "IN"),
                     hids: chunk.map(id => parseInt(id)),
                     correlationId,
                 };
@@ -81,6 +92,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         return { success: false };
                     });
             });
+
 
             const results = await Promise.all(promises);
             let anySuccess = false;
@@ -172,7 +184,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         currency: opt?.pricing?.currency ?? "INR",
         mealBasis: opt?.mealBasis,
         isRefundable: opt?.cancellation?.isRefundable,
-        onHoldAllowed: opt?.onHoldAllowed ?? h.onHoldAllowed ?? false,
+        onHoldAllowed: !!(opt?.onHoldAllowed || opt?.onholdAllowed),
         amenities: h.amenities || [],
         propertyCode: hotelId.toString(),
         brandCode: "",

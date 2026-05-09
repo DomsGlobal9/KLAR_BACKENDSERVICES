@@ -177,6 +177,35 @@ export class TripJackApiProvider {
     }
 
     /**
+     * POST /oms/v3/hotel/confirm-book
+     * Confirm a previously HELD booking before the deadline.
+     */
+    async confirmBook(payload: any) {
+        const {
+            bookingId,
+            paymentInfos,
+        } = payload;
+
+        if (!bookingId) throw new Error("[TripJack Confirm] bookingId is required");
+        if (!paymentInfos?.length) throw new Error("[TripJack Confirm] paymentInfos (amount) is required for confirmation");
+
+        const tjPayload = {
+            bookingId,
+            paymentInfos
+        };
+
+        try {
+            console.log(`[TripJack] Confirm Book Request:`, JSON.stringify(tjPayload, null, 2));
+            const res = await tripJackOmsClient.post("/oms/v3/hotel/confirm-book", tjPayload);
+            return res.data;
+        } catch (error: any) {
+            console.error("[TripJack] Confirm Book Error:", error.response?.status, error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+
+    /**
      * POST /oms/v3/hotel/booking-details
      * Poll every 5s up to 180s after Book call.
      * Terminal states: SUCCESS, ON_HOLD, ABORTED, FAILED, CANCELLED
