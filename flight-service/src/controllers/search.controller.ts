@@ -141,7 +141,6 @@ export const searchReturnController = async (req: Request, res: Response) => {
                 warnings: validationResult.warnings,
             });
         }
-        console.log("Validation Complete");
 
         if (validationResult.searchType !== "RETURN") {
             return res.status(400).json({
@@ -149,23 +148,87 @@ export const searchReturnController = async (req: Request, res: Response) => {
                 message: "Only return search allowed in this endpoint",
             });
         }
-        console.log("Validation search type found");
 
-        const data = await searchService.searchReturn(req.body);
+        const sortField = req.query.sortBy as SortField;
+        const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
+        const sortTarget = (req.query.sortTarget as string) || 'both';
 
-        return res.status(200).json({
+        let sortOption: SortOption | undefined;
+        if (sortField && FlightSorter.isValidSortField(sortField)) {
+            sortOption = {
+                field: sortField,
+                order: sortOrder
+            };
+        }
+
+        let validSortTarget: 'onward' | 'return' | 'both' = 'both';
+        if (sortTarget === 'onward' || sortTarget === 'return') {
+            validSortTarget = sortTarget;
+        }
+
+        const data = await searchService.searchReturn(req.body, sortOption, validSortTarget);
+
+        const response: any = {
             success: true,
             data,
             warnings: validationResult.warnings,
-        });
+        };
+
+        if (sortOption) {
+            response.sortApplied = {
+                ...sortOption,
+                target: validSortTarget
+            };
+        }
+
+        return res.status(200).json(response);
 
     } catch (error: any) {
+        console.error("Return search error:", error?.response?.data || error.message);
+
         return res.status(500).json({
             success: false,
             message: "Return search failed",
         });
     }
 };
+
+// export const searchReturnController = async (req: Request, res: Response) => {
+//     try {
+//         const validationResult = FlightSearchValidator.validate(req.body);
+
+//         if (!validationResult.isValid) {
+//             return res.status(400).json({
+//                 success: false,
+//                 errors: validationResult.errors,
+//                 warnings: validationResult.warnings,
+//             });
+//         }
+//         console.log("Validation Complete");
+
+//         if (validationResult.searchType !== "RETURN") {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Only return search allowed in this endpoint",
+//             });
+//         }
+//         console.log("Validation search type found");
+
+//         const data = await searchService.searchReturn(req.body);
+
+//         return res.status(200).json({
+//             success: true,
+//             data,
+//             warnings: validationResult.warnings,
+//         });
+
+//     } catch (error: any) {
+//         return res.status(500).json({
+//             success: false,
+//             message: "Return search failed",
+//         });
+//     }
+// };
 
 export const searchMulticityController = async (req: Request, res: Response) => {
     try {
