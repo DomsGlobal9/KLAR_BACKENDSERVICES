@@ -1,12 +1,44 @@
-import { Filter, FilterStats } from "../../types/filter.types";
-import { Flight } from "../../types/sort.types";
+import { Filter, FilterStats } from '../../types/filter.types';
+import { FlightSegment } from '../../types/returnFilter.types';
 
 export class FlightFilter {
 
     /**
-     * Apply multiple filters to flights
+     * Apply filters to return flights (onward and return arrays)
      */
-    static applyFilters(flights: Flight[], filters: Filter[]): Flight[] {
+    static applyFiltersToReturnFlights(
+        flights: { onward: FlightSegment[]; return: FlightSegment[] },
+        filters: Filter[],
+        applyTo: 'onward' | 'return' | 'both' = 'both'
+    ): { onward: FlightSegment[]; return: FlightSegment[] } {
+
+        if (!filters || filters.length === 0) {
+            return {
+                onward: [...flights.onward],
+                return: [...flights.return]
+            };
+        }
+
+        const result = {
+            onward: [...flights.onward],
+            return: [...flights.return]
+        };
+
+        if (applyTo === 'onward' || applyTo === 'both') {
+            result.onward = this.applyFilters(result.onward, filters);
+        }
+
+        if (applyTo === 'return' || applyTo === 'both') {
+            result.return = this.applyFilters(result.return, filters);
+        }
+
+        return result;
+    }
+
+    /**
+     * Apply filters to a single array of flights
+     */
+    static applyFilters(flights: FlightSegment[], filters: Filter[]): FlightSegment[] {
         if (!filters || filters.length === 0) {
             return [...flights];
         }
@@ -17,9 +49,9 @@ export class FlightFilter {
     }
 
     /**
-     * Apply a single filter
+     * Apply a single filter to a flight
      */
-    private static applyFilter(flight: Flight, filter: Filter): boolean {
+    private static applyFilter(flight: FlightSegment, filter: Filter): boolean {
         switch (filter.type) {
             case 'airline':
                 return this.filterByAirline(flight, filter.values);
@@ -43,7 +75,7 @@ export class FlightFilter {
     /**
      * Filter by airline (include only selected airlines)
      */
-    private static filterByAirline(flight: Flight, airlines: string[]): boolean {
+    private static filterByAirline(flight: FlightSegment, airlines: string[]): boolean {
         if (!airlines || airlines.length === 0) return true;
         return airlines.includes(flight.airline);
     }
@@ -51,7 +83,7 @@ export class FlightFilter {
     /**
      * Filter by cabin class
      */
-    private static filterByCabinClass(flight: Flight, cabinClasses: string[]): boolean {
+    private static filterByCabinClass(flight: FlightSegment, cabinClasses: string[]): boolean {
         if (!cabinClasses || cabinClasses.length === 0) return true;
         return cabinClasses.includes(flight.cabinClass);
     }
@@ -59,7 +91,7 @@ export class FlightFilter {
     /**
      * Filter by number of stops
      */
-    private static filterByStops(flight: Flight, stops: number[]): boolean {
+    private static filterByStops(flight: FlightSegment, stops: number[]): boolean {
         if (!stops || stops.length === 0) return true;
         return stops.includes(flight.stops);
     }
@@ -67,21 +99,23 @@ export class FlightFilter {
     /**
      * Filter by price range
      */
-    private static filterByPriceRange(flight: Flight, min: number, max: number): boolean {
+    private static filterByPriceRange(flight: FlightSegment, min: number, max: number): boolean {
         return flight.price >= min && flight.price <= max;
     }
 
     /**
      * Filter by departure time range
      */
-    private static filterByDepartureTimeRange(flight: Flight, start: string, end: string): boolean {
+    private static filterByDepartureTimeRange(flight: FlightSegment, start: string, end: string): boolean {
         const flightTime = this.timeToMinutes(flight.from.time);
         const startTime = this.timeToMinutes(start);
         const endTime = this.timeToMinutes(end);
 
+        // Handle overnight ranges (e.g., 22:00 to 06:00)
         if (startTime <= endTime) {
             return flightTime >= startTime && flightTime <= endTime;
         } else {
+            // Overnight range
             return flightTime >= startTime || flightTime <= endTime;
         }
     }
@@ -89,7 +123,7 @@ export class FlightFilter {
     /**
      * Filter by arrival time range
      */
-    private static filterByArrivalTimeRange(flight: Flight, start: string, end: string): boolean {
+    private static filterByArrivalTimeRange(flight: FlightSegment, start: string, end: string): boolean {
         const flightTime = this.timeToMinutes(flight.to.time);
         const startTime = this.timeToMinutes(start);
         const endTime = this.timeToMinutes(end);
@@ -97,6 +131,7 @@ export class FlightFilter {
         if (startTime <= endTime) {
             return flightTime >= startTime && flightTime <= endTime;
         } else {
+            // Overnight range
             return flightTime >= startTime || flightTime <= endTime;
         }
     }
@@ -104,7 +139,7 @@ export class FlightFilter {
     /**
      * Filter by duration range (in minutes)
      */
-    private static filterByDurationRange(flight: Flight, min: number, max: number): boolean {
+    private static filterByDurationRange(flight: FlightSegment, min: number, max: number): boolean {
         const durationMinutes = this.durationToMinutes(flight.duration);
         return durationMinutes >= min && durationMinutes <= max;
     }
@@ -112,7 +147,7 @@ export class FlightFilter {
     /**
      * Get filter statistics from flights
      */
-    static getFilterStats(flights: Flight[]): FilterStats {
+    static getFilterStats(flights: FlightSegment[]): FilterStats {
         const stats: FilterStats = {
             availableAirlines: [],
             availableCabinClasses: [],
@@ -127,21 +162,21 @@ export class FlightFilter {
         const cabinClasses = new Set<string>();
 
         flights.forEach(flight => {
-
+            // Collect airlines
             airlines.add(flight.airline);
 
-
+            // Collect cabin classes
             cabinClasses.add(flight.cabinClass);
 
-
+            // Update price range
             stats.priceRange.min = Math.min(stats.priceRange.min, flight.price);
             stats.priceRange.max = Math.max(stats.priceRange.max, flight.price);
 
-
+            // Update stops range
             stats.stopsRange.min = Math.min(stats.stopsRange.min, flight.stops);
             stats.stopsRange.max = Math.max(stats.stopsRange.max, flight.stops);
 
-
+            // Update duration range
             const duration = this.durationToMinutes(flight.duration);
             stats.durationRange.min = Math.min(stats.durationRange.min, duration);
             stats.durationRange.max = Math.max(stats.durationRange.max, duration);
@@ -150,11 +185,18 @@ export class FlightFilter {
         stats.availableAirlines = Array.from(airlines).sort();
         stats.availableCabinClasses = Array.from(cabinClasses).sort();
 
+        // Reset min/max if no flights
+        if (flights.length === 0) {
+            stats.priceRange = { min: 0, max: 0 };
+            stats.stopsRange = { min: 0, max: 0 };
+            stats.durationRange = { min: 0, max: 0 };
+        }
+
         return stats;
     }
 
     /**
-     * Validate filter configuration
+     * Validate filters
      */
     static validateFilters(filters: Filter[]): { isValid: boolean; errors: string[] } {
         const errors: string[] = [];
@@ -163,7 +205,7 @@ export class FlightFilter {
             switch (filter.type) {
                 case 'priceRange':
                     if (filter.min < 0) errors.push('Price minimum cannot be negative');
-                    if (filter.max < filter.min) errors.push('Price maximum must be greater than minimum');
+                    if (filter.max < filter.min) errors.push('Price maximum must be greater than or equal to minimum');
                     break;
 
                 case 'departureTimeRange':
@@ -178,7 +220,25 @@ export class FlightFilter {
 
                 case 'durationRange':
                     if (filter.min < 0) errors.push('Duration minimum cannot be negative');
-                    if (filter.max < filter.min) errors.push('Duration maximum must be greater than minimum');
+                    if (filter.max < filter.min) errors.push('Duration maximum must be greater than or equal to minimum');
+                    break;
+
+                case 'stops':
+                    if (filter.values.some(stop => stop < 0)) {
+                        errors.push('Stop count cannot be negative');
+                    }
+                    break;
+
+                case 'airline':
+                    if (!filter.values || filter.values.length === 0) {
+                        errors.push('Airlines filter must have at least one value');
+                    }
+                    break;
+
+                case 'cabinClass':
+                    if (!filter.values || filter.values.length === 0) {
+                        errors.push('Cabin class filter must have at least one value');
+                    }
                     break;
             }
         });
@@ -190,7 +250,7 @@ export class FlightFilter {
     }
 
     /**
-     * Helper: Convert duration string to minutes
+     * Convert duration string "2h 30m" to total minutes
      */
     private static durationToMinutes(duration: string): number {
         const hoursMatch = duration.match(/(\d+)h/);
@@ -203,7 +263,7 @@ export class FlightFilter {
     }
 
     /**
-     * Helper: Convert time string to minutes
+     * Convert time string "HH:MM" to minutes since midnight
      */
     private static timeToMinutes(time: string): number {
         const [hours, minutes] = time.split(':').map(Number);
@@ -211,7 +271,7 @@ export class FlightFilter {
     }
 
     /**
-     * Helper: Validate time format (HH:MM)
+     * Validate time format (HH:MM)
      */
     private static isValidTimeFormat(time: string): boolean {
         return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
