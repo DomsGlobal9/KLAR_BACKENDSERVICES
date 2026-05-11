@@ -161,29 +161,131 @@ export const getRazorpayOrderDetailsController = async (req: Request, res: Respo
     }
 };
 
-export const razorpayWebhookController = async (req: Request, res: Response) => {
+export const razorpayWebhookController = async (
+    req: Request,
+    res: Response
+) => {
     try {
+
+        console.log('================ RAZORPAY WEBHOOK START ================');
+
         const signature = req.headers['x-razorpay-signature'] as string;
+
+        console.log('Signature received:', signature);
 
         const rawBody = req.body.toString();
 
-        console.log('Webhook received');
+        console.log('Raw Body:', rawBody);
+
+        const parsedBody = JSON.parse(rawBody);
+
+        console.log(
+            'Webhook Event:',
+            parsedBody?.event
+        );
+
+        console.log(
+            'Razorpay Order ID:',
+            parsedBody?.payload?.payment?.entity?.order_id
+        );
 
         await razorpayWebhookService(rawBody, signature);
 
+        console.log('✅ Webhook processed successfully');
+
         return res.status(200).json({
             success: true,
-            message: 'Webhook processed successfully'
         });
 
     } catch (error: any) {
-        console.error('Webhook error:', error);
-        return res.status(200).json({
+
+        console.error('❌ Webhook Error:', error.message);
+
+        return res.status(400).json({
             success: false,
             message: error.message
         });
     }
 };
+
+// export const razorpayWebhookController = async (req: Request, res: Response) => {
+//     try {
+
+//         console.log('================ RAZORPAY WEBHOOK START ================');
+
+//         const signature = req.headers['x-razorpay-signature'] as string;
+
+//         console.log('Signature received:', signature);
+
+//         console.log('Headers:', JSON.stringify(req.headers, null, 2));
+
+//         console.log('Body type:', typeof req.body);
+
+//         const rawBody =
+//             typeof req.body === 'string'
+//                 ? req.body
+//                 : JSON.stringify(req.body);
+
+//         console.log('Raw Body:', rawBody);
+
+//         try {
+//             const parsedBody = JSON.parse(rawBody);
+
+//             console.log(
+//                 'Parsed Webhook Payload:',
+//                 JSON.stringify(parsedBody, null, 2)
+//             );
+
+//             console.log(
+//                 'Webhook Event:',
+//                 parsedBody?.event
+//             );
+
+//             console.log(
+//                 'Razorpay Order ID:',
+//                 parsedBody?.payload?.payment?.entity?.order_id
+//             );
+
+//             console.log(
+//                 'Razorpay Payment ID:',
+//                 parsedBody?.payload?.payment?.entity?.id
+//             );
+
+//         } catch (parseError) {
+//             console.log('Failed to parse webhook body');
+//         }
+
+//         console.log('Webhook received, calling service...');
+
+//         await razorpayWebhookService(rawBody, signature);
+
+//         console.log('Webhook processed successfully');
+
+//         console.log('================ RAZORPAY WEBHOOK END =================');
+
+//         return res.status(200).json({
+//             success: true,
+//             message: 'Webhook processed successfully'
+//         });
+
+//     } catch (error: any) {
+
+//         console.error('================ WEBHOOK ERROR =================');
+
+//         console.error('Webhook error message:', error?.message);
+
+//         console.error('Full webhook error:', error);
+
+//         console.error('Stack trace:', error?.stack);
+
+//         console.error('================================================');
+
+//         return res.status(200).json({
+//             success: false,
+//             message: error.message
+//         });
+//     }
+// };
 
 export const testWebhookController = async (req: Request, res: Response) => {
     try {
