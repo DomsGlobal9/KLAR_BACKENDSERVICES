@@ -239,13 +239,15 @@ export const refundRazorpayPaymentService = async (
 };
 
 export const razorpayWebhookService = async (
-    payload: any,
+    rawBody: Buffer,
     signature: string
 ): Promise<boolean> => {
-    // Verify webhook signature
+
+    const bodyString = rawBody.toString();
+    
     const expectedSignature = crypto
         .createHmac('sha256', config.RAZORPAY_WEBHOOK_SECRET!)
-        .update(JSON.stringify(payload))
+        .update(bodyString)
         .digest('hex');
 
     if (expectedSignature !== signature) {
@@ -253,7 +255,11 @@ export const razorpayWebhookService = async (
         throw new Error('Invalid webhook signature');
     }
 
+    // NOW PARSE JSON
+    const payload = JSON.parse(bodyString);
+
     const event = payload.event;
+
     console.log(`Received webhook event: ${event}`);
 
     if (event === 'payment.captured') {
@@ -287,7 +293,7 @@ export const razorpayWebhookService = async (
 
         console.log(`Order ${order.orderId} updated to SUCCESS with payment ${razorpayPaymentId}`);
     }
-    
+
     else if (event === 'payment.failed') {
         const paymentEntity = payload.payload.payment.entity;
         const razorpayOrderId = paymentEntity.order_id;

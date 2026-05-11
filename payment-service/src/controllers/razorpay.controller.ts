@@ -171,8 +171,10 @@ export const razorpayWebhookController = async (
             'x-razorpay-signature'
         ] as string;
 
+        const rawBody = req.body;
+
         await razorpayWebhookService(
-            req.body,
+            rawBody,
             signature
         );
 
