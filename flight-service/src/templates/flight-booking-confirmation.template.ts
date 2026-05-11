@@ -19,46 +19,49 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     <head>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-            body { font-family: 'Inter', sans-serif; color: #1e293b; padding: 30px; margin: 0; background: white; }
+            body { font-family: 'Inter', sans-serif; color: #1e293b; padding: 40px; margin: 0; background: white; }
             
             .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-            .logo-img { width: 120px; height: auto; }
+            .logo-img { width: 130px; height: auto; }
             
             .booking-header-info { text-align: right; }
             .label-sm { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-            .val-lg { font-size: 18px; font-weight: 800; color: #000; }
-            .price-blue { color: #2563eb; font-size: 22px; font-weight: 800; }
+            .val-lg { font-size: 20px; font-weight: 800; color: #000; }
+            .price-blue { color: #2563eb; font-size: 24px; font-weight: 800; margin-top: 4px; }
 
-            .section-tag { font-size: 11px; font-weight: 800; color: #10b981; margin: 25px 0 15px; text-transform: uppercase; }
+            .section-tag { font-size: 11px; font-weight: 800; color: #10b981; margin: 30px 0 10px; text-transform: uppercase; }
             
-            .pass-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; }
-            .meta-box .val { font-size: 14px; font-weight: 700; color: #1e293b; display: block; }
+            .pass-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+            .meta-box .val { font-size: 15px; font-weight: 700; color: #1e293b; margin-top: 4px; display: block; }
 
-            .route-card { background: #f8fafc; border-radius: 20px; padding: 25px; margin: 25px 0; display: flex; align-items: center; justify-content: space-between; }
-            .apt-code { font-size: 32px; font-weight: 800; margin: 0; color: #0f172a; line-height: 1; }
-            .apt-name { font-size: 11px; color: #64748b; font-weight: 500; }
-            .flight-time { font-size: 16px; font-weight: 800; margin-top: 5px; }
+            .route-card { background: #f8fafc; border-radius: 24px; padding: 30px; margin: 30px 0; display: flex; align-items: center; justify-content: space-between; }
+            .apt-code { font-size: 42px; font-weight: 800; margin: 0; color: #0f172a; line-height: 1; }
+            .apt-name { font-size: 12px; color: #1e293b; font-weight: 700; margin-top: 4px; }
+            .flight-time { font-size: 18px; font-weight: 800; margin-top: 8px; }
             
-            .path-area { flex: 1; text-align: center; position: relative; padding: 0 15px; }
-            .line { border-top: 2px dashed #cbd5e1; position: absolute; top: 35%; left: 15px; right: 15px; }
-            .plane { position: relative; z-index: 2; background: #f8fafc; padding: 0 8px; color: #2563eb; font-size: 12px; }
-            .dur { font-size: 9px; font-weight: 800; color: #1e293b; margin-top: 15px; }
+            .path-area { flex: 1; text-align: center; position: relative; padding: 0 20px; }
+            .line { border-top: 2px solid #cbd5e1; position: absolute; top: 35%; left: 20px; right: 20px; }
+            .plane { position: relative; z-index: 2; background: #f8fafc; padding: 0 10px; color: #2563eb; font-size: 14px; }
+            .dur { font-size: 10px; font-weight: 800; color: #1e293b; margin-top: 20px; text-transform: uppercase; }
 
-            /* Icon Grid - Labels BELOW Icons */
-            .icon-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 30px 0; }
-            .icon-item { display: flex; flex-direction: column; align-items: center; text-align: center; }
-            .icon-circle { width: 36px; height: 36px; background: #eff6ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; color: #2563eb; }
-            .icon-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
-            .icon-val { font-size: 11px; font-weight: 700; color: #1e293b; }
+            /* Grid Alignment - Horizontal layout for icons and text */
+            .icon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px 50px; margin: 40px 0; }
+            .icon-item { display: flex; align-items: center; gap: 15px; }
+            .icon-circle { width: 42px; height: 42px; background: #eff6ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #2563eb; font-size: 16px; flex-shrink: 0; }
+            .icon-text-group { display: flex; flex-direction: column; }
+            .icon-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+            .icon-val { font-size: 15px; font-weight: 700; color: #1e293b; }
 
-            .info-card { background: #f8fafc; border-radius: 15px; padding: 20px; margin-top: 30px; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-            .info-col h4 { font-size: 10px; font-weight: 800; margin: 0 0 10px 0; text-transform: uppercase; color: #475569; }
-            .info-col ul { padding-left: 12px; margin: 0; }
-            .info-col li { font-size: 10px; color: #64748b; margin-bottom: 5px; line-height: 1.4; }
+            .info-card { background: #f8fafc; border-radius: 20px; padding: 25px; margin-top: 40px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+            .info-col h4 { font-size: 11px; font-weight: 800; margin: 0 0 12px 0; text-transform: uppercase; color: #1e293b; display: flex; align-items: center; gap: 8px; }
+            .info-col ul { padding-left: 15px; margin: 0; }
+            .info-col li { font-size: 11px; color: #475569; margin-bottom: 8px; line-height: 1.5; font-weight: 500; }
 
-            .footer-strip { margin-top: 40px; border-top: 1px solid #f1f5f9; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
-            .support-text { font-size: 10px; color: #94a3b8; }
+            /* Bottom Logo Formatting */
+            .footer-branding { margin-top: 60px; text-align: right; }
+            .footer-logo { width: 100px;}
+            .support-bar { font-size: 11px; color: #94a3b8; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
         </style>
     </head>
     <body>
@@ -67,7 +70,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             <div class="booking-header-info">
                 <div class="label-sm">Booking Reference</div>
                 <div class="val-lg">${order.BookingId}</div>
-                <div class="label-sm" style="margin-top: 8px;">Total Amount Paid</div>
+                <div class="label-sm" style="margin-top: 10px;">Total Amount Paid</div>
                 <div class="price-blue">₹${fare.NetFare?.toLocaleString('en-IN')}</div>
             </div>
         </div>
@@ -104,51 +107,57 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         <div class="icon-grid">
             <div class="icon-item">
                 <div class="icon-circle">💺</div>
-                <div class="icon-label">Seat</div>
-                <div class="icon-val">Confirmed</div>
+                <div class="icon-text-group">
+                    <div class="icon-label">Seat</div>
+                    <div class="icon-val">Confirmed</div>
+                </div>
             </div>
             <div class="icon-item">
                 <div class="icon-circle">🎒</div>
-                <div class="icon-label">Baggage</div>
-                <div class="icon-val">${passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 Kg'}</div>
+                <div class="icon-text-group">
+                    <div class="icon-label">Baggage</div>
+                    <div class="icon-val">${passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 Kg'}</div>
+                </div>
             </div>
             <div class="icon-item">
                 <div class="icon-circle">🍽</div>
-                <div class="icon-label">Meal</div>
-                <div class="icon-val">${passenger.FareDetails?.MealIncluded ? 'Included' : 'Not Included'}</div>
+                <div class="icon-text-group">
+                    <div class="icon-label">Meal Preference</div>
+                    <div class="icon-val">${passenger.FareDetails?.MealIncluded ? 'Included' : 'Not Included'}</div>
+                </div>
             </div>
             <div class="icon-item">
                 <div class="icon-circle">📊</div>
-                <div class="icon-label">Class</div>
-                <div class="icon-val">${passenger.FareDetails?.CabinClass}</div>
+                <div class="icon-text-group">
+                    <div class="icon-label">Class</div>
+                    <div class="icon-val">${passenger.FareDetails?.CabinClass}</div>
+                </div>
             </div>
         </div>
 
         <div class="info-card">
             <div class="info-grid">
                 <div class="info-col">
-                    <h4>Check-in & Boarding</h4>
+                    <h4>ⓘ Important Information</h4>
                     <ul>
                         <li>Web check-in opens 48 hours prior to departure.</li>
-                        <li>Counters close 60 minutes before departure.</li>
-                        <li>Gates close 20 minutes before take-off.</li>
+                        <li>Airport check-in counters close 60 minutes before departure.</li>
+                        <li>Boarding gate closes 20 minutes before scheduled take-off.</li>
                     </ul>
                 </div>
                 <div class="info-col">
                     <h4>ID Requirements</h4>
                     <ul>
-                        <li>Government photo ID is mandatory for travel.</li>
-                        <li>Digital copies on DigiLocker are valid at all airports.</li>
+                        <li>Government-issued photo ID is mandatory for all passengers.</li>
+                        <li>Digital copies on DigiLocker are accepted at all Indian airports.</li>
+                        <li>Ensure name on ID matches the name on this confirmation exactly.</li>
                     </ul>
                 </div>
             </div>
         </div>
 
-        <div class="footer-strip">
-            <div class="support-text">
-                Need help? Contact support@klartravels.com | +91 1234567890
-            </div>
-            ${logoBase64 ? `<img src="${logoBase64}" style="width: 70px; opacity: 0.6;">` : ''}
+        <div class="footer-branding">
+            ${logoBase64 ? `<img src="${logoBase64}" class="footer-logo">` : ''}
         </div>
     </body>
     </html>
