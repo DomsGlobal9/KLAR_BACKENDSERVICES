@@ -166,29 +166,32 @@ export const razorpayWebhookController = async (
     res: Response
 ) => {
     try {
+        // Get signature from headers
+        const signature = req.headers['x-razorpay-signature'] as string;
 
-        const signature = req.headers[
-            'x-razorpay-signature'
-        ] as string;
+        // Get raw body buffer (since you're using express.raw middleware)
+        const rawBody = req.body;
+
+        // Convert buffer to string if needed
+        const webhookBody = rawBody.toString();
 
         console.log('\n========== WEBHOOK HIT ==========');
+        console.log('Signature:', signature);
+        console.log('Raw Body Type:', typeof rawBody);
+        console.log('Raw Body is Buffer:', Buffer.isBuffer(rawBody));
+        console.log('Webhook Body String:', webhookBody);
 
-        console.log('Received Signature:', signature);
+        // Parse the webhook body to log it (for debugging)
+        try {
+            const parsedBody = JSON.parse(webhookBody);
+            console.log('Parsed Webhook Event:', parsedBody.event);
+            console.log('Payment ID:', parsedBody.payload?.payment?.entity?.id);
+        } catch (e) {
+            console.log('Could not parse webhook body');
+        }
 
-        console.log(
-            'Raw Body Buffer:',
-            req.body
-        );
-
-        console.log(
-            'Raw Body String:',
-            req.body.toString()
-        );
-
-        await razorpayWebhookService(
-            req.body,
-            signature
-        );
+        // Pass the raw body string and signature to the service
+        await razorpayWebhookService(webhookBody, signature);
 
         return res.status(200).json({
             success: true,
@@ -196,11 +199,7 @@ export const razorpayWebhookController = async (
         });
 
     } catch (error: any) {
-
-        console.error(
-            'Razorpay webhook controller error:',
-            error
-        );
+        console.error('Razorpay webhook controller error:', error);
 
         return res.status(400).json({
             success: false,
