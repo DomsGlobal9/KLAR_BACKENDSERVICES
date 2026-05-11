@@ -8,13 +8,14 @@ export class RateGainApiProvider {
      */
     async precheck(payload: any) {
         const booking = payload.BookReservation || {};
-        const rawPropertyId = (booking.PropertyId || booking.propertyID || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
+        const rawPropertyId = (booking.propertyID || booking.PropertyId || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
+                propertyID: rawPropertyId, // v1.5.3 uses propertyID (capital ID)
                 PropertyId: rawPropertyId,
                 PropertyCode: booking.PropertyCode || rawPropertyId,
-                Echotoken: booking.Echotoken || booking.EchoToken || `echo-${Date.now()}`,
+                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`, // v1.5.3 uses EchoToken
                 RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
                     ...rs,
                     NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
@@ -42,18 +43,20 @@ export class RateGainApiProvider {
         const booking = payload.BookReservation || {};
         const now = new Date().toISOString();
 
-        const rawPropertyId = (booking.PropertyId || booking.propertyID || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
+        const rawPropertyId = (booking.propertyID || booking.PropertyId || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
                 ...booking,
+                propertyID: rawPropertyId, // v1.5.3 uses propertyID (capital ID)
                 PropertyId: rawPropertyId,
                 PropertyCode: booking.PropertyCode || rawPropertyId,
                 DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
                 ReservationDate: booking.ReservationDate || now,
                 TimeStamp: booking.TimeStamp || now,
-                Echotoken: booking.Echotoken || booking.EchoToken || `echo-${Date.now()}`,
-                // v1.5.3: SellingRate (capital S) for B2C Net+Commission model
+                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`, // v1.5.3 uses EchoToken
+                // v1.5.3: SellingRate for B2C Net+Commission model. Spec uses both cases, supporting both.
                 SellingRate: booking.SellingRate || booking.sellingRate,
+                sellingRate: booking.sellingRate || booking.SellingRate,
                 RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
                     ...rs,
                     NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
@@ -64,6 +67,7 @@ export class RateGainApiProvider {
         };
 
         try {
+            console.log(`[RateGain] Requesting Commit: ${JSON.stringify(consolidatedPayload, null, 2)}`);
             const response = await rateGainClient.post("/api/SmartDistribution/CommitReservation", consolidatedPayload);
             return response.data;
         } catch (error: any) {
@@ -77,10 +81,8 @@ export class RateGainApiProvider {
      * Cancel an existing hotel reservation.
      */
     async cancel(payload: any) {
-        // RateGain CancelReservation usually expects fields at top level, not wrapped.
         const booking = payload.CancelReservation || payload;
-
-        const rawPropertyId = (booking.PropertyId || booking.propertyId || "").toString().replace(/^RG:/, "");
+        const rawPropertyId = (booking.PropertyId || booking.propertyId || booking.propertyID || "").toString().replace(/^RG:/, "");
 
         const unwrappedPayload = {
             ConfirmationNumber: booking.ConfirmationNumber || booking.confirmationNumber || booking.confirmationId,
@@ -93,22 +95,12 @@ export class RateGainApiProvider {
             PropertyId: rawPropertyId
         };
 
-        console.log(`[RateGain] Cancel Request Payload (Unwrapped):`, JSON.stringify(unwrappedPayload, null, 2));
-        
         try {
+            console.log(`[RateGain] Requesting Cancel: ${JSON.stringify(unwrappedPayload, null, 2)}`);
             const response = await rateGainClient.post("/api/SmartDistribution/CancelReservation", unwrappedPayload);
-            
-            // Handle case where RateGain returns error message with 200/500 code in body
-            const data = response.data;
-            if (data && (data.Message || data.description) && (data.StatusCode !== 200 || data.status === false)) {
-                console.error('[RateGain] Cancel Application Error:', data);
-            }
-            
-            return data;
+            return response.data;
         } catch (error: any) {
-            // Log full error response for debugging
-            console.error('[RateGain] Cancel Error Details:', error.response?.data);
-            console.error('[RateGain] Cancel Error:', error.response?.status, error.response?.data?.description || error.message);
+            console.error("[RateGain] Cancel Error:", error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
     }

@@ -86,4 +86,54 @@ export class BookingRepository {
             "userInfo.id": userId
         });
     }
+
+    async getPendingStatusBookings() {
+        const result = await BookingModel.find({
+            status: {
+                $nin: [
+                    "SUCCESS",
+                    "FAILED",
+                    "CANCELLED",
+                    "ABORTED",
+                    // "UNCONFIRMED",
+                    "REJECTED",
+                    "INITIATED"
+                ]
+            }
+        })
+            .select({
+                bookingId: 1,
+                status: 1,
+                _id: 0
+            });
+
+        return result;
+    }
+
+    async deleteExpiredInitiatedBookings() {
+
+        /**
+         * Current time
+         */
+        const now = new Date();
+
+        /**
+         * 24 hours before current time
+         */
+        const before24hr = new Date(
+            now.getTime() - 24 * 60 * 60 * 1000
+        );
+
+        /**
+         * Delete bookings
+         */
+        const result = await BookingModel.deleteMany({
+            status: "INITIATED",
+            createdAt: {
+                $lte: before24hr
+            }
+        });
+
+        return result.deletedCount;
+    }
 }

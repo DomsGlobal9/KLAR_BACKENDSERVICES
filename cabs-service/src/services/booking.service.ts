@@ -17,7 +17,7 @@ class BookingService {
         if (!payload.journeyInfo || !payload.passengerDetail) {
             throw { status: 400, message: "Missing journeyInfo or passengerDetail" };
         }
-        
+
         // quoteId / vehicleType live inside quotationInfo per TripJack doc
         if (!payload.quotationInfo?.quoteId && !payload.quotationInfo?.childQuoteId) {
             throw { status: 400, message: "quotationInfo.quoteId (or childQuoteId) is required for booking" };
@@ -48,38 +48,40 @@ class BookingService {
         const finalPayload: BookingRequest = {
             ...payload,
             routeDetail,
-            agentId:    Number(payload.agentId    || agent.agentId),
+            agentId: Number(payload.agentId || agent.agentId),
             agentEmail: String(payload.agentEmail || agent.agentEmail),
             agentPhone: String(payload.agentPhone || agent.agentPhone),
-            consent:    String(payload.consent    || "yes"),
-            vendorId:   Number(payload.vendorId   || payload.quotationInfo?.vendorId)
+            consent: String(payload.consent || "yes"),
+            vendorId: Number(payload.vendorId || payload.quotationInfo?.vendorId)
         };
 
         console.log("[BookingService] Final Payload to TripJack:", JSON.stringify(finalPayload, null, 2));
 
         const response = await tripJackCabsProvider.createBooking(finalPayload);
 
+        const bookingId = response?.data?.id || response?.data?.bookingId;
+
         // PERSISTENCE: Save to MongoDB
-        if (response?.data?.bookingId) {
+        if (bookingId) {
             try {
                 const opt = payload.quotationInfo;
                 const pricing = payload.pricingInfo;
-                
+
                 await CabBookingModel.create({
-                    bookingId: response.data.bookingId,
+                    bookingId,
                     correlationId: finalPayload.correlationId,
-                    userId: payload.userId, // Save userId from payload
+                    userId: payload.userId || "guest", // Save userId from payload
                     status: CabBookingStatus.CONFIRMED,
-                    pickupDate: new Date(payload.journeyInfo.pickupDate),
+                    pickupDate: new Date(payload.journeyInfo.pickupDateTime || payload.journeyInfo.pickupDate),
                     origin: {
                         displayAddress: payload.routeDetail?.origin?.displayAddress || payload.routeDetail?.source?.displayAddress || "Unknown",
-                        lat: payload.routeDetail?.origin?.lat || payload.routeDetail?.source?.lat,
-                        long: payload.routeDetail?.origin?.long || payload.routeDetail?.source?.long
+                        lat: String(payload.routeDetail?.origin?.lat || payload.routeDetail?.source?.lat || "0"),
+                        long: String(payload.routeDetail?.origin?.long || payload.routeDetail?.source?.long || "0")
                     },
                     destination: {
                         displayAddress: payload.routeDetail?.destination?.displayAddress || "Unknown",
-                        lat: payload.routeDetail?.destination?.lat,
-                        long: payload.routeDetail?.destination?.long
+                        lat: String(payload.routeDetail?.destination?.lat || "0"),
+                        long: String(payload.routeDetail?.destination?.long || "0")
                     },
                     vehicleType: opt?.vehicleType || "Unknown",
                     vehicleCategory: opt?.vehicleCategory || "Unknown",
@@ -94,7 +96,7 @@ class BookingService {
                     tripJackRequest: finalPayload,
                     tripJackResponse: response
                 });
-                console.log(`✅ [BookingService] Saved booking ${response.data.bookingId} to DB.`);
+                console.log(`✅ [BookingService] Saved booking ${bookingId} to DB.`);
             } catch (dbError) {
                 console.error("❌ [BookingService] Failed to save booking to DB:", dbError);
                 // We don't throw here to avoid failing a successful TripJack booking

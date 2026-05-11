@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDestinations } from "../controllers/destinations.controller";
+import { getDestinations, getPopularDestinations } from "../controllers/destinations.controller";
 import { searchHotels, getHotelSuggestions } from "../controllers/hotels.controller";
 import { getProducts } from "../controllers/products.controller";
 import { HotelModel } from "../models/Hotel.model";
@@ -10,9 +10,10 @@ import { syncRGDestinations } from "../sync/rgDestinationSync";
 
 const router = Router();
 
-router.post("/sync/destinations", async (_req, res) => {
-    res.json({ status: "started", message: "RateGain destination sync triggered in background" });
-    syncRGDestinations().catch((err) =>
+router.post("/sync/destinations", async (req, res) => {
+    const force = req.query.force === "true";
+    res.json({ status: "started", message: `RateGain destination sync triggered (force: ${force})` });
+    syncRGDestinations(force).catch((err) =>
         console.error("[Sync] Manual RG sync failed:", err.message)
     );
 });
@@ -37,6 +38,7 @@ router.get("/health", (_req, res) => {
 });
 
 router.get("/destinations", getDestinations);
+router.get("/destinations/popular", getPopularDestinations);
 router.get("/hotels/suggestions", getHotelSuggestions);
 router.post("/hotels/search", searchHotels);
 router.post("/", searchHotels); // Unified architecture POST /api/search

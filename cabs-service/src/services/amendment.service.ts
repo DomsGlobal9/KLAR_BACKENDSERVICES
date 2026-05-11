@@ -1,5 +1,6 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { CancellationRequest } from "../models/tripjack.types";
+import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
 
 class AmendmentService {
     async getCharges(bookingId: string, type: string) {

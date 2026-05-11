@@ -1,24 +1,50 @@
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 
-// Same map as in the adapter — nationality ISO → TripJack countryId
+import { NationalityModel } from "../models/Nationality.model";
+
+// Fallback map if DB is empty
 const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
     IN: "106", US: "232", GB: "235", AE: "231", SG: "200",
     MY: "131", AU: "14",  CA: "40",  DE: "83",  FR: "76",
     JP: "112", CN: "45",  NZ: "157", ZA: "204",
 };
-function toTjNationality(iso: string): string {
+
+async function toTjNationality(iso: string): Promise<string> {
+    try {
+        if (!iso) return "106";
+        const code = iso.toUpperCase();
+        const found = await NationalityModel.findOne({ code }).select("countryId").lean();
+        if (found) return found.countryId;
+    } catch (err) {
+        console.warn("[TripJack] Nationality DB lookup failed, using fallback.");
+    }
     return ISO_TO_TJ_COUNTRY_ID[iso?.toUpperCase()] ?? "106";
 }
 
+
 export class TripJackApiProvider {
+    /**
+     * GET /hms/v3/nationality-info
+     * Returns list of all supported nationalities.
+     */
+    async getNationalities() {
+        try {
+            const res = await tripJackClient.get("/hms/v3/nationality-info");
+            return res.data;
+        } catch (error: any) {
+            console.error("[TripJack] GetNationalities Error:", error.response?.status, error.message);
+            throw error;
+        }
+    }
+
     /**
      * FIX #2 + #3: Use POST /hms/v3/hotel/pricing (NOT /listing) for hotel detail.
      * reviewHash is a TOP-LEVEL field in the response, not per-option.
      * FIX #4 (partial): hid is sent here so the frontend can forward it to Review.
      */
     async getProducts(payload: any) {
-        const rawId = (payload.propertyId || payload.PropertyId || "").replace("TJ:", "").trim();
+        const rawId = (payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
         const correlationId = payload.correlationId || uuidv4();
 
         if (!rawId) {
@@ -30,32 +56,39 @@ export class TripJackApiProvider {
             };
         }
 
+        const hidValue = rawId;
         const tjPayload: any = {
             correlationId,
-            hid: rawId,                         // FIX: single string, not array
+            hid: hidValue,
+            hotelId: hidValue,
             checkIn:  payload.checkin  || payload.checkIn,
             checkOut: payload.checkout || payload.checkOut,
             rooms: (payload.Rooms || payload.rooms || []).map((r: any) => ({
                 adults:   r.Adults   || r.adults   || 2,
-                children: r.Children || r.children || undefined,
+                children: (r.Children || r.children) ? Number(r.Children || r.children) : undefined,
                 childAge: (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age) || []).length
                     ? (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age))
                     : undefined,
             })),
             currency:    payload.Currency    || payload.currency    || "INR",
-            nationality: toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
+            nationality: await toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
         };
 
+
         try {
-            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}`);
+            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
             
             // Call both APIs in parallel
             const [staticRes, pricingRes] = await Promise.allSettled([
-                tripJackClient.post("/hms/v3/hotel/static-detail", { hid: rawId }),
+                tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue }),
                 tripJackClient.post("/hms/v3/hotel/pricing", tjPayload)
             ]);
 
+            if (staticRes.status === "rejected") {
+                console.error(`[TripJack] Static Detail Failed for ${rawId}:`, staticRes.reason?.message, staticRes.reason?.response?.data);
+            }
             if (pricingRes.status === "rejected") {
+                console.error(`[TripJack] Pricing Request Failed for ${rawId}:`, pricingRes.reason?.message, pricingRes.reason?.response?.data);
                 throw pricingRes.reason;
             }
 
@@ -130,6 +163,7 @@ export class TripJackApiProvider {
                     taxes:           opt.pricing?.taxes,
                     managementFee:   opt.pricing?.mf,
                     managementFeeTax: opt.pricing?.mft,
+                    pricing:         opt.pricing, // Pass the whole object for frontend breakup
                     strikethrough:   opt.pricing?.strikethrough,
                     currency:        opt.pricing?.currency,
 
@@ -140,6 +174,7 @@ export class TripJackApiProvider {
                     passportRequired: opt.compliance?.passportRequired ?? false,
                     gstType:          opt.compliance?.gstType,
 
+                    onHoldAllowed:       !!(opt.onHoldAllowed || opt.onholdAllowed),
                     isRefundable:        opt.cancellation?.isRefundable,
                     cancellationPolicies: opt.cancellation?.penalties || [],
 
