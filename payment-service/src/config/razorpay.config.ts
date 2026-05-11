@@ -27,3 +27,11 @@ export const razorpayConfig = {
 
     isProduction: isProd,
 };
+
+if (!razorpayConfig.keyId || !razorpayConfig.keySecret) {
+    throw new Error('Razorpay credentials are not configured properly');
+}
+
+if (!razorpayConfig.webhookSecret && razorpayConfig.environment === 'live') {
+    throw new Error('Razorpay webhook secret is required for production');
+}

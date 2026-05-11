@@ -47,3 +47,20 @@ export const getOrderByRazorpayOrderId = async (
 ) => {
     return OrderModel.findOne({ razorpayOrderId });
 };
+
+export const getOrderByRazorpayPaymentId = async (
+    razorpayPaymentId: string
+) => {
+    return OrderModel.findOne({ razorpayPaymentId });
+};
+
+export const updateOrderByRazorpayOrderId = async (
+    razorpayOrderId: string,
+    update: Partial<IOrder>
+) => {
+    return OrderModel.findOneAndUpdate(
+        { razorpayOrderId },
+        update,
+        { new: true }
+    );
+};

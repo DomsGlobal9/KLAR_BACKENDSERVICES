@@ -161,18 +161,13 @@ export const getRazorpayOrderDetailsController = async (req: Request, res: Respo
     }
 };
 
-
-
 export const razorpayWebhookController = async (req: Request, res: Response) => {
     try {
         const signature = req.headers['x-razorpay-signature'] as string;
 
-        // Get raw body string from buffer
-        const rawBody = Buffer.isBuffer(req.body)
-            ? req.body.toString()
-            : JSON.stringify(req.body);
+        const rawBody = req.body.toString();
 
-        console.log('Webhook received - Signature:', signature);
+        console.log('Webhook received');
 
         await razorpayWebhookService(rawBody, signature);
 
@@ -183,7 +178,6 @@ export const razorpayWebhookController = async (req: Request, res: Response) => 
 
     } catch (error: any) {
         console.error('Webhook error:', error);
-        // Always return 200 to Razorpay to prevent retries
         return res.status(200).json({
             success: false,
             message: error.message
@@ -191,7 +185,6 @@ export const razorpayWebhookController = async (req: Request, res: Response) => 
     }
 };
 
-// ADD THIS TEST CONTROLLER at the end of file
 export const testWebhookController = async (req: Request, res: Response) => {
     try {
         const testPayload = req.body;

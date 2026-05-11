@@ -12,15 +12,12 @@ export interface IOrder extends Document {
     currency: string;
     environment: string;
     orderId: string;
-
     cfOrderId?: string;
     paymentSessionId?: string;
     cfOrderStatus?: string;
-
     paymentGateway?: PaymentGateway;
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
-
     status: OrderStatus;
     createdAt: Date;
     updatedAt: Date;
@@ -63,7 +60,6 @@ const OrderSchema: Schema = new Schema(
             required: true,
             unique: true,
         },
-
         cfOrderId: {
             type: String,
             sparse: true,
@@ -74,7 +70,6 @@ const OrderSchema: Schema = new Schema(
         cfOrderStatus: {
             type: String,
         },
-
         paymentGateway: {
             type: String,
             enum: ['cashfree', 'razorpay'],
@@ -87,7 +82,6 @@ const OrderSchema: Schema = new Schema(
         razorpayPaymentId: {
             type: String,
         },
-
         status: {
             type: String,
             enum: ['CREATED', 'PENDING', 'SUCCESS', 'FAILED'],
@@ -99,10 +93,10 @@ const OrderSchema: Schema = new Schema(
     }
 );
 
-// OrderSchema.index({ orderId: 1 });
-// OrderSchema.index({ cfOrderId: 1 });
-// OrderSchema.index({ razorpayOrderId: 1 });
+OrderSchema.index({ orderId: 1 });
+OrderSchema.index({ razorpayOrderId: 1 });
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ paymentGateway: 1 });
+OrderSchema.index({ status: 1 });
 
 export const OrderModel = mongoose.model<IOrder>('Order', OrderSchema);

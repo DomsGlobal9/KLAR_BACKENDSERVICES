@@ -4,6 +4,7 @@ import FlightSearchValidator from "../utils/flightSearchValidator";
 import { SortField, SortOption, SortOrder } from "../types/sort.types";
 import { FlightSorter } from "../utils/sorter/sort.utils";
 import { Filter } from "../types/filter.types";
+import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
 
 
 export const searchOneWayController = async (req: Request, res: Response) => {
@@ -154,7 +155,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
         const sortTarget = (req.query.sortTarget as string) || 'both';
 
         let sortOption: SortOption | undefined;
-        if (sortField && FlightSorter.isValidSortField(sortField)) {
+        if (sortField && ReturnFlightSorter.isValidSortField(sortField)) {
             sortOption = {
                 field: sortField,
                 order: sortOrder
