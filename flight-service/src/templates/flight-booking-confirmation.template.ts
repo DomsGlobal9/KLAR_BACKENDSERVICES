@@ -7,130 +7,148 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     const fare = air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
 
     const formatDate = (dateStr: string) => {
+        if (!dateStr) return '';
         const d = new Date(dateStr);
         return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     };
+
+    const pnr = passenger.pnrDetails ? Object.values(passenger.pnrDetails)[0] : 'N/A';
 
     return `
     <html>
     <head>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; padding: 20px; line-height: 1.4; }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+            body { font-family: 'Inter', sans-serif; color: #1e293b; padding: 30px; margin: 0; background: white; }
+            
             .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-            .logo { width: 120px; }
-            .booking-ref-box { text-align: right; }
-            .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
-            .value-bold { font-size: 16px; font-weight: 700; color: #0f172a; }
+            .logo-img { width: 120px; height: auto; }
             
-            .section-header { background: #f8fafc; padding: 8px 12px; font-size: 13px; font-weight: 700; border-left: 4px solid #0f172a; margin: 20px 0 10px 0; }
-            
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th { text-align: left; font-size: 11px; color: #64748b; padding: 8px; border-bottom: 1px solid #e2e8f0; }
-            td { padding: 12px 8px; font-size: 13px; font-weight: 600; border-bottom: 1px solid #f1f5f9; }
+            .booking-header-info { text-align: right; }
+            .label-sm { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+            .val-lg { font-size: 18px; font-weight: 800; color: #000; }
+            .price-blue { color: #2563eb; font-size: 22px; font-weight: 800; }
 
-            .itinerary-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
-            .flight-row { display: flex; justify-content: space-between; align-items: center; }
-            .airport-box { flex: 1; }
-            .airport-code { font-size: 24px; font-weight: 800; margin: 0; }
-            .airport-name { font-size: 12px; color: #64748b; }
-            .time { font-size: 16px; font-weight: 700; margin-top: 4px; }
+            .section-tag { font-size: 11px; font-weight: 800; color: #10b981; margin: 25px 0 15px; text-transform: uppercase; }
             
-            .mid-info { text-align: center; flex: 1; color: #94a3b8; }
-            .duration { font-size: 10px; font-weight: 700; margin-bottom: 5px; }
-            
-            .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
-            .meta-item { background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #f1f5f9; }
+            .pass-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; }
+            .meta-box .val { font-size: 14px; font-weight: 700; color: #1e293b; display: block; }
 
-            .footer-info { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 11px; color: #64748b; }
-            .total-box { text-align: right; margin-top: 20px; }
+            .route-card { background: #f8fafc; border-radius: 20px; padding: 25px; margin: 25px 0; display: flex; align-items: center; justify-content: space-between; }
+            .apt-code { font-size: 32px; font-weight: 800; margin: 0; color: #0f172a; line-height: 1; }
+            .apt-name { font-size: 11px; color: #64748b; font-weight: 500; }
+            .flight-time { font-size: 16px; font-weight: 800; margin-top: 5px; }
+            
+            .path-area { flex: 1; text-align: center; position: relative; padding: 0 15px; }
+            .line { border-top: 2px dashed #cbd5e1; position: absolute; top: 35%; left: 15px; right: 15px; }
+            .plane { position: relative; z-index: 2; background: #f8fafc; padding: 0 8px; color: #2563eb; font-size: 12px; }
+            .dur { font-size: 9px; font-weight: 800; color: #1e293b; margin-top: 15px; }
+
+            /* Icon Grid - Labels BELOW Icons */
+            .icon-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 30px 0; }
+            .icon-item { display: flex; flex-direction: column; align-items: center; text-align: center; }
+            .icon-circle { width: 36px; height: 36px; background: #eff6ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; color: #2563eb; }
+            .icon-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
+            .icon-val { font-size: 11px; font-weight: 700; color: #1e293b; }
+
+            .info-card { background: #f8fafc; border-radius: 15px; padding: 20px; margin-top: 30px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+            .info-col h4 { font-size: 10px; font-weight: 800; margin: 0 0 10px 0; text-transform: uppercase; color: #475569; }
+            .info-col ul { padding-left: 12px; margin: 0; }
+            .info-col li { font-size: 10px; color: #64748b; margin-bottom: 5px; line-height: 1.4; }
+
+            .footer-strip { margin-top: 40px; border-top: 1px solid #f1f5f9; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .support-text { font-size: 10px; color: #94a3b8; }
         </style>
     </head>
     <body>
         <div class="header">
-            <img src="${logoBase64}" class="logo" alt="Klar Travels">
-            <div class="booking-ref-box">
-                <div class="label">Booking Reference</div>
-                <div class="value-bold">${order.BookingId}</div>
-                <div style="margin-top: 10px;">
-                    <div class="label">Status</div>
-                    <div style="color: #059669; font-weight: 700;">${order.status}</div>
-                </div>
+            ${logoBase64 ? `<img src="${logoBase64}" class="logo-img">` : `<strong>KLAR TRAVELS</strong>`}
+            <div class="booking-header-info">
+                <div class="label-sm">Booking Reference</div>
+                <div class="val-lg">${order.BookingId}</div>
+                <div class="label-sm" style="margin-top: 8px;">Total Amount Paid</div>
+                <div class="price-blue">₹${fare.NetFare?.toLocaleString('en-IN')}</div>
             </div>
         </div>
 
-        <div class="section-header">PASSENGER INFORMATION</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>PASSENGER NAME</th>
-                    <th>PNR</th>
-                    <th>TICKET TYPE</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>${passenger.Title} ${passenger.FirstName} ${passenger.LastName}</td>
-                    <td>${passenger.pnrDetails?.['JAI-DEL'] || 'N/A'}</td>
-                    <td>${passenger.FareDetails?.CabinClass} (${passenger.PaxType})</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="section-tag">Passenger Information</div>
+        <div class="pass-grid">
+            <div class="meta-box"><span class="label-sm">Name</span><span class="val">${passenger.Title} ${passenger.FirstName} ${passenger.LastName}</span></div>
+            <div class="meta-box"><span class="label-sm">PNR</span><span class="val">${pnr}</span></div>
+            <div class="meta-box"><span class="label-sm">Ticket Type</span><span class="val">${passenger.FareDetails?.CabinClass} (${passenger.FareDetails?.ClassCode})</span></div>
+        </div>
 
-        <div class="section-header">FLIGHT ITINERARY</div>
         ${segments.map((seg: any) => `
-            <div class="itinerary-card">
-                <div style="margin-bottom: 15px; font-size: 12px; font-weight: 700; color: #1d4ed8;">
-                    ${seg.FlightDetails.AirlineInfo.AirlineName} | ${seg.FlightDetails.AirlineInfo.SSRCode}-${seg.FlightDetails.FirstName}
-                </div>
-                <div class="flight-row">
-                    <div class="airport-box">
-                        <p class="airport-code">${seg.DepartureAirport.cityCode}</p>
-                        <span class="airport-name">${seg.DepartureAirport.city}</span>
-                        <div class="time">${new Date(seg.DepartureTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                        <div style="font-size: 11px;">${formatDate(seg.DepartureTime)}</div>
-                    </div>
-                    
-                    <div class="mid-info">
-                        <div class="duration">${seg.Duration} MINS NON-STOP</div>
-                        <div style="font-size: 20px;">✈</div>
-                    </div>
-
-                    <div class="airport-box" style="text-align: right;">
-                        <p class="airport-code">${seg.ArrivalAirport.cityCode}</p>
-                        <span class="airport-name">${seg.ArrivalAirport.city}</span>
-                        <div class="time">${new Date(seg.ArrivalTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                        <div style="font-size: 11px;">${formatDate(seg.ArrivalTime)}</div>
-                    </div>
-                </div>
+        <div class="route-card">
+            <div class="apt-group">
+                <div class="apt-code">${seg.DepartureAirport.cityCode}</div>
+                <div class="apt-name">${seg.DepartureAirport.city}</div>
+                <div class="flight-time">${new Date(seg.DepartureTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</div>
+                <div class="label-sm">${formatDate(seg.DepartureTime)}</div>
             </div>
+            <div class="path-area">
+                <div class="line"></div>
+                <span class="plane">✈</span>
+                <div class="dur">${seg.Duration} MINS • NON-STOP</div>
+            </div>
+            <div class="apt-group" style="text-align: right;">
+                <div class="apt-code">${seg.ArrivalAirport.cityCode}</div>
+                <div class="apt-name">${seg.ArrivalAirport.city}</div>
+                <div class="flight-time">${new Date(seg.ArrivalTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</div>
+                <div class="label-sm">${formatDate(seg.ArrivalTime)}</div>
+            </div>
+        </div>
         `).join('')}
 
-        <div class="meta-grid">
-            <div class="meta-item">
-                <div class="label">Baggage</div>
-                <div style="font-size: 12px; font-weight: 700;">${passenger.FareDetails.BaggageInfo.CheckInBaggage} Check-in</div>
+        <div class="icon-grid">
+            <div class="icon-item">
+                <div class="icon-circle">💺</div>
+                <div class="icon-label">Seat</div>
+                <div class="icon-val">Confirmed</div>
             </div>
-            <div class="meta-item">
-                <div class="label">Seat</div>
-                <div style="font-size: 12px; font-weight: 700;">Confirmed</div>
+            <div class="icon-item">
+                <div class="icon-circle">🎒</div>
+                <div class="icon-label">Baggage</div>
+                <div class="icon-val">${passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 Kg'}</div>
             </div>
-            <div class="meta-item">
-                <div class="label">Meal</div>
-                <div style="font-size: 12px; font-weight: 700;">${passenger.FareDetails.MealIncluded ? 'Included' : 'Not Included'}</div>
+            <div class="icon-item">
+                <div class="icon-circle">🍽</div>
+                <div class="icon-label">Meal</div>
+                <div class="icon-val">${passenger.FareDetails?.MealIncluded ? 'Included' : 'Not Included'}</div>
             </div>
-            <div class="meta-item">
-                <div class="label">Class</div>
-                <div style="font-size: 12px; font-weight: 700;">${passenger.FareDetails.ClassCode}</div>
+            <div class="icon-item">
+                <div class="icon-circle">📊</div>
+                <div class="icon-label">Class</div>
+                <div class="icon-val">${passenger.FareDetails?.CabinClass}</div>
             </div>
         </div>
 
-        <div class="total-box">
-            <div class="label">Total Amount Paid</div>
-            <div class="value-bold" style="font-size: 24px;">₹${fare.NetFare.toLocaleString('en-IN')}</div>
+        <div class="info-card">
+            <div class="info-grid">
+                <div class="info-col">
+                    <h4>Check-in & Boarding</h4>
+                    <ul>
+                        <li>Web check-in opens 48 hours prior to departure.</li>
+                        <li>Counters close 60 minutes before departure.</li>
+                        <li>Gates close 20 minutes before take-off.</li>
+                    </ul>
+                </div>
+                <div class="info-col">
+                    <h4>ID Requirements</h4>
+                    <ul>
+                        <li>Government photo ID is mandatory for travel.</li>
+                        <li>Digital copies on DigiLocker are valid at all airports.</li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
-        <div class="footer-info">
-            <strong>Important Note:</strong> Web check-in opens 48 hours prior to departure. Please carry a valid government ID. Digital copies on DigiLocker are accepted at all Indian airports.
+        <div class="footer-strip">
+            <div class="support-text">
+                Need help? Contact support@klartravels.com | +91 1234567890
+            </div>
+            ${logoBase64 ? `<img src="${logoBase64}" style="width: 70px; opacity: 0.6;">` : ''}
         </div>
     </body>
     </html>

@@ -3,7 +3,7 @@ import puppeteer from 'puppeteer';
 export const generatePdfFromHtml = async (html: string): Promise<Buffer> => {
     const browser = await puppeteer.launch({ 
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] // Recommended for server environments
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
     });
     const page = await browser.newPage();
     
