@@ -261,24 +261,19 @@ export const refundRazorpayPaymentService = async (
 };
 
 export const razorpayWebhookService = async (
-    webhookBody: string | Buffer,
+    webhookBody: string,
     signature: string
 ) => {
     try {
-        // Get the raw body string
-        const rawBody = Buffer.isBuffer(webhookBody)
-            ? webhookBody.toString()
-            : webhookBody;
-
-        // Verify webhook signature
         const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
         if (!secret) {
             throw new Error('RAZORPAY_WEBHOOK_SECRET not configured');
         }
 
+        const crypto = require('crypto');
         const expectedSignature = crypto
             .createHmac('sha256', secret)
-            .update(rawBody)
+            .update(webhookBody)
             .digest('hex');
 
         console.log('Expected Signature:', expectedSignature);
@@ -288,33 +283,18 @@ export const razorpayWebhookService = async (
             throw new Error('Invalid webhook signature');
         }
 
-        // Parse the webhook data
-        const webhookData: WebhookPaymentData = JSON.parse(rawBody);
-
+        const webhookData = JSON.parse(webhookBody);
         console.log('Webhook Event:', webhookData.event);
 
-        // Handle different webhook events
         switch (webhookData.event) {
             case 'payment.captured':
                 await handlePaymentCaptured(webhookData);
                 break;
-
-            case 'payment.authorized':
-                console.log('Payment authorized:', webhookData.payload.payment.entity.id);
-                // Optionally capture the payment automatically
-                // await capturePayment(webhookData.payload.payment.entity.id);
-                break;
-
             case 'payment.failed':
                 await handlePaymentFailed(webhookData);
                 break;
-
-            case 'order.paid':
-                console.log('Order paid:', webhookData.payload.payment.entity.order_id);
-                break;
-
             default:
-                console.log(`Unhandled webhook event: ${webhookData.event}`);
+                console.log(`Unhandled event: ${webhookData.event}`);
         }
 
         return { success: true };
@@ -326,28 +306,37 @@ export const razorpayWebhookService = async (
 };
 
 // Handle payment captured event
-const handlePaymentCaptured = async (webhookData: WebhookPaymentData) => {
-    const payment = webhookData.payload.payment.entity;
+const handlePaymentCaptured = async (webhookData: any) => {
+    const payment = webhookData.payload?.payment?.entity;
 
-    console.log(`✅ Payment captured: ${payment.id}`);
-    console.log(`   Amount: ${payment.amount / 100} ${payment.currency}`);
-    console.log(`   Order ID: ${payment.order_id}`);
-    console.log(`   Status: ${payment.status}`);
-
-    // Update your database here
-    // For wallet top-up:
-    const orderId = payment.order_id;
-    const userId = webhookData.payload.payment.entity.notes?.userId;
-    const amount = payment.amount / 100;
-
-    // Example: Update user's wallet balance
-    if (userId && amount) {
-        // await updateWalletBalance(userId, amount);
-        console.log(`Should update wallet for user ${userId} with amount ${amount}`);
+    if (!payment) {
+        console.error('No payment entity found');
+        return;
     }
 
-    // Update order status in your database
-    // await updateOrderStatus(orderId, 'PAID', payment.id);
+    console.log(`Payment captured: ${payment.id}`);
+    console.log(`Amount: ${payment.amount / 100} ${payment.currency}`);
+
+    // Try to get orderId from notes or payment
+    let orderId = payment.order_id;
+
+    if (!orderId && payment.notes?.orderId) {
+        orderId = payment.notes.orderId;
+    }
+
+    // Update order if we have orderId
+    if (orderId) {
+        try {
+            await updateOrderStatus(orderId, 'SUCCESS', {
+                razorpayPaymentId: payment.id
+            });
+            console.log(`Order ${orderId} updated successfully`);
+        } catch (error) {
+            console.error(`Failed to update order:`, error);
+        }
+    } else {
+        console.warn('No order_id found in webhook');
+    }
 
     return payment;
 };
