@@ -93,8 +93,7 @@ const OrderSchema: Schema = new Schema(
     }
 );
 
-OrderSchema.index({ orderId: 1 });
-OrderSchema.index({ razorpayOrderId: 1 });
+
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ paymentGateway: 1 });
 OrderSchema.index({ status: 1 });
