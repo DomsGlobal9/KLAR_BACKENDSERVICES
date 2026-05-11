@@ -1,10 +1,26 @@
 import axios from "axios";
 import { HotelModel } from "../models/Hotel.model";
+import { tripJackClient } from "../clients/tripjack.client";
 import { env } from "../config/env";
 import fs from "fs/promises";
 import path from "path";
 
+import { NationalityModel } from "../models/Nationality.model";
+
 const TJ_STATIC_BASE_URL = "https://apitest.tripjack.com";
+
+const tripJackStaticClient = axios.create({
+    baseURL: TJ_STATIC_BASE_URL,
+    timeout: 120000,
+    headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "apikey": env.tripJack.apiKey,
+        "agencyId": env.tripJack.agencyId,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+});
+
 const PROGRESS_FILE = path.join(process.cwd(), "sync_progress_tj_hotels.json");
 
 async function saveProgress(token: string, totalSynced: number) {
@@ -66,21 +82,15 @@ export async function syncTJHotels() {
 
             while (retryCount < maxRetries) {
                 try {
-                    res = await axios.post(
-                        `${TJ_STATIC_BASE_URL}/hms/v1/fetch-static-hotels`,
-                        payload,
-                        {
-                            headers: {
-                                "Content-Type": "application/json",
-                                "apikey": env.tripJack.apiKey,
-                                "Accept": "application/json",
-                                "Accept-Encoding": "gzip",
-                            },
-                            timeout: 120000, // 2 mins timeout for large pages
-                        }
+                    res = await tripJackStaticClient.post(
+                        "/hms/v3/fetch-static-hotels",
+                        payload
                     );
+
+
                     break;
                 } catch (err: any) {
+
                     retryCount++;
                     const status = err.response?.status;
                     const delay = Math.min(retryCount * 5000, 30000);
@@ -199,4 +209,80 @@ export async function syncTJHotels() {
         if (nextToken) await saveProgress(nextToken, totalCount);
     }
 }
+
+/**
+ * Sync Nationalities from TripJack v3
+ */
+export async function syncTJNationalities() {
+    console.log("[Sync] Syncing TripJack Nationalities...");
+    try {
+        const res = await tripJackStaticClient.get("/hms/v3/nationality-info");
+
+
+        const data = res.data;
+        if (!data.status?.success) {
+            console.error("[Sync] Nationalities API returned failure:", data.status?.description);
+            return;
+        }
+
+        const nationalities = data.nationalityInfos || [];
+        console.log(`[Sync] Found ${nationalities.length} nationalities.`);
+
+        const bulkOps = nationalities.map((n: any) => ({
+            updateOne: {
+                filter: { countryId: n.countryId },
+                update: {
+                    $set: {
+                        countryName: n.countryName,
+                        dialCode: n.dialCode,
+                        code: n.code,
+                        isoCode: n.isoCode,
+                        updatedAt: new Date()
+                    }
+                },
+                upsert: true
+            }
+        }));
+
+        if (bulkOps.length > 0) {
+            await NationalityModel.bulkWrite(bulkOps);
+            console.log("✅ [Sync] TripJack Nationalities updated in DB.");
+        }
+    } catch (err: any) {
+        if (err.response) {
+            console.error("[Sync] Failed to sync nationalities:", err.response.status, JSON.stringify(err.response.data));
+        } else {
+            console.error("[Sync] Failed to sync nationalities:", err.message);
+        }
+    }
+
+}
+
+/**
+ * Sync Deleted Hotels from TripJack v3
+ */
+export async function syncTJDeletedHotels(lastUpdateTime: string) {
+    console.log(`[Sync] Syncing TripJack Deleted Hotels since ${lastUpdateTime}...`);
+    try {
+        const res = await tripJackStaticClient.post("/hms/v3/fetch-static-hotels/deleted", {
+            lastUpdateTime
+        });
+
+
+        const hotels = res.data.hotelOpInfos || [];
+        if (hotels.length > 0) {
+            const ids = hotels.map((h: any) => h.tjHotelId);
+            await HotelModel.deleteMany({ tjHotelId: { $in: ids } });
+            console.log(`✅ [Sync] Removed ${ids.length} deleted hotels from DB.`);
+        }
+    } catch (err: any) {
+        if (err.response) {
+            console.error("[Sync] Failed to sync deleted hotels:", err.response.status, JSON.stringify(err.response.data));
+        } else {
+            console.error("[Sync] Failed to sync deleted hotels:", err.message);
+        }
+    }
+
+}
+
 

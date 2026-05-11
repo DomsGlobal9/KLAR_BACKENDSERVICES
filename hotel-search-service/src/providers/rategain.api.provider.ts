@@ -25,13 +25,11 @@ export class RateGainApiProvider {
             destinationCode: payload.destinationCode || payload.destCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
-            // v1.5.3: Echotoken (capital E)
-            Echotoken: payload.echotoken || payload.Echotoken || payload.echoToken || `echo-${Date.now()}`,
+            Echotoken: payload.Echotoken || payload.echotoken || payload.echoToken || `echo-${Date.now()}`, // v1.5.3 Search uses Echotoken (Capital E)
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;
 
-                // If paxes is already provided in the correct format, use it. Otherwise, derive from childrenAges or children count.
                 let paxes = r.paxes || [];
                 if (childrenCount > 0 && paxes.length === 0) {
                     const childrenAges: number[] = r.childrenAges || [];
@@ -42,33 +40,21 @@ export class RateGainApiProvider {
                     }
                 }
 
-                const room: any = {
+                return {
                     NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || 1,
                     Adults: adultsCount,
                     Children: childrenCount,
                     paxes: paxes,
                 };
-
-                return room;
             }),
             pageNo: payload.pageNo || 1,
         };
 
-        // Optional fields per spec - Ensure PropertyId is correctly named for TC3
         const propertyId = payload.PropertyId || payload.propertyId || payload.propertyID;
         if (propertyId) {
             rateGainPayload.PropertyId = propertyId;
         }
 
-        // VALIDATION: RateGain requires at least destinationCode OR PropertyId OR Geofilter
-        if (!rateGainPayload.destinationCode && !rateGainPayload.PropertyId && !payload.Geofilter) {
-            console.warn("[RateGain] Skipping BestProperties request: Missing destinationCode and PropertyId");
-            return {
-                header: { success: true },
-                body: [],
-                description: "Skipped: No filter provided"
-            };
-        }
         if (payload.CountryCode || payload.countryCode) {
             rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
         }
@@ -99,19 +85,20 @@ export class RateGainApiProvider {
     async getAllProducts(payload: any) {
         const propertyId = (payload.PropertyId || payload.propertyID || payload.propertyId || "").toString().replace("RG:", "");
         const rateGainPayload: any = {
-            PropertyId: propertyId,
+            propertyID: propertyId, // v1.5.3 spec uses propertyID (capital ID)
             PropertyCode: payload.PropertyCode || payload.propertyCode,
             BrandCode: payload.BrandCode || payload.brandCode,
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
-            destinationCode: payload.destinationCode || payload.destCode,
+            CountryCode: payload.CountryCode || payload.countryCode,
+            Currency: payload.Currency || payload.currency,
             Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
                 const adultsCount = r.adults || r.Adults || 2;
                 const childrenCount = r.children || r.Children || 0;
 
                 let paxes = r.paxes || [];
                 if (childrenCount > 0 && paxes.length === 0) {
-                    const childrenAges: number[] = r.childrenAges || [];
+                    const childrenAges: number[] = r.childrenAges || r.childAges || [];
                     if (childrenAges.length > 0) {
                         paxes = childrenAges.map((age: number) => ({ type: "Child", age: age || 5 }));
                     } else {
@@ -119,24 +106,18 @@ export class RateGainApiProvider {
                     }
                 }
 
-                const room: any = {
-                    NumberOfRoom: r.NumberOfRoom || r.numberOfRoom || 1,
-                    Adults: adultsCount,
-                    Children: childrenCount,
+                return {
+                    numberOfRoom: r.numberOfRoom || r.NumberOfRoom || 1, // v1.5.3 details uses numberOfRoom
+                    adults: adultsCount, // v1.5.3 details uses adults
+                    children: childrenCount, // v1.5.3 details uses children
                     paxes: paxes,
                 };
-
-                return room;
             }),
-            Echotoken: payload.echotoken || payload.echoToken || payload.Echotoken || `echo-${Date.now()}`,
+            echoToken: payload.echoToken || payload.echotoken || payload.Echotoken || `echo-${Date.now()}`, // v1.5.3 Details uses echoToken (CamelCase)
         };
 
-        // Optional fields
-        if (payload.CountryCode || payload.countryCode) {
-            rateGainPayload.CountryCode = payload.CountryCode || payload.countryCode;
-        }
-        if (payload.Currency || payload.currency) {
-            rateGainPayload.Currency = payload.Currency || payload.currency;
+        if (payload.destinationCode || payload.destCode) {
+            rateGainPayload.destinationCode = payload.destinationCode || payload.destCode;
         }
 
         try {
@@ -145,6 +126,20 @@ export class RateGainApiProvider {
             return res.data;
         } catch (error: any) {
             console.error("[RateGain] GetProducts Error:", error.response?.status, error.response?.data?.description || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * GET /api/SmartDistribution/getSpecialRequests
+     * Returns list of predefined special requests.
+     */
+    async getSpecialRequests() {
+        try {
+            const res = await rateGainClient.get("/api/SmartDistribution/getSpecialRequests");
+            return res.data;
+        } catch (error: any) {
+            console.error("[RateGain] GetSpecialRequests Error:", error.response?.status, error.response?.data?.description || error.message);
             throw error;
         }
     }

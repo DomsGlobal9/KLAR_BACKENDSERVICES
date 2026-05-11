@@ -1,7 +1,20 @@
 import { UnifiedHotel } from "../types/unified";
 
-export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
+export interface DeduplicationMeta {
+    duplicatedCount: number;
+    byExactId: number;
+    byExactGeo: number;
+    bySimilarGeoAndName: number;
+}
+
+export function deduplicateHotels(hotels: UnifiedHotel[]): { items: UnifiedHotel[], meta: DeduplicationMeta } {
     const collapsed: UnifiedHotel[] = [];
+    const meta: DeduplicationMeta = {
+        duplicatedCount: 0,
+        byExactId: 0,
+        byExactGeo: 0,
+        bySimilarGeoAndName: 0
+    };
     
     for (const hotel of hotels) {
         let matched = false;
@@ -17,30 +30,66 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
             
             // Geo-based similarity check
             let isGeoSame = false;
+            let geoMatchReason = "";
             if (hotel.latitude && hotel.longitude && existing.latitude && existing.longitude) {
                 const latDiff = Math.abs(hotel.latitude - existing.latitude);
                 const lngDiff = Math.abs(hotel.longitude - existing.longitude);
-                // Within ~100m
-                if (latDiff < 0.001 && lngDiff < 0.001) {
+                
+                // If EXACT same coordinates (within practically zero range), assume same property
+                if (latDiff === 0 && lngDiff === 0) {
+                    isGeoSame = true;
+                    geoMatchReason = "EXACT_GEO";
+                } 
+                // Or within ~100m AND similar names
+                else if (latDiff < 0.001 && lngDiff < 0.001) {
                     isGeoSame = isNameSimilar(hotel.name, existing.name);
+                    if (isGeoSame) geoMatchReason = "SIMILAR_GEO_AND_NAME";
                 }
             }
 
+            // Senior Dev: Only merge if they come from DIFFERENT providers.
+            // As requested, we allow duplicates from the SAME provider.
+            if (hotel.source === existing.source) continue;
+
             if (isSameId || isGeoSame) {
-                // Merge: keep the cheaper one as the lead deal
+                const reason = isSameId ? "ID_MATCH" : geoMatchReason;
+                
+                console.log(`[DEDUP] 🤝 Merge Detected!`);
+                console.log(`   ├─ New:      "${hotel.name}" (${hotel.source}, ₹${hotel.price})`);
+                console.log(`   ├─ Existing: "${existing.name}" (${existing.source}, ₹${existing.price})`);
+                console.log(`   ├─ Reason:   ${reason}`);
+
                 const currentPrice = hotel.price || 0;
                 const existingPrice = existing.price || 0;
+                let winnerName = "";
 
                 if (currentPrice > 0 && (currentPrice < existingPrice || existingPrice === 0)) {
-                    // Current hotel is cheaper: keep it and attach the other as an alt deal
-                    collapsed[i] = { 
-                        ...hotel, 
-                        altDeal: { source: existing.source, price: existing.price } 
-                    } as UnifiedHotel;
-                } else if (existingPrice > 0) {
-                    // Existing is cheaper or same: stay with it and attach current as alt deal
-                    existing.altDeal = { source: hotel.source, price: hotel.price };
+                    winnerName = hotel.name;
+                    const merged = { ...hotel };
+                    if (hotel.source !== existing.source) {
+                        merged.altDeal = { source: existing.source, price: existing.price };
+                    }
+                    collapsed[i] = merged as UnifiedHotel;
+                } else {
+                    winnerName = existing.name;
+                    if (hotel.source !== existing.source) {
+                        existing.altDeal = { source: hotel.source, price: hotel.price };
+                    }
                 }
+
+                const geoInfo = isSameId ? `ID: ${hotel.hotelId}` : `Pin-to-Pin: [${hotel.latitude}, ${hotel.longitude}] vs [${existing.latitude}, ${existing.longitude}]`;
+                console.log(`   └─ UI WINNER: "${winnerName}" (Cheaper) | ${geoInfo}`);
+
+                // Tracking stats
+                meta.duplicatedCount++;
+                if (isSameId) {
+                    meta.byExactId++;
+                } else if (geoMatchReason === "EXACT_GEO") {
+                    meta.byExactGeo++;
+                } else if (geoMatchReason === "SIMILAR_GEO_AND_NAME") {
+                    meta.bySimilarGeoAndName++;
+                }
+
                 matched = true;
                 break;
             }
@@ -51,7 +100,7 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
         }
     }
 
-    return collapsed;
+    return { items: collapsed, meta };
 }
 
 /**

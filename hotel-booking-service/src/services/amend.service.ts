@@ -1,4 +1,5 @@
 import { BookingModel } from "../models/Booking.model";
+import { tripJackProvider } from "../providers/tripjack.provider";
 
 class AmendService {
     async getModificationPolicy(confirmationNumber: string) {
@@ -18,6 +19,12 @@ class AmendService {
                 details: rgPolicy
             };
         }
+
+        return {
+            allowed: false,
+            message: "No specific modification policy found. Modification may not be available for this rate."
+        };
+    }
 
     async getModificationPricing(payload: any) {
         const { confirmationNumber, checkIn, checkOut, rooms } = payload;
