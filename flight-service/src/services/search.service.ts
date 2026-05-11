@@ -11,6 +11,8 @@ import { SortOption } from "../types/sort.types";
 import { Filter, FilterStats } from "../types/filter.types";
 import { FlightFilter } from "../utils/sorter/filter.utils";
 import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
+import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
+import { MultiCityFlightFilter } from "../utils/sorter/multiFilter.utils";
 
 class SearchService {
 
@@ -214,8 +216,14 @@ class SearchService {
     //     }
     // }
 
-    async searchMulticity(payload: any) {
-
+    async searchMulticity(
+        payload: any,
+        sortOption?: SortOption,
+        legIndex?: number,
+        filters?: Filter[],
+        applyToLegs?: number[] | 'all',
+        includeStats: boolean = false
+    ) {
         const sessionId = uuidv4();
 
         const env = tripjackConfig.ENV;
@@ -234,7 +242,44 @@ class SearchService {
                 }
             );
 
-            const normalized = MultiCityNormalizer.normalize(rawResponse.data);
+            let normalized = MultiCityNormalizer.normalize(rawResponse.data);
+
+            const originalCounts = normalized.map(leg => ({
+                legIndex: leg.legIndex,
+                count: leg.flights.length
+            }));
+
+            if (filters && filters.length > 0) {
+                const validation = MultiCityFlightFilter.validateFilters(filters);
+                if (validation.isValid) {
+                    normalized = MultiCityFlightFilter.applyFiltersToMultiCityFlights(
+                        normalized,
+                        filters,
+                        applyToLegs || 'all'
+                    );
+                } else {
+                    console.warn('Invalid filters:', validation.errors);
+                }
+            }
+
+            if (sortOption && MulticityFlightSorter.isValidSortField(sortOption.field)) {
+                if (legIndex !== undefined && MulticityFlightSorter.isValidLegIndex(legIndex, normalized.length)) {
+                    normalized = MulticityFlightSorter.sortSpecificLeg(normalized, sortOption, legIndex);
+                } else if (legIndex === undefined) {
+                    normalized = MulticityFlightSorter.sortMultiCityFlights(normalized, sortOption);
+                }
+            }
+
+            let stats: any = undefined;
+            if (includeStats) {
+                stats = MultiCityFlightFilter.getMultiCityFilterStats(normalized);
+                originalCounts.forEach(original => {
+                    if (stats[original.legIndex]) {
+                        stats[original.legIndex].totalFlights = original.count;
+                        stats[original.legIndex].filteredFlights = normalized[original.legIndex]?.flights.length || 0;
+                    }
+                });
+            }
 
             await RedisCacheService.set(
                 sessionId,
@@ -244,10 +289,16 @@ class SearchService {
                 1800
             );
 
-            return {
+            const response: any = {
                 sessionId,
                 flights: normalized
             };
+
+            if (stats) {
+                response.stats = stats;
+            }
+
+            return response;
 
         } catch (error: any) {
             console.error("MultiCity Search ERROR >>>", {
@@ -259,6 +310,52 @@ class SearchService {
             throw error;
         }
     }
+
+    // async searchMulticity(payload: any) {
+
+    //     const sessionId = uuidv4();
+
+    //     const env = tripjackConfig.ENV;
+    //     const config = TRIPJACK_URLS[env];
+    //     const url = `${config.BASE_URL}${config.SEARCH}`;
+
+    //     try {
+    //         const rawResponse = await axios.post(
+    //             url,
+    //             { searchQuery: payload },
+    //             {
+    //                 headers: {
+    //                     "Content-Type": "application/json",
+    //                     apikey: tripjackConfig.API_KEY,
+    //                 },
+    //             }
+    //         );
+
+    //         const normalized = MultiCityNormalizer.normalize(rawResponse.data);
+
+    //         await RedisCacheService.set(
+    //             sessionId,
+    //             {
+    //                 raw: rawResponse?.data?.searchResult?.tripInfos,
+    //             },
+    //             1800
+    //         );
+
+    //         return {
+    //             sessionId,
+    //             flights: normalized
+    //         };
+
+    //     } catch (error: any) {
+    //         console.error("MultiCity Search ERROR >>>", {
+    //             status: error.response?.status,
+    //             data: JSON.stringify(error.response?.data, null, 2),
+    //             message: error.message
+    //         });
+
+    //         throw error;
+    //     }
+    // }
 }
 
 export default new SearchService();

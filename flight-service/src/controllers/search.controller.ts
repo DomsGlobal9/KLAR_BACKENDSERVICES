@@ -230,6 +230,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
 //     }
 // };
 
+
 export const searchMulticityController = async (req: Request, res: Response) => {
     try {
         const validationResult = FlightSearchValidator.validate(req.body);
@@ -249,13 +250,35 @@ export const searchMulticityController = async (req: Request, res: Response) => 
             });
         }
 
-        const data = await searchService.searchMulticity(req.body);
+        // Extract sort parameters from query string
+        const sortField = req.query.sortBy as SortField;
+        const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
+        const legIndex = req.query.legIndex ? parseInt(req.query.legIndex as string) : undefined;
 
-        return res.status(200).json({
+        let sortOption: SortOption | undefined;
+        if (sortField && FlightSorter.isValidSortField(sortField)) {
+            sortOption = {
+                field: sortField,
+                order: sortOrder
+            };
+        }
+
+        const data = await searchService.searchMulticity(req.body, sortOption, legIndex);
+
+        const response: any = {
             success: true,
             data,
             warnings: validationResult.warnings,
-        });
+        };
+
+        if (sortOption) {
+            response.sortApplied = {
+                ...sortOption,
+                legIndex: legIndex !== undefined ? legIndex : 'all'
+            };
+        }
+
+        return res.status(200).json(response);
 
     } catch (error: any) {
         console.error("Multicity search error:", error?.response?.data || error.message);
@@ -266,3 +289,41 @@ export const searchMulticityController = async (req: Request, res: Response) => 
         });
     }
 };
+
+
+// export const searchMulticityController = async (req: Request, res: Response) => {
+//     try {
+//         const validationResult = FlightSearchValidator.validate(req.body);
+
+//         if (!validationResult.isValid) {
+//             return res.status(400).json({
+//                 success: false,
+//                 errors: validationResult.errors,
+//                 warnings: validationResult.warnings,
+//             });
+//         }
+
+//         if (validationResult.searchType !== "MULTICITY") {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Only multicity search allowed in this endpoint",
+//             });
+//         }
+
+//         const data = await searchService.searchMulticity(req.body);
+
+//         return res.status(200).json({
+//             success: true,
+//             data,
+//             warnings: validationResult.warnings,
+//         });
+
+//     } catch (error: any) {
+//         console.error("Multicity search error:", error?.response?.data || error.message);
+
+//         return res.status(500).json({
+//             success: false,
+//             message: "Multicity search failed",
+//         });
+//     }
+// };
