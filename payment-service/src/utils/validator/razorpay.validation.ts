@@ -14,8 +14,8 @@ export const validateCreateOrder = (body: any): string | null => {
     if (typeof body.amount !== 'number' || body.amount <= 0) {
         return 'amount must be a positive number';
     }
-    if (body.amount < 100) {
-        return 'minimum amount is ₹100';
+    if (body.amount < 1) {
+        return 'minimum amount is ₹1';
     }
     if (body.amount > 1000000) {
         return 'maximum amount is ₹10,00,000';
