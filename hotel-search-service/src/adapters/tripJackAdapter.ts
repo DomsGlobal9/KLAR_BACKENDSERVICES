@@ -47,31 +47,31 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     // Fetching 50 hotels takes ~3-5 seconds.
     const targetCount = 50;
 
-    const CHUNK_SIZE = 10; // Smaller chunks are less likely to timeout
+    const CHUNK_SIZE = 10; // Safer for Sandbox
     const chunks: string[][] = [];
     for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
         chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
 
-    // Since batchSize is 5 and CHUNK_SIZE is 10, we consume 5 chunks per page (50 items)
-    const batchSize = 5;
-    let currentIdx = (page - 1) * batchSize; // Start at the current page's index
+    const batchSize = 5; // Fetch 5 chunks (50 IDs) per page
+    let currentIdx = (page - 1) * batchSize;
 
     try {
         let collectedHotels: any[] = [];
-        console.log(`[TripJack] Fast Scavenging Page ${page}: Target ${targetCount} using chunks of ${CHUNK_SIZE}`);
+        const startId = currentIdx * CHUNK_SIZE;
+        const endId = Math.min(startId + (batchSize * CHUNK_SIZE), hids.length);
+        console.log(`[TripJack] Pagination: Page ${page} processing HIDs index ${startId} to ${endId}`);
 
-        // Limit the maximum number of batches to prevent infinite scavenging (e.g. searching 11,000 hotels taking 113s)
-        const maxBatches = 4; // Scan at most 4 batches * 50 hotels = 200 hotels per request
-        let batchesProcessed = 0;
+        const nationalityId = await toTjNationality(req.countryCode ?? "IN");
+        const fetchStartTime = Date.now();
 
-        // Increase parallelism to fetch the target in a single sweep
-        while (collectedHotels.length < targetCount && currentIdx < chunks.length && batchesProcessed < maxBatches) {
-            batchesProcessed++;
-            // More parallel requests
-            const batch = chunks.slice(currentIdx, currentIdx + batchSize);
+        // Fetch chunks sequentially to avoid 403 and ensure high yield
+        for (let i = 0; i < batchSize; i++) {
+            const chunkIdx = currentIdx + i;
+            if (chunkIdx >= chunks.length) break;
 
-            const promises = batch.map(async (chunk) => {
+            const chunk = chunks[chunkIdx];
+            try {
                 const payload = {
                     checkIn: req.checkin,
                     checkOut: req.checkout,
@@ -81,34 +81,21 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         childAge: r.childAges?.length ? r.childAges : undefined,
                     })),
                     currency: req.currency ?? "INR",
-                    nationality: await toTjNationality(req.countryCode ?? "IN"),
+                    nationality: nationalityId,
                     hids: chunk.map(id => parseInt(id)),
                     correlationId,
                 };
-                return tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 30000 }) // Higher timeout for slow sandbox
-                    .then(res => ({ success: true, hotels: res.data.hotels || [] }))
-                    .catch(err => {
-                        console.error(`[TripJack] Chunk failed:`, err.message);
-                        return { success: false };
-                    });
-            });
 
-
-            const results = await Promise.all(promises);
-            let anySuccess = false;
-            for (const r of results) {
-                if (r.success) {
-                    collectedHotels.push(...(r as any).hotels);
-                    anySuccess = true;
-                }
+                const res = await tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 30000 });
+                const found = res.data.hotels || [];
+                collectedHotels.push(...found);
+            } catch (err: any) {
+                console.error(`[TripJack] Chunk Fetch Error:`, err.message);
             }
-
-            if (!anySuccess && currentIdx > 0) break; // Stop if a whole batch fails
-            currentIdx += batchSize;
-
-            // If we have at least some hotels, return early to keep it "fast" for the user
-            if (collectedHotels.length >= (targetCount / 2)) break;
         }
+
+        collectedHotels = collectedHotels.slice(0, targetCount);
+        console.log(`[TripJack] Parallel Fetch Complete in ${Date.now() - fetchStartTime}ms. Found ${collectedHotels.length} hotels.`);
 
         const finalHotels = collectedHotels.slice(0, targetCount);
         console.log(`[TripJack] Fast Return: Returning ${finalHotels.length} hotels.`);
@@ -184,7 +171,8 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         currency: opt?.pricing?.currency ?? "INR",
         mealBasis: opt?.mealBasis,
         isRefundable: opt?.cancellation?.isRefundable,
-        onHoldAllowed: !!(opt?.onHoldAllowed || opt?.onholdAllowed),
+        onHoldAllowed: opt?.onHoldAllowed ?? opt?.cancellation?.onHoldAllowed ?? (opt?.cancellation?.isRefundable ?? false),
+        holdConfirm: opt?.holdConfirm ?? opt?.cancellation?.holdConfirm ?? (opt?.cancellation?.isRefundable ?? false),
         amenities: h.amenities || [],
         propertyCode: hotelId.toString(),
         brandCode: "",

@@ -42,6 +42,8 @@ export interface IBooking extends Document {
     checkIn: Date;
     checkOut: Date;
     totalAmount: number;
+    netAmount?: number;
+    markupAmount?: number;
     currencyCode: string;
     guestName?: string;
     agentId?: string;
@@ -115,6 +117,8 @@ const bookingSchema = new Schema<IBooking>(
         checkOut: { type: Date, required: true },
 
         totalAmount: { type: Number, required: true },
+        netAmount: { type: Number },     // The original API price
+        markupAmount: { type: Number },  // Klar's earnings
         currencyCode: { type: String, required: true },
 
         guestName: { type: String },

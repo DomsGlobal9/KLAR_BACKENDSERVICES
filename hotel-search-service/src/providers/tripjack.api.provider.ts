@@ -6,8 +6,8 @@ import { NationalityModel } from "../models/Nationality.model";
 // Fallback map if DB is empty
 const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
     IN: "106", US: "232", GB: "235", AE: "231", SG: "200",
-    MY: "131", AU: "14",  CA: "40",  DE: "83",  FR: "76",
-    JP: "112", CN: "45",  NZ: "157", ZA: "204",
+    MY: "131", AU: "14", CA: "40", DE: "83", FR: "76",
+    JP: "112", CN: "45", NZ: "157", ZA: "204",
 };
 
 async function toTjNationality(iso: string): Promise<string> {
@@ -61,23 +61,23 @@ export class TripJackApiProvider {
             correlationId,
             hid: hidValue,
             hotelId: hidValue,
-            checkIn:  payload.checkin  || payload.checkIn,
+            checkIn: payload.checkin || payload.checkIn,
             checkOut: payload.checkout || payload.checkOut,
             rooms: (payload.Rooms || payload.rooms || []).map((r: any) => ({
-                adults:   r.Adults   || r.adults   || 2,
+                adults: r.Adults || r.adults || 2,
                 children: (r.Children || r.children) ? Number(r.Children || r.children) : undefined,
-                childAge: (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age) || []).length
-                    ? (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age))
+                childAge: (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []).length
+                    ? (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age))
                     : undefined,
             })),
-            currency:    payload.Currency    || payload.currency    || "INR",
+            currency: payload.Currency || payload.currency || "INR",
             nationality: await toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
         };
 
 
         try {
             console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
-            
+
             // Call both APIs in parallel
             const [staticRes, pricingRes] = await Promise.allSettled([
                 tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue }),
@@ -93,18 +93,18 @@ export class TripJackApiProvider {
             }
 
             const pricingData = pricingRes.value.data;
-            const staticData  = staticRes.status === "fulfilled" ? staticRes.value.data : null;
+            const staticData = staticRes.status === "fulfilled" ? staticRes.value.data : null;
 
             console.log(`[DEBUG] TripJack Pricing Data for ${rawId}:`, JSON.stringify(pricingData, null, 1));
             if (staticData) console.log(`[DEBUG] TripJack Static Data for ${rawId}:`, JSON.stringify(staticData, null, 1));
             const reviewHash: string = pricingData.reviewHash || "";
 
             // Merge static info if available
-            const hotelName:     string   = pricingData.hotelName || staticData?.name || "";
-            const hotelAmenities: string[] = staticData?.amenities 
+            const hotelName: string = pricingData.hotelName || staticData?.name || "";
+            const hotelAmenities: string[] = staticData?.amenities
                 ? Object.values(staticData.amenities).map((a: any) => a.name)
                 : (pricingData.amenities || []);
-            
+
             const hotelImages: string[] = staticData?.images
                 ? staticData.images.map((img: any) => {
                     const links = img.links || {};
@@ -143,44 +143,45 @@ export class TripJackApiProvider {
                 }
 
                 return {
-                    id:          opt.optionId || `${payload.propertyId}-${idx}`,
-                    optionId:    opt.optionId,
-                    rateKey:     opt.optionId,
+                    id: opt.optionId || `${payload.propertyId}-${idx}`,
+                    optionId: opt.optionId,
+                    rateKey: opt.optionId,
                     RoomSelectionKey: opt.optionId,
                     reviewHash,
                     correlationId,
-                    hid:         rawId,
+                    hid: rawId,
 
-                    name:       (opt.roomInfo?.[0]?.name) || opt.roomName || `Option ${idx + 1}`,
+                    name: (opt.roomInfo?.[0]?.name) || opt.roomName || `Option ${idx + 1}`,
                     optionType: opt.optionType,
-                    roomInfo:   opt.roomInfo || [],
+                    roomInfo: opt.roomInfo || [],
                     inclusions: opt.inclusions || [],
-                    mealBasis:  opt.mealBasis || opt.boardName,
+                    mealBasis: opt.mealBasis || opt.boardName,
                     bookingNotes: opt.bookingNotes || null,
 
-                    price:           opt.pricing?.totalPrice,
-                    netPrice:        opt.pricing?.basePrice,
-                    taxes:           opt.pricing?.taxes,
-                    managementFee:   opt.pricing?.mf,
+                    price: opt.pricing?.totalPrice,
+                    netPrice: opt.pricing?.basePrice,
+                    taxes: opt.pricing?.taxes,
+                    managementFee: opt.pricing?.mf,
                     managementFeeTax: opt.pricing?.mft,
-                    pricing:         opt.pricing, // Pass the whole object for frontend breakup
-                    strikethrough:   opt.pricing?.strikethrough,
-                    currency:        opt.pricing?.currency,
+                    pricing: opt.pricing, // Pass the whole object for frontend breakup
+                    strikethrough: opt.pricing?.strikethrough,
+                    currency: opt.pricing?.currency,
 
-                    commercialType:   opt.commercial?.type,
-                    commission:       opt.commercial?.commission,
+                    commercialType: opt.commercial?.type,
+                    commission: opt.commercial?.commission,
 
-                    panRequired:      opt.compliance?.panRequired      ?? false,
+                    panRequired: opt.compliance?.panRequired ?? false,
                     passportRequired: opt.compliance?.passportRequired ?? false,
-                    gstType:          opt.compliance?.gstType,
+                    gstType: opt.compliance?.gstType,
 
-                    onHoldAllowed:       !!(opt.onHoldAllowed || opt.onholdAllowed),
-                    isRefundable:        opt.cancellation?.isRefundable,
+                    onHoldAllowed: opt.onHoldAllowed ?? opt.cancellation?.onHoldAllowed ?? (opt.cancellation?.isRefundable ?? false),
+                    holdConfirm: opt.holdConfirm ?? opt.cancellation?.holdConfirm ?? (opt.cancellation?.isRefundable ?? false),
+                    isRefundable: opt.cancellation?.isRefundable,
                     cancellationPolicies: opt.cancellation?.penalties || [],
 
                     amenities: optionAmenities,
                     hotelFacility: optionAmenities.map(name => ({ facilityName: name })),
-                    images:    roomImages,
+                    images: roomImages,
                     checkInTime,
                     checkOutTime,
                     rawOption: opt,
@@ -207,15 +208,15 @@ export class TripJackApiProvider {
                 statusCode: 200,
                 description: "Success",
                 body: {
-                    hotelId:    payload.propertyId,
-                    hid:        rawId,
-                    name:       hotelName,
+                    hotelId: payload.propertyId,
+                    hid: rawId,
+                    name: hotelName,
                     address,
                     city,
                     starRating,
                     description,
-                    images:     hotelImages,
-                    amenities:  hotelAmenities,
+                    images: hotelImages,
+                    amenities: hotelAmenities,
                     hotelFacility,
                     checkInTime,
                     checkOutTime,

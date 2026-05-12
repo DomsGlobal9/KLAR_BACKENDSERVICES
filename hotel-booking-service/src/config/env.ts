@@ -17,6 +17,8 @@ export const env = {
         apiKey: process.env.TRIPJACK_API_KEY!,
         agencyId: process.env.TRIPJACK_AGENCY_ID!,
     },
+
+    authServiceUrl: process.env.AUTH_SERVICE_URL || "http://localhost:5010",
 };
 
 if (!env.rateGain.baseUrl) {

@@ -98,7 +98,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     }
 
     return {
-      hotels: allHotels,
+      hotels: allHotels.sort((a, b) => a.hotelId.localeCompare(b.hotelId)),
       total: Math.max(allHotels.length, maxTotal)
     };
   } catch (error: any) {

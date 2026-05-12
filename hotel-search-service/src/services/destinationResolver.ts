@@ -209,6 +209,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
             }
         })
             .select("tjHotelId countryName")
+            .sort({ tjHotelId: 1 }) // STABLE SORT for pagination consistency
             .lean();
 
         // Sanity Check: If searching for India but resolved to Germany (or vice versa), filter out
@@ -220,7 +221,8 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
             );
         }
 
-        return [...new Set(hotels.map((h) => h.tjHotelId))];
+        const uniqueHids = [...new Set(hotels.map((h) => h.tjHotelId))];
+        return uniqueHids.sort(); // STABLE SORT: Ensure chunks are identical across requests
     }
 
     // 2. City/Hotel Name Search (Fallback if no Geo available)
@@ -256,7 +258,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
     const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId).filter(Boolean))];
     console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels`);
 
-    return uniqueHids;
+    return uniqueHids.sort(); // STABLE SORT: Essential for chunk-based pagination
 }
 
 
