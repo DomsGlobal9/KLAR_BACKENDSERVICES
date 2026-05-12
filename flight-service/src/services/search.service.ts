@@ -6,7 +6,7 @@ import { OneWayNormalizer } from "../normalizers/oneway.normalizer";
 import RedisCacheService from "../cache/redisCache.service";
 import { ReturnNormalizer } from "../normalizers/return.normalizer";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
-import { FlightSorter } from "../utils/sorter/sort.utils";
+import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
 import { SortOption } from "../types/sort.types";
 import { Filter, FilterStats } from "../types/filter.types";
 import { FlightFilter } from "../utils/sorter/filter.utils";
@@ -53,8 +53,8 @@ class SearchService {
                 }
             }
 
-            if (sortOption && FlightSorter.isValidSortField(sortOption.field)) {
-                normalized = FlightSorter.sortFlights(normalized, sortOption);
+            if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
+                normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
             }
 
             let stats: FilterStats | undefined;
