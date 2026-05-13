@@ -163,7 +163,6 @@ export class TripJackApiProvider {
 
         const tjPayload: any = {
             bookingId,
-            propertyId: (payload.propertyId || payload.hid || "").toString().replace("TJ:", "").replace("RG:", ""),
             type: "HOTEL",
             roomTravellerInfo: mappedRoomTravellerInfo,
             deliveryInfo: {
@@ -185,10 +184,14 @@ export class TripJackApiProvider {
             console.log(`[TripJack] Book Response (${bookingId}):`, JSON.stringify(data, null, 2));
 
             if (data?.status?.success === false) {
+                let errDesc = data.errors?.[0]?.message || data.status?.description || "Booking Failed";
+                if (errDesc.toLowerCase().includes("insufficient balance")) {
+                    errDesc = "TripJack Provider Wallet Insufficient Balance: Your upstream B2B API account on TripJack lacks sufficient deposit/credit limit to complete this instant booking.";
+                }
                 return {
                     status: false,
                     statusCode: 400,
-                    description: data.errors?.[0]?.message || data.status?.description || "Booking Failed",
+                    description: errDesc,
                     body: data
                 };
             }
@@ -203,10 +206,20 @@ export class TripJackApiProvider {
         } catch (error: any) {
             const errorData = error.response?.data || { message: error.message };
             console.error(`[TripJack] Book API Error (${bookingId}):`, JSON.stringify(errorData, null, 2));
+            let errorMessage = errorData?.errors?.[0]?.message || 
+                               errorData?.status?.description || 
+                               errorData?.description || 
+                               errorData?.message || 
+                               (typeof errorData === 'string' ? errorData : "Request failed");
+            
+            if (errorMessage.toLowerCase().includes("insufficient balance")) {
+                errorMessage = "TripJack Provider Wallet Insufficient Balance: Your upstream B2B API account on TripJack lacks sufficient deposit/credit limit to complete this instant booking.";
+            }
+
             return {
                 status: false,
                 statusCode: error.response?.status || 500,
-                description: errorData.description || errorData.message || "Request failed",
+                description: errorMessage,
                 body: errorData
             };
         }

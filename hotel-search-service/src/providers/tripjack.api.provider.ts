@@ -2,6 +2,7 @@ import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 
 import { NationalityModel } from "../models/Nationality.model";
+import { HotelModel } from "../models/Hotel.model";
 
 // Fallback map if DB is empty
 const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
@@ -78,14 +79,24 @@ export class TripJackApiProvider {
         try {
             console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
 
+            // Check local DB first for instant static metadata fallback
+            const localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
+
+            // Set a short timeout (2500ms) on static-detail so it never blocks pricing display
+            const staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue });
+            const fastStaticPromise = Promise.race([
+                staticDetailPromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Static detail fetch timeout")), 2500))
+            ]);
+
             // Call both APIs in parallel
             const [staticRes, pricingRes] = await Promise.allSettled([
-                tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue }),
+                fastStaticPromise,
                 tripJackClient.post("/hms/v3/hotel/pricing", tjPayload)
             ]);
 
             if (staticRes.status === "rejected") {
-                console.error(`[TripJack] Static Detail Failed for ${rawId}:`, staticRes.reason?.message, staticRes.reason?.response?.data);
+                console.warn(`[TripJack] Static Detail timed out/failed for ${rawId}, using local cache fallback.`);
             }
             if (pricingRes.status === "rejected") {
                 console.error(`[TripJack] Pricing Request Failed for ${rawId}:`, pricingRes.reason?.message, pricingRes.reason?.response?.data);
@@ -93,14 +104,14 @@ export class TripJackApiProvider {
             }
 
             const pricingData = pricingRes.value.data;
-            const staticData = staticRes.status === "fulfilled" ? staticRes.value.data : null;
+            const staticData = staticRes.status === "fulfilled" ? (staticRes.value as any).data : null;
 
             console.log(`[DEBUG] TripJack Pricing Data for ${rawId}:`, JSON.stringify(pricingData, null, 1));
             if (staticData) console.log(`[DEBUG] TripJack Static Data for ${rawId}:`, JSON.stringify(staticData, null, 1));
             const reviewHash: string = pricingData.reviewHash || "";
 
-            // Merge static info if available
-            const hotelName: string = pricingData.hotelName || staticData?.name || "";
+            // Merge static info if available or use local cache fallback
+            const hotelName: string = pricingData.hotelName || staticData?.name || localHotel?.name || "";
             const hotelAmenities: string[] = staticData?.amenities
                 ? Object.values(staticData.amenities).map((a: any) => a.name)
                 : (pricingData.amenities || []);
@@ -111,12 +122,12 @@ export class TripJackApiProvider {
                     const firstLink = Object.values(links)[0] as any;
                     return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
                 }).filter(Boolean)
-                : (Array.isArray(pricingData.images) ? pricingData.images : (pricingData.img ? [pricingData.img] : []));
+                : (Array.isArray(pricingData.images) && pricingData.images.length ? pricingData.images : (pricingData.img ? [pricingData.img] : (localHotel?.images || [])));
 
             const description = staticData?.descriptions?.default || staticData?.desc || pricingData.desc || "";
-            const address = staticData?.locale?.address?.fulladdr || pricingData.address || "";
-            const city = staticData?.locale?.address?.city || pricingData.city || "";
-            const starRating = staticData?.star_rating ? parseInt(staticData.star_rating) : (pricingData.star_rating ? parseInt(pricingData.star_rating) : undefined);
+            const address = staticData?.locale?.address?.fulladdr || pricingData.address || localHotel?.address || "";
+            const city = staticData?.locale?.address?.city || pricingData.city || localHotel?.cityName || "";
+            const starRating = staticData?.star_rating ? parseInt(staticData.star_rating) : (pricingData.star_rating ? parseInt(pricingData.star_rating) : localHotel?.starRating);
             const checkInTime = staticData?.hotelInfo?.checkInTime || staticData?.hotelInfo?.checkIn || staticData?.checkInTime || pricingData?.checkInTime || "";
             const checkOutTime = staticData?.hotelInfo?.checkOutTime || staticData?.hotelInfo?.checkOut || staticData?.checkOutTime || pricingData?.checkOutTime || "";
 

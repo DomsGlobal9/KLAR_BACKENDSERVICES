@@ -97,7 +97,7 @@ const bookingSchema = new Schema<IBooking>(
         },
         reservationId: { type: String, required: true },
         propertyId: { type: String, required: true },
-        propertyCode: { type: String, required: true },
+        propertyCode: { type: String, required: false },
 
         provider: {
             type: String,

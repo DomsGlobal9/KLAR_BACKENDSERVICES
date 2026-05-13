@@ -92,7 +92,7 @@ export class HotelsService {
         // Senior Dev: If we are on Page 1 and have fewer than 10 results but provider says more, 
         // we should still respect the provider's total for pagination to work, 
         // but only if the provider actually returned something.
-        const totalToUI = Math.max(rgTotal, tjTotal, deduplicatedResults.length);
+        const totalToUI = Math.max(rgTotal + tjTotal, deduplicatedResults.length);
 
         const totalDuration = Date.now() - totalStartTime;
 

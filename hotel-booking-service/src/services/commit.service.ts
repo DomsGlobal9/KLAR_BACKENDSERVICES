@@ -95,13 +95,19 @@ class CommitService {
         let bookingId = payload.bookingId;
 
         try {
-            // Only call precheck if optionId and reviewHash are provided, otherwise trust the payload price for committing the already-reviewed booking
+            // If the frontend already consumed the reviewHash to lock the bookingId, calling precheck again might fail.
+            // Catch any review hash expired / 15 mins error gracefully and fall back to the existing locked bookingId and net price.
             if (payload.optionId && payload.reviewHash) {
-                const precheckRes = await tripJackProvider.precheck(payload);
-                if (!precheckRes.status) throw new Error(precheckRes.description || "Pre-booking price verification failed.");
-                
-                bookingId = precheckRes.bookingId || bookingId;
-                netPrice = precheckRes.body?.option?.pricing?.totalPrice || precheckRes.body?.totalNet || 0;
+                try {
+                    const precheckRes = await tripJackProvider.precheck(payload);
+                    if (precheckRes.status) {
+                        bookingId = precheckRes.bookingId || bookingId;
+                        netPrice = precheckRes.body?.option?.pricing?.totalPrice || precheckRes.body?.totalNet || 0;
+                    }
+                } catch (precheckErr: any) {
+                    console.warn(`⚠️ [TripJack] Precheck re-verification failed/consumed, trusting frontend locked bookingId: ${bookingId}. Error:`, precheckErr.message || JSON.stringify(precheckErr?.response?.data || {}));
+                    if (!bookingId) throw precheckErr; // Throw only if we don't have a valid bookingId to fall back to
+                }
             }
             
             if (!netPrice) {
@@ -153,6 +159,7 @@ class CommitService {
                 confirmationNumber: tjResponse.bookingId || bookingId,
                 reservationId: tjResponse.bookingId || bookingId,
                 propertyId: payload.propertyId || "TJ-PROP",
+                propertyCode: payload.propertyCode || payload.propertyId || "TJ-PROP",
                 provider: BookingProvider.TRIPJACK,
                 status: BookingStatus.PENDING,
                 checkIn: payload.checkIn ? new Date(payload.checkIn) : new Date(),
@@ -164,6 +171,12 @@ class CommitService {
                 guestName: `${payload.roomTravellerInfo?.[0]?.travellerInfo?.[0]?.fN || ""} ${payload.roomTravellerInfo?.[0]?.travellerInfo?.[0]?.lN || ""}`.trim(),
                 agentId,
                 hotelName: payload.hotelName,
+                hotelImage: payload.hotelImage || payload.images?.[0] || "",
+                hotelAddress: payload.hotelAddress || "",
+                city: payload.city || "",
+                starRating: payload.starRating ? Number(payload.starRating) : undefined,
+                amenities: payload.amenities || [],
+                images: payload.images || [],
                 tripJackRequest: tjPayload,
                 tripJackResponse: tjResponse,
             });
@@ -228,6 +241,7 @@ class CommitService {
                 confirmationNumber: rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
                 reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
                 propertyId: payload.BookReservation?.propertyID || "RG-PROP",
+                propertyCode: payload.BookReservation?.PropertyCode || payload.BookReservation?.propertyCode || payload.propertyCode || payload.BookReservation?.propertyID || "RG-PROP",
                 provider: BookingProvider.RATEGAIN,
                 status: BookingStatus.CONFIRMED,
                 checkIn: new Date(payload.BookReservation?.checkin),
