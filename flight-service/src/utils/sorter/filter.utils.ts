@@ -93,7 +93,14 @@ export class FlightFilter {
      */
     private static filterByStops(flight: FlightSegment, stops: number[]): boolean {
         if (!stops || stops.length === 0) return true;
-        return stops.includes(flight.stops);
+
+        return stops.some(stop => {
+            if (stop === 2) {
+                return flight.stops >= 2;
+            }
+
+            return flight.stops === stop;
+        });
     }
 
     /**

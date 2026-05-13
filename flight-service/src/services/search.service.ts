@@ -118,6 +118,7 @@ class SearchService {
 
             let normalized = ReturnNormalizer.transform(rawResponse);
 
+
             const originalOnwardCount = normalized.onward.length;
             const originalReturnCount = normalized.return.length;
 

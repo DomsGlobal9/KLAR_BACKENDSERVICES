@@ -134,7 +134,6 @@ export const searchOneWayController = async (req: Request, res: Response) => {
 
 export const searchReturnController = async (req: Request, res: Response) => {
     try {
-        console.log("The body we get for RETURN\n", JSON.stringify(req.body, null, 2));
         const validationResult = FlightSearchValidator.validate(req.body);
 
         if (!validationResult.isValid) {
