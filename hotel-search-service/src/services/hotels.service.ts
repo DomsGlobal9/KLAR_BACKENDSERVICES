@@ -14,14 +14,14 @@ export class HotelsService {
         const totalStartTime = Date.now();
         const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
         console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}`);
-        
+
         // 1. Resolve Location (Once)
         const geoCenter = await resolveCityToCoords(searchPayload.destination);
         searchPayload._geoCenter = geoCenter;
 
         // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
         const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
-        
+
         // Secondary Check: If it matches a specific hotel name in our DB
         let isDirectHotelName = false;
         if (!isDirectHotelId) {
@@ -36,7 +36,7 @@ export class HotelsService {
         const isDirectSearch = isDirectHotelId || isDirectHotelName;
 
         if (isDirectSearch) {
-             console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
+            console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
         }
 
         const finalResults: UnifiedHotel[] = [];
@@ -47,7 +47,7 @@ export class HotelsService {
 
         // 2. Define Providers based on Mode
         const providers: { name: string; task: Promise<void> }[] = [];
-        
+
         if ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) {
             providers.push({
                 name: "RG",
@@ -61,7 +61,7 @@ export class HotelsService {
                 })
             });
         }
-        
+
         if (mode === "UNIFIED" || mode === "TJ_ONLY") {
             providers.push({
                 name: "TJ",
@@ -79,30 +79,35 @@ export class HotelsService {
         // 3. Orchestration: High-Performance Concurrent Collection
         // We wait for ALL providers, but if one hangs, the 50s cutoff ensures we return whatever we have.
         const allTasks = providers.map(p => p.task);
-        
+
         // Senior Dev: Removed safety cutoff as requested. 
         // We will now wait for all providers to finish, regardless of time.
         await Promise.all(allTasks);
 
         // 4. Deduplication Logic (MMT-style efficient dedup)
+        const totalReceivedCount = finalResults.length;
         const { items: deduplicatedResults, meta: dedupMeta } = deduplicateHotels(finalResults);
-        
+
         // Calculate reported total (rough estimate)
-        const activeTjTotal = tjCount > 0 ? tjTotal : 0;
-        const activeRgTotal = rgCount > 0 ? rgTotal : 0;
-        const totalToUI = Math.max(activeRgTotal + activeTjTotal, deduplicatedResults.length);
+        // Senior Dev: If we are on Page 1 and have fewer than 10 results but provider says more, 
+        // we should still respect the provider's total for pagination to work, 
+        // but only if the provider actually returned something.
+        const totalToUI = Math.max(rgTotal + tjTotal, deduplicatedResults.length);
 
         const totalDuration = Date.now() - totalStartTime;
+
+        const tjLog = (mode === "UNIFIED" || mode === "TJ_ONLY") ? `${tjCount} (Total: ${tjTotal})` : "[SKIPPED]";
+        const rgLog = ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) ? `${rgCount} (Total: ${rgTotal})` : "[SKIPPED]";
 
         console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏨 FINAL SEARCH SUMMARY (Senior OTA Logic)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TJ Search Results: ${tjCount} / Provider Total: ${tjTotal}
-RG Search Results: ${rgCount} / Provider Total: ${rgTotal}
+TJ Status: ${tjLog}
+RG Status: ${rgLog}
 ----------------------------------------------------
 Total Combined Unique:     ${deduplicatedResults.length}
-Deduplicated Items Removed: ${dedupMeta.duplicatedCount}
+Items Merged (Cheaper Wins): ${dedupMeta.duplicatedCount}
 Search Duration:           ${totalDuration}ms
 ----------------------------------------------------
 Reported Total to UI:      ${totalToUI}

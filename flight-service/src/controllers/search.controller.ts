@@ -2,9 +2,10 @@ import { Request, Response } from "express";
 import searchService from "../services/search.service";
 import FlightSearchValidator from "../utils/flightSearchValidator";
 import { SortField, SortOption, SortOrder } from "../types/sort.types";
-import { FlightSorter } from "../utils/sorter/sort.utils";
+import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
 import { Filter } from "../types/filter.types";
 import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
+import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 
 
 export const searchOneWayController = async (req: Request, res: Response) => {
@@ -30,7 +31,7 @@ export const searchOneWayController = async (req: Request, res: Response) => {
         const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
 
         let sortOption: SortOption | undefined;
-        if (sortField && FlightSorter.isValidSortField(sortField)) {
+        if (sortField && OnewayFlightSorter.isValidSortField(sortField)) {
             sortOption = {
                 field: sortField,
                 order: sortOrder
@@ -167,7 +168,90 @@ export const searchReturnController = async (req: Request, res: Response) => {
             validSortTarget = sortTarget;
         }
 
-        const data = await searchService.searchReturn(req.body, sortOption, validSortTarget);
+        // ========== ADD FILTER EXTRACTION (similar to one-way) ==========
+        const filters: Filter[] = [];
+
+        if (req.body.filters?.airlines && Array.isArray(req.body.filters.airlines)) {
+            filters.push({
+                type: 'airline',
+                values: req.body.filters.airlines
+            });
+        }
+
+        if (req.body.filters?.cabinClasses && Array.isArray(req.body.filters.cabinClasses)) {
+            filters.push({
+                type: 'cabinClass',
+                values: req.body.filters.cabinClasses
+            });
+        }
+
+        if (req.body.filters?.stops && Array.isArray(req.body.filters.stops)) {
+            filters.push({
+                type: 'stops',
+                values: req.body.filters.stops
+            });
+        }
+
+        if (req.body.filters?.priceRange) {
+            const { min, max } = req.body.filters.priceRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'priceRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        if (req.body.filters?.departureTimeRange) {
+            const { start, end } = req.body.filters.departureTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'departureTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.arrivalTimeRange) {
+            const { start, end } = req.body.filters.arrivalTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'arrivalTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.durationRange) {
+            const { min, max } = req.body.filters.durationRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'durationRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        // Extract filter target (apply filters to onward, return, or both)
+        const filterTarget = (req.body.filterTarget || 'both') as 'onward' | 'return' | 'both';
+
+        // Extract includeStats flag
+        const includeStats = req.query.includeStats === 'true';
+        // ========== END OF FILTER EXTRACTION ==========
+
+        // Pass filters to the service
+        const data = await searchService.searchReturn(
+            req.body,
+            sortOption,
+            validSortTarget,
+            filters.length > 0 ? filters : undefined,
+            filterTarget,
+            includeStats
+        );
 
         const response: any = {
             success: true,
@@ -180,6 +264,10 @@ export const searchReturnController = async (req: Request, res: Response) => {
                 ...sortOption,
                 target: validSortTarget
             };
+        }
+
+        if (filters.length > 0) {
+            response.filtersApplied = filters;
         }
 
         return res.status(200).json(response);
@@ -234,6 +322,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
 
 export const searchMulticityController = async (req: Request, res: Response) => {
     try {
+        console.log("The body we get for MULTICITY\n", JSON.stringify(req.body, null, 2));
         const validationResult = FlightSearchValidator.validate(req.body);
 
         if (!validationResult.isValid) {
@@ -257,14 +346,104 @@ export const searchMulticityController = async (req: Request, res: Response) => 
         const legIndex = req.query.legIndex ? parseInt(req.query.legIndex as string) : undefined;
 
         let sortOption: SortOption | undefined;
-        if (sortField && FlightSorter.isValidSortField(sortField)) {
+        if (sortField && MulticityFlightSorter.isValidSortField(sortField)) {
             sortOption = {
                 field: sortField,
                 order: sortOrder
             };
         }
 
-        const data = await searchService.searchMulticity(req.body, sortOption, legIndex);
+        // ========== ADD FILTER EXTRACTION (similar to one-way) ==========
+        const filters: Filter[] = [];
+
+        if (req.body.filters?.airlines && Array.isArray(req.body.filters.airlines)) {
+            filters.push({
+                type: 'airline',
+                values: req.body.filters.airlines
+            });
+        }
+
+        if (req.body.filters?.cabinClasses && Array.isArray(req.body.filters.cabinClasses)) {
+            filters.push({
+                type: 'cabinClass',
+                values: req.body.filters.cabinClasses
+            });
+        }
+
+        if (req.body.filters?.stops && Array.isArray(req.body.filters.stops)) {
+            filters.push({
+                type: 'stops',
+                values: req.body.filters.stops
+            });
+        }
+
+        if (req.body.filters?.priceRange) {
+            const { min, max } = req.body.filters.priceRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'priceRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        if (req.body.filters?.departureTimeRange) {
+            const { start, end } = req.body.filters.departureTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'departureTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.arrivalTimeRange) {
+            const { start, end } = req.body.filters.arrivalTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'arrivalTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.durationRange) {
+            const { min, max } = req.body.filters.durationRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'durationRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        // Extract which legs to apply filters to (array of leg indices or 'all')
+        let applyToLegs: number[] | 'all' = 'all';
+        if (req.body.applyToLegs) {
+            if (req.body.applyToLegs === 'all') {
+                applyToLegs = 'all';
+            } else if (Array.isArray(req.body.applyToLegs)) {
+                applyToLegs = req.body.applyToLegs;
+            }
+        }
+
+        // Extract includeStats flag
+        const includeStats = req.query.includeStats === 'true';
+        // ========== END OF FILTER EXTRACTION ==========
+
+        // Pass filters to the service
+        const data = await searchService.searchMulticity(
+            req.body,
+            sortOption,
+            legIndex,
+            filters.length > 0 ? filters : undefined,
+            applyToLegs,
+            includeStats
+        );
 
         const response: any = {
             success: true,
@@ -277,6 +456,11 @@ export const searchMulticityController = async (req: Request, res: Response) => 
                 ...sortOption,
                 legIndex: legIndex !== undefined ? legIndex : 'all'
             };
+        }
+
+        if (filters.length > 0) {
+            response.filtersApplied = filters;
+            response.applyToLegs = applyToLegs;
         }
 
         return res.status(200).json(response);

@@ -100,9 +100,32 @@ export class MultiCityFlightFilter {
     /**
      * Filter by number of stops
      */
-    private static filterByStops(flight: MultiCityFlight, stops: number[]): boolean {
+    private static filterByStops(
+        flight: MultiCityFlight,
+        stops: number[]
+    ): boolean {
+
         if (!stops || stops.length === 0) return true;
-        return stops.includes(flight.stops);
+
+        return stops.some(stop => {
+
+            // 0 stop -> exact
+            if (stop === 0) {
+                return flight.stops === 0;
+            }
+
+            // 1 stop -> exact
+            if (stop === 1) {
+                return flight.stops === 1;
+            }
+
+            // 2 stop -> 2 or more
+            if (stop === 2) {
+                return flight.stops >= 2;
+            }
+
+            return false;
+        });
     }
 
     /**

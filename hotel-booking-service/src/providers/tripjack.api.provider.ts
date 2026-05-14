@@ -100,6 +100,44 @@ export class TripJackApiProvider {
         }
     }
 
+    private static mapTripJackTravellers(roomTravellerInfo: any[]) {
+        return roomTravellerInfo?.map((room: any) => {
+            if (!room.travellerInfo) return room;
+            return {
+                travellerInfo: room.travellerInfo.map((traveller: any) => {
+                    const rawFN = (traveller.fN || traveller.firstName || "Guest").toString().replace(/[^a-zA-Z]/g, '');
+                    const rawLN = (traveller.lN || traveller.lastName || "User").toString().replace(/[^a-zA-Z]/g, '');
+                    
+                    const capsFN = rawFN.toUpperCase();
+                    const capsLN = rawLN.toUpperCase();
+                    const sentFN = rawFN.charAt(0).toUpperCase() + rawFN.slice(1).toLowerCase();
+                    const sentLN = rawLN.charAt(0).toUpperCase() + rawLN.slice(1).toLowerCase();
+
+                    const titleMap: Record<string, string> = {
+                        "MR": "Mr", "MRS": "Mrs", "MS": "Ms", "MISS": "Miss", "MASTER": "Master", "MSTR": "Master"
+                    };
+                    const inputTi = (traveller.ti || traveller.title || "Mr").replace(/\./g, '').trim().toUpperCase();
+                    const ti = titleMap[inputTi] || "Mr";
+                    const pt = (traveller.pt || traveller.paxType || "ADULT").trim().toUpperCase();
+
+                    const mappedTraveller: any = { 
+                        fN: capsFN, firstName: sentFN,
+                        lN: capsLN, lastName: sentLN,
+                        ti: ti, title: ti,
+                        pt: pt, paxType: pt
+                    };
+
+                    if (pt === "ADULT") {
+                        if (traveller.pan) mappedTraveller.pan = traveller.pan.replace(/\s+/g, '').trim().toUpperCase();
+                        if (traveller.pNum) mappedTraveller.pNum = traveller.pNum.replace(/\s+/g, '').trim().toUpperCase();
+                    }
+                    return mappedTraveller;
+                })
+            };
+        });
+    }
+
+
     /**
      * POST /oms/v3/hotel/book
      *
@@ -112,49 +150,49 @@ export class TripJackApiProvider {
      */
     async commit(payload: any) {
         const {
-            bookingId,         // from Review response — required
-            roomTravellerInfo, // [{travellerInfo:[{ti,pt,fN,lN,pan?,pNum?}]}]
-            deliveryInfo,      // {emails, contacts, code}
-            paymentInfos,      // [{amount}] — include for Instant, omit for Hold
+            bookingId,
+            type,
+            roomTravellerInfo,
+            deliveryInfo,
+            paymentInfos,
         } = payload;
 
-        if (!bookingId)        throw new Error("[TripJack Book] bookingId (from Review) is required");
-        if (!roomTravellerInfo?.length) throw new Error("[TripJack Book] roomTravellerInfo is required");
+        if (!bookingId) throw new Error("[TripJack Book] bookingId is required");
 
-        const rawId = (payload.propertyId || payload.PropertyId || payload.hid || "").toString().replace("TJ:", "").replace("RG:", "").trim();
-        
+        const mappedRoomTravellerInfo = TripJackApiProvider.mapTripJackTravellers(roomTravellerInfo);
+
         const tjPayload: any = {
             bookingId,
             type: "HOTEL",
-            hotelId: rawId ? (Number.isNaN(Number(rawId)) ? rawId : Number(rawId)) : undefined,
-            roomTravellerInfo,
+            roomTravellerInfo: mappedRoomTravellerInfo,
             deliveryInfo: {
-                emails:   deliveryInfo?.emails   || [],
+                emails: deliveryInfo?.emails || [],
                 contacts: deliveryInfo?.contacts || [],
-                code:     deliveryInfo?.code     || ["+91"],
-            },
+                code: (deliveryInfo?.code || ["+91"]).map((c: string) => c.startsWith("+") ? c : `+${c}`)
+            }
         };
 
-        // Instant booking: include paymentInfos. Hold: omit.
-        if (paymentInfos?.length) {
+        if (paymentInfos && paymentInfos.length > 0) {
             tjPayload.paymentInfos = paymentInfos;
         }
 
+        console.log(`[TripJack] Book Request (${bookingId}):`, JSON.stringify(tjPayload, null, 2));
+
         try {
-            console.log(`[TripJack] Book Request:`, JSON.stringify(tjPayload, null, 2));
             const res = await tripJackOmsClient.post("/oms/v3/hotel/book", tjPayload);
-
             const data = res.data;
+            console.log(`[TripJack] Book Response (${bookingId}):`, JSON.stringify(data, null, 2));
 
-            // Check for internal TripJack errors (False Positives)
             if (data?.status?.success === false) {
-                const errorMsg = data.errors?.[0]?.message || data.status?.description || "TripJack Book Internal Error";
-                console.error(`[TripJack] Book Internal Failure: ${errorMsg}`, JSON.stringify(data.errors));
-                throw {
-                    response: {
-                        status: 400,
-                        data: data
-                    }
+                let errDesc = data.errors?.[0]?.message || data.status?.description || "Booking Failed";
+                if (errDesc.toLowerCase().includes("insufficient balance")) {
+                    errDesc = "TripJack Provider Wallet Insufficient Balance: Your upstream B2B API account on TripJack lacks sufficient deposit/credit limit to complete this instant booking.";
+                }
+                return {
+                    status: false,
+                    statusCode: 400,
+                    description: errDesc,
+                    body: data
                 };
             }
 
@@ -162,17 +200,28 @@ export class TripJackApiProvider {
                 status: true,
                 statusCode: 200,
                 description: "TripJack Book Success",
-                // TripJack Book API returns bookingId (e.g. "TJ202487947162")
                 bookingId: data.bookingId || bookingId,
                 body: data,
             };
         } catch (error: any) {
-            const errorData = error.response?.data;
-            const errorMessage = typeof errorData === 'string' 
-                ? errorData.substring(0, 500) 
-                : JSON.stringify(errorData || {}).substring(0, 500);
-            console.error("[TripJack] Book Error:", error.response?.status, errorMessage);
-            throw error;
+            const errorData = error.response?.data || { message: error.message };
+            console.error(`[TripJack] Book API Error (${bookingId}):`, JSON.stringify(errorData, null, 2));
+            let errorMessage = errorData?.errors?.[0]?.message || 
+                               errorData?.status?.description || 
+                               errorData?.description || 
+                               errorData?.message || 
+                               (typeof errorData === 'string' ? errorData : "Request failed");
+            
+            if (errorMessage.toLowerCase().includes("insufficient balance")) {
+                errorMessage = "TripJack Provider Wallet Insufficient Balance: Your upstream B2B API account on TripJack lacks sufficient deposit/credit limit to complete this instant booking.";
+            }
+
+            return {
+                status: false,
+                statusCode: error.response?.status || 500,
+                description: errorMessage,
+                body: errorData
+            };
         }
     }
 

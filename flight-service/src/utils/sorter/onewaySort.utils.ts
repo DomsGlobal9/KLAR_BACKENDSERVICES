@@ -1,6 +1,6 @@
 import { Flight, SortField, SortOption } from "../../types/sort.types";
 
-export class FlightSorter {
+export class OnewayFlightSorter {
 
     /**
      * Main sorting function for one-way flights
