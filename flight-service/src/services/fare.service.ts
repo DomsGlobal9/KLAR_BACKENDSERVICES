@@ -33,39 +33,81 @@ class FareService {
     }
 
     async getReturnFares(sessionId: string, flightKey: string, segment: string) {
-
         const cachedData = await RedisCacheService.get(sessionId);
 
         if (!cachedData) {
             throw new Error("Session expired or invalid sessionId");
         }
 
-        if (segment !== "RETURN" && segment !== "ONWARD") {
-            return null;
+        const tripInfos = cachedData?.raw;
+
+        if (!tripInfos) {
+            throw new Error("No flight data found");
         }
 
-        const flights = cachedData?.raw?.[segment];
+        const isDomestic = tripInfos.ONWARD && tripInfos.RETURN;
+        const isInternational = tripInfos.COMBO;
 
-        if (!Array.isArray(flights) || flights.length === 0) {
-            throw new Error("No flights available for selected segment");
+        if (isDomestic) {
+            if (segment !== "RETURN" && segment !== "ONWARD") {
+                throw new Error("Invalid segment");
+            }
+
+            const flights = tripInfos[segment];
+
+            if (!Array.isArray(flights) || flights.length === 0) {
+                throw new Error("No flights available for selected segment");
+            }
+
+            const selectedFlight = flights.find((flight: any) =>
+                Array.isArray(flight?.sI) &&
+                flight.sI.map((seg: any) => seg?.id).join("-") === flightKey
+            );
+
+            if (!selectedFlight) {
+                throw new Error("Flight not found");
+            }
+
+            const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
+
+            if (!fares || fares.length === 0) {
+                throw new Error("Fare extraction failed");
+            }
+
+            return TripjackFieldMapper.map(fares[0]);
         }
 
-        const selectedFlight = flights.find((flight: any) =>
-            Array.isArray(flight?.sI) &&
-            flight.sI.map((seg: any) => seg?.id).join("-") === flightKey
-        );
+        if (isInternational) {
+            const combos = tripInfos.COMBO;
 
-        if (!selectedFlight) {
-            throw new Error("Flight not found");
+            if (!Array.isArray(combos) || combos.length === 0) {
+                throw new Error("No flights available");
+            }
+
+            const selectedCombo = combos.find((combo: any) => {
+                const segments = combo.sI || [];
+                const onwardSegments = segments.filter((seg: any) => !seg.isRs);
+                const returnSegments = segments.filter((seg: any) => seg.isRs);
+                const onwardKey = onwardSegments.map((seg: any) => seg?.id).join("-");
+                const returnKey = returnSegments.map((seg: any) => seg?.id).join("-");
+
+                return onwardKey === flightKey || returnKey === flightKey;
+            });
+
+            if (!selectedCombo) {
+                throw new Error("Flight not found");
+            }
+
+            const fares = BaseFlightNormalizer.extractFaresForCombo(selectedCombo);
+
+            if (!fares || fares.length === 0) {
+                throw new Error("Fare extraction failed");
+            }
+
+            return TripjackFieldMapper.map(fares[0]);
         }
 
-        const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
-
-        if (!fares || fares.length === 0) {
-            throw new Error("Fare extraction failed");
-        }
-
-        return TripjackFieldMapper.map(fares[0]);
+        throw new Error("Invalid flight data structure");
     }
 
     async getMultiCityFares(
@@ -105,7 +147,6 @@ class FareService {
 
         return TripjackFieldMapper.map(fares[0]);
     }
-
 
     async getFareRule(flowType: string, id: string) {
         const env = tripjackConfig.ENV;

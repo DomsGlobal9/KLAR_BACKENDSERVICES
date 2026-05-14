@@ -107,4 +107,47 @@ export class BaseFlightNormalizer {
             infantPrice: cheapestFare?.fd?.INFANT?.fC?.TF || 0
         };
     }
+
+    static extractFaresForCombo(combo: any) {
+        return [{
+            flightKey: null,
+            segments: (combo.sI || []).map((seg: any) => ({ ...seg })),
+            fares: (combo.totalPriceList || []).map((fare: any) => ({
+                ...fare,
+                fareId: fare.id,
+                fareIdentifier: fare.fareIdentifier,
+                passengerBreakup: {
+                    ADULT: fare.fd?.ADULT || null,
+                    CHILD: fare.fd?.CHILD || null,
+                    INFANT: fare.fd?.INFANT || null
+                },
+                priceSummary: {
+                    ADULT: {
+                        total: fare.fd?.ADULT?.fC?.TF,
+                        baseFare: fare.fd?.ADULT?.fC?.BF,
+                        tax: fare.fd?.ADULT?.fC?.TAF,
+                        netFare: fare.fd?.ADULT?.fC?.NF
+                    },
+                    CHILD: {
+                        total: fare.fd?.CHILD?.fC?.TF,
+                        baseFare: fare.fd?.CHILD?.fC?.BF,
+                        tax: fare.fd?.CHILD?.fC?.TAF,
+                        netFare: fare.fd?.CHILD?.fC?.NF
+                    },
+                    INFANT: {
+                        total: fare.fd?.INFANT?.fC?.TF,
+                        baseFare: fare.fd?.INFANT?.fC?.BF,
+                        tax: fare.fd?.INFANT?.fC?.TAF,
+                        netFare: fare.fd?.INFANT?.fC?.NF
+                    }
+                },
+                baggageDetails: fare.tai?.tbi || null,
+                meta: {
+                    isCreditCardApplicable: fare.icca,
+                    messages: fare.messages,
+                    msri: fare.msri
+                }
+            }))
+        }];
+    }
 }
