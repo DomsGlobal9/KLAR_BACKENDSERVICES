@@ -76,8 +76,10 @@ export interface Booking {
     | "REJECTED"
     | "NO_SHOW"
     | "VOIDED"
-    | "REISSUED";
-
+    | "REISSUED"
+    | "CANCEL_REQUESTED"  
+    | "CONFIRMED";
+    
     amendmentId?: string;
 
     createdAt?: Date;
