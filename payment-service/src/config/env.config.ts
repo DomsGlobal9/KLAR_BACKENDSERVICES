@@ -7,6 +7,10 @@ interface EnvConfig {
 
     RAZORPAY_KEY_ID: string;
     RAZORPAY_KEY_SECRET: string;
+    RAZORPAY_PROD_KEY_ID: string;
+    RAZORPAY_PROD_KEY_SECRET: string;
+    RAZORPAY_ENVIRONMENT: string;
+    RAZORPAY_WEBHOOK_SECRET?: string;
 
     CASHFREE_BASE_URL: string;
     CASHFREE_APP_ID: string;
@@ -25,6 +29,10 @@ const requiredEnvVars = [
     'NODE_ENV',
     'RAZORPAY_KEY_ID',
     'RAZORPAY_KEY_SECRET',
+    'RAZORPAY_PROD_KEY_ID',
+    'RAZORPAY_PROD_KEY_SECRET',
+    'RAZORPAY_ENVIRONMENT',
+    'RAZORPAY_WEBHOOK_SECRET',
     'CASHFREE_APP_ID',
     'CASHFREE_SECRET_KEY',
     'CASHFREE_ENVIRONMENT',
@@ -66,9 +74,14 @@ function validateEnv(): EnvConfig {
         throw new Error(`Invalid CASHFREE_ENVIRONMENT`);
     }
 
+    const razorpayEnv = process.env.RAZORPAY_ENVIRONMENT!;
+    if (!['test', 'live'].includes(razorpayEnv)) {
+        throw new Error(`RAZORPAY_ENVIRONMENT must be either 'test' or 'live'`);
+    }
 
     const corsCredentials = process.env.CORS_CREDENTIALS!;
     let corsCredentialsBoolean: boolean;
+
     if (corsCredentials.toLowerCase() === 'true') {
         corsCredentialsBoolean = true;
     } else if (corsCredentials.toLowerCase() === 'false') {
@@ -76,7 +89,6 @@ function validateEnv(): EnvConfig {
     } else {
         throw new Error('CORS_CREDENTIALS must be "true" or "false"');
     }
-
 
     const corsMaxAge = Number(process.env.CORS_MAX_AGE);
     if (isNaN(corsMaxAge)) {
@@ -92,6 +104,10 @@ function validateEnv(): EnvConfig {
 
         RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID!,
         RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET!,
+        RAZORPAY_PROD_KEY_ID: process.env.RAZORPAY_PROD_KEY_ID!,
+        RAZORPAY_PROD_KEY_SECRET: process.env.RAZORPAY_PROD_KEY_SECRET!,
+        RAZORPAY_ENVIRONMENT: process.env.RAZORPAY_ENVIRONMENT!,
+        RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET!,
 
         CASHFREE_BASE_URL: process.env.CASHFREE_BASE_URL!,
         CASHFREE_APP_ID: process.env.CASHFREE_APP_ID!,

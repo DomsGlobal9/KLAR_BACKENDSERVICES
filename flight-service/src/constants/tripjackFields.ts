@@ -48,6 +48,11 @@ export const TRIPJACK_FIELD_MAP = {
     MFT: "ManagementFeeTax",
     MF: "ManagementFee",
     OT: "OtherTaxes",
+    AGST: "AirlineGSTComponent",
+    UDF: "UserDevelopmentFee",
+    YR: "CarrierMiscFee",
+    YQ: "FuelSurcharge",
+    OC: "OtherCharges",
 
     fcs: "FareComponentsSummary",
     ARF: "AirlineRescheduleFee",
@@ -127,4 +132,6 @@ export const BOOKING_LEVEL_FIELD_MAP = {
     Email: "GSTEmail",
     Mobile: "GSTMobile",
     Address: "GSTAddress",
+
+    
 };

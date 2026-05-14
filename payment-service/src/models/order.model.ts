@@ -1,10 +1,12 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export type OrderStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED';
+export type PaymentGateway = 'cashfree' | 'razorpay';
 
 export interface IOrder extends Document {
     userId: string;
     userEmail: string;
+    mobile?: string;
     clientType: string;
     amount: number;
     currency: string;
@@ -12,8 +14,11 @@ export interface IOrder extends Document {
     orderId: string;
     cfOrderId?: string;
     paymentSessionId?: string;
-    status: OrderStatus;
     cfOrderStatus?: string;
+    paymentGateway?: PaymentGateway;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    status: OrderStatus;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -27,6 +32,10 @@ const OrderSchema: Schema = new Schema(
         userEmail: {
             type: String,
             required: true,
+        },
+        mobile: {
+            type: String,
+            required: false,
         },
         clientType: {
             type: String,
@@ -44,7 +53,7 @@ const OrderSchema: Schema = new Schema(
         environment: {
             type: String,
             required: true,
-            enum: ['sandbox', 'production'],
+            enum: ['sandbox', 'production', 'test', 'live'],
         },
         orderId: {
             type: String,
@@ -53,8 +62,24 @@ const OrderSchema: Schema = new Schema(
         },
         cfOrderId: {
             type: String,
+            sparse: true,
         },
         paymentSessionId: {
+            type: String,
+        },
+        cfOrderStatus: {
+            type: String,
+        },
+        paymentGateway: {
+            type: String,
+            enum: ['cashfree', 'razorpay'],
+            required: false,
+        },
+        razorpayOrderId: {
+            type: String,
+            sparse: true,
+        },
+        razorpayPaymentId: {
             type: String,
         },
         status: {
@@ -62,17 +87,15 @@ const OrderSchema: Schema = new Schema(
             enum: ['CREATED', 'PENDING', 'SUCCESS', 'FAILED'],
             default: 'CREATED',
         },
-        cfOrderStatus: {
-            type: String,
-        },
     },
     {
         timestamps: true,
     }
 );
 
-OrderSchema.index({ orderId: 1 });
-OrderSchema.index({ cfOrderId: 1 });
+
 OrderSchema.index({ userId: 1 });
+OrderSchema.index({ paymentGateway: 1 });
+OrderSchema.index({ status: 1 });
 
 export const OrderModel = mongoose.model<IOrder>('Order', OrderSchema);

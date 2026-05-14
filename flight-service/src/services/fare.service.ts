@@ -112,26 +112,37 @@ class FareService {
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.FARE_RULE}`;
 
-        const response = await axios.post(
-            url,
-            {
-                flowType: flowType,
-                id: id
-            },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    apikey: tripjackConfig.API_KEY,
+        try {
+            const response = await axios.post(
+                url,
+                {
+                    flowType: flowType,
+                    id: id
                 },
-                // timeout: 15000,
-            }
-        );
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        apikey: tripjackConfig.API_KEY,
+                    },
+                    // timeout: 15000,
+                }
+            );
 
-        const rawData = response.data;
+            const rawData = response.data;
 
-        const mappedData = TripjackFieldMapper.map(rawData);
+            const mappedData = TripjackFieldMapper.map(rawData);
 
-        return mappedData;
+            return mappedData;
+
+        } catch (error: any) {
+            console.error("Fare Rule ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
+            throw error;
+        }
     }
 }
 

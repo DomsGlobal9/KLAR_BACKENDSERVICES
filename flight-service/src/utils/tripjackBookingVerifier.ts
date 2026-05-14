@@ -10,6 +10,7 @@ import {
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export function validateBookingPayload(payload: FrontendBookingPayload) {
+    
     if (!payload.bookingId) throw new Error("bookingId is required");
 
     if (!PHONE_REGEX.test(payload.phone)) {
@@ -72,7 +73,7 @@ export function validateBookingPayload(payload: FrontendBookingPayload) {
         throw new Error("Infants cannot exceed adults");
     }
 
-    if (payload.gstInfo) {
+    if (payload.gstInfo?.gstNumber) {
         if (!GST_REGEX.test(payload.gstInfo.gstNumber)) {
             throw new Error("Invalid GST");
         }

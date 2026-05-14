@@ -23,11 +23,8 @@ export const contextResolver = (
         seg === ClientType.B2B2B
     );
 
-    console.log('Found client:', client);
-
     if (client) {
         req.clientType = client as ClientType;
-        console.log('Set clientType:', req.clientType);
         return next();
     }
 

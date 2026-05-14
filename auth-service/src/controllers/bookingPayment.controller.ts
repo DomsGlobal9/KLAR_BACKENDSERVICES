@@ -14,20 +14,21 @@ export class BookingPaymentController {
                 });
             }
 
-            const { bookingId, amount } = req.body;
+            const { bookingId, totalPrice } = req.body;
+            console.log("@@@@@@@@@@", {bookingId, totalPrice});
 
             if (!bookingId) {
                 throw new BadRequestError("Booking ID is required");
             }
 
-            if (!amount || amount <= 0) {
+            if (!totalPrice || totalPrice <= 0) {
                 throw new BadRequestError("Invalid amount");
             }
 
             const result = await BookingPaymentService.payForBooking(
                 new Types.ObjectId(req.user.userId),
                 bookingId,
-                amount
+                totalPrice
             );
 
             res.status(200).json({
@@ -42,7 +43,7 @@ export class BookingPaymentController {
                     isDuplicate: result.isDuplicate,
                 },
             });
-        } catch (err) {
+        } catch (err: any) {
             next(err);
         }
     }

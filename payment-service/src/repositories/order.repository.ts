@@ -41,3 +41,26 @@ export const getAllOrdersByUserId = async (userId: string, limit = 10, skip = 0)
         .limit(limit)
         .skip(skip);
 };
+
+export const getOrderByRazorpayOrderId = async (
+    razorpayOrderId: string
+) => {
+    return OrderModel.findOne({ razorpayOrderId });
+};
+
+export const getOrderByRazorpayPaymentId = async (
+    razorpayPaymentId: string
+) => {
+    return OrderModel.findOne({ razorpayPaymentId });
+};
+
+export const updateOrderByRazorpayOrderId = async (
+    razorpayOrderId: string,
+    update: Partial<IOrder>
+) => {
+    return OrderModel.findOneAndUpdate(
+        { razorpayOrderId },
+        update,
+        { new: true }
+    );
+};

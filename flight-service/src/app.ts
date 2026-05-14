@@ -1,34 +1,49 @@
 import express from "express";
 import cors from "cors";
+
 import { corsMiddleware } from "./config";
-import routes from "./routes"
+import routes from "./routes";
+
+import { initializeCrons } from "./cron";
 
 const app = express();
 
-app.use(express.json());
-app.use(cors(corsMiddleware));
+export const setupApp = () => {
 
-app.get("/", (_req, res) => {
-  res.send("Flight Service is running 🚀");
-});
+  app.use(express.json());
 
-app.use('/api/flight', routes);
+  app.use(cors(corsMiddleware));
 
-app.use((_req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
+  initializeCrons();
+
+  app.get("/", (_req, res) => {
+    res.send("Flight Service is running 🚀");
   });
-});
 
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("Global Error:", err);
+  app.use("/api/flight", routes);
 
-  res.status(500).json({
-    success: false,
-    message: "Internal Server Error",
+  app.use((_req, res) => {
+    res.status(404).json({
+      success: false,
+      message: "Route not found",
+    });
   });
-});
 
+  app.use(
+    (
+      err: any,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      console.error("Global Error:", err);
+
+      res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
+    }
+  );
+};
 
 export default app;

@@ -15,7 +15,8 @@ export class BookingPaymentRepository {
         });
     }
 
-    static async deductBalance(walletId: Types.ObjectId, amount: number) {
+    static async deductBalance(walletId: Types.ObjectId, totalPrice: number) {
+        const amount = totalPrice
         return Wallet.findOneAndUpdate(
             {
                 _id: walletId,

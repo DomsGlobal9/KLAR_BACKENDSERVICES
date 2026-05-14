@@ -4,10 +4,20 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "dev": "nodemon --watch src --exec ts-node src/index.ts",
+    "build": "rimraf dist && tsc",
+    "start": "node dist/index.js",
+    "clean": "rimraf node_modules dist",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "pm2:start": "pm2 start dist/index.js --name flight-service",
+    "pm2:stop": "pm2 stop flight-service",
+    "pm2:restart": "pm2 restart flight-service",
+    "pm2:delete": "pm2 delete flight-service",
+    "pm2:logs": "pm2 logs flight-service",
+    "pm2:status": "pm2 status",
+    "deploy": "git pull && npm install && npm run build && pm2 restart flight-service"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +39,7 @@
     "express": "^5.2.1",
     "ioredis": "^5.10.1",
     "mongoose": "^9.4.1",
+    "node-cron": "^4.2.1",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"
   }

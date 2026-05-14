@@ -15,12 +15,8 @@ export const authenticateJWT = (
     next: NextFunction
 ): Response | void => {
     try {
-        console.log("^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-        // Extract token from various possible sources
         const token = extractTokenFromRequest(req);
 
-
-        // Check if token exists
         if (!token) {
             return res.status(401).json({
                 success: false,
@@ -29,20 +25,8 @@ export const authenticateJWT = (
             });
         }
 
-        // Validate token format (basic JWT format check)
-        if (!isValidJWTFormat(token)) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid token format",
-                code: "INVALID_TOKEN_FORMAT"
-            });
-        }
-
-        // Verify the token
         const decoded = JWTUtil.getInstance().verifyAccessToken(token);
 
-
-        // Check if token payload contains required user information
         if (!decoded || !decoded.userId || !decoded.email) {
             return res.status(401).json({
                 success: false,
@@ -51,18 +35,15 @@ export const authenticateJWT = (
             });
         }
 
-        // Attach user info to request object
         req.user = decoded;
 
-        // Log authentication for debugging (optional, remove in production)
         if (process.env.NODE_ENV === 'development') {
             console.log(`User authenticated: ${decoded.userId} (${decoded.email})`);
         }
 
-        // Proceed to next middleware
         next();
     } catch (error: any) {
-        // Handle specific JWT errors
+
         if (error instanceof Error) {
             switch (error.name) {
                 case 'TokenExpiredError':
@@ -109,29 +90,26 @@ export const authenticateJWT = (
  * Priority: Cookie > Authorization Header > Query Parameter
  */
 function extractTokenFromRequest(req: Request): string | null {
-    // 1. Check cookies first (most secure for web apps)
+
     if (req.cookies?.token && typeof req.cookies.token === 'string') {
         return req.cookies.token;
     }
 
-    // 2. Check Authorization header (Bearer token)
     const authHeader = req.headers.authorization;
     if (authHeader) {
-        // Check for Bearer token format
         const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
         if (bearerMatch) {
             return bearerMatch[1];
         }
-
     }
 
-    // 3. Check query parameter (less secure, but useful for certain scenarios like email verification)
     if (req.query?.token && typeof req.query.token === 'string') {
         return req.query.token;
     }
 
     return null;
 }
+
 
 /**
  * Basic JWT format validation

@@ -11,9 +11,10 @@ const requiredEnv = (key: string): string => {
 };
 
 export const envConfig = {
-    NODE_ENV: process.env.NODE_ENV || "development",
-    PORT: Number(process.env.PORT) || 5000,
-    BASE_URL: process.env.BASE_URL || "",
+    NODE_ENV: process.env.NODE_ENV,
+    CRON_ENABLED: process.env.CRON_ENABLED,
+    PORT: Number(process.env.PORT),
+    BASE_URL: process.env.BASE_URL,
 
     /**
      * MongoDB
@@ -46,6 +47,11 @@ export const envConfig = {
      * Auth Service
      */
     AUTH_SERVICE: process.env.AUTHENTICATION_SERVICE || "",
+
+    /**
+     * Email Service
+     */
+    EMAIL_SERVICE: process.env.EMAIL_SERVICE || "",
 
     /**
      * CORS

@@ -4,6 +4,7 @@ import ReviewService from "../services/review.service";
 class ReviewController {
 
     async review(req: Request, res: Response) {
+        
         try {
             const { priceIds } = req.body;
 
@@ -22,6 +23,33 @@ class ReviewController {
             });
 
         } catch (error: any) {
+            if (error.statusCode) {
+                return res.status(error.statusCode).json({
+                    success: false,
+                    message: error.message,
+                    errorCode: error.errorCode,
+                    details: error.details,
+                    referenceId: error.referenceId
+                });
+            }
+
+            if (error.response?.status === 400) {
+                const errorData = error.response?.data;
+
+                if (errorData?.errors && errorData.errors.length > 0) {
+                    const errorDetail = errorData.errors[0];
+
+                    return res.status(400).json({
+                        success: false,
+                        message: errorDetail.message || "Flight is no longer available",
+                        errorCode: errorDetail.errCode,
+                        details: errorDetail.details,
+                        referenceId: errorDetail.id,
+                        httpStatus: errorData.status?.httpStatus
+                    });
+                }
+            }
+
             return res.status(500).json({
                 success: false,
                 message: error.message || "Review API failed"

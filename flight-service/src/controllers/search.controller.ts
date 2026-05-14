@@ -1,11 +1,15 @@
 import { Request, Response } from "express";
 import searchService from "../services/search.service";
 import FlightSearchValidator from "../utils/flightSearchValidator";
+import { SortField, SortOption, SortOrder } from "../types/sort.types";
+import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
+import { Filter } from "../types/filter.types";
+import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
+import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 
 
 export const searchOneWayController = async (req: Request, res: Response) => {
     try {
-
         const validationResult = FlightSearchValidator.validate(req.body);
 
         if (!validationResult.isValid) {
@@ -23,13 +27,101 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             });
         }
 
-        const data = await searchService.searchOneWay(req.body);
+        const sortField = req.query.sortBy as SortField;
+        const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
+
+        let sortOption: SortOption | undefined;
+        if (sortField && OnewayFlightSorter.isValidSortField(sortField)) {
+            sortOption = {
+                field: sortField,
+                order: sortOrder
+            };
+        }
+
+        const filters: Filter[] = [];
+
+        if (req.body.filters?.airlines && Array.isArray(req.body.filters.airlines)) {
+            filters.push({
+                type: 'airline',
+                values: req.body.filters.airlines
+            });
+        }
+
+        if (req.body.filters?.cabinClasses && Array.isArray(req.body.filters.cabinClasses)) {
+            filters.push({
+                type: 'cabinClass',
+                values: req.body.filters.cabinClasses
+            });
+        }
+
+        if (req.body.filters?.stops && Array.isArray(req.body.filters.stops)) {
+            filters.push({
+                type: 'stops',
+                values: req.body.filters.stops
+            });
+        }
+
+        if (req.body.filters?.priceRange) {
+            const { min, max } = req.body.filters.priceRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'priceRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        if (req.body.filters?.departureTimeRange) {
+            const { start, end } = req.body.filters.departureTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'departureTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.arrivalTimeRange) {
+            const { start, end } = req.body.filters.arrivalTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'arrivalTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.durationRange) {
+            const { min, max } = req.body.filters.durationRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'durationRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        const includeStats = req.query.includeStats === 'true';
+
+        const data = await searchService.searchOneWay(
+            req.body,
+            sortOption,
+            filters.length > 0 ? filters : undefined,
+            includeStats
+        );
 
         return res.status(200).json({
             success: true,
             data,
             warnings: validationResult.warnings,
+            filtersApplied: filters.length > 0 ? filters : undefined,
+            sortApplied: sortOption || undefined
         });
+
     } catch (error: any) {
         console.error("Search error:", error?.response?.data || error.message);
 
@@ -51,7 +143,6 @@ export const searchReturnController = async (req: Request, res: Response) => {
                 warnings: validationResult.warnings,
             });
         }
-        console.log("Validation Complete");
 
         if (validationResult.searchType !== "RETURN") {
             return res.status(400).json({
@@ -59,17 +150,131 @@ export const searchReturnController = async (req: Request, res: Response) => {
                 message: "Only return search allowed in this endpoint",
             });
         }
-        console.log("Validation search type found");
 
-        const data = await searchService.searchReturn(req.body);
+        const sortField = req.query.sortBy as SortField;
+        const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
+        const sortTarget = (req.query.sortTarget as string) || 'both';
 
-        return res.status(200).json({
+        let sortOption: SortOption | undefined;
+        if (sortField && ReturnFlightSorter.isValidSortField(sortField)) {
+            sortOption = {
+                field: sortField,
+                order: sortOrder
+            };
+        }
+
+        let validSortTarget: 'onward' | 'return' | 'both' = 'both';
+        if (sortTarget === 'onward' || sortTarget === 'return') {
+            validSortTarget = sortTarget;
+        }
+
+        // ========== ADD FILTER EXTRACTION (similar to one-way) ==========
+        const filters: Filter[] = [];
+
+        if (req.body.filters?.airlines && Array.isArray(req.body.filters.airlines)) {
+            filters.push({
+                type: 'airline',
+                values: req.body.filters.airlines
+            });
+        }
+
+        if (req.body.filters?.cabinClasses && Array.isArray(req.body.filters.cabinClasses)) {
+            filters.push({
+                type: 'cabinClass',
+                values: req.body.filters.cabinClasses
+            });
+        }
+
+        if (req.body.filters?.stops && Array.isArray(req.body.filters.stops)) {
+            filters.push({
+                type: 'stops',
+                values: req.body.filters.stops
+            });
+        }
+
+        if (req.body.filters?.priceRange) {
+            const { min, max } = req.body.filters.priceRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'priceRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        if (req.body.filters?.departureTimeRange) {
+            const { start, end } = req.body.filters.departureTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'departureTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.arrivalTimeRange) {
+            const { start, end } = req.body.filters.arrivalTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'arrivalTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.durationRange) {
+            const { min, max } = req.body.filters.durationRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'durationRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        // Extract filter target (apply filters to onward, return, or both)
+        const filterTarget = (req.body.filterTarget || 'both') as 'onward' | 'return' | 'both';
+
+        // Extract includeStats flag
+        const includeStats = req.query.includeStats === 'true';
+        // ========== END OF FILTER EXTRACTION ==========
+
+        // Pass filters to the service
+        const data = await searchService.searchReturn(
+            req.body,
+            sortOption,
+            validSortTarget,
+            filters.length > 0 ? filters : undefined,
+            filterTarget,
+            includeStats
+        );
+
+        const response: any = {
             success: true,
             data,
             warnings: validationResult.warnings,
-        });
+        };
+
+        if (sortOption) {
+            response.sortApplied = {
+                ...sortOption,
+                target: validSortTarget
+            };
+        }
+
+        if (filters.length > 0) {
+            response.filtersApplied = filters;
+        }
+
+        return res.status(200).json(response);
 
     } catch (error: any) {
+        console.error("Return search error:", error?.response?.data || error.message);
+
         return res.status(500).json({
             success: false,
             message: "Return search failed",
@@ -77,8 +282,47 @@ export const searchReturnController = async (req: Request, res: Response) => {
     }
 };
 
+// export const searchReturnController = async (req: Request, res: Response) => {
+//     try {
+//         const validationResult = FlightSearchValidator.validate(req.body);
+
+//         if (!validationResult.isValid) {
+//             return res.status(400).json({
+//                 success: false,
+//                 errors: validationResult.errors,
+//                 warnings: validationResult.warnings,
+//             });
+//         }
+//         console.log("Validation Complete");
+
+//         if (validationResult.searchType !== "RETURN") {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Only return search allowed in this endpoint",
+//             });
+//         }
+//         console.log("Validation search type found");
+
+//         const data = await searchService.searchReturn(req.body);
+
+//         return res.status(200).json({
+//             success: true,
+//             data,
+//             warnings: validationResult.warnings,
+//         });
+
+//     } catch (error: any) {
+//         return res.status(500).json({
+//             success: false,
+//             message: "Return search failed",
+//         });
+//     }
+// };
+
+
 export const searchMulticityController = async (req: Request, res: Response) => {
     try {
+        console.log("The body we get for MULTICITY\n", JSON.stringify(req.body, null, 2));
         const validationResult = FlightSearchValidator.validate(req.body);
 
         if (!validationResult.isValid) {
@@ -96,13 +340,130 @@ export const searchMulticityController = async (req: Request, res: Response) => 
             });
         }
 
-        const data = await searchService.searchMulticity(req.body);
+        // Extract sort parameters from query string
+        const sortField = req.query.sortBy as SortField;
+        const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
+        const legIndex = req.query.legIndex ? parseInt(req.query.legIndex as string) : undefined;
 
-        return res.status(200).json({
+        let sortOption: SortOption | undefined;
+        if (sortField && MulticityFlightSorter.isValidSortField(sortField)) {
+            sortOption = {
+                field: sortField,
+                order: sortOrder
+            };
+        }
+
+        // ========== ADD FILTER EXTRACTION (similar to one-way) ==========
+        const filters: Filter[] = [];
+
+        if (req.body.filters?.airlines && Array.isArray(req.body.filters.airlines)) {
+            filters.push({
+                type: 'airline',
+                values: req.body.filters.airlines
+            });
+        }
+
+        if (req.body.filters?.cabinClasses && Array.isArray(req.body.filters.cabinClasses)) {
+            filters.push({
+                type: 'cabinClass',
+                values: req.body.filters.cabinClasses
+            });
+        }
+
+        if (req.body.filters?.stops && Array.isArray(req.body.filters.stops)) {
+            filters.push({
+                type: 'stops',
+                values: req.body.filters.stops
+            });
+        }
+
+        if (req.body.filters?.priceRange) {
+            const { min, max } = req.body.filters.priceRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'priceRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        if (req.body.filters?.departureTimeRange) {
+            const { start, end } = req.body.filters.departureTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'departureTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.arrivalTimeRange) {
+            const { start, end } = req.body.filters.arrivalTimeRange;
+            if (start && end) {
+                filters.push({
+                    type: 'arrivalTimeRange',
+                    start,
+                    end
+                });
+            }
+        }
+
+        if (req.body.filters?.durationRange) {
+            const { min, max } = req.body.filters.durationRange;
+            if (min !== undefined && max !== undefined) {
+                filters.push({
+                    type: 'durationRange',
+                    min,
+                    max
+                });
+            }
+        }
+
+        // Extract which legs to apply filters to (array of leg indices or 'all')
+        let applyToLegs: number[] | 'all' = 'all';
+        if (req.body.applyToLegs) {
+            if (req.body.applyToLegs === 'all') {
+                applyToLegs = 'all';
+            } else if (Array.isArray(req.body.applyToLegs)) {
+                applyToLegs = req.body.applyToLegs;
+            }
+        }
+
+        // Extract includeStats flag
+        const includeStats = req.query.includeStats === 'true';
+        // ========== END OF FILTER EXTRACTION ==========
+
+        // Pass filters to the service
+        const data = await searchService.searchMulticity(
+            req.body,
+            sortOption,
+            legIndex,
+            filters.length > 0 ? filters : undefined,
+            applyToLegs,
+            includeStats
+        );
+
+        const response: any = {
             success: true,
             data,
             warnings: validationResult.warnings,
-        });
+        };
+
+        if (sortOption) {
+            response.sortApplied = {
+                ...sortOption,
+                legIndex: legIndex !== undefined ? legIndex : 'all'
+            };
+        }
+
+        if (filters.length > 0) {
+            response.filtersApplied = filters;
+            response.applyToLegs = applyToLegs;
+        }
+
+        return res.status(200).json(response);
 
     } catch (error: any) {
         console.error("Multicity search error:", error?.response?.data || error.message);
@@ -113,3 +474,41 @@ export const searchMulticityController = async (req: Request, res: Response) => 
         });
     }
 };
+
+
+// export const searchMulticityController = async (req: Request, res: Response) => {
+//     try {
+//         const validationResult = FlightSearchValidator.validate(req.body);
+
+//         if (!validationResult.isValid) {
+//             return res.status(400).json({
+//                 success: false,
+//                 errors: validationResult.errors,
+//                 warnings: validationResult.warnings,
+//             });
+//         }
+
+//         if (validationResult.searchType !== "MULTICITY") {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Only multicity search allowed in this endpoint",
+//             });
+//         }
+
+//         const data = await searchService.searchMulticity(req.body);
+
+//         return res.status(200).json({
+//             success: true,
+//             data,
+//             warnings: validationResult.warnings,
+//         });
+
+//     } catch (error: any) {
+//         console.error("Multicity search error:", error?.response?.data || error.message);
+
+//         return res.status(500).json({
+//             success: false,
+//             message: "Multicity search failed",
+//         });
+//     }
+// };

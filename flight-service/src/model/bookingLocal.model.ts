@@ -14,6 +14,8 @@ const SSRSchema = new Schema(
 
 const TravellerSchema = new Schema(
     {
+        travellerId: { type: String, required: true },
+
         title: String,
         paxType: { type: String, enum: ["ADULT", "CHILD", "INFANT"] },
         firstName: String,
@@ -34,14 +36,18 @@ const TravellerSchema = new Schema(
 
 const BookingSchema = new Schema<BookingDocument>(
     {
-        bookingId: { type: String, required: true, unique: true },
+        bookingId: {
+            type: String,
+            required: true,
+            unique: true
+        },
         amount: Number,
-
+        tripjackPrice: Number,
+        markupPrice: Number,
+        totalPrice: Number,
         email: String,
         phone: String,
-
         isHold: Boolean,
-
         travellers: [TravellerSchema],
 
         gstInfo: {
@@ -58,11 +64,34 @@ const BookingSchema = new Schema<BookingDocument>(
             name: String
         },
 
+        userInfo: {
+            id: String,
+            email: String,
+            role: String,
+            clientType: String
+        },
+
         status: {
             type: String,
-            enum: ["INITIATED", "PENDING", "CONFIRMED", "FAILED"],
+            enum: [
+                "INITIATED",
+                "SUCCESS",
+                "ON_HOLD",
+                "CANCELLED",
+                "FAILED",
+                "PENDING",
+                "ABORTED",
+                "UNCONFIRMED",
+                "REQUESTED",
+                "REJECTED",
+                "NO_SHOW",
+                "VOIDED",
+                "REISSUED"
+            ],
             default: "INITIATED"
-        }
+        },
+
+        amendmentId: { type: String }
     },
     { timestamps: true }
 );

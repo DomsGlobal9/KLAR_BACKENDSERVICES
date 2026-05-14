@@ -85,6 +85,32 @@ class BookingController {
             });
         }
     }
+
+    async getBookingDetails(req: Request, res: Response) {
+        try {
+            const { bookingId } = req.params;
+
+            if (!bookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "bookingId is required"
+                });
+            }
+
+            const response = await BookingService.getBookingDetails(bookingId as string);
+
+            return res.status(200).json({
+                success: true,
+                data: response
+            });
+
+        } catch (error: any) {
+            return res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
 }
 
 export default new BookingController();
