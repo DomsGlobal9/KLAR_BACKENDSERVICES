@@ -115,18 +115,44 @@ class FareService {
         legIndex: number,
         flightKey: string
     ) {
-
         const cachedData = await RedisCacheService.get(sessionId);
-
 
         if (!cachedData) {
             throw new Error("Session expired or invalid sessionId");
         }
 
         const tripInfos = cachedData?.raw;
+        
+        const isInternational = cachedData?.isInternational;
 
         if (!tripInfos) {
             throw new Error("Invalid session data");
+        }
+
+        if (isInternational) {
+            const combos = tripInfos.COMBO;
+
+            if (!combos || !combos.length) {
+                throw new Error("No flights available");
+            }
+
+            const selectedCombo = combos.find((combo: any) => {
+                const segments = combo.sI || [];
+                const flightKeyToMatch = segments.map((seg: any) => seg.id).join("-");
+                return flightKeyToMatch === flightKey;
+            });
+
+            if (!selectedCombo) {
+                throw new Error("Flight not found");
+            }
+
+            const fares = BaseFlightNormalizer.extractFaresForCombo(selectedCombo);
+
+            if (!fares || fares.length === 0) {
+                throw new Error("Fare extraction failed");
+            }
+
+            return TripjackFieldMapper.map(fares[0]);
         }
 
         const legFlights = tripInfos[String(legIndex)];
@@ -144,6 +170,10 @@ class FareService {
         }
 
         const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
+
+        if (!fares || fares.length === 0) {
+            throw new Error("Fare extraction failed");
+        }
 
         return TripjackFieldMapper.map(fares[0]);
     }

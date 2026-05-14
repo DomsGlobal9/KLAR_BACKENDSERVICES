@@ -306,47 +306,95 @@ class SearchService {
 
             let normalized = MultiCityNormalizer.normalize(rawResponse.data);
 
-            const originalCounts = normalized.map(leg => ({
-                legIndex: leg.legIndex,
-                count: leg.flights.length
-            }));
+            const isDomestic = normalized.length > 0 && 'flights' in normalized[0];
+            const isInternational = normalized.length > 0 && 'legs' in normalized[0];
+
+            let originalCounts: Array<{ legIndex: number; count: number }> = [];
+
+            if (isDomestic) {
+                originalCounts = normalized.map((leg: any) => ({
+                    legIndex: leg.legIndex,
+                    count: leg.flights.length
+                }));
+            }
 
             if (filters && filters.length > 0) {
                 const validation = MultiCityFlightFilter.validateFilters(filters);
                 if (validation.isValid) {
-                    normalized = MultiCityFlightFilter.applyFiltersToMultiCityFlights(
-                        normalized,
-                        filters,
-                        applyToLegs || 'all'
-                    );
+                    if (isDomestic) {
+                        normalized = MultiCityFlightFilter.applyFiltersToMultiCityFlights(
+                            normalized,
+                            filters,
+                            applyToLegs || 'all'
+                        );
+                    } else if (isInternational) {
+                        const filteredItineraries = normalized.filter((itinerary: any) => {
+                            let allLegsMatch = true;
+                            const legsToFilter = applyToLegs === 'all'
+                                ? itinerary.legs.map((_: any, idx: number) => idx)
+                                : applyToLegs || [];
+
+                            for (const legIdx of legsToFilter) {
+                                if (legIdx < itinerary.legs.length) {
+                                    const legMatch = MultiCityFlightFilter.applyFilters([itinerary.legs[legIdx]], filters).length > 0;
+                                    if (!legMatch) {
+                                        allLegsMatch = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            return allLegsMatch;
+                        });
+                        normalized = filteredItineraries;
+                    }
                 } else {
                     console.warn('Invalid filters:', validation.errors);
                 }
             }
 
             if (sortOption && MulticityFlightSorter.isValidSortField(sortOption.field)) {
-                if (legIndex !== undefined && MulticityFlightSorter.isValidLegIndex(legIndex, normalized.length)) {
-                    normalized = MulticityFlightSorter.sortSpecificLeg(normalized, sortOption, legIndex);
-                } else if (legIndex === undefined) {
-                    normalized = MulticityFlightSorter.sortMultiCityFlights(normalized, sortOption);
+                if (isDomestic) {
+                    if (legIndex !== undefined && MulticityFlightSorter.isValidLegIndex(legIndex, normalized.length)) {
+                        normalized = MulticityFlightSorter.sortSpecificLeg(normalized, sortOption, legIndex);
+                    } else if (legIndex === undefined) {
+                        normalized = MulticityFlightSorter.sortMultiCityFlights(normalized, sortOption);
+                    }
+                } else if (isInternational) {
+                    if (sortOption.field === 'price') {
+                        normalized.sort((a: any, b: any) => {
+                            const comparison = a.totalPrice - b.totalPrice;
+                            return sortOption.order === 'asc' ? comparison : -comparison;
+                        });
+                    }
                 }
             }
 
             let stats: any = undefined;
             if (includeStats) {
-                stats = MultiCityFlightFilter.getMultiCityFilterStats(normalized);
-                originalCounts.forEach(original => {
-                    if (stats[original.legIndex]) {
-                        stats[original.legIndex].totalFlights = original.count;
-                        stats[original.legIndex].filteredFlights = normalized[original.legIndex]?.flights.length || 0;
-                    }
-                });
+                if (isDomestic) {
+                    stats = MultiCityFlightFilter.getMultiCityFilterStats(normalized);
+                    originalCounts.forEach((original: { legIndex: number; count: number }) => {
+                        if (stats[original.legIndex]) {
+                            stats[original.legIndex].totalFlights = original.count;
+                            stats[original.legIndex].filteredFlights = normalized[original.legIndex]?.flights.length || 0;
+                        }
+                    });
+                } else if (isInternational) {
+                    stats = {
+                        totalItineraries: normalized.length,
+                        priceRange: {
+                            min: normalized.length > 0 ? Math.min(...normalized.map((i: any) => i.totalPrice)) : 0,
+                            max: normalized.length > 0 ? Math.max(...normalized.map((i: any) => i.totalPrice)) : 0
+                        }
+                    };
+                }
             }
 
             await RedisCacheService.set(
                 sessionId,
                 {
                     raw: rawResponse?.data?.searchResult?.tripInfos,
+                    isInternational: isInternational
                 },
                 1800
             );
@@ -366,7 +414,8 @@ class SearchService {
             console.error("MultiCity Search ERROR >>>", {
                 status: error.response?.status,
                 data: JSON.stringify(error.response?.data, null, 2),
-                message: error.message
+                message: error.message,
+                stack: error.stack
             });
 
             throw error;
