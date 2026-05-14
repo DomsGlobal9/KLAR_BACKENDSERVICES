@@ -1,6 +1,6 @@
 import cron from "node-cron";
-import { CRON_TIME } from "../../src/config/corn.config";
-import { BookingRepository } from "../repositories/bookingLocal.repository";
+import { CRON_TIME } from "../../config/corn.config";
+import { BookingRepository } from "../../repositories/bookingLocal.repository";
 
 const bookingRepository = new BookingRepository();
 

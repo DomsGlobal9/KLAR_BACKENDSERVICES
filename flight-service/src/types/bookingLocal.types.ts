@@ -65,11 +65,18 @@ export interface Booking {
 
     status:
     | "INITIATED"
-    | "PENDING"
-    | "CONFIRMED"
+    | "SUCCESS"
+    | "ON_HOLD"
+    | "CANCELLED"
     | "FAILED"
-    | "CANCEL_REQUESTED"
-    | "CANCELLED";
+    | "PENDING"
+    | "ABORTED"
+    | "UNCONFIRMED"
+    | "REQUESTED"
+    | "REJECTED"
+    | "NO_SHOW"
+    | "VOIDED"
+    | "REISSUED";
 
     amendmentId?: string;
 
