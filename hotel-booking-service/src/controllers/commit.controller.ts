@@ -5,8 +5,10 @@ export const commitController = async (req: any, res: Response) => {
     try {
         const agentId = req.user?.userId || req.user?.id || req.user?._id || null;
         const agentName = req.user?.email || null; // Fallback to email if name isn't in token
+        const token = req.headers.authorization?.split(" ")[1] || "";
+
         console.log(`[FORENSIC] Commit Booking: agentId=${agentId}, agentName=${agentName}`);
-        const data = await commitService.commit(req.body, agentId, agentName);
+        const data = await commitService.commit(req.body, agentId, agentName, token);
         res.json(data);
     } catch (error: any) {
         console.error("Commit Controller Error:", error.response?.data || error.message);
