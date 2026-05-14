@@ -264,6 +264,15 @@ export class TripJackApiProvider {
             const res = await tripJackOmsClient.post("/oms/v3/hotel/booking-details", { bookingId });
             return res.data;
         } catch (error: any) {
+            if (error.response?.status === 404) {
+                console.log(`[TripJack] v3 booking-details 404, falling back to v1...`);
+                try {
+                    const resV1 = await tripJackOmsClient.post("/oms/v1/hotel/booking-details", { bookingId });
+                    return resV1.data;
+                } catch (errV1: any) {
+                    throw errV1;
+                }
+            }
             const errorData = error.response?.data;
             const errorMessage = typeof errorData === 'string' 
                 ? errorData.substring(0, 500) 
@@ -275,19 +284,32 @@ export class TripJackApiProvider {
 
     /**
      * POST /oms/v3/hotel/cancel-booking/{bookingId}
-     * FIX #6: TripJack cancel is POST, not DELETE. No request body needed.
+     * Supports both v3 and v1 paths gracefully.
      */
     async cancel(bookingId: string): Promise<any> {
         try {
             console.log(`[TripJack] Cancelling booking: ${bookingId}`);
-            // FIX #6: POST (not DELETE)
-            const res = await tripJackOmsClient.post(`/oms/v3/hotel/cancel-booking/${bookingId}`);
-            return {
-                status: true,
-                statusCode: 200,
-                description: "TripJack Cancel Success",
-                body: res.data,
-            };
+            try {
+                const res = await tripJackOmsClient.post(`/oms/v3/hotel/cancel-booking/${bookingId}`);
+                return {
+                    status: true,
+                    statusCode: 200,
+                    description: "TripJack Cancel Success",
+                    body: res.data,
+                };
+            } catch (errV3: any) {
+                if (errV3.response?.status === 404) {
+                    console.log(`[TripJack] v3 cancel-booking 404, falling back to v1...`);
+                    const resV1 = await tripJackOmsClient.post(`/oms/v1/hotel/cancel-booking/${bookingId}`);
+                    return {
+                        status: true,
+                        statusCode: 200,
+                        description: "TripJack Cancel Success",
+                        body: resV1.data,
+                    };
+                }
+                throw errV3;
+            }
         } catch (error: any) {
             const errorData = error.response?.data;
             const errorMessage = typeof errorData === 'string' 

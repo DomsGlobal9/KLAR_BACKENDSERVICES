@@ -65,33 +65,40 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         const nationalityId = await toTjNationality(req.countryCode ?? "IN");
         const fetchStartTime = Date.now();
 
-        // Fetch chunks sequentially to avoid 403 and ensure high yield
+        // Fetch chunks concurrently to ensure extreme high-speed response
+        const fetchPromises = [];
         for (let i = 0; i < batchSize; i++) {
             const chunkIdx = currentIdx + i;
             if (chunkIdx >= chunks.length) break;
 
             const chunk = chunks[chunkIdx];
-            try {
-                const payload = {
-                    checkIn: req.checkin,
-                    checkOut: req.checkout,
-                    rooms: req.rooms.map((r) => ({
-                        adults: r.adults,
-                        children: r.children || undefined,
-                        childAge: r.childAges?.length ? r.childAges : undefined,
-                    })),
-                    currency: req.currency ?? "INR",
-                    nationality: nationalityId,
-                    hids: chunk.map(id => parseInt(id)),
-                    correlationId,
-                };
+            const payload = {
+                checkIn: req.checkin,
+                checkOut: req.checkout,
+                rooms: req.rooms.map((r) => ({
+                    adults: r.adults,
+                    children: r.children || undefined,
+                    childAge: r.childAges?.length ? r.childAges : undefined,
+                })),
+                currency: req.currency ?? "INR",
+                nationality: nationalityId,
+                hids: chunk.map(id => parseInt(id)),
+                correlationId,
+            };
 
-                const res = await tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 30000 });
-                const found = res.data.hotels || [];
-                collectedHotels.push(...found);
-            } catch (err: any) {
-                console.error(`[TripJack] Chunk Fetch Error:`, err.message);
-            }
+            fetchPromises.push(
+                tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 15000 })
+                    .then(res => res.data?.hotels || [])
+                    .catch(err => {
+                        console.error(`[TripJack] Chunk Fetch Error:`, err.message);
+                        return [];
+                    })
+            );
+        }
+
+        const resolvedArrays = await Promise.all(fetchPromises);
+        for (const found of resolvedArrays) {
+            collectedHotels.push(...found);
         }
 
         collectedHotels = collectedHotels.slice(0, targetCount);
@@ -129,6 +136,9 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
             mapped = mapped.map(bh => {
                 const s = staticMap.get(bh.hotelId.replace("TJ:", ""));
                 if (s) {
+                    const accTypeDesc = bh.accTypeDesc || s.accTypeDesc || "";
+                    const accMultiDesc = bh.accMultiDesc || s.accMultiDesc || "";
+                    const accomodationType = bh.accomodationType || s.accomodationType || "";
                     return {
                         ...bh,
                         address: bh.address || s.address || "",
@@ -137,6 +147,10 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         images: (bh.images?.length) ? bh.images : (s.images || []),
                         latitude: bh.latitude || s.location?.coordinates?.[1],
                         longitude: bh.longitude || s.location?.coordinates?.[0],
+                        accTypeDesc,
+                        accMultiDesc,
+                        accomodationType,
+                        hotelSegment: accTypeDesc || accMultiDesc || bh.hotelSegment || 'Hotel',
                     };
                 }
                 return bh;
@@ -170,6 +184,10 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         price: opt?.pricing?.totalPrice ?? 0,
         currency: opt?.pricing?.currency ?? "INR",
         mealBasis: opt?.mealBasis,
+        hotelSegment: h.accTypeDesc || h.accMultiDesc || 'Hotel',
+        accTypeDesc: h.accTypeDesc,
+        accMultiDesc: h.accMultiDesc,
+        accomodationType: h.accomodationType,
         isRefundable: opt?.cancellation?.isRefundable,
         onHoldAllowed: opt?.onHoldAllowed ?? opt?.cancellation?.onHoldAllowed ?? (opt?.cancellation?.isRefundable ?? false),
         holdConfirm: opt?.holdConfirm ?? opt?.cancellation?.holdConfirm ?? (opt?.cancellation?.isRefundable ?? false),

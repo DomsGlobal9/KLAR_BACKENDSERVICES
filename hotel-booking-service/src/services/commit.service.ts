@@ -126,31 +126,41 @@ class CommitService {
         const { total: finalPrice, markup } = this.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup, payload.couponCode);
         console.log(`✅ [Klar] Final Calculated Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`);
 
-        // PHASE 3: Wallet Deduction (Atomic)
-        const demandBookingId = `TJ-BOOK-${Date.now()}`;
-        const paymentProcessed = await WalletUtil.deductBalance(
-            token, 
-            finalPrice, 
-            demandBookingId, 
-            `Hotel Booking at ${payload.hotelName || 'TripJack Hotel'}`
-        );
+        // Determine Intent: Instant Confirmation vs Hold Booking
+        const isHoldIntent = payload.isHold === true || payload.holdBooking === true;
 
-        if (!paymentProcessed) throw new Error("Wallet deduction failed. Please check your balance.");
+        // PHASE 3: Wallet Deduction (Atomic) - Only deduct immediately for Instant Confirmations
+        const demandBookingId = `TJ-BOOK-${Date.now()}`;
+        let paymentProcessed = true;
+        if (!isHoldIntent) {
+            paymentProcessed = await WalletUtil.deductBalance(
+                token, 
+                finalPrice, 
+                demandBookingId, 
+                `Hotel Booking at ${payload.hotelName || 'TripJack Hotel'}`
+            );
+            if (!paymentProcessed) throw new Error("Wallet deduction failed. Please check your balance.");
+        } else {
+            console.log(`⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`);
+        }
 
         // PHASE 4: Provider Booking (Send ONLY Net Price)
         try {
             const tjPayload = {
                 ...payload,
                 bookingId,
-                paymentInfos: payload.paymentInfos ? [{ amount: netPrice }] : undefined // Only send net price to TJ
+                // Guaranteed positive net amount injection for instant confirmations; strict omission for holds
+                paymentInfos: !isHoldIntent ? [{ amount: netPrice }] : undefined
             };
 
             const tjResponse = await tripJackProvider.commit(tjPayload);
 
             if (!tjResponse.status) {
                 console.error(`❌ [TripJack] Booking failed: ${tjResponse.description}`);
-                // AUTO-REFUND
-                await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: TripJack booking failed");
+                // AUTO-REFUND only if money was actually deducted
+                if (!isHoldIntent) {
+                    await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: TripJack booking failed");
+                }
                 throw new Error(tjResponse.description || "Provider rejected the booking request.");
             }
 
@@ -161,7 +171,7 @@ class CommitService {
                 propertyId: payload.propertyId || "TJ-PROP",
                 propertyCode: payload.propertyCode || payload.propertyId || "TJ-PROP",
                 provider: BookingProvider.TRIPJACK,
-                status: BookingStatus.PENDING,
+                status: isHoldIntent ? BookingStatus.HELD : BookingStatus.PENDING,
                 checkIn: payload.checkIn ? new Date(payload.checkIn) : new Date(),
                 checkOut: payload.checkOut ? new Date(payload.checkOut) : new Date(Date.now() + 86400000),
                 totalAmount: finalPrice, // Store the amount the USER paid
@@ -188,7 +198,9 @@ class CommitService {
 
         } catch (bookingErr: any) {
             console.error(`❌ [TripJack] Critical Booking Error:`, bookingErr.message);
-            await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: System error during booking");
+            if (!isHoldIntent) {
+                await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: System error during booking");
+            }
             throw bookingErr;
         }
     }

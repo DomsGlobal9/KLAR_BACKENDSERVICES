@@ -34,13 +34,38 @@ class CancelService {
                 console.log(`[TripJack] Cancelling TripJack booking: ${targetId}`);
                 const tjResponse = await tripJackProvider.cancel(targetId);
 
-                // Update local DB if present
-                if (Object.keys(query).length > 0) {
-                    await BookingModel.findOneAndUpdate(query, { status: BookingStatus.CANCELLED });
-                    console.log(`✅ [TripJack] Booking marked CANCELLED in DB: ${targetId}`);
+                // Check actual status from TripJack side to confirm cancellation
+                let finalStatus = "PENDING";
+                let details = null;
+                try {
+                    details = await tripJackProvider.getBookingDetails(targetId);
+                    finalStatus = details?.order?.status || "PENDING";
+                    console.log(`[TripJack] Live status post-cancel check: ${finalStatus}`);
+                } catch (statusErr: any) {
+                    console.warn("[TripJack] Could not immediately verify cancelled status:", statusErr.message);
                 }
 
-                return tjResponse;
+                // If cancel API returns success true, TripJack acknowledges the cancellation immediately
+                const isSuccessAck = tjResponse?.body?.status?.success === true || tjResponse?.status?.success === true || tjResponse?.status === true;
+                const isFullyCancelled = isSuccessAck || finalStatus.toUpperCase() === "CANCELLED";
+                const dbStatusToSet = isFullyCancelled ? BookingStatus.CANCELLED : BookingStatus.PENDING;
+
+                if (Object.keys(query).length > 0) {
+                    await BookingModel.findOneAndUpdate(query, { 
+                        status: dbStatusToSet,
+                        tripJackResponse: details || tjResponse?.body
+                    });
+                    console.log(`✅ [TripJack] Booking status updated in DB to ${dbStatusToSet}: ${targetId}`);
+                }
+
+                return {
+                    status: true,
+                    statusCode: 200,
+                    description: isFullyCancelled ? "TripJack Cancel Success" : "Cancellation initiated. Pending confirmation from TripJack supplier.",
+                    isFullyCancelled,
+                    tjStatus: finalStatus,
+                    body: tjResponse?.body || tjResponse
+                };
             }
         } catch (tjCancelErr: any) {
             console.error("[TripJack] Cancel routing error:", tjCancelErr.message);

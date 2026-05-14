@@ -82,29 +82,26 @@ export class TripJackApiProvider {
             // Check local DB first for instant static metadata fallback
             const localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
 
-            // Set a short timeout (2500ms) on static-detail so it never blocks pricing display
-            const staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue });
-            const fastStaticPromise = Promise.race([
-                staticDetailPromise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Static detail fetch timeout")), 2500))
-            ]);
+            // Start static detail fetch in the background without blocking the pricing API response
+            let staticData: any = null;
+            const staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue })
+                .then(res => { staticData = res.data; })
+                .catch(err => { console.warn(`[TripJack] Static detail background fetch warning:`, err.message); });
 
-            // Call both APIs in parallel
-            const [staticRes, pricingRes] = await Promise.allSettled([
-                fastStaticPromise,
-                tripJackClient.post("/hms/v3/hotel/pricing", tjPayload)
-            ]);
+            // Await pricing request directly as the core requirement for room rates
+            const pricingStartTime = Date.now();
+            const pricingRes = await tripJackClient.post("/hms/v3/hotel/pricing", tjPayload);
+            console.log(`[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`);
 
-            if (staticRes.status === "rejected") {
-                console.warn(`[TripJack] Static Detail timed out/failed for ${rawId}, using local cache fallback.`);
-            }
-            if (pricingRes.status === "rejected") {
-                console.error(`[TripJack] Pricing Request Failed for ${rawId}:`, pricingRes.reason?.message, pricingRes.reason?.response?.data);
-                throw pricingRes.reason;
+            // If local cache is missing and staticData hasn't resolved yet, wait a brief grace period (max 500ms)
+            if (!staticData && !localHotel) {
+                await Promise.race([
+                    staticDetailPromise,
+                    new Promise(resolve => setTimeout(resolve, 500))
+                ]);
             }
 
-            const pricingData = pricingRes.value.data;
-            const staticData = staticRes.status === "fulfilled" ? (staticRes.value as any).data : null;
+            const pricingData = pricingRes.data;
 
             console.log(`[DEBUG] TripJack Pricing Data for ${rawId}:`, JSON.stringify(pricingData, null, 1));
             if (staticData) console.log(`[DEBUG] TripJack Static Data for ${rawId}:`, JSON.stringify(staticData, null, 1));

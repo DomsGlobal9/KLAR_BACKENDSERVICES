@@ -30,6 +30,10 @@ export interface UnifiedHotel {
   price: number;                // lowest available rate
   currency: string;
   mealBasis?: string;           // "Room Only", "Breakfast", etc.
+  hotelSegment?: string;
+  accTypeDesc?: string;
+  accMultiDesc?: string;
+  accomodationType?: string;
   isRefundable?: boolean;
   onHoldAllowed?: boolean;
   holdConfirm?: boolean;
