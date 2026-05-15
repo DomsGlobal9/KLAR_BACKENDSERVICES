@@ -260,6 +260,9 @@ export const razorpayWebhookService = async (
         case 'payment.failed':
             await handlePaymentFailed(webhookData);
             break;
+        case 'order.paid':
+            console.log('Order paid event received');
+            break;
         default:
             console.log(`Unhandled event: ${webhookData.event}`);
     }
