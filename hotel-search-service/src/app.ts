@@ -5,7 +5,10 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true,
+}));
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -25,7 +28,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/search", routes);
-app.use("/", routes);
+// app.use("/", routes);
 app.use(errorHandler);
 
 export default app;
