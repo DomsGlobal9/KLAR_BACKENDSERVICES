@@ -14,6 +14,7 @@ app.get("/", (_req, res) => {
         status: "UP",
         endpoints: {
             destinations: "GET /api/search/destinations",
+            popularDestinations: "GET /api/search/destinations/popular",
             hotelSearch: "POST /api/search/hotels/search",
             products: "POST /api/search/hotels/:propertyId/products",
             health: "GET /api/search/health",
