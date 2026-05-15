@@ -2,14 +2,32 @@ import { RGDestinationModel } from "../models/RGDestination.model";
 
 class DestinationsService {
     async getDestinations() {
-        const destinations = await RGDestinationModel.find().lean();
+        // Use MongoDB aggregation to deduplicate by destName (case-insensitive) at the database level
+        const uniqueDestinations = await RGDestinationModel.aggregate([
+            {
+                $group: {
+                    _id: { 
+                        $toLower: { 
+                            $trim: { 
+                                input: { 
+                                    $arrayElemAt: [ { $split: ["$destName", ","] }, 0 ] 
+                                } 
+                            } 
+                        } 
+                    },
+                    destCode: { $first: "$destCode" },
+                    destName: { $first: "$destName" },
+                    countryName: { $first: "$countryName" }
+                }
+            }
+        ]);
 
         return {
             status: true,
-            body: destinations.map(dest => ({
+            body: uniqueDestinations.map(dest => ({
                 destCode: dest.destCode,
                 destName: dest.destName,
-                countryName: "" // Optional, can be added if available in model
+                countryName: dest.countryName || "" // Optional
             }))
         };
     }

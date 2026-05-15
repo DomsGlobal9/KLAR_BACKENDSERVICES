@@ -160,7 +160,12 @@ Reported Total to UI:      ${totalToUI}
 
         // Deduplicate suggestions by name to fix "multiple times same location" issue
         const uniqueSuggestions = Array.from(
-            new Map(suggestions.map(item => [item.label.toLowerCase(), item])).values()
+            new Map(suggestions.map(item => {
+                const dedupeKey = item.type === "city" 
+                    ? item.label.split(',')[0].toLowerCase().trim() 
+                    : item.label.toLowerCase().trim();
+                return [dedupeKey, item];
+            })).values()
         );
 
         return uniqueSuggestions;
