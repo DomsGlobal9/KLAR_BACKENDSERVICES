@@ -28,7 +28,7 @@ router.post("/sync/hotels", async (_req, res) => {
 // ─── Core Routes ─────────────────────────────────────────────────────────────
 
 // Base route returns destinations data as requested
-router.get("/", getDestinations);
+// router.get("/", getDestinations);
 
 router.get("/health", (_req, res) => {
     res.json({
