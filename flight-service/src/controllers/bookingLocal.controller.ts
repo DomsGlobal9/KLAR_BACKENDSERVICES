@@ -62,7 +62,7 @@ class BookingLocalController {
 
             const token = this.currentToken;
 
-            console.log({bookingId, totalPrice, token});
+            console.log({ bookingId, totalPrice, token });
 
             if (!token) {
                 throw new Error("Token missing for wallet deduction");
@@ -88,6 +88,47 @@ class BookingLocalController {
                 error.message ||
                 "Wallet deduction failed"
             );
+        }
+    };
+
+    private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
+        try {
+            console.log("Wallet balance check call");
+
+            const token = this.currentToken;
+
+            console.log({ bookingId, totalPrice, token });
+
+            if (!token) {
+                return {
+                    status: 404,
+                    success: false,
+                    message: "Token missing for wallet balance check",
+                };
+            }
+
+            const response = await axios.get(
+                `${this.authServiceUrl}/book/check-balance/${bookingId}`,
+                {
+                    params: { totalPrice },
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                }
+            );
+
+
+            const walletBalanceCheckResponse = response.data;
+            console.log("@@@@@@@@@@@@@@@ The walletBalanceCheckResponse we got", response);
+
+            return walletBalanceCheckResponse;
+
+        } catch (error: any) {
+            return {
+                status: 400,
+                success: false,
+                message: error.response?.data?.message || error.message || "Wallet balance check failed",
+            };
         }
     };
 
@@ -173,6 +214,7 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
             const {
                 bookingId,
                 travellers,
@@ -189,6 +231,36 @@ class BookingLocalController {
                 });
             }
 
+            // Check wallet balance first
+            const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
+
+            // If balance check failed or insufficient balance
+            if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
+                return res.status(400).json({
+                    success: false,
+                    message: balanceCheck.message,
+                    data: {
+                        currentBalance: balanceCheck.currentBalance,
+                        requiredAmount: balanceCheck.requiredAmount,
+                        shortfallAmount: balanceCheck.shortfallAmount,
+                        isAlreadyPaid: balanceCheck.isAlreadyPaid
+                    }
+                });
+            }
+
+            // If already paid, return appropriate response
+            if (balanceCheck.isAlreadyPaid) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Booking already paid",
+                    data: {
+                        bookingId,
+                        isAlreadyPaid: true
+                    }
+                });
+            }
+
+            // Proceed with booking only if balance is sufficient
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
                 travellers,
@@ -205,6 +277,7 @@ class BookingLocalController {
                 });
             }
 
+            // Deduct wallet after successful booking
             await this.deductWalletBalance(bookingId, totalPrice);
 
             return res.status(200).json({
@@ -214,6 +287,7 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
+            console.log("$$$$$$$$$$$$$$$$$ Entering into catch in UPDATE-AND-BOOK");
             return res.status(400).json({
                 success: false,
                 message: error.message

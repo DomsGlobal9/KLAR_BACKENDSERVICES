@@ -3,6 +3,7 @@ import { BookingPaymentRepository } from "../repositories/bookingPayment.reposit
 import { BadRequestError, NotFoundError } from "../errors/AppError";
 
 export class BookingPaymentService {
+
     static async payForBooking(
         userId: Types.ObjectId,
         bookingId: string,
@@ -60,6 +61,38 @@ export class BookingPaymentService {
             transaction,
             wallet: updatedWallet,
             isDuplicate: false,
+        };
+    }
+    
+    static async checkWalletBalance(
+        userId: Types.ObjectId,
+        bookingId: string,
+        totalPrice: number
+    ) {
+        /**
+         * Get wallet
+         */
+        const wallet = await BookingPaymentRepository.getWallet(userId);
+        if (!wallet) {
+            throw new NotFoundError("Wallet not found");
+        }
+
+        /**
+         * Check if already paid for this booking
+         */
+        const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
+        const isAlreadyPaid = !!existingPayment;
+
+        const hasSufficientBalance = wallet.balance >= totalPrice;
+        const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - wallet.balance;
+
+        return {
+            hasSufficientBalance,
+            currentBalance: wallet.balance,
+            requiredAmount: totalPrice,
+            shortfallAmount,
+            bookingId,
+            isAlreadyPaid,
         };
     }
 }
