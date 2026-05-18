@@ -9,6 +9,7 @@ import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
 import flightBookingConfirmationTemplateRoute from "./flight-booking-confirmation-template.routes";
+import AgencyBookingController from "../controllers/agency-booking.controller";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
 router.use("/confirmation", flightBookingConfirmationTemplateRoute);
+router.use("/agency/booking", AgencyBookingController.getAgencyConfirmationPdf);
 
 export default router;
