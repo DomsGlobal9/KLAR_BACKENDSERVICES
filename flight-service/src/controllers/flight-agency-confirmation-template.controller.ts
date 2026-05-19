@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import FlightAgencyBookingService from "../services/flight-agency-confirmation-template.service";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
+import { flightAgencyCancellationTemplate } from "../templates/flight-agency-cancellation.template"; // New
 import { generatePdfFromHtml } from "../utils/flight-confirmatoin-pdf-generator.util";
 
 class FlightAgencyBookingController {
@@ -14,7 +15,6 @@ class FlightAgencyBookingController {
                 return res.status(400).json({ success: false, message: "bookingId is required" });
             }
 
-            // 1. Fetch the full DB and Tripjack details combined
             const cleanBookingId = Array.isArray(bookingId) ? bookingId[0] : bookingId;
             const bookingData = await FlightAgencyBookingService.getAgencyConfirmationData(cleanBookingId);
 
@@ -22,47 +22,53 @@ class FlightAgencyBookingController {
                 return res.status(404).json({ success: false, message: "Booking data not found" });
             }
 
-            // 2. FIXED STATUS GUARD: Protect against object naming collisions
+            // 1. Resolve State Status Engine Mapping cleanly
             let currentStatus = 'UNKNOWN';
             if (typeof bookingData?.status === 'string') {
-                currentStatus = bookingData.status;
+                currentStatus = bookingData.status.toUpperCase();
             } else if (typeof bookingData?.order?.status === 'string') {
-                currentStatus = bookingData.order.status;
+                currentStatus = bookingData.order.status.toUpperCase();
             }
 
-            console.log("flight-agency-confirmation-template.controller.ts currentStatus:", currentStatus);
+            console.log(`Processing Agency Accounting Pipeline for ID: ${cleanBookingId} with Status: ${currentStatus}`);
 
-            if (currentStatus !== "SUCCESS") {
-                return res.status(400).json({
-                    success: false,
-                    message: `Cannot generate Agency configuration PDF. Current booking status is: ${currentStatus}. Documents are only available for SUCCESS status.`
-                });
-            }
-
-            // 3. Convert Logo to Base64
+            // 2. Load Base64 assets
             const logoPath = path.join(__dirname, '../assets/images/klar-travels-logo.png'); 
             let logoBase64 = '';
-            
             if (fs.existsSync(logoPath)) {
                 const bitmap = fs.readFileSync(logoPath);
                 logoBase64 = `data:image/png;base64,${bitmap.toString('base64')}`;
             }
 
-            // 4. Render HTML using the Agency Template
-            const html = flightAgencyBookingConfirmationTemplate(bookingData, logoBase64);
+            // 3. Dynamic Structural Template Selector Switch Block
+            let html = '';
+            let filenamePrefix = 'Agency_Document';
 
-            // 5. Generate PDF from HTML
+            if (currentStatus === "SUCCESS") {
+                html = flightAgencyBookingConfirmationTemplate(bookingData, logoBase64);
+                filenamePrefix = 'Agency_Confirmation';
+            } else if (currentStatus === "CANCELLED") {
+                html = flightAgencyCancellationTemplate(bookingData, logoBase64);
+                filenamePrefix = 'Agency_Cancellation';
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: `Cannot generate Agency PDF. Current status is ${currentStatus}. Documents are only available for SUCCESS or CANCELLED status values.`
+                });
+            }
+
+            // 4. Generate and send PDF Binary data stream
             const pdfBuffer = await generatePdfFromHtml(html);
 
             res.setHeader("Content-Type", "application/pdf");
-            res.setHeader("Content-Disposition", `attachment; filename=Agency_Confirmation_${cleanBookingId}.pdf`);
+            res.setHeader("Content-Disposition", `attachment; filename=${filenamePrefix}_${cleanBookingId}.pdf`);
             
             return res.status(200).send(pdfBuffer);
 
         } catch (error: any) {
             return res.status(500).json({
                 success: false,
-                message: error.message || "Failed to generate Agency PDF confirmation",
+                message: error.message || "Failed to process target agency document compilation",
             });
         }
     }
