@@ -1,4 +1,4 @@
-import { FlightDocumentRepository } from "../repositories/flight-document.repository";
+import { FlightDocumentRepository } from "../repositories/flight-client-template.repository";
 
 export class FlightDocumentService {
     private repo = new FlightDocumentRepository();

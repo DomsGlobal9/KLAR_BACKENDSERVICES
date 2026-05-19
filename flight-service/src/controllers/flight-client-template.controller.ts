@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import fs from 'fs';
 import path from 'path';
-import FlightDocumentService from "../services/flight-document.service";
+import FlightDocumentService from "../services/flight-client-template.service";
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
 import { flightClientCancellationTemplate } from "../templates/flight-client-cancellation.template";
 import { generatePdfFromHtml } from "../utils/flight-document-pdf-generator.util"
