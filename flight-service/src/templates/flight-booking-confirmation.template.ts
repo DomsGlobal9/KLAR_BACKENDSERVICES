@@ -3,7 +3,9 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     const air = data?.itemInfos?.AIR || {};
     const trip = air?.TripInformation?.[0] || {};
     const segments = trip?.SegmentInformation || [];
-    const passenger = air?.TravellerInformation?.[0] || {};
+    
+    // FIX: Look into the local database tracking array fallback if Tripjack payload arrays are empty of meta-records
+    const passenger = air?.TravellerInformation?.[0] || data?.travellers?.[0] || {};
     const fare = air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
 
     const formatDate = (dateStr: string) => {
@@ -12,7 +14,37 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     };
 
-    const pnr = passenger.pnrDetails ? Object.values(passenger.pnrDetails)[0] : 'N/A';
+    // AIRTIGHT PNR EXTRACTION PIPELINE
+    let resolvedPnr = 'N/A';
+
+    if (passenger?.pnrDetails && Object.keys(passenger.pnrDetails).length > 0) {
+        resolvedPnr = Object.values(passenger.pnrDetails)[0] as string;
+    } else if (passenger?.pnr) {
+        resolvedPnr = passenger.pnr;
+    } else if (data?.pnr) {
+        resolvedPnr = data.pnr;
+    } else if (order?.Pnr || order?.pnr) {
+        resolvedPnr = order.Pnr || order.pnr;
+    } else if (segments.length > 0) {
+        // Scans through your Segment information lists to capture deep nested PNR references
+        for (const seg of segments) {
+            const tiArray = seg?.BaggageInfo?.tI || seg?.BaggageInfo?.ti || [];
+            if (tiArray[0]?.pnrDetails && Object.keys(tiArray[0].pnrDetails).length > 0) {
+                resolvedPnr = Object.values(tiArray[0].pnrDetails)[0] as string;
+                break;
+            } else if (tiArray[0]?.pnr) {
+                resolvedPnr = tiArray[0].pnr;
+                break;
+            }
+        }
+    }
+
+    // Normalized fallbacks to handle database property case configurations (Title vs title)
+    const title = passenger.Title || passenger.title || 'Mr/Ms';
+    const firstName = passenger.FirstName || passenger.firstName || '';
+    const lastName = passenger.LastName || passenger.lastName || '';
+    const cabinClass = passenger.FareDetails?.CabinClass || passenger.paxType || 'ECONOMY';
+    const classCode = passenger.FareDetails?.ClassCode || 'T';
 
     return `
     <html>
@@ -44,7 +76,6 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             .plane { position: relative; z-index: 2; background: #f8fafc; padding: 0 10px; color: #2563eb; font-size: 14px; }
             .dur { font-size: 10px; font-weight: 800; color: #1e293b; margin-top: 20px; text-transform: uppercase; }
 
-            /* Grid Alignment - Horizontal layout for icons and text */
             .icon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px 50px; margin: 40px 0; }
             .icon-item { display: flex; align-items: center; gap: 15px; }
             .icon-circle { width: 42px; height: 42px; background: #eff6ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #2563eb; font-size: 16px; flex-shrink: 0; }
@@ -58,7 +89,6 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             .info-col ul { padding-left: 15px; margin: 0; }
             .info-col li { font-size: 11px; color: #475569; margin-bottom: 8px; line-height: 1.5; font-weight: 500; }
 
-            /* Bottom Logo Formatting */
             .footer-branding { margin-top: 60px; text-align: right; }
             .footer-logo { width: 100px;}
             .support-bar { font-size: 11px; color: #94a3b8; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
@@ -69,35 +99,35 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             ${logoBase64 ? `<img src="${logoBase64}" class="logo-img">` : `<strong>KLAR TRAVELS</strong>`}
             <div class="booking-header-info">
                 <div class="label-sm">Booking Reference</div>
-                <div class="val-lg">${order.BookingId}</div>
+                <div class="val-lg">${order.BookingId || 'N/A'}</div>
                 <div class="label-sm" style="margin-top: 10px;">Total Amount Paid</div>
-                <div class="price-blue">₹${fare.NetFare?.toLocaleString('en-IN')}</div>
+                <div class="price-blue">₹${(fare.NetFare || data.totalPrice || 0).toLocaleString('en-IN')}</div>
             </div>
         </div>
 
         <div class="section-tag">Passenger Information</div>
         <div class="pass-grid">
-            <div class="meta-box"><span class="label-sm">Name</span><span class="val">${passenger.Title} ${passenger.FirstName} ${passenger.LastName}</span></div>
-            <div class="meta-box"><span class="label-sm">PNR</span><span class="val">${pnr}</span></div>
-            <div class="meta-box"><span class="label-sm">Ticket Type</span><span class="val">${passenger.FareDetails?.CabinClass} (${passenger.FareDetails?.ClassCode})</span></div>
+            <div class="meta-box"><span class="label-sm">Name</span><span class="val">${title} ${firstName} ${lastName}</span></div>
+            <div class="meta-box"><span class="label-sm">PNR</span><span class="val">${resolvedPnr}</span></div>
+            <div class="meta-box"><span class="label-sm">Ticket Type</span><span class="val">${cabinClass} (${classCode})</span></div>
         </div>
 
         ${segments.map((seg: any) => `
         <div class="route-card">
             <div class="apt-group">
-                <div class="apt-code">${seg.DepartureAirport.cityCode}</div>
-                <div class="apt-name">${seg.DepartureAirport.city}</div>
+                <div class="apt-code">${seg.DepartureAirport?.cityCode || 'N/A'}</div>
+                <div class="apt-name">${seg.DepartureAirport?.city || 'N/A'}</div>
                 <div class="flight-time">${new Date(seg.DepartureTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</div>
                 <div class="label-sm">${formatDate(seg.DepartureTime)}</div>
             </div>
             <div class="path-area">
                 <div class="line"></div>
                 <span class="plane">✈</span>
-                <div class="dur">${seg.Duration} MINS • NON-STOP</div>
+                <div class="dur">${seg.Duration || '0'} MINS • NON-STOP</div>
             </div>
             <div class="apt-group" style="text-align: right;">
-                <div class="apt-code">${seg.ArrivalAirport.cityCode}</div>
-                <div class="apt-name">${seg.ArrivalAirport.city}</div>
+                <div class="apt-code">${seg.ArrivalAirport?.cityCode || 'N/A'}</div>
+                <div class="apt-name">${seg.ArrivalAirport?.city || 'N/A'}</div>
                 <div class="flight-time">${new Date(seg.ArrivalTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</div>
                 <div class="label-sm">${formatDate(seg.ArrivalTime)}</div>
             </div>
@@ -130,7 +160,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
                 <div class="icon-circle">📊</div>
                 <div class="icon-text-group">
                     <div class="icon-label">Class</div>
-                    <div class="icon-val">${passenger.FareDetails?.CabinClass}</div>
+                    <div class="icon-val">${cabinClass}</div>
                 </div>
             </div>
         </div>

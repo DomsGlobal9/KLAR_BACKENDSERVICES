@@ -18,7 +18,7 @@ export const flightAgencyBookingConfirmationTemplate = (data: any, logoBase64: s
         return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     };
 
-    const pnr = passenger.pnrDetails ? Object.values(passenger.pnrDetails)[0] : (data?.pnr || 'TESTPNR');
+    const pnr = passenger.pnrDetails ? Object.values(passenger.pnrDetails)[0] : (data?.pnr || 'N/A');
 
     // Combine fields if necessary to match the structure
     const title = passenger.Title || passenger.title || 'Mr';

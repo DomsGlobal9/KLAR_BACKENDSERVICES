@@ -44,6 +44,6 @@ export class FlightAgencyBookingRepository {
         } catch (error: any) {
             console.error("Critical Failure inside FlightAgencyBookingRepository parsing pipeline:", error.message);
             throw new Error(`Failed to correlate internal agency tracking variables: ${error.message}`);
-        }
+        } 
     }
 }
