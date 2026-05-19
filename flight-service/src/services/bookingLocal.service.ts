@@ -286,7 +286,7 @@ class BookingService {
 
     async getBookingDetails(bookingId: string, userId: string) {
         if (!bookingId) {
-            throw new Error("bookingId is required");
+            throw new Error("bookingId is required"); 
         }
 
         const booking = await this.bookingRepo.getBookingByIdAndUser(

@@ -9,7 +9,7 @@ import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
 import flightBookingConfirmationTemplateRoute from "./flight-booking-confirmation-template.routes";
-import flightAgencyConfirmationTemplateRoute "./flight-agency-confirmation-template.routes"; // Importing the new route for the agency confirmation template
+import flightBookingAgencyConfirmatoinTemplateRoute from "./flight-agency-confirmation-template.routes";
 
 const router = Router();
 
@@ -23,5 +23,5 @@ router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
 router.use("/confirmation", flightBookingConfirmationTemplateRoute);
-router.use("/agency-confirmation", flightAgencyConfirmationTemplateRoute);
+router.use("/agency-confirmation", flightBookingAgencyConfirmatoinTemplateRoute);
 export default router;
