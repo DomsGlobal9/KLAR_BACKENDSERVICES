@@ -1,10 +1,10 @@
 import BookingService from "../services/booking.service";
 import { BookingRepository } from "./bookingLocal.repository"; 
 
-export class FlightBookingRepository {
+export class FlightDocumentRepository {
     private localBookingRepo = new BookingRepository();
 
-    async getBookingById(bookingId: string) {
+    async getBookingDocumentById(bookingId: string) {
         try {
             // 1. Fetch live Tripjack flight status and local DB records in parallel
             const [tripjackDetails, localDbDetails] = await Promise.all([
@@ -12,7 +12,7 @@ export class FlightBookingRepository {
                 this.localBookingRepo.getBookingById(bookingId)
             ]);
 
-            console.log("--- DEBUG USER FLIGHT CONFIRMATION PIPELINE ---");
+            console.log("--- DEBUG USER FLIGHT DOCUMENT PIPELINE ---");
             console.log("Tripjack Response Found:", JSON.stringify(tripjackDetails));
             console.log("Local Database Record Found:", JSON.stringify(localDbDetails));
 
@@ -56,8 +56,8 @@ export class FlightBookingRepository {
             return finalMergedPayload;
 
         } catch (error: any) {
-            console.error("Error in FlightBookingRepository map pipeline:", error.message);
-            throw new Error(`Failed to build user flight confirmation payload: ${error.message}`);
+            console.error("Error in FlightDocumentRepository map pipeline:", error.message);
+            throw new Error(`Failed to build user flight document payload: ${error.message}`);
         }
     }
 }

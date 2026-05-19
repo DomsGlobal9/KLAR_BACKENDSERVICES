@@ -1,13 +1,12 @@
 import { Request, Response } from "express";
 import fs from 'fs';
 import path from 'path';
-import FlightBookingService from "../services/flight-confirmation-template.service";
+import FlightDocumentService from "../services/flight-document.service";
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
-import { flightClientCancellationTemplate } from "../templates/flight-client-cancellation.template"; // New
-import { generatePdfFromHtml } from "../utils/flight-confirmatoin-pdf-generator.util";
-
-class BookingController {
-    async getConfirmationPdf(req: Request, res: Response) {
+import { flightClientCancellationTemplate } from "../templates/flight-client-cancellation.template";
+import { generatePdfFromHtml } from "../utils/flight-document-pdf-generator.util"
+class FlightDocumentController {
+    async getDocumentPdf(req: Request, res: Response) {
         try {
             const { bookingId } = req.params;
 
@@ -16,7 +15,7 @@ class BookingController {
             }
 
             const cleanBookingId = Array.isArray(bookingId) ? bookingId[0] : bookingId;
-            const bookingData = await FlightBookingService.getConfirmationHtml(cleanBookingId);
+            const bookingData = await FlightDocumentService.getDocumentHtml(cleanBookingId);
 
             if (!bookingData) {
                 return res.status(404).json({ success: false, message: "Booking data not found" });
@@ -46,10 +45,10 @@ class BookingController {
 
             if (currentStatus === "SUCCESS") {
                 html = flightBookingConfirmationTemplate(bookingData, logoBase64);
-                filenamePrefix = 'Confirmation';
+                filenamePrefix = 'BookingConfirmation';
             } else if (currentStatus === "CANCELLED") {
                 html = flightClientCancellationTemplate(bookingData, logoBase64);
-                filenamePrefix = 'Cancellation';
+                filenamePrefix = 'BookingCancellation';
             } else {
                 return res.status(400).json({
                     success: false,
@@ -74,4 +73,4 @@ class BookingController {
     }
 }
 
-export default new BookingController();
+export default new FlightDocumentController();

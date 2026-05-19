@@ -4,7 +4,7 @@ import path from 'path';
 import FlightAgencyBookingService from "../services/flight-agency-confirmation-template.service";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
 import { flightAgencyCancellationTemplate } from "../templates/flight-agency-cancellation.template"; // New
-import { generatePdfFromHtml } from "../utils/flight-confirmatoin-pdf-generator.util";
+import { generatePdfFromHtml } from "../utils/flight-document-pdf-generator.util";
 
 class FlightAgencyBookingController {
     async getAgencyConfirmationPdf(req: Request, res: Response) {
