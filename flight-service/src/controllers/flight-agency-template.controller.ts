@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import fs from 'fs';
 import path from 'path';
-import FlightAgencyBookingService from "../services/flight-agency-confirmation-template.service";
+import FlightAgencyBookingService from "../services/flight-agency-template.service";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
 import { flightAgencyCancellationTemplate } from "../templates/flight-agency-cancellation.template"; // New
 import { generatePdfFromHtml } from "../utils/flight-document-pdf-generator.util";
 
 class FlightAgencyBookingController {
-    async getAgencyConfirmationPdf(req: Request, res: Response) {
+    async getAgencyPdf(req: Request, res: Response) {
         try {
             const { bookingId } = req.params;
 
@@ -16,7 +16,7 @@ class FlightAgencyBookingController {
             }
 
             const cleanBookingId = Array.isArray(bookingId) ? bookingId[0] : bookingId;
-            const bookingData = await FlightAgencyBookingService.getAgencyConfirmationData(cleanBookingId);
+            const bookingData = await FlightAgencyBookingService.getAgencyData(cleanBookingId);
 
             if (!bookingData) {
                 return res.status(404).json({ success: false, message: "Booking data not found" });
@@ -46,7 +46,7 @@ class FlightAgencyBookingController {
 
             if (currentStatus === "SUCCESS") {
                 html = flightAgencyBookingConfirmationTemplate(bookingData, logoBase64);
-                filenamePrefix = 'Agency_Confirmation';
+                filenamePrefix = 'Agency_Booking';
             } else if (currentStatus === "CANCELLED") {
                 html = flightAgencyCancellationTemplate(bookingData, logoBase64);
                 filenamePrefix = 'Agency_Cancellation';
