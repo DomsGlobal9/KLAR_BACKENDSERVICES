@@ -107,7 +107,7 @@ export class AuthService {
         });
 
         if (existingUser) {
-            throw new ConflictError('User already exists');
+            throw new ConflictError("User already exists");
         }
 
         /**
@@ -116,16 +116,22 @@ export class AuthService {
         const passwordHash = await this.passwordUtil.hashPassword(password);
 
         /**
-         * Create user
+         * Create ACTIVE user directly
          */
         const user = new UserModel({
             clientType: ClientType.B2B,
+
             email: businessEmail.toLowerCase(),
             mobile: businessMobile,
+
             passwordHash,
 
             roles: [Roles.B2B_ADMIN],
-            status: UserStatus.VERIFICATION_PENDING,
+
+            /**
+             * ACTIVE by default
+             */
+            status: UserStatus.ACTIVE,
 
             businessProfile: {
                 businessName,
@@ -133,19 +139,25 @@ export class AuthService {
                 contactPerson,
                 businessEmail,
                 businessMobile,
+
                 gstNumber: data.gstNumber,
                 panNumber: data.panNumber,
+
                 address: data.address,
                 city: data.city,
                 country: data.country,
             },
 
+            /**
+             * VERIFIED by default
+             */
             verification: {
-                status: VerificationStatus.PENDING,
+                status: VerificationStatus.APPROVED,
+                verifiedAt: new Date(),
             },
 
             wallet: {
-                status: WalletStatus.INACTIVE || "inactive",
+                status: WalletStatus.ACTIVE,
             },
         });
 
@@ -154,12 +166,17 @@ export class AuthService {
          */
         await user.save();
 
-        // Now create wallet separately
+        /**
+         * Create wallet
+         */
         const wallet = new Wallet({
-            userId: user._id, // Now we have the user ID
+            userId: user._id,
+
             balance: 0,
             currency: "INR",
-            status: "ACTIVE", // Use uppercase as per your enum
+
+            status: WalletStatus.ACTIVE,
+
             emailAlerts: true,
             smsAlerts: false,
         });

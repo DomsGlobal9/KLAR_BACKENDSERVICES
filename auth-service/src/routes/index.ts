@@ -7,6 +7,7 @@ import dashboardRoutes from "./dashboard.routes";
 import bookingRoutes from "./bookingPayment.routes";
 import { Wallet } from "../models/wallet.model";
 import { UserModel } from "../models/user.model";
+import rmRoutes from "./rm.routes";
 
 const router = Router();
 
@@ -84,5 +85,6 @@ router.use("/admin/verifications", adminRoutes);
 router.use("/wallet", walletRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/book", bookingRoutes);
+router.use("/rm", rmRoutes);
 
 export default router;

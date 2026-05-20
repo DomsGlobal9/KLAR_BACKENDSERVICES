@@ -5,9 +5,12 @@ import {
   rejectVerificationService,
 } from "../services/adminVerification.service";
 import { AuthService } from "../services/auth.service";
+import { OTPService } from "../services/otp.service";
 import { ClientType } from "../constants/clientTypes";
 import { envConfig } from "../config/env.config";
 import { UserModel } from "../models/user.model";
+import { OTPType } from "../models/otp.model";
+
 
 export const signupB2B = async (
   req: Request,
@@ -25,6 +28,114 @@ export const signupB2B = async (
     next(err);
   }
 };
+
+
+/**
+ * OTP Functionality Begins
+ */
+export const requestSignupOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    console.log("The REQUEST signup function called");
+
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const otpDoc = await OTPService.generateOTP(
+      email.toLowerCase(),
+      OTPType.SIGNUP
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "OTP generated successfully",
+      otp: otpDoc.otp,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifySignupOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email, otp,
+      businessName,
+      businessType,
+      contactPerson,
+      businessMobile,
+      password,
+
+      gstNumber,
+      panNumber,
+
+      address,
+      city,
+      country,
+    } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        status: false,
+        message: "Email or OTP not found"
+      })
+    }
+
+    /**
+     * Verify OTP
+     */
+    await OTPService.verifyOTP(
+      email.toLowerCase(),
+      otp,
+      OTPType.SIGNUP
+    );
+
+    /**
+     * Create user
+     */
+    const result = await AuthService.getInstance().signupB2B({
+      businessName,
+      businessType,
+      contactPerson,
+
+      businessEmail: email.toLowerCase(),
+      businessMobile,
+
+      password,
+
+      gstNumber,
+      panNumber,
+
+      address,
+      city,
+      country,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Signup successful",
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * OTP Functionality End here
+ */
 
 export const getPendingVerifications = async (
 
@@ -142,6 +253,138 @@ export const loginB2B = async (
     next(err);
   }
 };
+
+/**
+ * OTP SEND FOR LOGIN BEGINS HERE
+ */
+export const requestLoginOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    /**
+     * Verify user credentials first
+     */
+    await AuthService.getInstance().login({
+      email: email.toLowerCase(),
+      password,
+      clientType: ClientType.B2B,
+    });
+
+    /**
+     * Generate OTP only after password verification
+     */
+    const otpDoc = await OTPService.generateOTP(
+      email.toLowerCase(),
+      OTPType.LOGIN
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "OTP generated successfully",
+
+      /**
+       * TEMPORARY FOR TESTING
+       */
+      otp: otpDoc.otp,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyLoginOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email, otp } = req.body;
+
+    /**
+     * Verify OTP
+     */
+    await OTPService.verifyOTP(
+      email.toLowerCase(),
+      otp,
+      OTPType.LOGIN
+    );
+
+    /**
+     * Find user
+     */
+    const user = await UserModel.findOne({
+      email: email.toLowerCase(),
+      clientType: ClientType.B2B,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    /**
+     * Generate JWT
+     */
+    const tokenPayload = {
+      userId: user._id.toString(),
+      email: user.email,
+      clientType: user.clientType,
+      roles: user.roles,
+    };
+
+    const jwtUtil = AuthService.getInstance()["jwtUtil"];
+
+    const token = jwtUtil.generateAccessToken(
+      tokenPayload
+    );
+
+    /**
+     * Set Cookie
+     */
+    res.cookie("token", token, {
+      httpOnly: envConfig.COOKIE.HTTP_ONLY,
+      secure: envConfig.COOKIE.SECURE,
+      sameSite: envConfig.COOKIE.SAME_SITE,
+      maxAge: envConfig.COOKIE.MAX_AGE,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+
+      data: {
+        token,
+
+        user: {
+          id: user._id,
+          email: user.email,
+          roles: user.roles,
+          clientType: user.clientType,
+          status: user.status,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+/**
+ * OTP SEND FOR LOGIN END HERE
+ */
+
 
 /**
  * B2B Logout Controller

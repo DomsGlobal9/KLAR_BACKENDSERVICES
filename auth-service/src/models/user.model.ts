@@ -22,6 +22,7 @@ export interface IUser extends Document {
     verification?: any;
     wallet?: any;
 
+    createdBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -87,8 +88,10 @@ const UserSchema = new Schema<IUser>(
         verification: {
             type: VerificationSchema,
         },
-
-
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
     },
     {
         timestamps: true,
