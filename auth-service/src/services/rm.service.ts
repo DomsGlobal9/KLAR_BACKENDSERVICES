@@ -1,26 +1,30 @@
 import bcrypt from "bcryptjs";
+
 import { Roles } from "../constants/roles";
-import { UserModel } from "../models/user.model";
-import { CreateRMInput } from "../types/rm.types";
 import { ClientType } from "../constants/clientTypes";
 import { UserStatus } from "../constants/userStatus";
 import { VerificationStatus } from "../constants/verificationStatus";
-import { ConflictError, BadRequestError } from "../errors/AppError";
 
+import { UserModel } from "../models/user.model";
 
+import { CreateRMInput } from "../types/rm.types";
+
+import {
+    ConflictError,
+    BadRequestError,
+} from "../errors/AppError";
+import { EmailService } from "./email.service";
+import { registrationSuccessEmailTemplate } from "../templates/registrationSuccessful.template";
 
 export class RMService {
 
-    public static async createRM(data: CreateRMInput) {
-
-        const {
-            memberName,
-            email,
-            password,
-            mobile,
-            role,
-            createdBy,
-        } = data;
+    /**
+     * Validate RM creation
+     */
+    public static async validateRMCreation(
+        email: string,
+        role: string
+    ) {
 
         /**
          * Only RM role allowed
@@ -44,15 +48,46 @@ export class RMService {
             );
         }
 
+        return true;
+    }
+
+    /**
+     * Create RM
+     */
+    public static async createRM(
+        data: CreateRMInput
+    ) {
+
+        const {
+            memberName,
+            email,
+            password,
+            mobile,
+            role,
+            createdBy,
+        } = data;
+
+        /**
+         * Validate
+         */
+        await this.validateRMCreation(
+            email,
+            role
+        );
+
         /**
          * Hash password
          */
-        const passwordHash = await bcrypt.hash(password, 10);
+        const passwordHash = await bcrypt.hash(
+            password,
+            10
+        );
 
         /**
          * Create RM user
          */
         const user = new UserModel({
+
             clientType: ClientType.B2B,
 
             email: email.toLowerCase(),
@@ -74,6 +109,15 @@ export class RMService {
         });
 
         await user.save();
+
+        /**
+         * Send Email
+         */
+        await EmailService.sendEmail({
+            to: email,
+            subject: "Your OTP Verification Code",
+            html: registrationSuccessEmailTemplate(email, password, role),
+        });
 
         return {
             id: user._id,
