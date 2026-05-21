@@ -149,6 +149,7 @@ export class TripJackCabsProvider {
 
         const requestPayload = {
             ...payload,
+            agencyId: env.tripJack.agencyId,
             correlationId: payload.correlationId || uuidv4()
         };
 

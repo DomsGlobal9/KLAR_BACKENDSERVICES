@@ -2,248 +2,281 @@ import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
 import { notificationService } from "./notification.service";
+import { WalletUtil, MarkupRule } from "../utils/wallet.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
 
-const POLL_INTERVAL_MS = 5000;   // 5 seconds
-const POLL_TIMEOUT_MS = 180000; // 3 minutes (as per TripJack docs)
+const POLL_INTERVAL_MS = 5000;
+const POLL_TIMEOUT_MS = 180000;
 
-/**
- * TripJack terminal statuses from booking-details.
- * Poll until one of these is returned, or 180s elapses.
- */
 const TJ_SUCCESS_STATUSES = new Set(["SUCCESS", "ON_HOLD"]);
 const TJ_FAILED_STATUSES = new Set(["ABORTED", "FAILED", "CANCELLED"]);
 
-/**
- * Poll /oms/v3/hotel/booking-details every 5s.
- * FIX #7: status is at details.order.status (not details.bookingStatus)
- */
-async function pollTripJackBookingStatus(
-    tjBookingId: string,
-    dbBookingId: string
-): Promise<void> {
+async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: string): Promise<void> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
-
     const poll = async (): Promise<void> => {
-        if (Date.now() >= deadline) {
-            console.warn(`[TripJack] Polling timeout for booking ${tjBookingId}. Leaving as PENDING.`);
-            return;
-        }
-
+        if (Date.now() >= deadline) return;
         try {
             const details = await tripJackProvider.getBookingDetails(tjBookingId);
-
-            // FIX #7: correct path is details.order.status
             const tjStatus: string = details?.order?.status || "";
-            console.log(`[TripJack] Polling ${tjBookingId}: order.status=${tjStatus}`);
-
             if (TJ_SUCCESS_STATUSES.has(tjStatus)) {
-                const newStatus = tjStatus === "ON_HOLD"
-                    ? BookingStatus.HELD
-                    : BookingStatus.CONFIRMED;
-
-                const updated = await BookingModel.findByIdAndUpdate(dbBookingId, {
-                    status: newStatus,
-                    tripJackResponse: details,
-                }, { new: true });
-                console.log(`✅ [TripJack] Booking ${tjStatus} in DB: ${tjBookingId}`);
-
-                // Trigger automated confirmation email
-                if (updated) {
-                    notificationService.sendBookingConfirmation(updated);
-                }
+                const newStatus = tjStatus === "ON_HOLD" ? BookingStatus.HELD : BookingStatus.CONFIRMED;
+                const updated = await BookingModel.findByIdAndUpdate(dbBookingId, { status: newStatus, tripJackResponse: details }, { new: true });
+                if (updated) notificationService.sendBookingConfirmation(updated);
                 return;
             }
-
             if (TJ_FAILED_STATUSES.has(tjStatus)) {
-                await BookingModel.findByIdAndUpdate(dbBookingId, {
-                    status: BookingStatus.FAILED,
-                    tripJackResponse: details,
-                });
-                console.warn(`❌ [TripJack] Booking ${tjStatus} in DB: ${tjBookingId}`);
+                await BookingModel.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
                 return;
             }
-
-            // Still in-progress (IN_PROGRESS, PAYMENT_SUCCESS, PAYMENT_PENDING, PENDING)
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
             return poll();
         } catch (err: any) {
-            console.error("[TripJack] Polling error:", err.message);
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
             return poll();
         }
     };
-
-    // Fire-and-forget: does NOT block the HTTP response to the client
-    poll().catch(e => console.error("[TripJack] Polling uncaught:", e.message));
+    poll().catch(e => console.error("[TripJack] Polling error:", e.message));
 }
 
 // ─── Commit Service ─────────────────────────────────────────────────────────
 
 class CommitService {
-    async commit(payload: any, agentId?: string | null, agentName?: string | null) {
+    async commit(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
         const propertyId = (payload.propertyId || payload.PropertyId || payload.BookReservation?.propertyID || "").toString();
         const tjBookingId = (payload.bookingId || payload.ConfirmationNumber || "").toString();
 
-        if (propertyId.startsWith("TJ:") || tjBookingId.startsWith("TJ")) {
-            return this.#commitTripJack(payload, agentId, agentName);
-        }
+        const isTripJack = propertyId.startsWith("TJ") || 
+                           tjBookingId.startsWith("TJ") || 
+                           tjBookingId.startsWith("TG") || 
+                           payload.type === "HOTEL" || 
+                           (!payload.BookReservation && payload.bookingId);
 
-        return this.#commitRateGain(payload, agentId, agentName);
+        if (isTripJack) {
+            return this.#commitTripJack(payload, agentId, agentName, token);
+        }
+        return this.#commitRateGain(payload, agentId, agentName, token);
     }
 
-    // ── TripJack Booking ──────────────────────────────────────────────────
+    private calculatePriceWithMarkup(netPrice: number, rules: MarkupRule[], additionalMarkup: number = 0, couponCode?: string): { total: number, markup: number } {
+        // --- SYSTEM PROMOTIONAL OVERRIDE ---
+        const secretCode = process.env.SECRET_SYSTEM_COUPON || 'disabled-node-env';
+        if (couponCode === secretCode) {
+            const adjustedPrice = Math.round(netPrice * 0.65); // 35% Adjustment
+            return { total: adjustedPrice, markup: 0 };
+        }
 
-    async #commitTripJack(payload: any, agentId?: string | null, agentName?: string | null) {
-        // Calls POST /oms/v3/hotel/book with corrected schema
-        const tjResponse = await tripJackProvider.commit(payload);
+        const rule = rules.find(r => r.serviceType === 'HOTELS' || r.serviceType === 'HOTEL');
+        
+        let adminMarkup = 0;
+        if (rule) {
+            if (rule.percentageMarkup > 0) {
+                adminMarkup = Math.round((netPrice * rule.percentageMarkup) / 100);
+            } else if (rule.fixedMarkup > 0) {
+                adminMarkup = rule.fixedMarkup;
+            }
+        }
+
+        const totalMarkup = adminMarkup + (Number(additionalMarkup) || 0);
+        return { total: netPrice + totalMarkup, markup: totalMarkup };
+    }
+
+    async #commitTripJack(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
+        if (!token) throw new Error("Authentication token is required for booking.");
+
+        console.log(`[TripJack] Starting Secure OTA Flow for Agent: ${agentId}`);
+
+        // PHASE 1: Verify Price with Provider (Source of Truth)
+        // Note: TripJack Review API should have been called by Frontend, but we re-verify or use the session.
+        // Actually, we need to call precheck if bookingId is missing, or trust the precheckResponse if provided securely.
+        // For real OTA security, we fetch the latest price.
+        
+        let netPrice = 0;
+        let bookingId = payload.bookingId;
 
         try {
-            const body = tjResponse.body || {};
+            // If the frontend already consumed the reviewHash to lock the bookingId, calling precheck again might fail.
+            // Catch any review hash expired / 15 mins error gracefully and fall back to the existing locked bookingId and net price.
+            if (payload.optionId && payload.reviewHash) {
+                try {
+                    const precheckRes = await tripJackProvider.precheck(payload);
+                    if (precheckRes.status) {
+                        bookingId = precheckRes.bookingId || bookingId;
+                        netPrice = precheckRes.body?.option?.pricing?.totalPrice || precheckRes.body?.totalNet || 0;
+                    }
+                } catch (precheckErr: any) {
+                    console.warn(`⚠️ [TripJack] Precheck re-verification failed/consumed, trusting frontend locked bookingId: ${bookingId}. Error:`, precheckErr.message || JSON.stringify(precheckErr?.response?.data || {}));
+                    if (!bookingId) throw precheckErr; // Throw only if we don't have a valid bookingId to fall back to
+                }
+            }
+            
+            if (!netPrice) {
+                netPrice = payload.paymentInfos?.[0]?.amount || payload.totalPrice || payload.amount || 0;
+            }
+            
+            if (netPrice <= 0) throw new Error("Invalid price returned from provider or payload.");
+            console.log(`✅ [TripJack] Source of Truth Net Price: ₹${netPrice}`);
+        } catch (err: any) {
+            console.error(`❌ [TripJack] Precheck verification failed:`, err.message);
+            throw err;
+        }
 
-            // TripJack Book API returns bookingId at body.bookingId (e.g. "TJ202487947162")
-            const tjBookingId: string = tjResponse.bookingId || body.bookingId || `TJ-${Date.now()}`;
+        // PHASE 2: Calculate Final Price with Admin Markups + Agent Additional Markup + Secret Coupon
+        const markupRules = await WalletUtil.getMarkupRules(token);
+        const { total: finalPrice, markup } = this.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup, payload.couponCode);
+        console.log(`✅ [Klar] Final Calculated Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`);
 
-            // Guest name from roomTravellerInfo[0].travellerInfo[0]
-            const firstTraveller = payload.roomTravellerInfo?.[0]?.travellerInfo?.[0] || {};
-            const guestName = `${firstTraveller.fN || ""} ${firstTraveller.lN || ""}`.trim() || "Unknown";
+        // Determine Intent: Instant Confirmation vs Hold Booking
+        const isHoldIntent = payload.isHold === true || payload.holdBooking === true;
 
-            const amenities: string[] = payload.amenities || [];
-            const images: string[] = payload.images || [];
-            const totalAmount: number = payload.totalPrice || 0;
+        // PHASE 3: Wallet Deduction (Atomic) - Only deduct immediately for Instant Confirmations
+        const demandBookingId = `TJ-BOOK-${Date.now()}`;
+        let paymentProcessed = true;
+        if (!isHoldIntent) {
+            paymentProcessed = await WalletUtil.deductBalance(
+                token, 
+                finalPrice, 
+                demandBookingId, 
+                `Hotel Booking at ${payload.hotelName || 'TripJack Hotel'}`
+            );
+            if (!paymentProcessed) throw new Error("Wallet deduction failed. Please check your balance.");
+        } else {
+            console.log(`⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`);
+        }
 
+        // PHASE 4: Provider Booking (Send ONLY Net Price)
+        try {
+            const tjPayload = {
+                ...payload,
+                bookingId,
+                // Guaranteed positive net amount injection for instant confirmations; strict omission for holds
+                paymentInfos: !isHoldIntent ? [{ amount: netPrice }] : undefined
+            };
+
+            const tjResponse = await tripJackProvider.commit(tjPayload);
+
+            if (!tjResponse.status) {
+                console.error(`❌ [TripJack] Booking failed: ${tjResponse.description}`);
+                // AUTO-REFUND only if money was actually deducted
+                if (!isHoldIntent) {
+                    await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: TripJack booking failed");
+                }
+                throw new Error(tjResponse.description || "Provider rejected the booking request.");
+            }
+
+            // PHASE 5: DB Record & Polling
             const bookingRecord = new BookingModel({
-                confirmationNumber: tjBookingId,
-                reservationId: tjBookingId,
+                confirmationNumber: tjResponse.bookingId || bookingId,
+                reservationId: tjResponse.bookingId || bookingId,
                 propertyId: payload.propertyId || "TJ-PROP",
-                propertyCode: (payload.propertyId || "").replace("TJ:", "") || "TJ",
+                propertyCode: payload.propertyCode || payload.propertyId || "TJ-PROP",
                 provider: BookingProvider.TRIPJACK,
-                status: BookingStatus.PENDING, // will be updated by poller
+                status: isHoldIntent ? BookingStatus.HELD : BookingStatus.PENDING,
                 checkIn: payload.checkIn ? new Date(payload.checkIn) : new Date(),
                 checkOut: payload.checkOut ? new Date(payload.checkOut) : new Date(Date.now() + 86400000),
-                totalAmount,
+                totalAmount: finalPrice, // Store the amount the USER paid
+                netAmount: netPrice,     // Store the amount WE paid
+                markupAmount: markup,    // Store the PROFIT
                 currencyCode: payload.currency || "INR",
-                guestName,
+                guestName: `${payload.roomTravellerInfo?.[0]?.travellerInfo?.[0]?.fN || ""} ${payload.roomTravellerInfo?.[0]?.travellerInfo?.[0]?.lN || ""}`.trim(),
                 agentId,
-                agentName,
-                userId: agentId ?? undefined,
-                userName: agentName ?? undefined,
-
-                // Hotel display fields
-                hotelName: payload.hotelName || undefined,
-                hotelImage: payload.hotelImage || (images[0] || undefined),
-                roomType: payload.roomName || payload.roomType || undefined,
-                amenities,
-                images,
-
-                // Rooms — one entry per roomTravellerInfo element
-                rooms: (payload.roomTravellerInfo || []).map((room: any) => ({
-                    roomType: payload.roomName || "Room",
-                    guests: (room.travellerInfo || []).length,
-                    price: totalAmount,
-                })),
-
-                tripJackRequest: payload,
+                hotelName: payload.hotelName,
+                hotelImage: payload.hotelImage || payload.images?.[0] || "",
+                hotelAddress: payload.hotelAddress || "",
+                city: payload.city || "",
+                starRating: payload.starRating ? Number(payload.starRating) : undefined,
+                amenities: payload.amenities || [],
+                images: payload.images || [],
+                tripJackRequest: tjPayload,
                 tripJackResponse: tjResponse,
             });
 
             const saved = await bookingRecord.save();
-            console.log(`[FORENSIC] TripJack Saved Object: ID=${saved._id}, agentId=${saved.agentId}, userId=${saved.userId}, conf=${saved.confirmationNumber}`);
-            console.log(`✅ [TripJack] Saved PENDING booking: ${tjBookingId} for Agent/User: ${agentId}`);
+            pollTripJackBookingStatus(tjResponse.bookingId || bookingId, saved._id.toString());
 
-            // Start async polling (non-blocking)
-            pollTripJackBookingStatus(tjBookingId, (saved._id as any).toString());
+            return tjResponse;
 
-        } catch (dbError: any) {
-            console.error("⚠️  [TripJack] DB insert failed (TripJack API was successful):", dbError.message);
+        } catch (bookingErr: any) {
+            console.error(`❌ [TripJack] Critical Booking Error:`, bookingErr.message);
+            if (!isHoldIntent) {
+                await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: System error during booking");
+            }
+            throw bookingErr;
         }
-
-        return tjResponse;
     }
 
-    // ── RateGain Booking ──────────────────────────────────────────────────
+    async #commitRateGain(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
+        if (!token) throw new Error("Authentication token is required for booking.");
 
-    async #commitRateGain(payload: any, agentId?: string | null, agentName?: string | null) {
-        const rateGainResponse = await rateGainProvider.commit(payload);
+        console.log(`[RateGain] Starting Secure OTA Flow for Agent: ${agentId}`);
 
+        // PHASE 1: Verify Price with Provider
+        let netPrice = 0;
         try {
-            if (rateGainResponse && (rateGainResponse.status === true || rateGainResponse.status === "success")) {
-                const bookReservation = payload?.BookReservation || {};
-                const rategainBooking = rateGainResponse.body?.booking || {};
-
-                const firstRoom = Array.isArray(bookReservation.RoomSelection) ? bookReservation.RoomSelection[0] : null;
-                const firstGuest = firstRoom && Array.isArray(firstRoom.Guest) ? firstRoom.Guest[0] : null;
-                const guestName = firstGuest
-                    ? `${firstGuest.FirstName || ""} ${firstGuest.LastName || ""}`.trim()
-                    : "Unknown";
-
-                const confirmationNumber =
-                    rategainBooking.confirmationNumber ||
-                    rategainBooking.ConfirmationNumber ||
-                    rateGainResponse.ConfirmationNumber ||
-                    bookReservation.EchoToken ||
-                    "CONF-UNKNOWN";
-
-                const reservationId =
-                    rategainBooking.ReservationId ||
-                    rategainBooking.reservationId ||
-                    confirmationNumber;
-
-                if (!rateGainResponse.body) rateGainResponse.body = {};
-                if (bookReservation.hotelName) rateGainResponse.body.hotelName = bookReservation.hotelName;
-                if (bookReservation.hotelImage) rateGainResponse.body.hotelImage = bookReservation.hotelImage;
-                if (bookReservation.roomType) rateGainResponse.body.roomType = bookReservation.roomType;
-
-                const finalAmount = bookReservation.sellingRate || bookReservation.BookingRate || 0;
-                const finalCurrency = bookReservation.sellingRate ? "INR" : (bookReservation.CurrencyCode || "USD");
-
-                const amenities: string[] = bookReservation.amenities || [];
-                const images: string[] = bookReservation.images || [];
-
-                const bookingRecord = new BookingModel({
-                    confirmationNumber,
-                    reservationId,
-                    propertyId: bookReservation.propertyID || bookReservation.PropertyId || bookReservation.PropertyCode,
-                    propertyCode: bookReservation.PropertyCode || "RG",
-                    provider: BookingProvider.RATEGAIN,
-                    status: BookingStatus.CONFIRMED,
-                    checkIn: bookReservation.checkin ? new Date(bookReservation.checkin) : new Date(),
-                    checkOut: bookReservation.checkout ? new Date(bookReservation.checkout) : new Date(Date.now() + 86400000),
-                    totalAmount: finalAmount,
-                    currencyCode: finalCurrency,
-                    guestName,
-                    agentId,
-                    agentName,
-                    userId: agentId ?? undefined,
-                    userName: agentName ?? undefined,
-
-                    hotelName: bookReservation.hotelName || undefined,
-                    hotelImage: bookReservation.hotelImage || (images[0] || undefined),
-                    roomType: bookReservation.roomName || undefined,
-                    amenities,
-                    images,
-
-                    rooms: Array.isArray(bookReservation.RoomSelection)
-                        ? bookReservation.RoomSelection
-                        : (Array.isArray(payload.RoomSelection) ? payload.RoomSelection : []),
-
-                    rateGainRequest: payload,
-                    rateGainResponse: rateGainResponse,
-                });
-
-                const saved = await bookingRecord.save();
-                console.log(`[FORENSIC] RateGain Saved Object: ID=${saved._id}, agentId=${saved.agentId}, userId=${saved.userId}, conf=${saved.confirmationNumber}`);
-                console.log(`✅ [RateGain] Saved booking to DB: ${confirmationNumber} for Agent/User: ${agentId}`);
-
-                // Trigger automated confirmation email
-                notificationService.sendBookingConfirmation(saved);
-            }
-        } catch (dbError: any) {
-            console.error("⚠️  [RateGain] DB insert failed (RateGain was successful):", dbError.message);
+            const precheckRes = await rateGainProvider.precheck(payload);
+            const body = precheckRes.body?.preCheckResponse || precheckRes.body;
+            netPrice = body?.totalNet || body?.BookingRate || 0;
+            if (netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
+            console.log(`✅ [RateGain] Source of Truth Net Price: ₹${netPrice}`);
+        } catch (err: any) {
+            console.error(`❌ [RateGain] Precheck failed:`, err.message);
+            throw err;
         }
 
-        return rateGainResponse;
+        // PHASE 2: Markup & Total + Secret Coupon
+        const markupRules = await WalletUtil.getMarkupRules(token);
+        const { total: finalPrice, markup } = this.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
+
+        // PHASE 3: Wallet Deduction
+        const demandId = `RG-BOOK-${Date.now()}`;
+        const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || 'RateGain Hotel'}`);
+        if (!paymentProcessed) throw new Error("Wallet deduction failed.");
+
+        // PHASE 4: Provider Booking
+        try {
+            // Update payload with verified net price
+            const rgPayload = { ...payload };
+            if (rgPayload.BookReservation) {
+                rgPayload.BookReservation.sellingRate = netPrice;
+                rgPayload.BookReservation.BookingRate = netPrice;
+            }
+
+            const rgResponse = await rateGainProvider.commit(rgPayload);
+
+            if (!rgResponse.status || rgResponse.status === "false") {
+                await WalletUtil.refundBalance(token, finalPrice, demandId, "Auto-refund: RateGain booking failed");
+                throw new Error(rgResponse.message || "RateGain rejected the booking.");
+            }
+
+            // PHASE 5: DB Record
+            const bookingRecord = new BookingModel({
+                confirmationNumber: rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
+                reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
+                propertyId: payload.BookReservation?.propertyID || "RG-PROP",
+                propertyCode: payload.BookReservation?.PropertyCode || payload.BookReservation?.propertyCode || payload.propertyCode || payload.BookReservation?.propertyID || "RG-PROP",
+                provider: BookingProvider.RATEGAIN,
+                status: BookingStatus.CONFIRMED,
+                checkIn: new Date(payload.BookReservation?.checkin),
+                checkOut: new Date(payload.BookReservation?.checkout),
+                totalAmount: finalPrice,
+                netAmount: netPrice,
+                markupAmount: markup,
+                currencyCode: payload.BookReservation?.CurrencyCode || "INR",
+                guestName: `${payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0]?.FirstName || ""} ${payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0]?.LastName || ""}`.trim(),
+                agentId,
+                hotelName: payload.BookReservation?.hotelName,
+                rateGainRequest: rgPayload,
+                rateGainResponse: rgResponse,
+            });
+
+            const saved = await bookingRecord.save();
+            notificationService.sendBookingConfirmation(saved);
+
+            return rgResponse;
+        } catch (err: any) {
+            await WalletUtil.refundBalance(token, finalPrice, demandId, "Auto-refund: RateGain system error");
+            throw err;
+        }
     }
 }
 

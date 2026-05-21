@@ -6,6 +6,8 @@ export interface UnifiedSearchRequest {
   rooms: UnifiedRoom[];
   currency?: string;            // default USD
   countryCode?: string;         // default US
+  pageNo?: number;              // 1-indexed pagination
+  _geoCenter?: { lat: number; lng: number } | null; // internal: pre-resolved coords
 }
 
 export interface UnifiedRoom {
@@ -28,7 +30,13 @@ export interface UnifiedHotel {
   price: number;                // lowest available rate
   currency: string;
   mealBasis?: string;           // "Room Only", "Breakfast", etc.
+  hotelSegment?: string;
+  accTypeDesc?: string;
+  accMultiDesc?: string;
+  accomodationType?: string;
   isRefundable?: boolean;
+  onHoldAllowed?: boolean;
+  holdConfirm?: boolean;
   amenities: string[];
   propertyCode?: string;
   brandCode?: string;

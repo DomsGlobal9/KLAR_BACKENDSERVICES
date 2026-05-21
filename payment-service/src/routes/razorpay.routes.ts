@@ -6,7 +6,8 @@ import {
     syncRazorpayOrderStatusController,
     getRazorpayPaymentStatusController,
     getRazorpayOrderDetailsController,
-    razorpayWebhookController
+    razorpayWebhookController,
+    testWebhookController
 } from '../controllers/razorpay.controller';
 
 const router = express.Router();
@@ -52,5 +53,8 @@ router.get('/payment-status/:paymentId', getRazorpayPaymentStatusController);
  * GET /api/razorpay/razorpay-order/:razorpayOrderId
  */
 router.get('/razorpay-order/:razorpayOrderId', getRazorpayOrderDetailsController);
+
+
+router.post('/test-webhook', testWebhookController);
 
 export default router;

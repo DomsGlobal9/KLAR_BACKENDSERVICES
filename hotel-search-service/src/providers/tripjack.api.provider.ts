@@ -1,24 +1,51 @@
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 
-// Same map as in the adapter — nationality ISO → TripJack countryId
+import { NationalityModel } from "../models/Nationality.model";
+import { HotelModel } from "../models/Hotel.model";
+
+// Fallback map if DB is empty
 const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
     IN: "106", US: "232", GB: "235", AE: "231", SG: "200",
-    MY: "131", AU: "14",  CA: "40",  DE: "83",  FR: "76",
-    JP: "112", CN: "45",  NZ: "157", ZA: "204",
+    MY: "131", AU: "14", CA: "40", DE: "83", FR: "76",
+    JP: "112", CN: "45", NZ: "157", ZA: "204",
 };
-function toTjNationality(iso: string): string {
+
+async function toTjNationality(iso: string): Promise<string> {
+    try {
+        if (!iso) return "106";
+        const code = iso.toUpperCase();
+        const found = await NationalityModel.findOne({ code }).select("countryId").lean();
+        if (found) return found.countryId;
+    } catch (err) {
+        console.warn("[TripJack] Nationality DB lookup failed, using fallback.");
+    }
     return ISO_TO_TJ_COUNTRY_ID[iso?.toUpperCase()] ?? "106";
 }
 
+
 export class TripJackApiProvider {
+    /**
+     * GET /hms/v3/nationality-info
+     * Returns list of all supported nationalities.
+     */
+    async getNationalities() {
+        try {
+            const res = await tripJackClient.get("/hms/v3/nationality-info");
+            return res.data;
+        } catch (error: any) {
+            console.error("[TripJack] GetNationalities Error:", error.response?.status, error.message);
+            throw error;
+        }
+    }
+
     /**
      * FIX #2 + #3: Use POST /hms/v3/hotel/pricing (NOT /listing) for hotel detail.
      * reviewHash is a TOP-LEVEL field in the response, not per-option.
      * FIX #4 (partial): hid is sent here so the frontend can forward it to Review.
      */
     async getProducts(payload: any) {
-        const rawId = (payload.propertyId || payload.PropertyId || "").replace("TJ:", "").trim();
+        const rawId = (payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
         const correlationId = payload.correlationId || uuidv4();
 
         if (!rawId) {
@@ -30,60 +57,74 @@ export class TripJackApiProvider {
             };
         }
 
+        const hidValue = rawId;
         const tjPayload: any = {
             correlationId,
-            hid: rawId,                         // FIX: single string, not array
-            checkIn:  payload.checkin  || payload.checkIn,
+            hid: hidValue,
+            hotelId: hidValue,
+            checkIn: payload.checkin || payload.checkIn,
             checkOut: payload.checkout || payload.checkOut,
             rooms: (payload.Rooms || payload.rooms || []).map((r: any) => ({
-                adults:   r.Adults   || r.adults   || 2,
-                children: r.Children || r.children || undefined,
-                childAge: (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age) || []).length
-                    ? (r.childrenAges || r.childAges || r.paxes?.map((p:any)=>p.age))
+                adults: r.Adults || r.adults || 2,
+                children: (r.Children || r.children) ? Number(r.Children || r.children) : undefined,
+                childAge: (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []).length
+                    ? (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age))
                     : undefined,
             })),
-            currency:    payload.Currency    || payload.currency    || "INR",
-            nationality: toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
+            currency: payload.Currency || payload.currency || "INR",
+            nationality: await toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
         };
 
-        try {
-            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}`);
-            
-            // Call both APIs in parallel
-            const [staticRes, pricingRes] = await Promise.allSettled([
-                tripJackClient.post("/hms/v3/hotel/static-detail", { hid: rawId }),
-                tripJackClient.post("/hms/v3/hotel/pricing", tjPayload)
-            ]);
 
-            if (pricingRes.status === "rejected") {
-                throw pricingRes.reason;
+        try {
+            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
+
+            // Check local DB first for instant static metadata fallback
+            const localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
+
+            // Start static detail fetch in the background without blocking the pricing API response
+            let staticData: any = null;
+            const staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue })
+                .then(res => { staticData = res.data; })
+                .catch(err => { console.warn(`[TripJack] Static detail background fetch warning:`, err.message); });
+
+            // Await pricing request directly as the core requirement for room rates
+            const pricingStartTime = Date.now();
+            const pricingRes = await tripJackClient.post("/hms/v3/hotel/pricing", tjPayload);
+            console.log(`[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`);
+
+            // If local cache is missing and staticData hasn't resolved yet, wait a brief grace period (max 500ms)
+            if (!staticData && !localHotel) {
+                await Promise.race([
+                    staticDetailPromise,
+                    new Promise(resolve => setTimeout(resolve, 500))
+                ]);
             }
 
-            const pricingData = pricingRes.value.data;
-            const staticData  = staticRes.status === "fulfilled" ? staticRes.value.data : null;
+            const pricingData = pricingRes.data;
 
             console.log(`[DEBUG] TripJack Pricing Data for ${rawId}:`, JSON.stringify(pricingData, null, 1));
             if (staticData) console.log(`[DEBUG] TripJack Static Data for ${rawId}:`, JSON.stringify(staticData, null, 1));
             const reviewHash: string = pricingData.reviewHash || "";
 
-            // Merge static info if available
-            const hotelName:     string   = pricingData.hotelName || staticData?.name || "";
-            const hotelAmenities: string[] = staticData?.amenities 
+            // Merge static info if available or use local cache fallback
+            const hotelName: string = pricingData.hotelName || staticData?.name || localHotel?.name || "";
+            const hotelAmenities: string[] = staticData?.amenities
                 ? Object.values(staticData.amenities).map((a: any) => a.name)
                 : (pricingData.amenities || []);
-            
+
             const hotelImages: string[] = staticData?.images
                 ? staticData.images.map((img: any) => {
                     const links = img.links || {};
                     const firstLink = Object.values(links)[0] as any;
                     return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
                 }).filter(Boolean)
-                : (Array.isArray(pricingData.images) ? pricingData.images : (pricingData.img ? [pricingData.img] : []));
+                : (Array.isArray(pricingData.images) && pricingData.images.length ? pricingData.images : (pricingData.img ? [pricingData.img] : (localHotel?.images || [])));
 
             const description = staticData?.descriptions?.default || staticData?.desc || pricingData.desc || "";
-            const address = staticData?.locale?.address?.fulladdr || pricingData.address || "";
-            const city = staticData?.locale?.address?.city || pricingData.city || "";
-            const starRating = staticData?.star_rating ? parseInt(staticData.star_rating) : (pricingData.star_rating ? parseInt(pricingData.star_rating) : undefined);
+            const address = staticData?.locale?.address?.fulladdr || pricingData.address || localHotel?.address || "";
+            const city = staticData?.locale?.address?.city || pricingData.city || localHotel?.cityName || "";
+            const starRating = staticData?.star_rating ? parseInt(staticData.star_rating) : (pricingData.star_rating ? parseInt(pricingData.star_rating) : localHotel?.starRating);
             const checkInTime = staticData?.hotelInfo?.checkInTime || staticData?.hotelInfo?.checkIn || staticData?.checkInTime || pricingData?.checkInTime || "";
             const checkOutTime = staticData?.hotelInfo?.checkOutTime || staticData?.hotelInfo?.checkOut || staticData?.checkOutTime || pricingData?.checkOutTime || "";
 
@@ -110,42 +151,45 @@ export class TripJackApiProvider {
                 }
 
                 return {
-                    id:          opt.optionId || `${payload.propertyId}-${idx}`,
-                    optionId:    opt.optionId,
-                    rateKey:     opt.optionId,
+                    id: opt.optionId || `${payload.propertyId}-${idx}`,
+                    optionId: opt.optionId,
+                    rateKey: opt.optionId,
                     RoomSelectionKey: opt.optionId,
                     reviewHash,
                     correlationId,
-                    hid:         rawId,
+                    hid: rawId,
 
-                    name:       (opt.roomInfo?.[0]?.name) || opt.roomName || `Option ${idx + 1}`,
+                    name: (opt.roomInfo?.[0]?.name) || opt.roomName || `Option ${idx + 1}`,
                     optionType: opt.optionType,
-                    roomInfo:   opt.roomInfo || [],
+                    roomInfo: opt.roomInfo || [],
                     inclusions: opt.inclusions || [],
-                    mealBasis:  opt.mealBasis || opt.boardName,
+                    mealBasis: opt.mealBasis || opt.boardName,
                     bookingNotes: opt.bookingNotes || null,
 
-                    price:           opt.pricing?.totalPrice,
-                    netPrice:        opt.pricing?.basePrice,
-                    taxes:           opt.pricing?.taxes,
-                    managementFee:   opt.pricing?.mf,
+                    price: opt.pricing?.totalPrice,
+                    netPrice: opt.pricing?.basePrice,
+                    taxes: opt.pricing?.taxes,
+                    managementFee: opt.pricing?.mf,
                     managementFeeTax: opt.pricing?.mft,
-                    strikethrough:   opt.pricing?.strikethrough,
-                    currency:        opt.pricing?.currency,
+                    pricing: opt.pricing, // Pass the whole object for frontend breakup
+                    strikethrough: opt.pricing?.strikethrough,
+                    currency: opt.pricing?.currency,
 
-                    commercialType:   opt.commercial?.type,
-                    commission:       opt.commercial?.commission,
+                    commercialType: opt.commercial?.type,
+                    commission: opt.commercial?.commission,
 
-                    panRequired:      opt.compliance?.panRequired      ?? false,
+                    panRequired: opt.compliance?.panRequired ?? false,
                     passportRequired: opt.compliance?.passportRequired ?? false,
-                    gstType:          opt.compliance?.gstType,
+                    gstType: opt.compliance?.gstType,
 
-                    isRefundable:        opt.cancellation?.isRefundable,
+                    onHoldAllowed: opt.onHoldAllowed ?? opt.cancellation?.onHoldAllowed ?? (opt.cancellation?.isRefundable ?? false),
+                    holdConfirm: opt.holdConfirm ?? opt.cancellation?.holdConfirm ?? (opt.cancellation?.isRefundable ?? false),
+                    isRefundable: opt.cancellation?.isRefundable,
                     cancellationPolicies: opt.cancellation?.penalties || [],
 
                     amenities: optionAmenities,
                     hotelFacility: optionAmenities.map(name => ({ facilityName: name })),
-                    images:    roomImages,
+                    images: roomImages,
                     checkInTime,
                     checkOutTime,
                     rawOption: opt,
@@ -172,15 +216,15 @@ export class TripJackApiProvider {
                 statusCode: 200,
                 description: "Success",
                 body: {
-                    hotelId:    payload.propertyId,
-                    hid:        rawId,
-                    name:       hotelName,
+                    hotelId: payload.propertyId,
+                    hid: rawId,
+                    name: hotelName,
                     address,
                     city,
                     starRating,
                     description,
-                    images:     hotelImages,
-                    amenities:  hotelAmenities,
+                    images: hotelImages,
+                    amenities: hotelAmenities,
                     hotelFacility,
                     checkInTime,
                     checkOutTime,

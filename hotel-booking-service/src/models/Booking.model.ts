@@ -42,6 +42,8 @@ export interface IBooking extends Document {
     checkIn: Date;
     checkOut: Date;
     totalAmount: number;
+    netAmount?: number;
+    markupAmount?: number;
     currencyCode: string;
     guestName?: string;
     agentId?: string;
@@ -53,6 +55,9 @@ export interface IBooking extends Document {
     // --- Hotel display fields (shown on My Bookings & Detail pages) ---
     hotelName?: string;
     hotelImage?: string;
+    hotelAddress?: string;
+    city?: string;
+    starRating?: number;
     roomType?: string;
     amenities?: string[];
     images?: string[];
@@ -92,7 +97,7 @@ const bookingSchema = new Schema<IBooking>(
         },
         reservationId: { type: String, required: true },
         propertyId: { type: String, required: true },
-        propertyCode: { type: String, required: true },
+        propertyCode: { type: String, required: false },
 
         provider: {
             type: String,
@@ -112,6 +117,8 @@ const bookingSchema = new Schema<IBooking>(
         checkOut: { type: Date, required: true },
 
         totalAmount: { type: Number, required: true },
+        netAmount: { type: Number },     // The original API price
+        markupAmount: { type: Number },  // Klar's earnings
         currencyCode: { type: String, required: true },
 
         guestName: { type: String },
@@ -123,6 +130,9 @@ const bookingSchema = new Schema<IBooking>(
         // Hotel display fields (both providers)
         hotelName: { type: String },
         hotelImage: { type: String },
+        hotelAddress: { type: String },
+        city: { type: String },
+        starRating: { type: Number },
         roomType: { type: String },
         amenities: { type: [String], default: [] },
         images: { type: [String], default: [] },

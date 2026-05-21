@@ -5,6 +5,8 @@ import { cancelController } from "../controllers/cancel.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
 import { getBookings, getBookingDetails } from "../controllers/bookings.controller";
+import { confirmController } from "../controllers/confirm.controller";
+
 import { authenticateJWT } from "../middlewares/auth.middleware";
 
 const router = Router();
@@ -18,7 +20,10 @@ router.get("/", (_req, res) => {
             precheck: "POST /precheck",
             commit: "POST /commit",
             cancel: "POST /cancel",
+            confirm: "POST /confirm",
             specialRequests: "GET /special-requests",
+
+
             bookingDetails: "GET /bookings/:id"
         }
     });
@@ -43,7 +48,10 @@ import { getModificationPolicy, getModificationPricing, commitModification } fro
 // RateGain booking flow — now protected
 router.post("/precheck", authenticateJWT, precheckController);
 router.post("/commit", authenticateJWT, commitController);
+router.post("/confirm", authenticateJWT, confirmController);
 router.post("/cancel", authenticateJWT, cancelController);
+
+
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);
 router.post("/amend/price", authenticateJWT, getModificationPricing);
 router.post("/amend/commit", authenticateJWT, commitModification);

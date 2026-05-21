@@ -167,30 +167,157 @@ export const razorpayWebhookController = async (
 ) => {
     try {
 
-        const signature = req.headers[
-            'x-razorpay-signature'
-        ] as string;
+        console.log('================ RAZORPAY WEBHOOK START ================');
 
-        await razorpayWebhookService(
-            req.body,
-            signature
+        const signature = req.headers['x-razorpay-signature'] as string;
+
+        console.log('Signature received:', signature);
+
+        const rawBody = req.body.toString();
+
+        console.log('Raw Body:', rawBody);
+
+        const parsedBody = JSON.parse(rawBody);
+
+        console.log(
+            'Webhook Event:',
+            parsedBody?.event
         );
+
+        console.log(
+            'Razorpay Order ID:',
+            parsedBody?.payload?.payment?.entity?.order_id
+        );
+
+        await razorpayWebhookService(rawBody, signature);
+
+        console.log('✅ Webhook processed successfully');
 
         return res.status(200).json({
             success: true,
-            message: 'Webhook processed successfully'
         });
 
     } catch (error: any) {
 
-        console.error(
-            'Razorpay webhook controller error:',
-            error
-        );
+        console.error('❌ Webhook Error:', error.message);
 
         return res.status(400).json({
             success: false,
-            message: error.message || 'Webhook failed'
+            message: error.message
+        });
+    }
+};
+
+// export const razorpayWebhookController = async (req: Request, res: Response) => {
+//     try {
+
+//         console.log('================ RAZORPAY WEBHOOK START ================');
+
+//         const signature = req.headers['x-razorpay-signature'] as string;
+
+//         console.log('Signature received:', signature);
+
+//         console.log('Headers:', JSON.stringify(req.headers, null, 2));
+
+//         console.log('Body type:', typeof req.body);
+
+//         const rawBody =
+//             typeof req.body === 'string'
+//                 ? req.body
+//                 : JSON.stringify(req.body);
+
+//         console.log('Raw Body:', rawBody);
+
+//         try {
+//             const parsedBody = JSON.parse(rawBody);
+
+//             console.log(
+//                 'Parsed Webhook Payload:',
+//                 JSON.stringify(parsedBody, null, 2)
+//             );
+
+//             console.log(
+//                 'Webhook Event:',
+//                 parsedBody?.event
+//             );
+
+//             console.log(
+//                 'Razorpay Order ID:',
+//                 parsedBody?.payload?.payment?.entity?.order_id
+//             );
+
+//             console.log(
+//                 'Razorpay Payment ID:',
+//                 parsedBody?.payload?.payment?.entity?.id
+//             );
+
+//         } catch (parseError) {
+//             console.log('Failed to parse webhook body');
+//         }
+
+//         console.log('Webhook received, calling service...');
+
+//         await razorpayWebhookService(rawBody, signature);
+
+//         console.log('Webhook processed successfully');
+
+//         console.log('================ RAZORPAY WEBHOOK END =================');
+
+//         return res.status(200).json({
+//             success: true,
+//             message: 'Webhook processed successfully'
+//         });
+
+//     } catch (error: any) {
+
+//         console.error('================ WEBHOOK ERROR =================');
+
+//         console.error('Webhook error message:', error?.message);
+
+//         console.error('Full webhook error:', error);
+
+//         console.error('Stack trace:', error?.stack);
+
+//         console.error('================================================');
+
+//         return res.status(200).json({
+//             success: false,
+//             message: error.message
+//         });
+//     }
+// };
+
+export const testWebhookController = async (req: Request, res: Response) => {
+    try {
+        const testPayload = req.body;
+        const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+        if (!secret) {
+            return res.status(500).json({
+                success: false,
+                message: 'RAZORPAY_WEBHOOK_SECRET not configured'
+            });
+        }
+
+        const rawBody = JSON.stringify(testPayload);
+        const crypto = require('crypto');
+        const generatedSignature = crypto
+            .createHmac('sha256', secret)
+            .update(rawBody)
+            .digest('hex');
+
+        const result = await razorpayWebhookService(rawBody, generatedSignature);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Test webhook processed',
+            data: result
+        });
+
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };

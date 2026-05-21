@@ -59,3 +59,12 @@ process.on("uncaughtException", (err) => {
     console.error("❌ Uncaught Exception:", err);
     process.exit(1);
 });
+
+// Graceful shutdown to release the port immediately
+const shutdown = () => {
+    console.log("⏳ Shutting down server...");
+    process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

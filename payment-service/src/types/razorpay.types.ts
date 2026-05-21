@@ -77,3 +77,16 @@ export interface IRazorpayWebhookPayload {
     };
     created_at: number;
 }
+
+export interface IWebhookPaymentData {
+    event: string;
+    payload: {
+        payment: {
+            entity: IRazorpayPaymentResponse;
+        };
+        order?: {
+            entity: IRazorpayOrderResponse;
+        };
+    };
+    created_at: number;
+}

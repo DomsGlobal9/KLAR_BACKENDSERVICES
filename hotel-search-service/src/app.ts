@@ -5,7 +5,10 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true,
+}));
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -14,6 +17,7 @@ app.get("/", (_req, res) => {
         status: "UP",
         endpoints: {
             destinations: "GET /api/search/destinations",
+            popularDestinations: "GET /api/search/destinations/popular",
             hotelSearch: "POST /api/search/hotels/search",
             products: "POST /api/search/hotels/:propertyId/products",
             health: "GET /api/search/health",
@@ -24,7 +28,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/search", routes);
-app.use("/", routes);
+// app.use("/", routes);
 app.use(errorHandler);
 
 export default app;

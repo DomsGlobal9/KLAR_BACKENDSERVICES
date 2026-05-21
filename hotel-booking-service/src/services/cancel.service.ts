@@ -4,8 +4,9 @@ import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.
 
 class CancelService {
     async cancel(payload: any) {
-        const confirmationNumber = payload.ConfirmationNumber;
-        const reservationId = payload.ReservationId;
+        const confirmationNumber = payload.ConfirmationNumber || payload.bookingId;
+        const reservationId = payload.ReservationId || payload.bookingId;
+        const bookingId = payload.bookingId;
 
         console.log(`🚫 Cancel service called with:`, JSON.stringify(payload, null, 2));
 
@@ -13,20 +14,58 @@ class CancelService {
         try {
             const query: any = {};
             if (confirmationNumber) query.confirmationNumber = confirmationNumber;
-            else if (reservationId)  query.reservationId = reservationId;
+            else if (reservationId) query.reservationId = reservationId;
+            else if (bookingId) query.confirmationNumber = bookingId;
 
+            const isTripJack = payload.type === "HOTEL" || 
+                               confirmationNumber?.startsWith("TG") || 
+                               confirmationNumber?.startsWith("TJ");
+
+            let isDbTripJack = false;
             if (Object.keys(query).length > 0) {
                 const booking = await BookingModel.findOne(query).lean();
                 if (booking && booking.provider === BookingProvider.TRIPJACK) {
-                    console.log(`[TripJack] Cancelling TripJack booking: ${booking.confirmationNumber}`);
-                    const tjResponse = await tripJackProvider.cancel(booking.confirmationNumber);
-
-                    // Update local DB
-                    await BookingModel.findOneAndUpdate(query, { status: BookingStatus.CANCELLED });
-                    console.log(`✅ [TripJack] Booking marked CANCELLED in DB: ${booking.confirmationNumber}`);
-
-                    return tjResponse;
+                    isDbTripJack = true;
                 }
+            }
+
+            if (isTripJack || isDbTripJack) {
+                const targetId = confirmationNumber || bookingId;
+                console.log(`[TripJack] Cancelling TripJack booking: ${targetId}`);
+                const tjResponse = await tripJackProvider.cancel(targetId);
+
+                // Check actual status from TripJack side to confirm cancellation
+                let finalStatus = "PENDING";
+                let details = null;
+                try {
+                    details = await tripJackProvider.getBookingDetails(targetId);
+                    finalStatus = details?.order?.status || "PENDING";
+                    console.log(`[TripJack] Live status post-cancel check: ${finalStatus}`);
+                } catch (statusErr: any) {
+                    console.warn("[TripJack] Could not immediately verify cancelled status:", statusErr.message);
+                }
+
+                // If cancel API returns success true, TripJack acknowledges the cancellation immediately
+                const isSuccessAck = tjResponse?.body?.status?.success === true || tjResponse?.status?.success === true || tjResponse?.status === true;
+                const isFullyCancelled = isSuccessAck || finalStatus.toUpperCase() === "CANCELLED";
+                const dbStatusToSet = isFullyCancelled ? BookingStatus.CANCELLED : BookingStatus.PENDING;
+
+                if (Object.keys(query).length > 0) {
+                    await BookingModel.findOneAndUpdate(query, { 
+                        status: dbStatusToSet,
+                        tripJackResponse: details || tjResponse?.body
+                    });
+                    console.log(`✅ [TripJack] Booking status updated in DB to ${dbStatusToSet}: ${targetId}`);
+                }
+
+                return {
+                    status: true,
+                    statusCode: 200,
+                    description: isFullyCancelled ? "TripJack Cancel Success" : "Cancellation initiated. Pending confirmation from TripJack supplier.",
+                    isFullyCancelled,
+                    tjStatus: finalStatus,
+                    body: tjResponse?.body || tjResponse
+                };
             }
         } catch (tjCancelErr: any) {
             console.error("[TripJack] Cancel routing error:", tjCancelErr.message);

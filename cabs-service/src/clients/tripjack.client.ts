@@ -13,6 +13,7 @@ export const tripJackCabsClient = axios.create({
         "Accept": "application/json",
         "apikey": env.tripJack.apiKey,
         "agencyId": env.tripJack.agencyId,
-        "Accept-Encoding": "gzip"
+        "Accept-Encoding": "gzip",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     },
 });

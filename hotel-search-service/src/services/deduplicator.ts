@@ -1,7 +1,20 @@
 import { UnifiedHotel } from "../types/unified";
 
-export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
+export interface DeduplicationMeta {
+    duplicatedCount: number;
+    byExactId: number;
+    byExactGeo: number;
+    bySimilarGeoAndName: number;
+}
+
+export function deduplicateHotels(hotels: UnifiedHotel[]): { items: UnifiedHotel[], meta: DeduplicationMeta } {
     const collapsed: UnifiedHotel[] = [];
+    const meta: DeduplicationMeta = {
+        duplicatedCount: 0,
+        byExactId: 0,
+        byExactGeo: 0,
+        bySimilarGeoAndName: 0
+    };
     
     for (const hotel of hotels) {
         let matched = false;
@@ -17,30 +30,71 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
             
             // Geo-based similarity check
             let isGeoSame = false;
+            let geoMatchReason = "";
             if (hotel.latitude && hotel.longitude && existing.latitude && existing.longitude) {
                 const latDiff = Math.abs(hotel.latitude - existing.latitude);
                 const lngDiff = Math.abs(hotel.longitude - existing.longitude);
-                // Within ~100m
-                if (latDiff < 0.001 && lngDiff < 0.001) {
+                
+                // If EXACT same coordinates (within practically zero range), assume same property
+                if (latDiff === 0 && lngDiff === 0) {
+                    isGeoSame = true;
+                    geoMatchReason = "EXACT_GEO";
+                } 
+                // Or within ~100m AND similar names
+                else if (latDiff < 0.001 && lngDiff < 0.001) {
                     isGeoSame = isNameSimilar(hotel.name, existing.name);
+                    if (isGeoSame) geoMatchReason = "SIMILAR_GEO_AND_NAME";
                 }
             }
 
-            if (isSameId || isGeoSame) {
-                // Merge: keep the cheaper one as the lead deal
+            // [Senior Dev Update]
+            // We now allow merging if they are from the SAME source BUT have the SAME ID.
+            // This handles cases where a provider returns the same hotel multiple times (e.g. different rates).
+            const shouldMerge = (isSameId) || (hotel.source !== existing.source && isGeoSame);
+
+            if (shouldMerge) {
+                const reason = isSameId ? "ID_MATCH" : geoMatchReason;
+                
+                console.log(`[DEDUP] 🤝 Merge Detected!`);
+                console.log(`   ├─ New:      "${hotel.name}" (${hotel.source}, ₹${hotel.price})`);
+                console.log(`   ├─ Existing: "${existing.name}" (${existing.source}, ₹${existing.price})`);
+                console.log(`   ├─ Reason:   ${reason}`);
+
                 const currentPrice = hotel.price || 0;
                 const existingPrice = existing.price || 0;
+                let winnerName = "";
 
+                // If same ID, we just want the cheaper one regardless of source.
+                // If different sources, we merge and add an altDeal.
                 if (currentPrice > 0 && (currentPrice < existingPrice || existingPrice === 0)) {
-                    // Current hotel is cheaper: keep it and attach the other as an alt deal
-                    collapsed[i] = { 
-                        ...hotel, 
-                        altDeal: { source: existing.source, price: existing.price } 
-                    } as UnifiedHotel;
-                } else if (existingPrice > 0) {
-                    // Existing is cheaper or same: stay with it and attach current as alt deal
-                    existing.altDeal = { source: hotel.source, price: hotel.price };
+                    winnerName = hotel.name;
+                    const merged = { ...hotel };
+                    if (hotel.source !== existing.source) {
+                        merged.altDeal = { source: existing.source, price: existing.price };
+                    } else {
+                        // If same source, just take the cheaper one's details
+                    }
+                    collapsed[i] = merged as UnifiedHotel;
+                } else {
+                    winnerName = existing.name;
+                    if (hotel.source !== existing.source) {
+                        existing.altDeal = { source: hotel.source, price: hotel.price };
+                    }
                 }
+
+                const geoInfo = isSameId ? `ID: ${hotel.hotelId}` : `Pin-to-Pin: [${hotel.latitude}, ${hotel.longitude}] vs [${existing.latitude}, ${existing.longitude}]`;
+                console.log(`   └─ UI WINNER: "${winnerName}" (Cheaper) | ${geoInfo}`);
+
+                // Tracking stats
+                meta.duplicatedCount++;
+                if (isSameId) {
+                    meta.byExactId++;
+                } else if (geoMatchReason === "EXACT_GEO") {
+                    meta.byExactGeo++;
+                } else if (geoMatchReason === "SIMILAR_GEO_AND_NAME") {
+                    meta.bySimilarGeoAndName++;
+                }
+
                 matched = true;
                 break;
             }
@@ -51,16 +105,32 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): UnifiedHotel[] {
         }
     }
 
-    return collapsed;
+    return { items: collapsed, meta };
 }
 
 /**
- * Basic name similarity check. 
- * Strips non-alphanumeric chars and checks for containment.
+ * Enhanced name similarity check. 
+ * Strips non-alphanumeric chars and checks for containment, 
+ * but excludes very common generic terms if they are the only match.
  */
 function isNameSimilar(name1: string, name2: string): boolean {
     const n1 = (name1 || "").toLowerCase().replace(/[^a-z0-9]/g, '');
     const n2 = (name2 || "").toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!n1 || !n2) return false;
-    return n1.includes(n2) || n2.includes(n1);
+
+    if (n1 === n2) return true;
+
+    // Avoid merging if they are just generic names like "hotel" or "resort"
+    const generics = ["hotel", "resort", "apartment", "villa", "hostel", "guesthouse", "inn", "suites"];
+    if (generics.includes(n1) || generics.includes(n2)) {
+        return n1 === n2; // Must be exact if it's just a generic term
+    }
+
+    // If one contains the other, ensure the overlap is significant (not just "Hotel Taj" vs "Taj")
+    if (n1.includes(n2) || n2.includes(n1)) {
+        const shorter = n1.length < n2.length ? n1 : n2;
+        return shorter.length > 5;
+    }
+
+    return false;
 }

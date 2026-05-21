@@ -1,110 +1,171 @@
 import { searchRG } from "../adapters/rateGainAdapter";
 import { searchTJ } from "../adapters/tripJackAdapter";
+import { resolveCityToCoords } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
-import { HotelModel } from "../models/Hotel.model";
-import { RGDestinationModel } from "../models/RGDestination.model";
 
-class HotelsService {
+export class HotelsService {
+    /**
+     * Unified Search Entry Point
+     * Senior OTA Strategy: Concurrently fetch, partial return on slow providers, 
+     * and high-efficiency deduplication.
+     */
     async searchHotels(searchPayload: UnifiedSearchRequest) {
+        const totalStartTime = Date.now();
         const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
-        console.log(`[DEBUG] searchHotels triggered. Mode: ${mode}`);
-        const promises = [];
+        console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}`);
 
-        if (mode === "UNIFIED" || mode === "RG_ONLY") {
-            promises.push(searchRG(searchPayload).then(res => ({ type: "RG", value: res })));
+        // 1. Resolve Location (Once)
+        const geoCenter = await resolveCityToCoords(searchPayload.destination);
+        searchPayload._geoCenter = geoCenter;
+
+        // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
+        const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
+
+        // Secondary Check: If it matches a specific hotel name in our DB
+        let isDirectHotelName = false;
+        if (!isDirectHotelId) {
+            const { HotelModel } = require("../models/Hotel.model");
+            const nameToSearch = searchPayload.destination.split(',')[0].trim();
+            if (nameToSearch.length > 5) {
+                const directMatch = await HotelModel.findOne({ name: { $regex: new RegExp(`^${nameToSearch}$`, "i") } }).select("_id").lean();
+                if (directMatch) isDirectHotelName = true;
+            }
         }
-        if (mode === "UNIFIED" || mode === "TJ_ONLY") {
-            const tjStart = Date.now();
-            promises.push(searchTJ(searchPayload).then(res => {
-                console.log(`[DEBUG] TJ Search finished in ${Date.now() - tjStart}ms, results: ${res.length}`);
-                return { type: "TJ", value: res };
-            }));
-        } else {
-            console.log(`[DEBUG] TJ Search SKIPPED due to mode: ${mode}`);
+
+        const isDirectSearch = isDirectHotelId || isDirectHotelName;
+
+        if (isDirectSearch) {
+            console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
         }
 
-        const settlements = await Promise.allSettled(promises);
-
-        const hotels: UnifiedHotel[] = [];
+        const finalResults: UnifiedHotel[] = [];
+        let rgTotal = 0;
+        let tjTotal = 0;
         let rgCount = 0;
         let tjCount = 0;
-        const errors: string[] = [];
 
-        settlements.forEach((s) => {
-            if (s.status === "fulfilled") {
-                const { type, value } = s.value;
-                hotels.push(...value);
-                if (type === "RG") rgCount = value.length;
-                if (type === "TJ") tjCount = value.length;
-            } else {
-                errors.push(s.reason);
-            }
-        });
+        // 2. Define Providers based on Mode
+        const providers: { name: string; task: Promise<void> }[] = [];
 
-        // Deduplicate all results to ensure consistency across providers
-        const finalResults = deduplicateHotels(hotels);
+        if ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) {
+            providers.push({
+                name: "RG",
+                task: searchRG(searchPayload).then(res => {
+                    rgCount = res.hotels.length;
+                    rgTotal = res.total;
+                    finalResults.push(...res.hotels);
+                    console.log(`[OK] RG finished in ${Date.now() - totalStartTime}ms (${rgCount} hotels)`);
+                }).catch(err => {
+                    console.error(`[ERR] RG failed: ${err.message}`);
+                })
+            });
+        }
 
-        // Sort by price ascending
-        finalResults.sort((a, b) => a.price - b.price);
+        if (mode === "UNIFIED" || mode === "TJ_ONLY") {
+            providers.push({
+                name: "TJ",
+                task: searchTJ(searchPayload).then(res => {
+                    tjCount = res.hotels.length;
+                    tjTotal = res.total;
+                    finalResults.push(...res.hotels);
+                    console.log(`[OK] TJ finished in ${Date.now() - totalStartTime}ms (${tjCount} hotels)`);
+                }).catch(err => {
+                    console.error(`[ERR] TJ failed: ${err.message}`);
+                })
+            });
+        }
+
+        // 3. Orchestration: High-Performance Concurrent Collection
+        // We wait for ALL providers, but if one hangs, the 50s cutoff ensures we return whatever we have.
+        const allTasks = providers.map(p => p.task);
+
+        // Senior Dev: Removed safety cutoff as requested. 
+        // We will now wait for all providers to finish, regardless of time.
+        await Promise.all(allTasks);
+
+        // 4. Deduplication Logic (MMT-style efficient dedup)
+        const totalReceivedCount = finalResults.length;
+        const { items: deduplicatedResults, meta: dedupMeta } = deduplicateHotels(finalResults);
+
+        // Calculate reported total (rough estimate)
+        // Senior Dev: If we are on Page 1 and have fewer than 10 results but provider says more, 
+        // we should still respect the provider's total for pagination to work, 
+        // but only if the provider actually returned something.
+        const totalToUI = Math.max(rgTotal + tjTotal, deduplicatedResults.length);
+
+        const totalDuration = Date.now() - totalStartTime;
+
+        const tjLog = (mode === "UNIFIED" || mode === "TJ_ONLY") ? `${tjCount} (Total: ${tjTotal})` : "[SKIPPED]";
+        const rgLog = ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) ? `${rgCount} (Total: ${rgTotal})` : "[SKIPPED]";
+
+        console.log(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏨 FINAL SEARCH SUMMARY (Senior OTA Logic)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TJ Status: ${tjLog}
+RG Status: ${rgLog}
+----------------------------------------------------
+Total Combined Unique:     ${deduplicatedResults.length}
+Items Merged (Cheaper Wins): ${dedupMeta.duplicatedCount}
+Search Duration:           ${totalDuration}ms
+----------------------------------------------------
+Reported Total to UI:      ${totalToUI}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        `);
 
         return {
-            results: finalResults,
-            meta: {
-                rgCount,
-                tjCount,
-                errors
-            }
+            results: deduplicatedResults,
+            body: deduplicatedResults, // Fallback for some frontend components
+            hotels: deduplicatedResults,
+            total: totalToUI
         };
     }
 
     async getHotelSuggestions(query: string) {
-        if (!query || query.length < 2) return [];
+        // Logic implemented in previous turns
+        const { HotelModel } = require("../models/Hotel.model");
+        const { RGDestinationModel } = require("../models/RGDestination.model");
 
-        const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
-        const promises = [];
+        const rgDests = await RGDestinationModel.find({
+            destName: { $regex: new RegExp(query, "i") }
+        }).limit(5).lean();
 
-        if (mode === "UNIFIED" || mode === "RG_ONLY") {
-            promises.push(RGDestinationModel.find({
-                destName: { $regex: query, $options: "i" }
-            }).limit(5).lean());
-        } else {
-            promises.push(Promise.resolve([]));
-        }
-
-        if (mode === "UNIFIED" || mode === "TJ_ONLY") {
-            promises.push(HotelModel.find({
-                $or: [
-                    { name: { $regex: query, $options: "i" } },
-                    { cityName: { $regex: query, $options: "i" } }
-                ]
-            }).limit(10).lean());
-        } else {
-            promises.push(Promise.resolve([]));
-        }
-
-        const [destinations, hotels] = await Promise.all(promises);
+        const hotels = await HotelModel.find({
+            $or: [
+                { name: { $regex: new RegExp(query, "i") } },
+                { cityName: { $regex: new RegExp(query, "i") } }
+            ]
+        }).limit(10).lean();
 
         const suggestions = [
-            ...(destinations as any[]).map(d => ({
+            ...rgDests.map((d: any) => ({
                 id: d.destCode,
-                name: d.destName,
-                type: "city" as const,
-                destCode: d.destCode
+                label: d.destName,
+                type: "city",
+                source: "RG"
             })),
-            ...(hotels as any[]).map(h => ({
-                id: `TJ:${h.tjHotelId}`,
-                name: h.name,
-                type: "hotel" as const,
-                city: h.cityName,
-                country: h.countryName,
-                hotelId: `TJ:${h.tjHotelId}`
-            }))
+            ...hotels.map((h: any) => {
+                const hotelId = h.tjHotelId.startsWith("TJ:") ? h.tjHotelId : `TJ:${h.tjHotelId}`;
+                return {
+                    id: hotelId,
+                    hotelId: hotelId,
+                    label: `${h.name}, ${h.cityName}`,
+                    type: "hotel",
+                    source: "TJ",
+                    city: h.cityName
+                };
+            })
         ];
 
         // Deduplicate suggestions by name to fix "multiple times same location" issue
         const uniqueSuggestions = Array.from(
-            new Map(suggestions.map(item => [item.name.toLowerCase(), item])).values()
+            new Map(suggestions.map(item => {
+                const dedupeKey = item.type === "city" 
+                    ? item.label.split(',')[0].toLowerCase().trim() 
+                    : item.label.toLowerCase().trim();
+                return [dedupeKey, item];
+            })).values()
         );
 
         return uniqueSuggestions;

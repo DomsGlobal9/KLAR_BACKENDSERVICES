@@ -12,6 +12,9 @@ export interface IHotelData {
         coordinates: number[];
     };
     images: string[];
+    accTypeDesc?: string;
+    accMultiDesc?: string;
+    accomodationType?: string;
     lastUpdated: Date;
 }
 
@@ -30,6 +33,9 @@ const hotelSchema = new Schema<IHotel>(
         countryName: { type: String, default: "" },
         starRating: { type: Number, default: 0 },
         address: { type: String, default: "" },
+        accTypeDesc: { type: String, default: "" },
+        accMultiDesc: { type: String, default: "" },
+        accomodationType: { type: String, default: "" },
         location: {
             type: {
                 type: String,

@@ -1,16 +1,27 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
 
+const locationCache = new Map<string, { timestamp: number; data: any }>();
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour cache for locations
+
 class SearchService {
     async locationSearch(input: string) {
         if (!input || input.trim().length < 2) {
             throw { status: 400, message: "Search input must be at least 2 characters" };
         }
         
+        const cacheKey = input.trim().toLowerCase();
+        const cached = locationCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+            return cached.data;
+        }
+
         let lastError;
         for (let i = 0; i < 2; i++) {
             try {
-                return await tripJackCabsProvider.googlePlaces(input);
+                const data = await tripJackCabsProvider.googlePlaces(input);
+                locationCache.set(cacheKey, { timestamp: Date.now(), data });
+                return data;
             } catch (err) {
                 lastError = err;
                 console.warn(`[SearchService] Location search retry ${i + 1} for: ${input}`);
@@ -47,8 +58,11 @@ class SearchService {
         }
 
         // Logical defaults
-        payload.journeyType = payload.journeyType || "airport_transfer";
-        payload.tripType = payload.tripType || "oneway";
+        const rawJourneyType = payload.journeyType || "airport_transfer";
+        const rawTripType = payload.tripType || "oneway";
+
+        payload.journeyType = rawJourneyType.toUpperCase();
+        payload.tripType = rawTripType.toUpperCase();
 
         const pax = Number(payload.passengers) || 1;
         payload.passengers = pax;

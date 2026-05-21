@@ -2,50 +2,76 @@ import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForTJ } from "../services/destinationResolver";
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
-
-/**
- * TripJack requires its own internal countryId (e.g. "106" for India),
- * NOT the ISO 2-letter code.
- * Source: GET /hms/v3/nationality-info → nationalityInfos[].countryId
- * Extend this map as needed or replace with a DB lookup.
- */
-const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
-    IN: "106",
-    US: "232",
-    GB: "235",
-    AE: "231",
-    SG: "200",
-    MY: "131",
-    AU: "14",
-    CA: "40",
-    DE: "83",
-    FR: "76",
-    JP: "112",
-    CN: "45",
-    NZ: "157",
-    ZA: "204",
-};
-
-function toTjNationality(isoCode: string): string {
-    return ISO_TO_TJ_COUNTRY_ID[isoCode?.toUpperCase()] ?? "106"; // fallback: India
-}
-
 import { HotelModel } from "../models/Hotel.model";
 
-export async function searchTJ(req: UnifiedSearchRequest): Promise<UnifiedHotel[]> {
-    const hids = await resolveForTJ(req.destination);
-    if (!hids.length) return [];
+import { NationalityModel } from "../models/Nationality.model";
+
+const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
+    IN: "106", US: "232", GB: "235", AE: "231", SG: "200", MY: "131",
+    AU: "14", CA: "40", DE: "83", FR: "76", JP: "112", CN: "45", NZ: "157", ZA: "204",
+};
+
+async function toTjNationality(isoCode: string): Promise<string> {
+    try {
+        if (!isoCode) return "106";
+        const code = isoCode.toUpperCase();
+        const found = await NationalityModel.findOne({ code }).select("countryId").lean();
+        if (found) return found.countryId;
+    } catch (err) {
+        console.warn("[TripJack Search] Nationality DB lookup failed, using fallback.");
+    }
+    return ISO_TO_TJ_COUNTRY_ID[isoCode?.toUpperCase()] ?? "106";
+}
+
+
+// ─── TripJack Circuit Breaker ────────────────────────────────────────────────
+let tjCircuitOpenUntil = 0;
+function isTJCircuitOpen(): boolean {
+    return Date.now() < tjCircuitOpenUntil;
+}
+function tripTJCircuit() {
+    tjCircuitOpenUntil = Date.now() + 60_000;
+    console.error(`[TripJack] ⚡ Circuit breaker OPEN.`);
+}
+
+export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: UnifiedHotel[]; total: number }> {
+    if (isTJCircuitOpen()) return { hotels: [], total: 0 };
+
+    const hids = await resolveForTJ(req.destination, req._geoCenter);
+    if (!hids.length) return { hotels: [], total: 0 };
 
     const correlationId = uuidv4();
+    const page = req.pageNo || 1;
 
-    // 3. Chunk HIDs into groups of 100 (TripJack limit)
+    // REDUCED TARGET FOR SPEED: 50 hotels is more than enough for a single page view.
+    // Fetching 50 hotels takes ~3-5 seconds.
+    const targetCount = 50;
+
+    const CHUNK_SIZE = 10; // Safer for Sandbox
     const chunks: string[][] = [];
-    for (let i = 0; i < hids.length; i += 100) {
-        chunks.push(hids.slice(i, i + 100));
+    for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
+        chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
 
+    const batchSize = 5; // Fetch 5 chunks (50 IDs) per page
+    let currentIdx = (page - 1) * batchSize;
+
     try {
-        const searchPromises = chunks.map(async (chunk, index) => {
+        let collectedHotels: any[] = [];
+        const startId = currentIdx * CHUNK_SIZE;
+        const endId = Math.min(startId + (batchSize * CHUNK_SIZE), hids.length);
+        console.log(`[TripJack] Pagination: Page ${page} processing HIDs index ${startId} to ${endId}`);
+
+        const nationalityId = await toTjNationality(req.countryCode ?? "IN");
+        const fetchStartTime = Date.now();
+
+        // Fetch chunks concurrently to ensure extreme high-speed response
+        const fetchPromises = [];
+        for (let i = 0; i < batchSize; i++) {
+            const chunkIdx = currentIdx + i;
+            if (chunkIdx >= chunks.length) break;
+
+            const chunk = chunks[chunkIdx];
             const payload = {
                 checkIn: req.checkin,
                 checkOut: req.checkout,
@@ -55,62 +81,95 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<UnifiedHotel[
                     childAge: r.childAges?.length ? r.childAges : undefined,
                 })),
                 currency: req.currency ?? "INR",
-                nationality: toTjNationality(req.countryCode ?? "IN"),
-                hids: chunk,
+                nationality: nationalityId,
+                hids: chunk.map(id => parseInt(id)),
                 correlationId,
             };
-            
-            const res = await tripJackClient.post("/hms/v3/hotel/listing", payload);
-            return res.data.hotels || [];
-        });
 
-        const results = await Promise.all(searchPromises);
-        const allHotels = results.flat();
-        
-        let mapped: UnifiedHotel[] = allHotels.map((h: any) =>
-            mapTJHotel(h, correlationId)
-        );
+            fetchPromises.push(
+                tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 15000 })
+                    .then(res => res.data?.hotels || [])
+                    .catch(err => {
+                        console.error(`[TripJack] Chunk Fetch Error:`, err.message);
+                        return [];
+                    })
+            );
+        }
 
-        // ENRICH WITH STATIC DATA FROM DB (if available)
+        const resolvedArrays = await Promise.all(fetchPromises);
+        for (const found of resolvedArrays) {
+            collectedHotels.push(...found);
+        }
+
+        collectedHotels = collectedHotels.slice(0, targetCount);
+        console.log(`[TripJack] Parallel Fetch Complete in ${Date.now() - fetchStartTime}ms. Found ${collectedHotels.length} hotels.`);
+
+        const finalHotels = collectedHotels.slice(0, targetCount);
+        console.log(`[TripJack] Fast Return: Returning ${finalHotels.length} hotels.`);
+
+        let mapped: UnifiedHotel[] = finalHotels.map((h: any) => mapTJHotel(h, correlationId));
+
+        // Geographic Sanity Check: Ensure results match the intended region
+        const isIndiaTarget = req.destination.toLowerCase().includes("india") || req.destination.toLowerCase().includes("goa") || (req.countryCode === "IN");
+        if (isIndiaTarget) {
+            const initialCount = mapped.length;
+            mapped = mapped.filter(h => {
+                const addr = (h.address || "").toLowerCase();
+                const country = (h.country || "").toLowerCase();
+                // Filter out German hotels if we are targeting India
+                if (addr.includes("germany") || country.includes("germany") || country.includes("deutschland")) {
+                    return false;
+                }
+                return true;
+            });
+            if (mapped.length < initialCount) {
+                console.log(`[TripJack] Filtered out ${initialCount - mapped.length} cross-region hotels (Germany -> India).`);
+            }
+        }
+
+        // ASYNC ENRICHMENT (don't wait for DB if it's too slow, but here we do it fast)
         try {
-            const tjHotelIds = mapped.map(h => h.hotelId.replace("TJ:", ""));
-            const staticHotels = await HotelModel.find({ tjHotelId: { $in: tjHotelIds } }).lean();
-            const staticMap = new Map(staticHotels.map(sh => [sh.tjHotelId, sh]));
+            const tjIds = mapped.map(h => h.hotelId.replace("TJ:", ""));
+            const staticData = await HotelModel.find({ tjHotelId: { $in: tjIds } }).limit(100).lean();
+            const staticMap = new Map(staticData.map(s => [s.tjHotelId, s]));
 
             mapped = mapped.map(bh => {
-                const rawId = bh.hotelId.replace("TJ:", "");
-                const sh = staticMap.get(rawId);
-                if (sh) {
+                const s = staticMap.get(bh.hotelId.replace("TJ:", ""));
+                if (s) {
+                    const accTypeDesc = bh.accTypeDesc || s.accTypeDesc || "";
+                    const accMultiDesc = bh.accMultiDesc || s.accMultiDesc || "";
+                    const accomodationType = bh.accomodationType || s.accomodationType || "";
                     return {
                         ...bh,
-                        address: bh.address || sh.address || "",
-                        city: bh.city || sh.cityName || "",
-                        starRating: bh.starRating || sh.starRating || 0,
-                        images: (bh.images && bh.images.length > 0) ? bh.images : (sh.images || []),
+                        address: bh.address || s.address || "",
+                        city: bh.city || s.cityName || "",
+                        starRating: bh.starRating || s.starRating || 0,
+                        images: (bh.images?.length) ? bh.images : (s.images || []),
+                        latitude: bh.latitude || s.location?.coordinates?.[1],
+                        longitude: bh.longitude || s.location?.coordinates?.[0],
+                        accTypeDesc,
+                        accMultiDesc,
+                        accomodationType,
+                        hotelSegment: accTypeDesc || accMultiDesc || bh.hotelSegment || 'Hotel',
                     };
                 }
                 return bh;
             });
-        } catch (dbError) {
-            console.warn("[TripJack Adapter] DB Enrichment Failed:", dbError);
-        }
+        } catch (enrichErr) { }
 
-        return mapped;
+        return {
+            hotels: mapped,
+            total: hids.length
+        };
     } catch (error: any) {
-        console.error("[TripJack Adapter] Search Error:", error.response?.data || error.message);
+        console.error("[TripJack Adapter] Search Error:", error.message);
         throw error;
     }
 }
 
 function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     const opt = h.options?.[0];
-
-    const liveImages = Array.isArray(h.images)
-        ? h.images
-        : (h.img ? [h.img] : []);
-
     const hotelId = h.tjHotelId || h.hotelId || h.id;
-
     return {
         hotelId: `TJ:${hotelId}`,
         source: "TJ",
@@ -118,21 +177,23 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         address: h.address,
         city: h.city,
         country: h.country,
-        starRating: parseInt(h.rating),
+        starRating: parseInt(h.rating) || 0,
         latitude: h.latitude,
         longitude: h.longitude,
-        images: liveImages,
+        images: Array.isArray(h.images) ? h.images : (h.img ? [h.img] : []),
         price: opt?.pricing?.totalPrice ?? 0,
         currency: opt?.pricing?.currency ?? "INR",
         mealBasis: opt?.mealBasis,
+        hotelSegment: h.accTypeDesc || h.accMultiDesc || 'Hotel',
+        accTypeDesc: h.accTypeDesc,
+        accMultiDesc: h.accMultiDesc,
+        accomodationType: h.accomodationType,
         isRefundable: opt?.cancellation?.isRefundable,
+        onHoldAllowed: opt?.onHoldAllowed ?? opt?.cancellation?.onHoldAllowed ?? (opt?.cancellation?.isRefundable ?? false),
+        holdConfirm: opt?.holdConfirm ?? opt?.cancellation?.holdConfirm ?? (opt?.cancellation?.isRefundable ?? false),
         amenities: h.amenities || [],
         propertyCode: hotelId.toString(),
         brandCode: "",
-        rawPayload: {
-            ...h,
-            // Pass correlationId along so Detail page can use the same one
-            _correlationId: correlationId,
-        },
+        rawPayload: { ...h, _correlationId: correlationId },
     };
 }

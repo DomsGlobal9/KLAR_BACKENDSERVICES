@@ -7,13 +7,7 @@ const app = express();
 
 app.use(cors(corsOptions));
 
-/**
- * Razorpay webhook raw body parser
- */
-app.use(
-  '/api/pay/razorpay/webhook',
-  express.raw({ type: 'application/json' })
-);
+app.use('/api/pay/razorpay/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -1,9 +1,15 @@
 import { rateGainProvider } from "../providers/rategain.provider";
 import { RGDestinationModel } from "../models/RGDestination.model";
 
-export async function syncRGDestinations() {
-+    console.log("[Sync] Starting RateGain Destinations Sync...");
+export async function syncRGDestinations(force = false) {
+    // Optimization: Skip sync if we already have destinations unless forced
+    const existingCount = await RGDestinationModel.countDocuments();
+    if (existingCount > 0 && !force) {
+        console.log(`[Sync] Skip RateGain Destinations Sync: DB already has ${existingCount} destinations. Use force=true to refresh.`);
+        return;
+    }
 
+    console.log(`[Sync] Starting RateGain Destinations Sync (Force: ${force})...`);
     try {
         const data = await rateGainProvider.getDestinations();
         const destinations = data.body || data.destinations || [];
