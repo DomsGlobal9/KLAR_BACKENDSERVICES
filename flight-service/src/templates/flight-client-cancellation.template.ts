@@ -14,6 +14,20 @@ export const flightClientCancellationTemplate = (data: any, logoBase64: string):
         return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     };
 
+    // Helper to format minutes to hours and minutes
+    const formatDuration = (totalMinutes: any): string => {
+        const mins = parseInt(totalMinutes, 10);
+        if (isNaN(mins) || mins <= 0) return '0 HR';
+        
+        const hours = Math.floor(mins / 60);
+        const remainingMinutes = mins % 60;
+        
+        if (remainingMinutes === 0) {
+            return `${hours} HR`;
+        }
+        return `${hours} HR ${remainingMinutes} MIN`;
+    };
+
     // PNR Safe extraction mechanics
     let resolvedPnr = 'N/A';
     if (passenger?.pnrDetails && Object.keys(passenger.pnrDetails).length > 0) {
@@ -146,7 +160,7 @@ export const flightClientCancellationTemplate = (data: any, logoBase64: string):
             <div class="path-area">
                 <div class="line"></div>
                 <span class="plane">✈</span>
-                <div class="dur">${seg.Duration || '0'} MINS • CANCELLED</div>
+                <div class="dur">${formatDuration(seg.Duration)} • CANCELLED</div>
             </div>
             <div class="apt-group" style="text-align: right;">
                 <div class="apt-code">${seg.ArrivalAirport?.cityCode || 'N/A'}</div>
