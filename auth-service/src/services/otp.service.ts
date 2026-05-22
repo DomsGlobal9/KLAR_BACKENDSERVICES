@@ -38,7 +38,7 @@ export class OTPService {
         /**
          * Send Email
          */
-        const otpSendResponse = await EmailService.sendEmail({
+        await EmailService.sendEmail({
             to: email,
             subject: "Your OTP Verification Code",
             html: otpEmailTemplate(otp),

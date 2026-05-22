@@ -177,7 +177,159 @@ export class B2CAuthController {
         }
     };
 
-    
+    // Add these methods to B2CAuthController class
+
+    /**
+     * Request OTP for signup
+     * POST /api/b2c/auth/signup/request-otp
+     */
+    requestSignupOTP = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { email } = req.body;
+
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email is required",
+                });
+            }
+
+            // Email format validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid email format",
+                });
+            }
+
+            const result = await this.authService.requestSignupOTP(email);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+                otp: result.otp, // Remove in production
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    /**
+     * Verify OTP and complete signup
+     * POST /api/b2c/auth/signup/verify-otp
+     */
+    verifySignupOTP = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { fullName, email, password, mobileNumber, otp } = req.body;
+
+            // Validation
+            if (!fullName || !email || !password || !mobileNumber || !otp) {
+                return res.status(400).json({
+                    success: false,
+                    message: "All fields are required: fullName, email, password, mobileNumber, otp",
+                });
+            }
+
+            // Email format validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid email format",
+                });
+            }
+
+            // Mobile number validation (10 digits)
+            const mobileRegex = /^\d{10}$/;
+            if (!mobileRegex.test(mobileNumber)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid mobile number. Please enter 10 digits",
+                });
+            }
+
+            const result = await this.authService.verifySignupAndRegister({
+                fullName,
+                email,
+                password,
+                mobileNumber,
+                otp,
+            });
+
+            res.status(201).json({
+                success: true,
+                message: result.message,
+                data: {
+                    user: result.user,
+                },
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    /**
+     * Request OTP for login 2FA
+     * POST /api/b2c/auth/login/request-otp
+     */
+    requestLoginOTP = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { email, password } = req.body;
+
+            if (!email || !password) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email and password are required",
+                });
+            }
+
+            const result = await this.authService.requestLoginOTP(email, password);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+                otp: result.otp, // Remove in production
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    /**
+     * Verify login OTP and complete authentication
+     * POST /api/b2c/auth/login/verify-otp
+     */
+    verifyLoginOTP = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { email, otp } = req.body;
+
+            if (!email || !otp) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email and OTP are required",
+                });
+            }
+
+            // Get client IP
+            const ipAddress = req.ip || req.socket.remoteAddress;
+
+            const result = await this.authService.verifyLoginAndAuthenticate(email, otp, ipAddress);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+                data: {
+                    user: result.user,
+                    token: result.token,
+                },
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+
 }
 
 export default B2CAuthController;

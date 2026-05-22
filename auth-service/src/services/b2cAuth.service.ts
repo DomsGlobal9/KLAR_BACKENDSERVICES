@@ -3,6 +3,8 @@ import { B2CLoginType, B2CRoles, B2CUserStatus } from "../models/b2cUser.model";
 import bcrypt from "bcryptjs";
 import { JWTUtil } from "../utils/JWT";
 import { ClientType } from "../constants/clientTypes";
+import { OTPType } from "../models/otp.model";
+import { OTPService } from "./otp.service";
 
 export class B2CAuthService {
     private static instance: B2CAuthService;
@@ -207,6 +209,146 @@ export class B2CAuthService {
         
         await this.userRepository.updatePassword(userId, hashedPassword);
     }
+
+    // Add these methods to B2CAuthService class
+
+/**
+ * Request OTP for signup verification
+ */
+async requestSignupOTP(email: string): Promise<{ otp: string; message: string }> {
+    // Check if email already exists
+    const emailExists = await this.userRepository.isEmailExists(email);
+    if (emailExists) {
+        throw new Error("Email already registered");
+    }
+
+    // Generate and send OTP
+    const otpDoc = await OTPService.generateOTP(email, OTPType.SIGNUP);
+
+    return {
+        otp: otpDoc.otp, // Remove in production
+        message: "OTP sent successfully",
+    };
+}
+
+/**
+ * Verify OTP and complete signup
+ */
+async verifySignupAndRegister(userData: {
+    fullName: string;
+    email: string;
+    password: string;
+    mobileNumber: string;
+    otp: string;
+}): Promise<{
+    user: any;
+    message: string;
+}> {
+    // Verify OTP first
+    await OTPService.verifyOTP(
+        userData.email.toLowerCase(),
+        userData.otp,
+        OTPType.SIGNUP
+    );
+
+    // Then register the user
+    return this.register(userData);
+}
+
+/**
+ * Request OTP for login 2FA
+ */
+async requestLoginOTP(email: string, password: string): Promise<{ otp: string; message: string }> {
+    console.log("1. Request login OTP for:", email);
+    // First verify credentials
+    const user = await this.userRepository.findByEmail(email);
+
+    console.log("2. User found:", user ? "Yes" : "No");
+    
+    if (!user) {
+        throw new Error("Invalid email or password");
+    }
+
+    console.log("3. User status:", user.status);
+
+    if (user.status !== B2CUserStatus.ACTIVE) {
+        throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+    }
+
+    const isPasswordValid = await this.userRepository.verifyPassword(user, password);
+
+    console.log("4. Password valid:", isPasswordValid);
+    
+    if (!isPasswordValid) {
+        throw new Error("Invalid email or password");
+    }
+
+    console.log("5. Generating OTP...");
+
+    // Generate and send OTP
+    const otpDoc = await OTPService.generateOTP(email, OTPType.LOGIN);
+
+    console.log("6. OTP generated:", otpDoc.otp);
+
+    return {
+        otp: otpDoc.otp, // Remove in production
+        message: "OTP sent successfully",
+    };
+}
+
+/**
+ * Verify login OTP and complete login
+ */
+async verifyLoginAndAuthenticate(
+    email: string,
+    otp: string,
+    ipAddress?: string
+): Promise<{
+    user: any;
+    token: string;
+    message: string;
+}> {
+    // Verify OTP
+    await OTPService.verifyOTP(
+        email.toLowerCase(),
+        otp,
+        OTPType.LOGIN
+    );
+
+    // Get user
+    const user = await this.userRepository.findByEmail(email);
+    
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    if (user.status !== B2CUserStatus.ACTIVE) {
+        throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+    }
+
+    // Update last login
+    await this.userRepository.updateLastLogin(user._id.toString(), ipAddress);
+
+    // Generate JWT token
+    const tokenPayload = {
+        userId: user._id.toString(),
+        email: user.email,
+        clientType: ClientType.B2C,
+        roles: [user.role],
+    };
+    
+    const token = JWTUtil.getInstance().generateAccessToken(tokenPayload);
+
+    // Remove password from response
+    const userResponse = user.toObject();
+    delete (userResponse as any).password;
+
+    return {
+        user: userResponse,
+        token,
+        message: "Login successful",
+    };
+}
 
 }
 
