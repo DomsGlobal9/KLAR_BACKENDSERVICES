@@ -14,6 +14,20 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     };
 
+    // Helper to format minutes to hours and minutes
+    const formatDuration = (totalMinutes: any): string => {
+        const mins = parseInt(totalMinutes, 10);
+        if (isNaN(mins) || mins <= 0) return '0 HR';
+        
+        const hours = Math.floor(mins / 60);
+        const remainingMinutes = mins % 60;
+        
+        if (remainingMinutes === 0) {
+            return `${hours} HR`;
+        }
+        return `${hours} HR ${remainingMinutes} MIN`;
+    };
+
     // AIRTIGHT PNR EXTRACTION PIPELINE
     let resolvedPnr = 'N/A';
 
@@ -45,6 +59,14 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     const lastName = passenger.LastName || passenger.lastName || '';
     const cabinClass = passenger.FareDetails?.CabinClass || passenger.paxType || 'ECONOMY';
     const classCode = passenger.FareDetails?.ClassCode || 'T';
+
+    // Handle baggage formatting to ensure space between number and unit (e.g., 15KG -> 15 KG)
+    let rawBaggage = passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 KG';
+    let formattedBaggage = String(rawBaggage).trim();
+    const baggageMatch = formattedBaggage.match(/^(\d+)\s*([a-zA-Z]+)$/);
+    if (baggageMatch) {
+        formattedBaggage = `${baggageMatch[1]} ${baggageMatch[2].toUpperCase()}`;
+    }
 
     return `
     <html>
@@ -123,7 +145,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             <div class="path-area">
                 <div class="line"></div>
                 <span class="plane">✈</span>
-                <div class="dur">${seg.Duration || '0'} MINS • NON-STOP</div>
+                <div class="dur">${formatDuration(seg.Duration)} • NON-STOP</div>
             </div>
             <div class="apt-group" style="text-align: right;">
                 <div class="apt-code">${seg.ArrivalAirport?.cityCode || 'N/A'}</div>
@@ -146,7 +168,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
                 <div class="icon-circle">🎒</div>
                 <div class="icon-text-group">
                     <div class="icon-label">Baggage</div>
-                    <div class="icon-val">${passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 Kg'}</div>
+                    <div class="icon-val">${formattedBaggage}</div>
                 </div>
             </div>
             <div class="icon-item">
