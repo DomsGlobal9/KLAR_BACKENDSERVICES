@@ -208,7 +208,7 @@ export class B2CAuthController {
             res.status(200).json({
                 success: true,
                 message: result.message,
-                otp: result.otp, // Remove in production
+                otp: result.otp,
             });
         } catch (err) {
             next(err);
@@ -320,7 +320,6 @@ export class B2CAuthController {
                 success: true,
                 message: result.message,
                 data: {
-                    user: result.user,
                     token: result.token,
                 },
             });

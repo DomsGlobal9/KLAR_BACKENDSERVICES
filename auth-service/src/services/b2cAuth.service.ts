@@ -6,12 +6,35 @@ import { ClientType } from "../constants/clientTypes";
 import { OTPType } from "../models/otp.model";
 import { OTPService } from "./otp.service";
 
+class PasswordUtil {
+    private static instance: PasswordUtil;
+
+    private constructor() { }
+
+    public static getInstance(): PasswordUtil {
+        if (!PasswordUtil.instance) {
+            PasswordUtil.instance = new PasswordUtil();
+        }
+        return PasswordUtil.instance;
+    }
+
+    public async hashPassword(password: string): Promise<string> {
+        return await bcrypt.hash(password, 10);
+    }
+
+    public async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
+        return await bcrypt.compare(password, hashedPassword);
+    }
+}
+
 export class B2CAuthService {
+    private passwordUtil: PasswordUtil;
     private static instance: B2CAuthService;
     private userRepository: B2CUserRepository;
 
     private constructor() {
         this.userRepository = B2CUserRepository.getInstance();
+        this.passwordUtil = PasswordUtil.getInstance();
     }
 
     public static getInstance(): B2CAuthService {
@@ -21,9 +44,6 @@ export class B2CAuthService {
         return B2CAuthService.instance;
     }
 
-    /**
-     * Register a new B2C user
-     */
     async register(userData: {
         fullName: string;
         email: string;
@@ -33,36 +53,32 @@ export class B2CAuthService {
         user: any;
         message: string;
     }> {
-        // Check if email already exists
         const emailExists = await this.userRepository.isEmailExists(userData.email);
         if (emailExists) {
             throw new Error("Email already registered");
         }
 
-        // Check if mobile already exists
         const mobileExists = await this.userRepository.isMobileExists(userData.mobileNumber);
         if (mobileExists) {
             throw new Error("Mobile number already registered");
         }
 
-        // Validate password length
         if (userData.password.length < 6) {
             throw new Error("Password must be at least 6 characters");
         }
 
+        const passwordHash = await this.passwordUtil.hashPassword(userData.password);
+        console.log("THe password hash we got", passwordHash);
 
-
-        // Create new user
         const user = await this.userRepository.createUser({
             fullName: userData.fullName,
             email: userData.email,
-            password: userData.password,
+            password: passwordHash,
             mobileNumber: userData.mobileNumber,
             loginType: B2CLoginType.EMAIL,
             role: B2CRoles.USER,
         });
 
-        // Remove password from response
         const userResponse = user.toObject();
         delete (userResponse as any).password;
 
@@ -72,9 +88,6 @@ export class B2CAuthService {
         };
     }
 
-    /**
-     * Login B2C user with email and password
-     */
     async loginWithEmail(credentials: {
         email: string;
         password: string;
@@ -84,39 +97,33 @@ export class B2CAuthService {
         token: string;
         message: string;
     }> {
-        // Find user by email
         const user = await this.userRepository.findByEmail(credentials.email);
-        
+
         if (!user) {
             throw new Error("Invalid email or password");
         }
 
-        // Check user status
         if (user.status !== B2CUserStatus.ACTIVE) {
             throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
         }
 
-        // Verify password
-        const isPasswordValid = await this.userRepository.verifyPassword(user, credentials.password);
-        
+        const isPasswordValid = await this.passwordUtil.comparePassword(credentials.password, user.password);
+
         if (!isPasswordValid) {
             throw new Error("Invalid email or password");
         }
 
-        // Update last login
         await this.userRepository.updateLastLogin(user._id.toString(), credentials.ipAddress);
 
-        // Generate JWT token
         const tokenPayload = {
             userId: user._id.toString(),
             email: user.email,
             clientType: ClientType.B2C,
             roles: [user.role],
         };
-        
+
         const token = JWTUtil.getInstance().generateAccessToken(tokenPayload);
 
-        // Remove password from response
         const userResponse = user.toObject();
         delete (userResponse as any).password;
 
@@ -127,12 +134,9 @@ export class B2CAuthService {
         };
     }
 
-    /**
-     * Get current user profile
-     */
     async getCurrentUser(userId: string): Promise<any> {
         const user = await this.userRepository.findById(userId);
-        
+
         if (!user) {
             throw new Error("User not found");
         }
@@ -143,14 +147,10 @@ export class B2CAuthService {
         return userResponse;
     }
 
-    /**
-     * Update user profile
-     */
     async updateProfile(userId: string, updateData: {
         fullName?: string;
         mobileNumber?: string;
     }): Promise<any> {
-        // Check if mobile number is being changed and if it already exists
         if (updateData.mobileNumber) {
             const mobileExists = await this.userRepository.isMobileExists(updateData.mobileNumber);
             if (mobileExists) {
@@ -162,7 +162,7 @@ export class B2CAuthService {
         }
 
         const updatedUser = await this.userRepository.updateUser(userId, updateData);
-        
+
         if (!updatedUser) {
             throw new Error("User not found");
         }
@@ -173,183 +173,146 @@ export class B2CAuthService {
         return userResponse;
     }
 
-    /**
-     * Change password
-     */
     async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-        // Get user with password
         const user = await this.userRepository.findById(userId);
-        
+
         if (!user) {
             throw new Error("User not found");
         }
 
-        // Get full user with password field
         const userWithPassword = await B2CUserRepository.getInstance().getUserWithPassword(user.email);
-        
+
         if (!userWithPassword) {
             throw new Error("User not found");
         }
 
-        // Verify current password
-        const isPasswordValid = await this.userRepository.verifyPassword(userWithPassword, currentPassword);
-        
+        const isPasswordValid = await this.passwordUtil.comparePassword(currentPassword, userWithPassword.password);
+
         if (!isPasswordValid) {
             throw new Error("Current password is incorrect");
         }
 
-        // Validate new password
         if (newPassword.length < 6) {
             throw new Error("New password must be at least 6 characters");
         }
 
-        // Hash and update new password
-        const salt = await bcrypt.genSalt(12);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-        
+        const hashedPassword = await this.passwordUtil.hashPassword(newPassword);
+
         await this.userRepository.updatePassword(userId, hashedPassword);
     }
 
-    // Add these methods to B2CAuthService class
+    async requestSignupOTP(email: string): Promise<{ otp: string; message: string }> {
+        const emailExists = await this.userRepository.isEmailExists(email);
+        if (emailExists) {
+            throw new Error("Email already registered");
+        }
 
-/**
- * Request OTP for signup verification
- */
-async requestSignupOTP(email: string): Promise<{ otp: string; message: string }> {
-    // Check if email already exists
-    const emailExists = await this.userRepository.isEmailExists(email);
-    if (emailExists) {
-        throw new Error("Email already registered");
+        const otpDoc = await OTPService.generateOTP(email, OTPType.SIGNUP);
+
+        return {
+            otp: otpDoc.otp,
+            message: "OTP sent successfully",
+        };
     }
 
-    // Generate and send OTP
-    const otpDoc = await OTPService.generateOTP(email, OTPType.SIGNUP);
+    async verifySignupAndRegister(userData: {
+        fullName: string;
+        email: string;
+        password: string;
+        mobileNumber: string;
+        otp: string;
+    }): Promise<{
+        user: any;
+        message: string;
+    }> {
+        await OTPService.verifyOTP(
+            userData.email.toLowerCase(),
+            userData.otp,
+            OTPType.SIGNUP
+        );
 
-    return {
-        otp: otpDoc.otp, // Remove in production
-        message: "OTP sent successfully",
-    };
-}
-
-/**
- * Verify OTP and complete signup
- */
-async verifySignupAndRegister(userData: {
-    fullName: string;
-    email: string;
-    password: string;
-    mobileNumber: string;
-    otp: string;
-}): Promise<{
-    user: any;
-    message: string;
-}> {
-    // Verify OTP first
-    await OTPService.verifyOTP(
-        userData.email.toLowerCase(),
-        userData.otp,
-        OTPType.SIGNUP
-    );
-
-    // Then register the user
-    return this.register(userData);
-}
-
-/**
- * Request OTP for login 2FA
- */
-async requestLoginOTP(email: string, password: string): Promise<{ otp: string; message: string }> {
-    console.log("1. Request login OTP for:", email);
-    // First verify credentials
-    const user = await this.userRepository.findByEmail(email);
-
-    console.log("2. User found:", user ? "Yes" : "No");
-    
-    if (!user) {
-        throw new Error("Invalid email or password");
+        return this.register(userData);
     }
 
-    console.log("3. User status:", user.status);
+    async requestLoginOTP(email: string, password: string): Promise<{ otp: string; message: string }> {
+        console.log("1. Request login OTP for:", email);
 
-    if (user.status !== B2CUserStatus.ACTIVE) {
-        throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+        const user = await this.userRepository.findByEmail(email);
+        console.log("2. User found:", user ? "Yes" : "No");
+
+        if (!user) {
+            throw new Error("Invalid email or password");
+        }
+
+        console.log("3. User status:", user.status);
+
+        if (user.status !== B2CUserStatus.ACTIVE) {
+            throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+        }
+
+        const isPasswordValid = await this.passwordUtil.comparePassword(password, user.password);
+        console.log("4. Password valid:", isPasswordValid);
+
+        if (!isPasswordValid) {
+            throw new Error("Invalid email or password");
+        }
+
+        console.log("5. Generating OTP...");
+
+        const otpDoc = await OTPService.generateOTP(email, OTPType.LOGIN);
+        console.log("6. OTP generated:", otpDoc.otp);
+
+        return {
+            otp: otpDoc.otp,
+            message: "OTP sent successfully",
+        };
     }
 
-    const isPasswordValid = await this.userRepository.verifyPassword(user, password);
+    async verifyLoginAndAuthenticate(
+        email: string,
+        otp: string,
+        ipAddress?: string
+    ): Promise<{
+        user: any;
+        token: string;
+        message: string;
+    }> {
+        await OTPService.verifyOTP(
+            email.toLowerCase(),
+            otp,
+            OTPType.LOGIN
+        );
 
-    console.log("4. Password valid:", isPasswordValid);
-    
-    if (!isPasswordValid) {
-        throw new Error("Invalid email or password");
+        const user = await this.userRepository.findByEmail(email);
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        if (user.status !== B2CUserStatus.ACTIVE) {
+            throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+        }
+
+        await this.userRepository.updateLastLogin(user._id.toString(), ipAddress);
+
+        const tokenPayload = {
+            userId: user._id.toString(),
+            email: user.email,
+            clientType: ClientType.B2C,
+            roles: [user.role],
+        };
+
+        const token = JWTUtil.getInstance().generateAccessToken(tokenPayload);
+
+        const userResponse = user.toObject();
+        delete (userResponse as any).password;
+
+        return {
+            user: userResponse,
+            token,
+            message: "Login successful",
+        };
     }
-
-    console.log("5. Generating OTP...");
-
-    // Generate and send OTP
-    const otpDoc = await OTPService.generateOTP(email, OTPType.LOGIN);
-
-    console.log("6. OTP generated:", otpDoc.otp);
-
-    return {
-        otp: otpDoc.otp, // Remove in production
-        message: "OTP sent successfully",
-    };
-}
-
-/**
- * Verify login OTP and complete login
- */
-async verifyLoginAndAuthenticate(
-    email: string,
-    otp: string,
-    ipAddress?: string
-): Promise<{
-    user: any;
-    token: string;
-    message: string;
-}> {
-    // Verify OTP
-    await OTPService.verifyOTP(
-        email.toLowerCase(),
-        otp,
-        OTPType.LOGIN
-    );
-
-    // Get user
-    const user = await this.userRepository.findByEmail(email);
-    
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    if (user.status !== B2CUserStatus.ACTIVE) {
-        throw new Error(`Account is ${user.status.toLowerCase()}. Please contact support.`);
-    }
-
-    // Update last login
-    await this.userRepository.updateLastLogin(user._id.toString(), ipAddress);
-
-    // Generate JWT token
-    const tokenPayload = {
-        userId: user._id.toString(),
-        email: user.email,
-        clientType: ClientType.B2C,
-        roles: [user.role],
-    };
-    
-    const token = JWTUtil.getInstance().generateAccessToken(tokenPayload);
-
-    // Remove password from response
-    const userResponse = user.toObject();
-    delete (userResponse as any).password;
-
-    return {
-        user: userResponse,
-        token,
-        message: "Login successful",
-    };
-}
-
 }
 
 export default B2CAuthService;
