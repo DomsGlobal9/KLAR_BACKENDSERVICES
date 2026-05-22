@@ -260,9 +260,6 @@ export class B2CAuthController {
             res.status(201).json({
                 success: true,
                 message: result.message,
-                data: {
-                    user: result.user,
-                },
             });
         } catch (err) {
             next(err);
