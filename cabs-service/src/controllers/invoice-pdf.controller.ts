@@ -20,7 +20,7 @@ export const getClientInvoicePdf = async (req: Request, res: Response, next: Nex
 
 export const getAgentInvoicePdf = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { bookingId } = req.query;
+        const { bookingId } = req.params;
         const bookingData = await orderService.getBookingDetails(bookingId as string);
         
         const html = invoicePdfService.compileInvoiceHtml("agent-invoice-template.html", bookingData);
