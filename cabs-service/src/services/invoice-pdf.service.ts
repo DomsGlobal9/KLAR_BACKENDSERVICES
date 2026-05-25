@@ -4,13 +4,18 @@ import fs from "fs";
 
 class InvoicePdfService {
     public compileInvoiceHtml(templateName: string, backendData: any): string {
+
+        console.log("============== [INVOICE DATA DEBUG] ==============");
+        console.log(JSON.stringify(backendData, null, 2));
+        console.log("==================================================");
+
         const filePath = path.join(__dirname, "../templates", templateName);
         let html = fs.readFileSync(filePath, "utf8");
 
         const orderDetails = backendData?.data?.[0] || {};
         const order = orderDetails.order || {};
         const cabInfo = orderDetails.itemInfos?.CAB || {};
-        
+
         const isConfirmed = order.status === "CONFIRMED";
 
         // Mappings dictionary
