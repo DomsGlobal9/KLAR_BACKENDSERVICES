@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Agent Financial Statement</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1e293b;
+            background-color: #ffffff;
+            padding: 20mm 15mm;
+        }
+        .header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; }
+        .header-table { width: 100%; border-collapse: collapse; }
+        
+        /* Brand Identity Headers */
+        .logo-text { font-size: 32pt; font-weight: bold; color: #0f294d; line-height: 1; }
+        .logo-plus { color: #ff2e4d; }
+        .logo-sub { font-size: 9pt; font-weight: 600; letter-spacing: 3px; color: #ff2e4d; }
+        
+        .title { font-size: 15pt; font-weight: bold; color: #ff2e4d; text-transform: uppercase; }
+        .ref { font-size: 11pt; color: #475569; margin-top: 5px; }
+        
+        .badge-confirmed { display: inline-block; background-color: #e6f7ed; color: #268e4c; padding: 4px 12px; border-radius: 4px; font-size: 9pt; font-weight: bold; margin-top: 8px; }
+        .badge-pending { display: inline-block; background-color: #fef3c7; color: #d97706; padding: 4px 12px; border-radius: 4px; font-size: 9pt; font-weight: bold; margin-top: 8px; }
+
+        .section-title { font-size: 11pt; font-weight: bold; color: #0f294d; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; margin-bottom: 15px; margin-top: 25px; text-transform: uppercase; }
+        .info-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .info-table td { padding: 6px 0; }
+        .label { color: #64748b; width: 30%; }
+        .value { font-weight: 600; color: #1e293b; width: 70%; }
+        
+        .breakdown-table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #e2e8f0; }
+        .breakdown-table th { background-color: #f8fafc; color: #334155; font-weight: bold; padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        .breakdown-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+        .amt { text-align: right; font-weight: 600; }
+        .total-row { background-color: #f1f5f9; font-weight: bold; color: #0f294d; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="logo-text">Klar<span class="logo-plus">+</span></div>
+                    <div class="logo-sub">TRAVELS</div>
+                </td>
+                <td style="text-align: right;">
+                    <div class="title">{{templateHeaderTitle}}</div>
+                    <div class="ref">BOOKING REF: <strong>{{bookingId}}</strong></div>
+                    <div class="{{statusBadgeClass}}">{{status}}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section-title">Agency & Account Context</div>
+    <table class="info-table">
+        <tr><td class="label">Agency Name</td><td class="value">{{agencyName}}</td></tr>
+        <tr><td class="label">Agency Email</td><td class="value">{{agencyEmail}}</td></tr>
+        <tr><td class="label">Passenger Reference</td><td class="value">{{passengerName}}</td></tr>
+    </table>
+
+    <div class="section-title">Financial Audit Breakdown</div>
+    <table class="breakdown-table">
+        <thead>
+            <tr><th>Component Item Line Description</th><th class="amt">Amount (INR)</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Net Base Cost</td><td class="amt">₹{{netPrice}}</td></tr>
+            <tr><td>Taxes & Fees (GST)</td><td class="amt">₹{{totalTax}}</td></tr>
+            <tr><td>Configured Markup</td><td class="amt">₹{{agentMarkup}}</td></tr>
+            <tr class="total-row"><td>Gross Amount Paid Statement</td><td class="amt">₹{{grossAmount}}</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>
