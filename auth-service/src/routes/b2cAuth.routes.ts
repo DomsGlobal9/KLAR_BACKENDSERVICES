@@ -22,4 +22,11 @@ router.post("/signup/verify-otp", authController.verifySignupOTP);
 router.post("/login/request-otp", authController.requestLoginOTP);
 router.post("/login/verify-otp", authController.verifyLoginOTP);
 
+
+/**
+ * Google login
+ */
+
+router.post("/google", authController.googleAuth);
+
 export default router;

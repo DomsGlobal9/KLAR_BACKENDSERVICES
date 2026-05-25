@@ -5,6 +5,9 @@ import { JWTUtil } from "../utils/JWT";
 import { ClientType } from "../constants/clientTypes";
 import { OTPType } from "../models/otp.model";
 import { OTPService } from "./otp.service";
+import { OAuth2Client } from 'google-auth-library';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 class PasswordUtil {
     private static instance: PasswordUtil;
@@ -199,6 +202,99 @@ export class B2CAuthService {
         const hashedPassword = await this.passwordUtil.hashPassword(newPassword);
 
         await this.userRepository.updatePassword(userId, hashedPassword);
+    }
+
+    async googleAuth(idToken: string, ipAddress?: string): Promise<{
+        user: any;
+        token: string;
+        message: string;
+    }> {
+        try {
+            console.log("1️⃣ Verifying Google ID token...");
+
+            // Step 1: Verify the token with Google
+            const ticket = await googleClient.verifyIdToken({
+                idToken: idToken,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+
+            const payload = ticket.getPayload();
+            console.log("2️⃣ Token verified. Payload:", payload);
+
+            const { email, name, picture, sub: googleId } = payload as {
+                email: string;
+                name: string;
+                picture: string;
+                sub: string;
+            };
+
+            if (!email) {
+                throw new Error("Email not provided by Google");
+            }
+
+            console.log("3️⃣ Email from Google:", email);
+            console.log("4️⃣ Name from Google:", name);
+
+            // Step 2: Check if user exists in database
+            let user = await this.userRepository.findByEmail(email);
+
+            // Step 3: If user doesn't exist, create new user
+            if (!user) {
+                console.log("5️⃣ User not found. Creating new user...");
+
+                // Generate a random mobile number for Google users (they can update it later)
+                const randomMobile = `91${Math.floor(Math.random() * 100000000)}`.slice(0, 10);
+
+                user = await this.userRepository.createUser({
+                    fullName: name || email.split('@')[0],
+                    email: email,
+                    password: "", 
+                    mobileNumber: randomMobile, 
+                    loginType: B2CLoginType.GOOGLE,
+                    role: B2CRoles.USER,
+                    googleId: googleId,
+                    googlePhoto: picture || "",
+                });
+                console.log("6️⃣ New user created with ID:", user._id);
+            } else {
+                console.log("5️⃣ User already exists. Logging in...");
+
+                // Optional: Update googleId if user logged in with Google but doesn't have one
+                if (!user.googleId && googleId) {
+                    user.googleId = googleId;
+                    await user.save();
+                }
+            }
+
+            // Step 4: Update last login time
+            await this.userRepository.updateLastLogin(user._id.toString(), ipAddress);
+            console.log("7️⃣ Last login updated");
+
+            // Step 5: Generate your own JWT token
+            const tokenPayload = {
+                userId: user._id.toString(),
+                email: user.email,
+                clientType: ClientType.B2C,
+                roles: [user.role],
+            };
+
+            const token = JWTUtil.getInstance().generateAccessToken(tokenPayload);
+            console.log("8️⃣ JWT token generated");
+
+            // Step 6: Return user without password
+            const userResponse = user.toObject();
+            delete (userResponse as any).password;
+
+            return {
+                user: userResponse,
+                token: token,
+                message: "Google login successful",
+            };
+
+        } catch (error: any) {
+            console.error("Google auth error:", error);
+            throw new Error(error.message || "Google authentication failed");
+        }
     }
 
     async requestSignupOTP(email: string): Promise<{ otp: string; message: string }> {

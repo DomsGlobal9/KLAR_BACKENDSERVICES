@@ -104,6 +104,41 @@ export class B2CAuthController {
         }
     };
 
+
+    /**
+     * Google Login
+     * POST /api/b2c/auth/google
+     */
+    googleAuth = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { idToken } = req.body;
+
+            // Validate request
+            if (!idToken) {
+                return res.status(400).json({
+                    success: false,
+                    message: "ID token is required",
+                });
+            }
+
+            // Get client IP
+            const ipAddress = req.ip || req.socket.remoteAddress;
+
+            const result = await this.authService.googleAuth(idToken, ipAddress);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+                data: {
+                    token: result.token,
+                    user: result.user,
+                },
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     /**
      * Get current user profile
      * GET /api/b2c/auth/me
