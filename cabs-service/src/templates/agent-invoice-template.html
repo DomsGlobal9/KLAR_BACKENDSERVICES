@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -123,4 +123,163 @@
     </div>
 
 </body>
-</html>
+</html>  -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Agent Financial Statement Invoice</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1e293b;
+            background-color: #ffffff;
+            padding: 20mm 18mm;
+            font-size: 11pt;
+            line-height: 1.6;
+        }
+        .header-container { display: table; width: 100%; border-bottom: 2px solid #f1f5f9; padding-bottom: 25px; margin-bottom: 35px; }
+        .header-left { display: table-cell; vertical-align: middle; }
+        .header-right { display: table-cell; text-align: right; vertical-align: middle; }
+        
+        .logo-img { height: 55px; max-width: 240px; object-fit: contain; display: block; }
+        
+        .header-meta-label { font-size: 9pt; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 3px; letter-spacing: 0.5px; }
+        .header-meta-value-huge { font-size: 20pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; margin-top: 2px; }
+        .meta-text { font-size: 10.5pt; color: #64748b; margin-bottom: 4px; }
+
+        .section-heading { font-size: 12pt; font-weight: bold; color: #0f294d; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-top: 30px; margin-bottom: 18px; letter-spacing: 0.3px; }
+        
+        .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .grid-table td { padding: 8px 0; vertical-align: top; }
+        .label-col { width: 28%; color: #64748b; font-weight: 500; }
+        .value-col { width: 72%; font-weight: 600; color: #0f294d; }
+
+        .financial-grid { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+        .financial-grid th { background-color: #f8fafc; color: #475569; font-weight: 700; padding: 14px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.3px; }
+        .financial-grid td { padding: 14px; border-bottom: 1px solid #f1f5f9; font-size: 11pt; }
+        .num-col { text-align: right; font-weight: 600; color: #0f294d; }
+        
+        .total-highlight-row { background-color: #f1f5f9; font-weight: bold !important; }
+        .total-highlight-row td { font-size: 13pt; color: #0f294d; font-weight: bold; border-top: 1px solid #cbd5e1; padding: 16px 14px; }
+
+        .footer { margin-top: 60px; border-top: 1px solid #e2e8f0; padding-top: 25px; text-align: center; font-size: 9.5pt; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <div class="header-left">
+            <img src="{{logoSrc}}" alt="Klar Travels Corporate Logo" class="logo-img" />
+        </div>
+        <div class="header-right">
+            <div class="header-meta-label">Booking Reference</div>
+            <div style="font-weight: 700; color:#0f294d; font-size:12pt; margin-bottom:8px;">{{bookingId}}</div>
+            <div class="header-meta-label">Total Amount Paid</div>
+            <div class="header-meta-value-huge">₹{{grossAmount}}</div>
+            <div class="meta-text" style="font-weight:bold; margin-top:8px; font-size:9.5pt;">STATEMENT STATUS: <span style="color:#ea580c;">{{status}}</span></div>
+        </div>
+    </div>
+
+    <div class="section-heading">Agency & Account Context</div>
+    <table class="grid-table">
+        <tr>
+            <td class="label-col">Agency Partner</td>
+            <td class="value-col">{{agencyName}}</td>
+        </tr>
+        <tr>
+            <td class="label-col">Channel Email</td>
+            <td class="value-col">{{agencyEmail}}</td>
+        </tr>
+        <tr>
+            <td class="label-col">Lead Passenger Name</td>
+            <td class="value-col">{{passengerName}}</td>
+        </tr>
+    </table>
+
+    <div class="section-heading">Route Logistics Parameters</div>
+    <table class="grid-table">
+        <tr>
+            <td class="label-col">Pickup Location</td>
+            <td class="value-col">{{sourceAddress}}</td>
+        </tr>
+        <tr>
+            <td class="label-col">Dropoff Location</td>
+            <td class="value-col">{{destAddress}}</td>
+        </tr>
+        <tr>
+            <td class="label-col">Schedule Window</td>
+            <td class="value-col">{{pickupDate}} ({{duration}} / {{distance}})</td>
+        </tr>
+    </table>
+
+    <div class="section-heading">Financial Settlement Ledger Sheet</div>
+    <table class="financial-grid">
+        <thead>
+            <tr>
+                <th>Itemized Component Line Description</th>
+                <th class="num-col" style="width:35%;">Amount (INR)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Net Supplier Base Cost</td>
+                <td class="num-col">₹{{netPrice}}</td>
+            </tr>
+            <tr>
+                <td>Taxes & Operational Service Fees (GST)</td>
+                <td class="num-col">₹{{totalTax}}</td>
+            </tr>
+            <tr>
+                <td>Agent Configured Corporate Markup Price</td>
+                <td class="num-col">₹{{agentMarkup}}</td>
+            </tr>
+            <tr class="total-row total-highlight-row">
+                <td>TOTAL AMOUNT DEBITED (Internal Ledger Settlement)</td>
+                <td class="num-col" style="color:#0f294d;">₹{{grossAmount}}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Confidential Document Statement — Internal B2B Channel Affiliate Records Ledger Audit Only.
+    </div>
+
+</body>
+</html> 

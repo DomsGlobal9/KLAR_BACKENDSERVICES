@@ -9,24 +9,19 @@ class InvoicePdfService {
             
             if (fs.existsSync(logoPath)) {
                 const bitmap = fs.readFileSync(logoPath);
-                const base64Str = Buffer.from(bitmap).toString('base64');
-                return `data:image/png;base64,${base64Str}`;
+                return `data:image/png;base64,${Buffer.from(bitmap).toString('base64')}`;
             }
-            
-            // Fallback warning path trace profile
-            console.warn(`⚠️ [InvoicePdfService] Logo not found at absolute path: ${logoPath}`);
+            console.warn(`⚠️ [InvoicePdfService] Logo asset file not found at path: ${logoPath}`);
             return "";
         } catch (error) {
-            console.error("❌ [InvoicePdfService] Failed converting logo asset to base64 string stream:", error);
+            console.error("❌ [InvoicePdfService] Error converting logo asset to base64:", error);
             return "";
         }
     }
 
     public compileInvoiceHtml(templateName: string, backendData: any): string {
-        // 🔍 DEBUG SYSTEM TRACE LOG OUTPUT
         console.log("==================================================");
-        console.log("📥 [DEBUG] INVOICE BACKEND DATA STRINGS PROFILE:");
-        console.log(JSON.stringify(backendData, null, 2));
+        console.log("📥 [DEBUG] COMPILING TEMPLATE CONTENT DATA INJECTION MATRIX");
         console.log("==================================================");
 
         const filePath = path.join(__dirname, "../templates", templateName);
@@ -35,9 +30,16 @@ class InvoicePdfService {
         const orderDetails = backendData?.data?.[0] || {};
         const order = orderDetails.order || {};
         const cabInfo = orderDetails.itemInfos?.CAB || {};
+        const policies = order.policies || {};
         
         const currentStatus = String(order.status || "PENDING").toUpperCase();
-        const isConfirmed = currentStatus === "CONFIRMED";
+        const isConfirmed = currentStatus === "CONFIRMED" || currentStatus === "SUCCESS";
+
+        // Dynamic status badge styling selection profile
+        let statusBadgeClass = "badge-pending";
+        if (isConfirmed) {
+            statusBadgeClass = "badge-confirmed";
+        }
 
         const parseReadableDate = (rawDateStr: string): string => {
             if (!rawDateStr) return "N/A";
@@ -56,31 +58,51 @@ class InvoicePdfService {
             }
         };
 
+        // Construct Robust Dynamic List Line-Items with Fallbacks
+        const buildListItems = (itemsArray: any[] | undefined, defaultText: string): string => {
+            if (!itemsArray || !Array.isArray(itemsArray) || itemsArray.length === 0) {
+                return `<li>${defaultText}</li>`;
+            }
+            return itemsArray.map(item => {
+                const text = typeof item === 'object' && item !== null ? item.description || JSON.stringify(item) : String(item);
+                return `<li>${text}</li>`;
+            }).join("");
+        };
+
+        const dynamicInclusions = buildListItems(policies.inclusions, "All inclusive pricing");
+        const dynamicExclusions = buildListItems(policies.exclusions, "Charges for changes or extra stops");
+        const dynamicBaggage = buildListItems(policies.baggagePolicy, "Standard luggage parameters apply.");
+        const dynamicTerms = buildListItems(policies.termsAndPolicies, "Standard passenger terms apply.");
+
         const base64Logo = this.getLogoAsBase64();
 
-        // Template replacement tokens profile map dictionary configuration layout 
+        // Dictionary map tokens to execute total replacement metrics loops matching HTML variables
         const mappings: { [key: string]: string } = {
             "{{logoSrc}}": base64Logo,
             "{{bookingId}}": String(order.bookingId || "N/A"),
             "{{status}}": currentStatus,
             "{{templateHeaderTitle}}": isConfirmed ? "Booking Confirmed!" : "BOOKING STATEMENT (PROCESSING)",
-            "{{statusBadgeClass}}": isConfirmed ? "badge-confirmed" : "badge-pending",
+            "{{statusBadgeClass}}": statusBadgeClass,
             "{{tripType}}": String(order.tripType || "ONEWAY"),
             "{{sourceAddress}}": String(cabInfo.journeyInfo?.source || "N/A"),
             "{{destAddress}}": String(cabInfo.journeyInfo?.destination || "N/A"),
             "{{pickupDate}}": parseReadableDate(cabInfo.journeyInfo?.pickupDate),
             "{{distance}}": String(cabInfo.journeyInfo?.distance || "10 Km"),
             "{{duration}}": `${cabInfo.journeyInfo?.duration || 30} mins`,
-            "{{vehicleClass}}": String(cabInfo.vehicleDetail?.clazz || "Standard Private Van"),
-            "{{passengerName}}": String(cabInfo.paxDetails?.fullName || "sudheer ganta"),
+            "{{vehicleClass}}": String(cabInfo.vehicleDetail?.clazz || "Standard Sedan"),
+            "{{passengerName}}": String(cabInfo.paxDetails?.fullName || "Passenger"),
             "{{passengerPhone}}": String(cabInfo.paxDetails?.phone || "N/A"),
             "{{passengerEmail}}": String(cabInfo.paxDetails?.email || "N/A"),
-            "{{agencyName}}": String(orderDetails.bookingUser?.name || "N/A"),
-            "{{agencyEmail}}": String(orderDetails.bookingUser?.email || "N/A"),
-            "{{netPrice}}": Number(cabInfo.pricing?.netPrice || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-            "{{totalTax}}": Number(cabInfo.pricing?.totalTax || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-            "{{agentMarkup}}": Number(cabInfo.pricing?.agentMarkup || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-            "{{grossAmount}}": Number(order.amount || cabInfo.pricing?.grossAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
+            "{{grossAmount}}": Number(order.amount || cabInfo.pricing?.grossAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+            
+            // Fixed Array Parameter Content Nodes
+            "{{waitingTime}}": String(policies.waitingTime || "30 mins free waiting time"),
+            "{{meetAndGreet}}": String(policies.meetAndGreet?.description || "Driver meets with placard at Arrivals Gate"),
+            "{{helpline}}": String(order.helpline || "For any urgent matters, you can also call our 24/7 helpline number at: +1 855 980 5669"),
+            "{{dynamicInclusions}}": dynamicInclusions,
+            "{{dynamicExclusions}}": dynamicExclusions,
+            "{{dynamicBaggage}}": dynamicBaggage,
+            "{{dynamicTerms}}": dynamicTerms
         };
 
         for (const placeholder in mappings) {
