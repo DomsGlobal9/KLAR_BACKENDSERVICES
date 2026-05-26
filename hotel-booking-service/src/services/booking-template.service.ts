@@ -17,7 +17,7 @@ export class BookingTemplateService {
         let html = fs.readFileSync(templatePath, 'utf8');
 
         // Target path matching your local absolute asset folder setup
-        const logoAbsolutePath = path.join(__dirname, '../assets/images/klar-travels-logo.png');
+        const logoAbsolutePath = path.join(__dirname, 'src\\assets\\images\\klar-travels-logo.png');
         // Convert to file:// format so headless chromium can read it locally
         const logoUrl = `file://${logoAbsolutePath}`;
 
