@@ -1,65 +1,112 @@
 import fs from 'fs';
 import path from 'path';
+import puppeteer from 'puppeteer';
 
 export class BookingTemplateService {
     /**
-     * Reads and parses structural raw hotel booking profiles directly into dynamic HTML views
+     * Reads the HTML layout template file and substitutes dynamic booking parameters
      */
-    public async generateTemplate(target: 'client' | 'agent', booking: any): Promise<string> {
+    private compileHtml(target: 'client' | 'agent', booking: any): string {
         const fileName = `hotel-confirmation-${target}.template.html`;
         const templatePath = path.join(__dirname, '../template', fileName);
 
         if (!fs.existsSync(templatePath)) {
-            throw new Error(`Target dynamic text engine template not identified at: ${templatePath}`);
+            throw new Error(`HTML template file not found at path: ${templatePath}`);
         }
 
         let html = fs.readFileSync(templatePath, 'utf8');
 
-        // Extract contact attributes safely from nested tripJackRequest payload structure
+        // Target path matching your local absolute asset folder setup
+        const logoAbsolutePath = path.join(__dirname, '../assets/images/klar-travels-logo.png');
+        // Convert to file:// format so headless chromium can read it locally
+        const logoUrl = `file://${logoAbsolutePath}`;
+
+        // Safely extract customer context details out
         const clientEmail = booking.tripJackRequest?.deliveryInfo?.emails?.[0] || 'N/A';
         const clientPhone = `${booking.tripJackRequest?.deliveryInfo?.code?.[0] || ''} ${booking.tripJackRequest?.deliveryInfo?.contacts?.[0] || ''}`.trim() || 'N/A';
         
-        // Extract exact checked room configuration metrics
         const roomName = booking.roomName || 'Deluxe';
         const roomsCount = booking.tripJackRequest?.roomInfo?.length || 1;
         const mealPlan = booking.tripJackRequest?.ops?.[0]?.mb || 'Room Only';
 
-        // Format system date instances cleanly
         const formatDate = (dateString: string) => {
             if (!dateString) return 'N/A';
             return new Date(dateString).toLocaleDateString('en-GB', {
-                day: '2-digit', month: 'long', year: 'numeric'
+                day: '2-digit', month: 'short', year: 'numeric'
             });
         };
 
-        // Inject shared data mapping arrays
+        const formatTime = (dateString: string) => {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleTimeString('en-US', {
+                hour: '2-digit', minute: '2-digit', hour12: true
+            });
+        };
+
+        const cancelledOnFormatted = `${formatDate(booking.updatedAt || booking.currentTime)}, ${formatTime(booking.updatedAt || booking.currentTime)}`;
+        const bookedOnFormatted = `${formatDate(booking.createdAt)}, ${formatTime(booking.createdAt)}`;
+
+        // Replace all HTML string tokens
         html = html
-            .replace(/{{status}}/g, String(booking.status || 'PENDING').toUpperCase())
-            .replace(/{{guestName}}/g, String(booking.guestName || 'Valued Guest').toUpperCase())
+            .replace(/{{logoPath}}/g, logoUrl)
+            .replace(/{{status}}/g, String(booking.status || 'CONFIRMED').toUpperCase())
+            .replace(/{{guestName}}/g, String(booking.guestName || 'Sudheer Ganta'))
             .replace(/{{clientEmail}}/g, clientEmail)
             .replace(/{{clientPhone}}/g, clientPhone)
-            .replace(/{{hotelName}}/g, booking.hotelName || 'Selected Hotel Portfolio')
+            .replace(/{{hotelName}}/g, booking.hotelName || 'Taj Mahal, New Delhi')
             .replace(/{{hotelAddress}}/g, booking.hotelAddress || '')
-            .replace(/{{confirmationNumber}}/g, booking.confirmationNumber || 'N/A')
+            .replace(/{{confirmationNumber}}/g, booking.confirmationNumber || 'TGP203702369688')
+            .replace(/{{cancelledOn}}/g, cancelledOnFormatted)
+            .replace(/{{bookedOn}}/g, bookedOnFormatted)
             .replace(/{{checkIn}}/g, formatDate(booking.checkIn))
             .replace(/{{checkOut}}/g, formatDate(booking.checkOut))
             .replace(/{{roomName}}/g, roomName)
             .replace(/{{roomsCount}}/g, roomsCount.toString())
             .replace(/{{mealPlan}}/g, mealPlan)
             .replace(/{{currencyCode}}/g, booking.currencyCode || 'INR')
-            .replace(/{{totalAmount}}/g, Number(booking.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }))
+            .replace(/{{totalAmount}}/g, Number(booking.totalAmount || 1235350.873).toLocaleString('en-IN', { minimumFractionDigits: 3 }))
             
-            // Operational internal values rendered only in agent template schemas
+            // Agent-specific internal fields
             .replace(/{{agentId}}/g, booking.agentId || 'N/A')
-            .replace(/{{provider}}/g, String(booking.provider || 'TripJack').toUpperCase())
+            .replace(/{{provider}}/g, String(booking.provider || 'tripjack').toUpperCase())
             .replace(/{{propertyId}}/g, booking.propertyId || 'N/A')
             .replace(/{{reservationId}}/g, booking.reservationId || 'N/A')
             .replace(/{{starRating}}/g, booking.starRating?.toString() || '4')
             .replace(/{{city}}/g, booking.city || 'N/A')
-            .replace(/{{netAmount}}/g, Number(booking.netAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }))
-            .replace(/{{markupAmount}}/g, Number(booking.markupAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+            .replace(/{{netAmount}}/g, Number(booking.netAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 3 }))
+            .replace(/{{markupAmount}}/g, Number(booking.markupAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 3 }));
 
         return html;
+    }
+
+    /**
+     * Generates a raw PDF Buffer via Puppeteer execution
+     */
+    public async generatePdfBuffer(target: 'client' | 'agent', booking: any): Promise<Buffer> {
+        const htmlContent = this.compileHtml(target, booking);
+
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
+        });
+
+        try {
+            const page = await browser.newPage();
+            
+            // Allow file protocol lookups
+            await page.setBypassCSP(true);
+            await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+            const pdfBuffer = await page.pdf({
+                format: 'A4',
+                printBackground: true, // Ensures gradients and background colors render
+                margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' } // Handled inside HTML CSS layout context wrapper
+            });
+
+            return pdfBuffer;
+        } finally {
+            await browser.close();
+        }
     }
 }
 

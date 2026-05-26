@@ -67,8 +67,7 @@ router.get("/bookings/:id", authenticateJWT, getBookingDetails);
  * GET -> /api/templates/hotel/confirmation/client/6a15467827cdbbb8d1982f82
  */
 router.get(
-    "/templates/hotel/confirmation/client/:id", 
-    bookingTemplateController.renderClientConfirmation
+    "/templates/hotel/confirmation/client/:id", authenticateJWT, bookingTemplateController.renderClientConfirmation
 );
 
 /**
@@ -76,8 +75,7 @@ router.get(
  * GET -> /api/templates/hotel/confirmation/agent/6a15467827cdbbb8d1982f82
  */
 router.get(
-    "/templates/hotel/confirmation/agent/:id", 
-    bookingTemplateController.renderAgentConfirmation
+    "/templates/hotel/confirmation/agent/:id", authenticateJWT, bookingTemplateController.renderAgentConfirmation
 );
 
 
