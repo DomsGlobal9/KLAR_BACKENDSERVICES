@@ -20,7 +20,7 @@ export class B2CUserRepository {
     async createUser(userData: {
         fullName: string;
         email: string;
-        password: string;
+        password?: string;
         mobileNumber: string;
         loginType: B2CLoginType;
         role?: B2CRoles;
@@ -30,7 +30,7 @@ export class B2CUserRepository {
         const user = new B2CUserModel({
             fullName: userData.fullName,
             email: userData.email.toLowerCase(),
-            password: userData.password,
+            // password: userData.password,
             mobileNumber: userData.mobileNumber,
             loginType: userData.loginType,
             role: userData.role || B2CRoles.USER,

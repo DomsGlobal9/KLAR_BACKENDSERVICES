@@ -248,7 +248,7 @@ export class B2CAuthService {
                 user = await this.userRepository.createUser({
                     fullName: name || email.split('@')[0],
                     email: email,
-                    password: "", 
+                    // password: "", 
                     mobileNumber: randomMobile, 
                     loginType: B2CLoginType.GOOGLE,
                     role: B2CRoles.USER,

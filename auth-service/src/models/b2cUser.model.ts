@@ -47,7 +47,7 @@ const B2CUserSchema = new Schema<IB2CUser>(
         },
         password: {
             type: String,
-            required: true,
+            required: false,
         },
         mobileNumber: {
             type: String,
