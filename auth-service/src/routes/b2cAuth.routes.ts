@@ -29,4 +29,6 @@ router.post("/login/verify-otp", authController.verifyLoginOTP);
 
 router.post("/google", authController.googleAuth);
 
+router.post("/validate-token", authenticateJWT, authController.validateToken);
+
 export default router;
