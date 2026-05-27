@@ -4,24 +4,33 @@ import puppeteer from 'puppeteer';
 
 export class BookingTemplateService {
     /**
-     * Reads the HTML layout template file and substitutes dynamic booking parameters
+     * Reads the HTML layout template file dynamically based on status and substitutes parameters
      */
     private compileHtml(target: 'client' | 'agent', booking: any): string {
-        const fileName = `hotel-confirmation-${target}.template.html`;
-        const templatePath = path.join(__dirname, '../template', fileName);
+        // 1. Sanitize status to lowercase (e.g., "confirmed" or "cancelled")
+        let currentStatus = String(booking.status || 'CONFIRMED').toLowerCase();
+
+        if (currentStatus === 'canceled' || currentStatus === 'cancelled') {
+        currentStatus = 'cancelled'; 
+    }
+        
+        // 2. Resolve filename dynamically: hotel-confirmation-client / hotel-cancelled-client, etc.
+        const fileName = `hotel-${currentStatus}-${target}.template.html`;
+        
+        // Ground path resolution to project root working directory
+        const templatePath = path.join(process.cwd(), 'src', 'template', fileName);
 
         if (!fs.existsSync(templatePath)) {
-            throw new Error(`HTML template file not found at path: ${templatePath}`);
+            throw new Error(`Target HTML template file not found at path: ${templatePath}`);
         }
 
         let html = fs.readFileSync(templatePath, 'utf8');
 
-        // Target path matching your local absolute asset folder setup
-        const logoAbsolutePath = path.join(__dirname, 'src\\assets\\images\\klar-travels-logo.png');
-        // Convert to file:// format so headless chromium can read it locally
+        // 3. Setup absolute asset location safely for Puppeteer headless browser instance
+        const logoAbsolutePath = path.join(process.cwd(), 'src', 'assets', 'images', 'klar-travels-logo.png');
         const logoUrl = `file://${logoAbsolutePath}`;
 
-        // Safely extract customer context details out
+        // Safely extract customer context details out from your TripJack schema structures
         const clientEmail = booking.tripJackRequest?.deliveryInfo?.emails?.[0] || 'N/A';
         const clientPhone = `${booking.tripJackRequest?.deliveryInfo?.code?.[0] || ''} ${booking.tripJackRequest?.deliveryInfo?.contacts?.[0] || ''}`.trim() || 'N/A';
         
@@ -43,13 +52,20 @@ export class BookingTemplateService {
             });
         };
 
+        // Determine timeline parameters accurately
         const cancelledOnFormatted = `${formatDate(booking.updatedAt || booking.currentTime)}, ${formatTime(booking.updatedAt || booking.currentTime)}`;
         const bookedOnFormatted = `${formatDate(booking.createdAt)}, ${formatTime(booking.createdAt)}`;
 
-        // Replace all HTML string tokens
+        // Calculate explicit cancellation values from payload logs
+        const cancellationPenaltyVal = booking.cancelCharge || booking.cancelChargesInfo?.applicableCharge || 0;
+        const refundAmountVal = booking.cancelChargesInfo?.refundAmount !== undefined 
+            ? booking.cancelChargesInfo.refundAmount 
+            : (booking.totalAmount - cancellationPenaltyVal);
+
+        // Replace all global template tokens
         html = html
             .replace(/{{logoPath}}/g, logoUrl)
-            .replace(/{{status}}/g, String(booking.status || 'CONFIRMED').toUpperCase())
+            .replace(/{{status}}/g, currentStatus.toUpperCase())
             .replace(/{{guestName}}/g, String(booking.guestName || 'Sudheer Ganta'))
             .replace(/{{clientEmail}}/g, clientEmail)
             .replace(/{{clientPhone}}/g, clientPhone)
@@ -64,9 +80,13 @@ export class BookingTemplateService {
             .replace(/{{roomsCount}}/g, roomsCount.toString())
             .replace(/{{mealPlan}}/g, mealPlan)
             .replace(/{{currencyCode}}/g, booking.currencyCode || 'INR')
-            .replace(/{{totalAmount}}/g, Number(booking.totalAmount || 1235350.873).toLocaleString('en-IN', { minimumFractionDigits: 3 }))
             
-            // Agent-specific internal fields
+            // Dynamic value formatting expressions 
+            .replace(/{{totalAmount}}/g, Number(booking.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 3 }))
+            .replace(/{{cancellationPenalty}}/g, Number(cancellationPenaltyVal).toLocaleString('en-IN', { minimumFractionDigits: 3 }))
+            .replace(/{{refundAmount}}/g, Number(refundAmountVal).toLocaleString('en-IN', { minimumFractionDigits: 3 }))
+            
+            // Agent-specific operation fields
             .replace(/{{agentId}}/g, booking.agentId || 'N/A')
             .replace(/{{provider}}/g, String(booking.provider || 'tripjack').toUpperCase())
             .replace(/{{propertyId}}/g, booking.propertyId || 'N/A')
@@ -93,14 +113,14 @@ export class BookingTemplateService {
         try {
             const page = await browser.newPage();
             
-            // Allow file protocol lookups
+            // Allow local filesystem lookups within the layout file protocol sandbox context
             await page.setBypassCSP(true);
             await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
             const pdfBuffer = await page.pdf({
                 format: 'A4',
-                printBackground: true, // Ensures gradients and background colors render
-                margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' } // Handled inside HTML CSS layout context wrapper
+                printBackground: true, 
+                margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' }
             });
 
             return pdfBuffer;
