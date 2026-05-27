@@ -155,6 +155,7 @@ export class TripJackApiProvider {
             roomTravellerInfo,
             deliveryInfo,
             paymentInfos,
+            gstInfo,
         } = payload;
 
         if (!bookingId) throw new Error("[TripJack Book] bookingId is required");
@@ -171,6 +172,17 @@ export class TripJackApiProvider {
                 code: (deliveryInfo?.code || ["+91"]).map((c: string) => c.startsWith("+") ? c : `+${c}`)
             }
         };
+
+        // GST Info: Include only when gstNumber is present (TripJack ignores empty gstInfo)
+        // Required for hotels that have GST passthrough / reseller registration
+        if (gstInfo?.gstNumber) {
+            tjPayload.gstInfo = {
+                gstNumber: gstInfo.gstNumber.trim().toUpperCase(),
+                registeredName: (gstInfo.registeredName || gstInfo.companyName || 'KLAR').trim(),
+                ...(gstInfo.pan && { pan: gstInfo.pan.trim().toUpperCase() })
+            };
+            console.log(`[TripJack] Book: Including gstInfo for GST passthrough:`, tjPayload.gstInfo);
+        }
 
         if (paymentInfos && paymentInfos.length > 0) {
             tjPayload.paymentInfos = paymentInfos;

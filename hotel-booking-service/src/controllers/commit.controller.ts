@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { commitService } from "../services/commit.service";
+import { compileTravellerPayload } from "../utils/bookingTransformer";
 
 export const commitController = async (req: any, res: Response) => {
     try {
@@ -7,8 +8,23 @@ export const commitController = async (req: any, res: Response) => {
         const agentName = req.user?.email || null; // Fallback to email if name isn't in token
         const token = req.headers.authorization?.split(" ")[1] || "";
 
+        let finalPayload = req.body;
+        
+        // INTERCEPT UNIFIED PAYLOAD
+        if (req.body.bookingFormData && req.body.providerContext) {
+            const compiledProviderPayload = compileTravellerPayload(req.body.bookingFormData, req.body.providerContext);
+            finalPayload = {
+                ...compiledProviderPayload,
+                ...req.body.meta, // hotelName, hotelImage, additionalMarkup, etc.
+                bookingId: req.body.providerContext.bookingId || compiledProviderPayload.bookingId,
+                propertyId: req.body.providerContext.hotelId,
+                totalPrice: req.body.providerContext.totalAggregatePrice,
+            };
+            console.log(`[FORENSIC] Compiled Unified Payload for property: ${finalPayload.propertyId}`);
+        }
+
         console.log(`[FORENSIC] Commit Booking: agentId=${agentId}, agentName=${agentName}`);
-        const data = await commitService.commit(req.body, agentId, agentName, token);
+        const data = await commitService.commit(finalPayload, agentId, agentName, token);
         res.json(data);
     } catch (error: any) {
         console.error("Commit Controller Error:", error.response?.data || error.message);

@@ -20,7 +20,7 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
     // Strategy 1: Look for an exact city name match in our database (Fastest)
     // We strictly use anchors ^...$ to avoid "Goa" matching "Goettingen"
     const hotel = await HotelModel.findOne({
-        cityName: { $regex: new RegExp(`^${normalizedQuery}$`, "i") }
+        cityName: { $regex: `^${normalizedQuery}$`, $options: "i" }
     }).select("location").lean();
 
     if (hotel?.location?.coordinates) {
@@ -34,7 +34,7 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
     if (parts.length > 1) {
         const firstPart = parts[0];
         const partialHotel = await HotelModel.findOne({
-            cityName: { $regex: new RegExp(`^${firstPart}$`, "i") }
+            cityName: { $regex: `^${firstPart}$`, $options: "i" }
         }).select("location").lean();
 
         if (partialHotel?.location?.coordinates) {
@@ -95,8 +95,8 @@ export async function resolveForRG(query: string): Promise<string | null> {
     // Use sort by updatedAt desc to get the most fresh codes if duplicates exist
     let dest = await RGDestinationModel.findOne({
         $or: [
-            { destName: normalizedQuery },
-            { destName: { $regex: new RegExp(`^${normalizedQuery}`, "i") } }
+            { destName: { $regex: `^${normalizedQuery}$`, $options: "i" } },
+            { destName: { $regex: `^${normalizedQuery}`, $options: "i" } }
         ]
     }).sort({ updatedAt: -1 });
 
@@ -148,7 +148,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
     // 3. First Word Fallback - Only as a last resort and if it's not a generic word
     if (!dest && words.length > 0 && !GENERIC_WORDS.includes(words[0]!)) {
         dest = await RGDestinationModel.findOne({
-            destName: { $regex: new RegExp(`^${words[0]}`, "i") }
+            destName: { $regex: `^${words[0]}`, $options: "i" }
         }).sort({ updatedAt: -1 });
     }
 
@@ -180,13 +180,13 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
     // If user searches "Hotel Name, City" or just "Hotel Name"
     const nameToSearch = normalizedQuery.split(',')[0].trim();
     if (nameToSearch.length > 5) {
-        const directMatch = await HotelModel.findOne({
-            name: { $regex: new RegExp(`^${nameToSearch}$`, "i") }
-        }).select("tjHotelId").lean();
+        const directMatches = await HotelModel.find({
+            $text: { $search: `"${nameToSearch}"` }
+        }).select("tjHotelId").limit(5).lean();
 
-        if (directMatch) {
-            console.log(`[DEBUG] resolveForTJ: Direct hotel name match for "${nameToSearch}": ${directMatch.tjHotelId}`);
-            return [directMatch.tjHotelId];
+        if (directMatches && directMatches.length > 0) {
+            console.log(`[DEBUG] resolveForTJ: Direct hotel name match for "${nameToSearch}": ${directMatches[0].tjHotelId}`);
+            return directMatches.map((m: any) => m.tjHotelId);
         }
     }
 
@@ -238,7 +238,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
     // Step B: Fallback to Phrase Regex
     if (hotels.length < 5) {
         const regexHotels = await HotelModel.find({
-            cityName: { $regex: new RegExp(`^${normalizedQuery}$`, "i") }
+            cityName: { $regex: `^${normalizedQuery}$`, $options: "i" }
         }).select("tjHotelId countryName").lean();
 
         if (regexHotels.length > hotels.length) {

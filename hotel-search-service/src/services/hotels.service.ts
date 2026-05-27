@@ -28,7 +28,7 @@ export class HotelsService {
             const { HotelModel } = require("../models/Hotel.model");
             const nameToSearch = searchPayload.destination.split(',')[0].trim();
             if (nameToSearch.length > 5) {
-                const directMatch = await HotelModel.findOne({ name: { $regex: new RegExp(`^${nameToSearch}$`, "i") } }).select("_id").lean();
+                const directMatch = await HotelModel.findOne({ $text: { $search: `"${nameToSearch}"` } }).select("_id").lean();
                 if (directMatch) isDirectHotelName = true;
             }
         }
@@ -128,15 +128,13 @@ Reported Total to UI:      ${totalToUI}
         const { RGDestinationModel } = require("../models/RGDestination.model");
 
         const rgDests = await RGDestinationModel.find({
-            destName: { $regex: new RegExp(query, "i") }
+            destName: { $regex: query, $options: "i" }
         }).limit(5).lean();
 
+        // Use $text index for blazing fast name/city searches instead of slow $regex collection scans
         const hotels = await HotelModel.find({
-            $or: [
-                { name: { $regex: new RegExp(query, "i") } },
-                { cityName: { $regex: new RegExp(query, "i") } }
-            ]
-        }).limit(10).lean();
+            $text: { $search: query }
+        }).limit(15).lean();
 
         const suggestions = [
             ...rgDests.map((d: any) => ({

@@ -17,3 +17,19 @@ export const cancelController = async (req: Request, res: Response) => {
         });
     }
 };
+
+export const getCancelChargesController = async (req: Request, res: Response) => {
+    try {
+        console.log("🔍 Get Cancel Charges Query:", JSON.stringify(req.query, null, 2));
+        const data = await cancelService.getCancelCharges(req.query);
+        res.json(data);
+    } catch (error: any) {
+        console.error("Get Cancel Charges Error:", error.response?.data || error.message);
+        res.status(error.response?.status || 500).json({
+            status: false,
+            statusCode: error.response?.status || 500,
+            description: error.response?.data?.description || error.message || "Internal Server Error",
+            body: error.response?.data || null
+        });
+    }
+};
