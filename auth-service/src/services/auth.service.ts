@@ -206,7 +206,7 @@ export class AuthService {
         /**
          * Validate password
          */
-        const isMatch = await this.passwordUtil.comparePassword(password, user.passwordHash);
+        const isMatch = await this.passwordUtil.comparePassword(password, user.passwordHash as string);
         if (!isMatch) {
             throw new UnauthorizedError('Invalid credentials');
         }
