@@ -20,6 +20,7 @@ export class BookingTemplateService {
         let html = fs.readFileSync(templatePath, 'utf8');
 
         // FIX: Construct absolute asset paths correctly using project root working directory
+        // const logoAbsolutePath = path.join(process.cwd(), 'src', 'assets', 'images', 'klar-travels-logo.png');
         const logoAbsolutePath = path.join(process.cwd(), 'src', 'assets', 'images', 'klar-travels-logo.png');
         const logoUrl = `file://${logoAbsolutePath}`;
 
