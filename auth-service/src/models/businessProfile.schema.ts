@@ -55,6 +55,3 @@ export const BusinessProfileSchema = new Schema(
     },
     { _id: false }
 );
-
-
-// Used only for b2b & b2b2b.

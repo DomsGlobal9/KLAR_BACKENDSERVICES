@@ -6,6 +6,10 @@ import {
   me,
   validateToken,
   validateTokenForService,
+  requestSignupOTP,
+  verifySignupOTP,
+  requestLoginOTP,
+  verifyLoginOTP,
 } from "../controllers/auth.controller";
 import { authenticateJWT } from "../middlewares/authentication.middleware";
 
@@ -16,6 +20,14 @@ router.post("/login", loginB2B);
 router.post("/logout", logoutB2B);
 router.get("/me", authenticateJWT, me);
 router.get("/validate", authenticateJWT, validateToken);
+
+/**
+ * OTP sending and verifications
+ */
+router.post("/signup/request-otp", requestSignupOTP);
+router.post("/signup/verify-otp", verifySignupOTP);
+router.post("/login/request-otp", requestLoginOTP);
+router.post("/login/verify-otp", verifyLoginOTP);
 
 /**
  * endpoint for service-to-service validation 

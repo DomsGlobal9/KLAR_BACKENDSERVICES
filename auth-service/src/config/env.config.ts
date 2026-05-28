@@ -59,6 +59,10 @@ export const envConfig = {
         SAME_SITE: (getEnv("NODE_ENV", false) === "production" ? "none" : "lax") as "none" | "lax" | "strict",
         MAX_AGE: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
+
+    EMAIL: {
+        EMAIL_SERVICE_URL: getEnv("EMAIL_BASE_URL"),
+    }
 };
 
 /**
