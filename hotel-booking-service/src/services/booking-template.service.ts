@@ -20,7 +20,6 @@
 //         let html = fs.readFileSync(templatePath, 'utf8');
 
 //         // FIX: Construct absolute asset paths correctly using project root working directory
-//         // const logoAbsolutePath = path.join(process.cwd(), 'src', 'assets', 'images', 'klar-travels-logo.png');
 //         const logoAbsolutePath = path.join(process.cwd(), 'src', 'assets', 'images', 'klar-travels-logo.png');
 //         const logoUrl = `file://${logoAbsolutePath}`;
 
@@ -158,17 +157,13 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 
 export class BookingTemplateService {
-    /**
-     * Reads the HTML layout template file dynamically based on status and substitutes parameters
-     */
     private compileHtml(target: 'client' | 'agent', booking: any): string {
         let currentStatus = String(booking.status || 'CONFIRMED').toLowerCase();
         
-        // Normalize variant database statuses to map cleanly to your folder files
         if (currentStatus === 'canceled' || currentStatus === 'cancelled') {
             currentStatus = 'cancelled'; 
         } else if (currentStatus === 'pending') {
-            currentStatus = 'onhold'; // Maps "PENDING" logs directly to your onhold template file structures
+            currentStatus = 'onhold'; 
         }
 
         const fileName = `hotel-${currentStatus}-${target}.template.html`;
@@ -181,8 +176,16 @@ export class BookingTemplateService {
         let html = fs.readFileSync(templatePath, 'utf8');
 
         const logoAbsolutePath = path.join(process.cwd(), 'src', 'assets', 'images', 'klar-travels-logo.png');
-        const logoUrl = `file://${logoAbsolutePath}`;
+        let logoDataUri = '';
+        
+        if (fs.existsSync(logoAbsolutePath)) {
+            const logoBase64 = fs.readFileSync(logoAbsolutePath, { encoding: 'base64' });
+            logoDataUri = `data:image/png;base64,${logoBase64}`;
+        } else {
+            console.error(`[Warning] Logo file not found at path: ${logoAbsolutePath}`);
+        }
 
+        // Safely extract customer context details out from your TripJack schema structures
         const clientEmail = booking.tripJackRequest?.deliveryInfo?.emails?.[0] || 'N/A';
         const clientPhone = `${booking.tripJackRequest?.deliveryInfo?.code?.[0] || ''} ${booking.tripJackRequest?.deliveryInfo?.contacts?.[0] || ''}`.trim() || 'N/A';
         
@@ -213,7 +216,7 @@ export class BookingTemplateService {
             : (booking.totalAmount - cancellationPenaltyVal);
 
         html = html
-            .replace(/{{logoPath}}/g, logoUrl)
+            .replace(/{{logoPath}}/g, logoDataUri) // Now injecting direct inline data URI
             .replace(/{{status}}/g, currentStatus === 'onhold' ? 'ON HOLD' : currentStatus.toUpperCase())
             .replace(/{{guestName}}/g, String(booking.guestName || 'Sudheer Ganta'))
             .replace(/{{clientEmail}}/g, clientEmail)
@@ -251,12 +254,13 @@ export class BookingTemplateService {
 
         const browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
 
         try {
             const page = await browser.newPage();
-            await page.setBypassCSP(true);
+            
+            // Set content and generate the exact pixel layout matching your custom styles
             await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
             const pdfBuffer = await page.pdf({
