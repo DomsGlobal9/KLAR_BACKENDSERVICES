@@ -38,8 +38,8 @@ export const getPricingSummaryController = async (req: Request, res: Response) =
                 console.log("[PricingSummary] Calling TripJack precheck for true price...", precheckPayload.optionId);
                 const precheckRes = await precheckService.precheck(precheckPayload);
 
-                if (precheckRes.status && precheckRes.body?.option?.pricing) {
-                    const pricing = precheckRes.body.option.pricing;
+                if (precheckRes.status && precheckRes.body?.hotel?.ops?.[0]) {
+                    const pricing = precheckRes.body.hotel.ops[0];
                     // TripJack pricing structure: tp (total price), mf (management fee), mft (management fee tax), bf (base fare)
                     providerNetPrice = Number(pricing.tp || pricing.totalPrice || 0);
                     precheckBookingId = precheckRes.bookingId || null;

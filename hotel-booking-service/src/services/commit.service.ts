@@ -92,7 +92,7 @@ class CommitService {
                     const precheckRes = await tripJackProvider.precheck(payload);
                     if (precheckRes.status) {
                         bookingId = precheckRes.bookingId || bookingId;
-                        netPrice = precheckRes.body?.option?.pricing?.totalPrice || precheckRes.body?.totalNet || 0;
+                        netPrice = precheckRes.body?.hInfo?.ops?.[0]?.tp || precheckRes.body?.hotel?.ops?.[0]?.tp || precheckRes.body?.totalNet || 0;
                     }
                 } catch (precheckErr: any) {
                     console.warn(`⚠️ [TripJack] Precheck re-verification failed/consumed, trusting frontend locked bookingId: ${bookingId}. Error:`, precheckErr.message || JSON.stringify(precheckErr?.response?.data || {}));
@@ -164,9 +164,9 @@ class CommitService {
                 price: pricePerRoom,
             }));
 
-            // ─── PHASE 5: Save lean booking record ───────────────────────────────
+             // ─── PHASE 5: Save lean booking record ───────────────────────────────
             const primaryGuest = payload.roomTravellerInfo?.[0]?.travellerInfo?.[0];
-            const bookingRecord = new BookingModel({
+             const bookingRecord = new BookingModel({
                 confirmationNumber: tjResponse.bookingId || bookingId,
                 reservationId: tjResponse.bookingId || bookingId,
                 propertyId: payload.propertyId || "TJ-PROP",
@@ -174,32 +174,26 @@ class CommitService {
                 status: isHoldIntent ? BookingStatus.HELD : BookingStatus.PENDING,
                 checkIn: payload.checkIn ? new Date(payload.checkIn) : new Date(),
                 checkOut: payload.checkOut ? new Date(payload.checkOut) : new Date(Date.now() + 86400000),
-                // Pricing — always in INR
                 totalAmount: finalPrice,
                 netAmount: netPrice,
                 markupAmount: markup,
-                currencyCode: "INR",
-                // Hotel fields
-                hotelName: payload.hotelName || "",
-                hotelImage: payload.hotelImage || payload.images?.[0] || "",
-                hotelAddress: payload.hotelAddress || "",
-                city: payload.city || "",
-                starRating: payload.starRating ? Number(payload.starRating) : undefined,
-                roomType: payload.roomName || payload.roomType || "",
-                // Guest
                 guestName: primaryGuest ? `${primaryGuest.fN || ''} ${primaryGuest.lN || ''}`.trim() : "",
                 guestEmail: payload.deliveryInfo?.emails?.[0] || "",
                 guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
                 agentId,
                 agentName,
-                userId: agentId,
                 rooms,
+                tripJackRequest: tjPayload, // Cache the compiled outbound request payload
             });
 
             const saved = await bookingRecord.save();
             pollTripJackBookingStatus(tjResponse.bookingId || bookingId, saved._id.toString());
 
-            return tjResponse;
+            return {
+                ...tjResponse,
+                tripJackRequest: tjPayload,
+                bookingRecord: saved
+            };
 
         } catch (bookingErr: any) {
             console.error(`❌ [TripJack] Critical Booking Error:`, bookingErr.message);
@@ -263,7 +257,6 @@ class CommitService {
 
             const primaryGuest = payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0];
 
-            // PHASE 5: DB Record
             const bookingRecord = new BookingModel({
                 confirmationNumber: rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
                 reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
@@ -272,24 +265,14 @@ class CommitService {
                 status: BookingStatus.CONFIRMED,
                 checkIn: new Date(payload.BookReservation?.checkin),
                 checkOut: new Date(payload.BookReservation?.checkout),
-                // Pricing
                 totalAmount: finalPrice,
                 netAmount: netPrice,
                 markupAmount: markup,
-                currencyCode: payload.BookReservation?.CurrencyCode || "INR",
-                // Hotel fields
-                hotelName: payload.BookReservation?.hotelName || "",
-                hotelAddress: payload.BookReservation?.hotelAddress || "",
-                city: payload.BookReservation?.city || "",
-                starRating: payload.BookReservation?.starRating ? Number(payload.BookReservation?.starRating) : undefined,
-                roomType: payload.BookReservation?.RoomSelection?.[0]?.RoomTypeName || "",
-                // Guest
                 guestName: primaryGuest ? `${primaryGuest.FirstName || ''} ${primaryGuest.LastName || ''}`.trim() : "",
                 guestEmail: payload.BookReservation?.emailAddress || payload.emailAddress || "",
                 guestMobile: payload.BookReservation?.phoneNumber || "",
                 agentId,
                 agentName,
-                userId: agentId,
                 rooms: rgRooms.length > 0 ? rgRooms : undefined,
             });
 

@@ -51,16 +51,18 @@ class BookingsService {
                     const tjDetails = await tripJackProvider.getBookingDetails(booking.confirmationNumber);
                     
                     if (tjDetails) {
-                        const rsta = tjDetails?.itemInfos?.HOTEL?.ops?.[0]?.rsta || tjDetails?.status?.success;
+                        const orderStatus = tjDetails?.order?.status;
+                        const rsta = tjDetails?.itemInfos?.HOTEL?.ops?.[0]?.rsta;
                         let newStatus: BookingStatus = booking.status;
                         
-                        // C means Cancelled, S means Success/Confirmed, O means On Hold
-                        if (rsta === 'C' || tjDetails?.status?.description?.toLowerCase()?.includes('cancelled')) {
-                            newStatus = BookingStatus.CANCELLED;
-                        } else if (rsta === 'S') {
+                        if (orderStatus === 'SUCCESS' || rsta === 'S') {
                             newStatus = BookingStatus.CONFIRMED;
-                        } else if (rsta === 'O') {
+                        } else if (orderStatus === 'ON_HOLD' || rsta === 'O') {
                             newStatus = BookingStatus.HELD;
+                        } else if (orderStatus === 'CANCELLED' || rsta === 'C' || tjDetails?.status?.description?.toLowerCase()?.includes('cancelled')) {
+                            newStatus = BookingStatus.CANCELLED;
+                        } else if (orderStatus === 'FAILED' || orderStatus === 'ABORTED') {
+                            newStatus = BookingStatus.FAILED;
                         }
                         
                         if (newStatus !== booking.status) {

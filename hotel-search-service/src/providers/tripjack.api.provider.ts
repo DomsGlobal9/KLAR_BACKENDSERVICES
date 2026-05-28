@@ -45,15 +45,15 @@ export class TripJackApiProvider {
      * FIX #4 (partial): hid is sent here so the frontend can forward it to Review.
      */
     async getProducts(payload: any) {
-        const rawId = (payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
+        const rawId = (payload.hid || payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
         const correlationId = payload.correlationId || uuidv4();
 
         if (!rawId) {
-            console.error("[TripJack] GetProducts Error: No propertyId provided in payload:", JSON.stringify(payload));
+            console.error("[TripJack] GetProducts Error: No propertyId or hid provided in payload:", JSON.stringify(payload));
             throw {
                 status: 400,
-                message: "propertyId is required for TripJack detail/pricing request",
-                data: { ErrorCode: 1012, description: "propertyId is required." }
+                message: "propertyId or hid is required for TripJack detail/pricing request",
+                data: { ErrorCode: 1012, description: "propertyId/hid is required." }
             };
         }
 
@@ -61,16 +61,14 @@ export class TripJackApiProvider {
         const numericHid = /^\d+$/.test(hidValue) ? Number(hidValue) : hidValue;
         const tjPayload: any = {
             correlationId,
-            id: numericHid,
             hid: numericHid,
-            hotelId: numericHid,
             checkIn: payload.checkin || payload.checkIn,
             checkOut: payload.checkout || payload.checkOut,
             rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
-                const childrenCount = (r.Children !== undefined ? r.Children : r.children) || 0;
-                const childAgeArr = (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []);
+                const childrenCount = (r.Children !== undefined ? r.Children : r.children) ?? 0;
+                const childAgeArr = (r.childAge || r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []);
                 return {
-                    adults: r.Adults || r.adults || 2,
+                    adults: Number(r.Adults || r.adults || 2),
                     children: Number(childrenCount),
                     childAge: childAgeArr.length > 0 ? childAgeArr : undefined,
                 };
@@ -91,7 +89,7 @@ export class TripJackApiProvider {
             localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
 
             // Start static detail fetch in the background without blocking the pricing API response
-            staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue })
+            staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue })
                 .then(res => { staticData = res.data; })
                 .catch(err => { console.warn(`[TripJack] Static detail background fetch warning:`, err.message); });
 
@@ -157,11 +155,12 @@ export class TripJackApiProvider {
                     roomImages = opt.roomInfo[0].images;
                 }
 
+                const optionIdStr = opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
                 return {
-                    id: opt.optionId || `${payload.propertyId}-${idx}`,
-                    optionId: opt.optionId,
-                    rateKey: opt.optionId,
-                    RoomSelectionKey: opt.optionId,
+                    id: optionIdStr,
+                    optionId: optionIdStr,
+                    rateKey: optionIdStr,
+                    RoomSelectionKey: optionIdStr,
                     reviewHash,
                     correlationId,
                     hid: rawId,

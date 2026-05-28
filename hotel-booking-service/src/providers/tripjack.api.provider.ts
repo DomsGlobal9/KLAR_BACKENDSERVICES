@@ -46,12 +46,13 @@ export class TripJackApiProvider {
             correlationId,
             optionId,
             reviewHash,
-            hotelId: finalHid,
             hid: finalHid,
         };
 
         try {
             console.log(`[TripJack] Sending v3 Review Request to HMS:`, JSON.stringify(tjPayload, null, 2));
+            const serializedReviewPayload = JSON.stringify(tjPayload);
+            console.log(`[NETWORK BOUNDARY] TripJack HMS Review Request Serialized Payload: ${serializedReviewPayload}`);
             const res = await tripJackHmsClient.post("/hms/v3/hotel/review", tjPayload);
 
             const data = res.data;
@@ -121,10 +122,10 @@ export class TripJackApiProvider {
                     const pt = (traveller.pt || traveller.paxType || "ADULT").trim().toUpperCase();
 
                     const mappedTraveller: any = { 
-                        fN: capsFN, firstName: sentFN,
-                        lN: capsLN, lastName: sentLN,
-                        ti: ti, title: ti,
-                        pt: pt, paxType: pt
+                        fN: capsFN,
+                        lN: capsLN,
+                        ti: ti,
+                        pt: pt
                     };
 
                     if (pt === "ADULT") {
@@ -173,13 +174,10 @@ export class TripJackApiProvider {
             }
         };
 
-        // GST Info: Include only when gstNumber is present (TripJack ignores empty gstInfo)
-        // Required for hotels that have GST passthrough / reseller registration
         if (gstInfo?.gstNumber) {
             tjPayload.gstInfo = {
                 gstNumber: gstInfo.gstNumber.trim().toUpperCase(),
                 registeredName: (gstInfo.registeredName || gstInfo.companyName || 'KLAR').trim(),
-                ...(gstInfo.pan && { pan: gstInfo.pan.trim().toUpperCase() })
             };
             console.log(`[TripJack] Book: Including gstInfo for GST passthrough:`, tjPayload.gstInfo);
         }
@@ -189,6 +187,8 @@ export class TripJackApiProvider {
         }
 
         console.log(`[TripJack] Book Request (${bookingId}):`, JSON.stringify(tjPayload, null, 2));
+        const serializedBookPayload = JSON.stringify(tjPayload);
+        console.log(`[NETWORK BOUNDARY] TripJack Book Request Serialized Payload: ${serializedBookPayload}`);
 
         try {
             const res = await tripJackOmsClient.post("/oms/v3/hotel/book", tjPayload);

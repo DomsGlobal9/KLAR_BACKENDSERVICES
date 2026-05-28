@@ -2,6 +2,60 @@ import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
 
+async function pollTripJackCancellationStatus(bookingId: string, query: any, cancelChargesInfo: any): Promise<void> {
+    const POLL_INTERVAL_MS = 5000;
+    const POLL_TIMEOUT_MS = 180000; // 3 minutes
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+    const poll = async (): Promise<void> => {
+        if (Date.now() >= deadline) {
+            console.log(`[TripJack Cancel Poll] Deadline reached for booking: ${bookingId}`);
+            return;
+        }
+        try {
+            const details = await tripJackProvider.getBookingDetails(bookingId);
+            const finalStatus = details?.order?.status || "PENDING";
+            const apiSuccess = details?.status?.success === true;
+            const isTerminal = finalStatus === "CANCELLED" || finalStatus === "FAILED" || finalStatus === "ABORTED";
+
+            console.log(`[TripJack Cancel Poll] Status check for ${bookingId}: status=${finalStatus}, isTerminal=${isTerminal}`);
+
+            if (apiSuccess && isTerminal) {
+                const dbStatus = finalStatus === "CANCELLED" ? BookingStatus.CANCELLED : BookingStatus.FAILED;
+                if (Object.keys(query).length > 0) {
+                    await BookingModel.findOneAndUpdate(query, {
+                        status: dbStatus,
+                        tripJackResponse: details,
+                        cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
+                        cancelChargesInfo: cancelChargesInfo,
+                        cancellationDetails: cancelChargesInfo?.cancellation
+                    });
+                }
+                console.log(`✅ [TripJack Cancel Poll] Booking status updated in DB to ${dbStatus}: ${bookingId}`);
+                return;
+            }
+
+            // Map CANCELLATION_PENDING (or other active states) to PENDING in the DB
+            if (finalStatus === "CANCELLATION_PENDING") {
+                if (Object.keys(query).length > 0) {
+                    await BookingModel.findOneAndUpdate(query, {
+                        status: BookingStatus.PENDING,
+                        tripJackResponse: details
+                    });
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            return poll();
+        } catch (err: any) {
+            console.warn(`[TripJack Cancel Poll] Error checking status for ${bookingId}:`, err.message);
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            return poll();
+        }
+    };
+    poll().catch(e => console.error("[TripJack Cancel Poll] Polling error:", e.message));
+}
+
 class CancelService {
     async cancel(payload: any) {
         const confirmationNumber = payload.ConfirmationNumber || payload.bookingId;
@@ -51,68 +105,33 @@ class CancelService {
             if (isTripJack || isDbTripJack) {
                 console.log(`[TripJack] Cancelling TripJack booking: ${actualTargetId}`);
                 const tjResponse = await tripJackProvider.cancel(actualTargetId);
-                const targetId = actualTargetId; // For polling details below
+                const targetId = actualTargetId;
 
-                // Poll booking details up to 3 times (6s) to verify cancellation
-                let isFullyCancelled = false;
-                let finalStatus = "PENDING";
-                let details = null;
-
-                for (let i = 0; i < 3; i++) {
-                    try {
-                        details = await tripJackProvider.getBookingDetails(targetId);
-                        finalStatus = details?.order?.status || "PENDING";
-                        const apiSuccess = details?.status?.success === true;
-                        
-                        // Terminal statuses for cancellation:
-                        const isTerminal = finalStatus === "CANCELLED" || finalStatus === "FAILED" || finalStatus === "ABORTED";
-                        const isSystemPending = details?.isSystemPending === true;
-                        
-                        console.log(`[TripJack Cancel] Poll ${i+1}: apiSuccess=${apiSuccess}, isSystemPending=${isSystemPending}, status=${finalStatus}`);
-
-                        // Wait if system is still processing and we haven't reached a terminal status
-                        if (apiSuccess && isTerminal) {
-                            isFullyCancelled = true;
-                            break;
-                        }
-                    } catch (statusErr: any) {
-                        console.warn("[TripJack] Could not verify cancelled status:", statusErr.message);
-                    }
-                    if (!isFullyCancelled) {
-                        await new Promise(r => setTimeout(r, 2000));
-                    }
-                }
-
-                // If cancel API itself returns success true directly, and we couldn't verify, we might still treat it as cancelled
                 const isSuccessAck = tjResponse?.body?.status?.success === true || tjResponse?.status?.success === true || tjResponse?.status === true;
-                if (!isFullyCancelled && isSuccessAck) {
-                    if (finalStatus === "CANCELLATION_PENDING") {
-                        console.log(`[TripJack Cancel] Polling timeout and status is CANCELLATION_PENDING. Keeping status as PENDING for offline processing.`);
-                    } else {
-                        console.log(`[TripJack Cancel] Warning: Polling timeout but Cancel API returned success. Proceeding with cancel.`);
-                        isFullyCancelled = true;
+
+                if (isSuccessAck) {
+                    // Update database immediately to CANCELLED upon success acknowledgment
+                    if (Object.keys(query).length > 0) {
+                        await BookingModel.findOneAndUpdate(query, { 
+                            status: BookingStatus.CANCELLED,
+                            tripJackResponse: tjResponse?.body,
+                            cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
+                            cancelChargesInfo: cancelChargesInfo,
+                            cancellationDetails: cancelChargesInfo?.cancellation
+                        });
+                        console.log(`✅ [TripJack] Booking status updated in DB to CANCELLED (Ack): ${targetId}`);
                     }
-                }
-
-                const dbStatusToSet = isFullyCancelled ? BookingStatus.CANCELLED : (finalStatus === "CANCELLATION_PENDING" ? BookingStatus.PENDING : BookingStatus.PENDING);
-
-                if (Object.keys(query).length > 0) {
-                    await BookingModel.findOneAndUpdate(query, { 
-                        status: dbStatusToSet,
-                        tripJackResponse: details || tjResponse?.body,
-                        cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
-                        cancelChargesInfo: cancelChargesInfo,
-                        cancellationDetails: cancelChargesInfo?.cancellation
-                    });
-                    console.log(`✅ [TripJack] Booking status updated in DB to ${dbStatusToSet}: ${targetId}`);
+                    
+                    // Trigger asynchronous background polling to verify terminal status (e.g. CANCELLATION_PENDING check)
+                    pollTripJackCancellationStatus(targetId, query, cancelChargesInfo);
                 }
 
                 return {
-                    status: true,
+                    status: isSuccessAck,
                     statusCode: 200,
-                    description: isFullyCancelled ? "TripJack Cancel Success" : "Cancellation initiated. Pending confirmation from TripJack supplier.",
-                    isFullyCancelled,
-                    tjStatus: finalStatus,
+                    description: isSuccessAck ? "TripJack Cancel Success" : "Cancellation failed",
+                    isFullyCancelled: isSuccessAck,
+                    tjStatus: isSuccessAck ? "CANCELLED" : "FAILED",
                     totalAmount: cancelChargesInfo?.totalAmount,
                     applicableCharge: cancelChargesInfo?.applicableCharge,
                     refundAmount: cancelChargesInfo?.refundAmount,

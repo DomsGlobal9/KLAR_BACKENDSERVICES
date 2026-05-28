@@ -1,27 +1,41 @@
 // src/utils/bookingTransformer.ts
 
 export const compileTravellerPayload = (formData: any, providerContext: any) => {
-  const isTJ = providerContext.hotelId.startsWith('TJ:');
+  const rawHotelId = providerContext?.hotelId || formData?.hotelId || "";
+  const cleanHotelId = typeof rawHotelId === 'string' && rawHotelId.startsWith("TJ:") 
+      ? rawHotelId.replace("TJ:", "") 
+      : rawHotelId;
+  const isTJ = typeof rawHotelId === 'string' && rawHotelId.startsWith('TJ:');
+
 
   if (isTJ) {
     // 🏢 TRIPJACK ARCHITECTURE PIPELINE
+    const primaryEmail = formData.primaryEmail || formData.email || formData.rooms?.[0]?.guests?.[0]?.email || "";
+    const primaryPhone = formData.primaryPhone || formData.mobile || formData.phone || formData.rooms?.[0]?.guests?.[0]?.mobile || "";
+    const rawCountryCode = formData.countryCode || formData.profileCountryCode || "+91";
+    const countryCode = rawCountryCode.startsWith("+") ? rawCountryCode : `+${rawCountryCode}`;
+
     return {
-      bookingId: providerContext.bookingId,
+      bookingId: providerContext.bookingId || formData.precheckBookingId,
       type: "HOTEL",
       roomTravellerInfo: formData.rooms.map((room: any, rIdx: number) => ({
-        travellerInfo: room.guests.map((g: any, gIdx: number) => ({
-          ti: g.title, // Mr, Mrs, Ms, Miss, Master
-          pt: g.isAdult ? "ADULT" : "CHILD",
-          fN: gIdx === 0 && rIdx > 0 ? `${g.firstName}R${rIdx + 1}`.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : g.firstName.toUpperCase(),
-          lN: g.lastName.toUpperCase(),
-          ...(g.pan && { pan: g.pan.toUpperCase() }),
-          ...(g.passport && { pNum: g.passport.toUpperCase() })
-        }))
+        travellerInfo: room.guests.map((g: any, gIdx: number) => {
+          const cleanFN = (g.firstName || "Guest").replace(/[^a-zA-Z]/g, '').toUpperCase();
+          const cleanLN = (g.lastName || "User").replace(/[^a-zA-Z]/g, '').toUpperCase();
+          return {
+            ti: g.title || "Mr",
+            pt: g.isAdult ? "ADULT" : "CHILD",
+            fN: gIdx === 0 && rIdx > 0 ? `${cleanFN}R${rIdx + 1}`.toUpperCase() : cleanFN,
+            lN: cleanLN,
+            ...(g.pan && { pan: g.pan.toUpperCase() }),
+            ...(g.passport && { pNum: g.passport.toUpperCase() })
+          };
+        })
       })),
       deliveryInfo: {
-        emails: [formData.primaryEmail],
-        contacts: [formData.primaryPhone],
-        code: [formData.countryCode || "+91"]
+        emails: [primaryEmail],
+        contacts: [primaryPhone],
+        code: [countryCode]
       },
       ...(formData.isCorporate && formData.gstNumber && {
         gstInfo: {
