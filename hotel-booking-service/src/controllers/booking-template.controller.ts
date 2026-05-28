@@ -31,9 +31,11 @@ export class BookingTemplateController {
             res.status(200).send(pdfBuffer);
         } catch (error: any) {
             console.error("Client PDF Generation Error:", error.message);
-            res.status(500).json({
+            
+            const isValidationError = error.message.includes("Invalid booking status");
+            res.status(isValidationError ? 400 : 500).json({
                 status: false,
-                statusCode: 500,
+                statusCode: isValidationError ? 400 : 500,
                 description: error.message || "Failed to render client template.",
                 body: null
             });
@@ -68,9 +70,11 @@ export class BookingTemplateController {
             res.status(200).send(pdfBuffer);
         } catch (error: any) {
             console.error("Agent PDF Generation Error:", error.message);
-            res.status(500).json({
+            
+            const isValidationError = error.message.includes("Invalid booking status");
+            res.status(isValidationError ? 400 : 500).json({
                 status: false,
-                statusCode: 500,
+                statusCode: isValidationError ? 400 : 500,
                 description: error.message || "Failed to render agent template.",
                 body: null
             });
