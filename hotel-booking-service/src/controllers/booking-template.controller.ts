@@ -10,6 +10,7 @@ export class BookingTemplateController {
         try {
             const { id } = req.params;
             const booking = await bookingsService.getBookingById(id);
+            console.log("13 booking-template.controller.ts - renderClientConfirmation - booking:", JSON.stringify(booking));
 
             if (!booking) {
                 res.status(404).json({
@@ -82,4 +83,4 @@ export class BookingTemplateController {
     };
 }
 
-export const bookingTemplateController = new BookingTemplateController();
+export const bookingTemplateController = new BookingTemplateController();     
