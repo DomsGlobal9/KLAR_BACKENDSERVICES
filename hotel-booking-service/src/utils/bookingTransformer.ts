@@ -51,20 +51,12 @@ export const compileTravellerPayload = (formData: any, providerContext: any) => 
         ResStatus: 1,
         DemandBookingId: `KLAR${Date.now()}`,
         CurrencyCode: providerContext.currency || "USD",
-        GuaranteeMethod: "CreditCard",
-        GuaranteeType: "Guarantee",
         TimeStamp: new Date().toISOString(),
         ReservationDate: new Date().toISOString(),
         checkin: providerContext.checkIn,
         checkout: providerContext.checkOut,
         propertyID: providerContext.hotelId,
         BookingRate: providerContext.totalAggregatePrice,
-        CreditCard: {
-          Number: "1111222233334444",
-          IssuedName: `${formData.rooms[0].guests[0].firstName} ${formData.rooms[0].guests[0].lastName}`,
-          ExpirationDate: "2030-12",
-          TypeIdentifier: "VISA"
-        },
         RoomSelection: formData.rooms.map((room: any) => ({
           RoomTypeCode: room.roomTypeCode,
           NumberOfRooms: 1,

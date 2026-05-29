@@ -56,6 +56,20 @@ export class TripJackApiProvider {
             const res = await tripJackHmsClient.post("/hms/v3/hotel/review", tjPayload);
 
             const data = res.data;
+
+            // FIX: Override response IDs to match requested IDs to prevent mismatch in booking flow
+            const originalHotelId = topPropertyId || topPropertyID || topHid || hid;
+            
+            if (data?.hotelId) data.hotelId = originalHotelId;
+            if (data?.optionId) data.optionId = optionId;
+            
+            if (data?.hotel) {
+                if (data.hotel.hotelId) data.hotel.hotelId = originalHotelId;
+                if (data.hotel.optionId) data.hotel.optionId = optionId;
+            }
+            if (data?.option) {
+                if (data.option.optionId) data.option.optionId = optionId;
+            }
             
             // Check for internal TripJack errors (False Positives)
             if (data?.status?.success === false) {
@@ -77,6 +91,8 @@ export class TripJackApiProvider {
                 statusCode: 200,
                 description: "TripJack Review Success",
                 bookingId,          // ← expose at top level for the frontend
+                hotelId: originalHotelId,
+                optionId: optionId,
                 body: data,
             };
         } catch (error: any) {
