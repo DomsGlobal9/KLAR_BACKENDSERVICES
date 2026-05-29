@@ -37,6 +37,10 @@ export const commitController = async (req: any, res: Response) => {
                 additionalMarkup: req.body.bookingFormData.additionalMarkup,
                 couponCode: req.body.bookingFormData.couponCode,
                 roomName: req.body.bookingFormData.roomName,
+                bookingPayload: {
+                    ...(req.body.bookingPayload || {}),
+                    ...(compiledProviderPayload.gstInfo && { gstInfo: compiledProviderPayload.gstInfo })
+                }
             };
             console.log(`[FORENSIC] Compiled Unified Payload for property: ${finalPayload.propertyId}, Price: ${finalPayload.totalPrice}`);
         }
