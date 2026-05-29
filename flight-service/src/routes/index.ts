@@ -11,14 +11,14 @@ import updateRoute from "./update.route";
 
 const router = Router();
 
-router.use("/fare", fareRoutes);
-router.use("/seat", seatRoutes);
+router.use("/fare", fareRoutes); // 2.
+router.use("/seat", seatRoutes); // 5.
 router.use("/book", bookingRoutes);
 router.use("/cancel", cancelRoute);
 router.use("/update", updateRoute);
-router.use("/search", searchRoutes);
-router.use("/review", reviewRoutes);
-router.use("/ancillary", ancillaryRoutes);
-router.use("/book-local", bookingLocalRoute);
+router.use("/search", searchRoutes); // 1.
+router.use("/review", reviewRoutes); // 3. 
+router.use("/ancillary", ancillaryRoutes); // 4.
+router.use("/book-local", bookingLocalRoute); // 5.
 
 export default router;

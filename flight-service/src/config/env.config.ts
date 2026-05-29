@@ -10,6 +10,14 @@ const requiredEnv = (key: string): string => {
     return value;
 };
 
+const optionalEnv = (key: string, defaultValue: any): any => {
+    const value = process.env[key];
+    if (!value) {
+        return defaultValue;
+    }
+    return value;
+};
+
 export const envConfig = {
     NODE_ENV: process.env.NODE_ENV,
     CRON_ENABLED: process.env.CRON_ENABLED,
@@ -62,5 +70,16 @@ export const envConfig = {
         ALLOWED_HEADERS: process.env.CORS_ALLOWED_HEADERS?.split(",") || [],
         CREDENTIALS: process.env.CORS_CREDENTIALS === "true",
         MAX_AGE: Number(process.env.CORS_MAX_AGE) || 0,
+    },
+
+    /**
+     * Platform Markup Configuration (Your Markup)
+     */
+    PLATFORM_MARKUP: {
+        TYPE: optionalEnv("PLATFORM_MARKUP_TYPE", "FIXED"),
+        VALUE: Number(optionalEnv("PLATFORM_MARKUP", 0)),
+        ENABLED: optionalEnv("PLATFORM_MARKUP_ENABLED", "false") === "true",
+        APPLY_TO: optionalEnv("APPLY_TO", "FLIGHT,HOTEL").split(",").map((item: string) => item.trim()),
+        CURRENCY: optionalEnv("CURRENCY", "INR"),
     },
 };

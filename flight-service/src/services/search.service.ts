@@ -6,6 +6,7 @@ import tripjackConfig from "../config/tripjack.config";
 import RedisCacheService from "../cache/redisCache.service";
 import { Filter, FilterStats } from "../types/filter.types";
 import { FlightFilter } from "../utils/sorter/filter.utils";
+import { FlightSegment } from "../types/returnFilter.types";
 import { OneWayNormalizer } from "../normalizers/oneway.normalizer";
 import { ReturnNormalizer } from "../normalizers/return.normalizer";
 import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
@@ -13,7 +14,7 @@ import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
 import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 import { MultiCityFlightFilter } from "../utils/sorter/multiFilter.utils";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
-import { FlightSegment } from "../types/returnFilter.types";
+import MarkupInterceptor from "../services/markup.interceptor";
 
 class SearchService {
 
@@ -30,6 +31,7 @@ class SearchService {
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
         try {
+            // Step 1: Call Tripjack API
             const rawResponse = await axios.post(
                 url,
                 { searchQuery: payload },
@@ -41,10 +43,15 @@ class SearchService {
                 }
             );
 
-            let normalized = OneWayNormalizer.transform(rawResponse);
+            // Step 2: Apply markup to the response
+            const markedUpResponse = MarkupInterceptor.applyMarkupToFlightSearch(rawResponse.data);
+
+            // Step 3: Pass the marked-up response to normalizer
+            let normalized = OneWayNormalizer.transform({ data: markedUpResponse });
 
             const originalCount = normalized.length;
 
+            // Step 4: Apply filters (if any)
             if (filters && filters.length > 0) {
                 const validation = FlightFilter.validateFilters(filters);
                 if (validation.isValid) {
@@ -54,10 +61,12 @@ class SearchService {
                 }
             }
 
+            // Step 5: Apply sorting (if any)
             if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
                 normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
             }
 
+            // Step 6: Calculate stats (if needed)
             let stats: FilterStats | undefined;
             if (includeStats) {
                 stats = FlightFilter.getFilterStats(normalized);
@@ -65,10 +74,12 @@ class SearchService {
                 stats.filteredFlights = normalized.length;
             }
 
+            // Step 7: Save to cache
             await RedisCacheService.set(sessionId, {
-                raw: rawResponse?.data?.searchResult?.tripInfos,
+                raw: markedUpResponse?.searchResult?.tripInfos,
             }, 1800);
 
+            // Step 8: Return response
             const response: any = {
                 sessionId,
                 flights: normalized
