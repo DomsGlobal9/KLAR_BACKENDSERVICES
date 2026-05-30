@@ -214,8 +214,8 @@ class CommitService {
         try {
             const precheckRes = await rateGainProvider.precheck(payload);
             const body = precheckRes.body?.preCheckResponse || precheckRes.body;
-            netPrice = body?.totalNet || body?.BookingRate || 0;
-            if (netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
+            netPrice = Number(body?.totalNet || body?.BookingRate || 0);
+            if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
             console.log(`✅ [RateGain] Source of Truth Net Price: ₹${netPrice}`);
         } catch (err: any) {
             console.error(`❌ [RateGain] Precheck failed:`, err.message);
@@ -224,7 +224,8 @@ class CommitService {
 
         // PHASE 2: Markup & Total + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
-        const { total: finalPrice, markup } = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
+        let { total: finalPrice, markup } = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
+        finalPrice = Math.round(finalPrice * 100) / 100; // Round to 2 decimal places
 
         // PHASE 3: Wallet Deduction
         const demandId = `RG-BOOK-${Date.now()}`;
@@ -238,6 +239,9 @@ class CommitService {
             if (rgPayload.BookReservation) {
                 rgPayload.BookReservation.sellingRate = netPrice;
                 rgPayload.BookReservation.BookingRate = netPrice;
+            } else {
+                rgPayload.sellingRate = netPrice;
+                rgPayload.BookingRate = netPrice;
             }
 
             const rgResponse = await rateGainProvider.commit(rgPayload);
@@ -269,11 +273,16 @@ class CommitService {
                 netAmount: netPrice,
                 markupAmount: markup,
                 guestName: primaryGuest ? `${primaryGuest.FirstName || ''} ${primaryGuest.LastName || ''}`.trim() : "",
-                guestEmail: payload.BookReservation?.emailAddress || payload.emailAddress || "",
-                guestMobile: payload.BookReservation?.phoneNumber || "",
+                guestEmail: primaryGuest?.Email || payload.BookReservation?.emailAddress || payload.emailAddress || "",
+                guestMobile: primaryGuest?.Phone || payload.BookReservation?.phoneNumber || "",
                 agentId,
                 agentName,
                 rooms: rgRooms.length > 0 ? rgRooms : undefined,
+                hotelName: payload.hotelName,
+                hotelImage: payload.hotelImage,
+                hotelAddress: payload.hotelAddress,
+                city: payload.city,
+                starRating: payload.starRating,
             });
 
             const saved = await bookingRecord.save();
