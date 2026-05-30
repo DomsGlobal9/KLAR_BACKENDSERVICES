@@ -8,7 +8,8 @@ import bookingRoutes from "./booking.routes";
 import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
-
+import flightDocumentRoute from "./flight-client-template.route";
+import flightBookingAgencyTemplateRoute from "./flight-agency-template.routes"
 const router = Router();
 
 router.use("/fare", fareRoutes); // 2.
@@ -16,9 +17,10 @@ router.use("/seat", seatRoutes); // 5.
 router.use("/book", bookingRoutes);
 router.use("/cancel", cancelRoute);
 router.use("/update", updateRoute);
-router.use("/search", searchRoutes); // 1.
-router.use("/review", reviewRoutes); // 3. 
-router.use("/ancillary", ancillaryRoutes); // 4.
-router.use("/book-local", bookingLocalRoute); // 5.
-
-export default router;
+router.use("/search", searchRoutes);
+router.use("/review", reviewRoutes);
+router.use("/ancillary", ancillaryRoutes);
+router.use("/book-local", bookingLocalRoute);
+router.use("/client-booking-document", flightDocumentRoute);
+router.use("/agency", flightBookingAgencyTemplateRoute);
+export default router;  

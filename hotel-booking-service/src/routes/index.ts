@@ -6,6 +6,7 @@ import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
 import { getBookings, getBookingDetails } from "../controllers/bookings.controller";
 import { confirmController } from "../controllers/confirm.controller";
+import { bookingTemplateController } from "../controllers/booking-template.controller";
 
 import { authenticateJWT } from "../middlewares/auth.middleware";
 
@@ -59,5 +60,23 @@ router.get("/special-requests", specialRequestsController);
 
 // New booking management routes
 router.get("/bookings/:id", authenticateJWT, getBookingDetails);
+
+
+/**
+ * Client Confirmation Template Endpoint
+ * GET -> /api/templates/hotel/confirmation/client/6a15467827cdbbb8d1982f82
+ */
+router.get(
+    "/templates/hotel/confirmation/client/:id", authenticateJWT, bookingTemplateController.renderClientConfirmation
+);
+
+/**
+ * Agent Confirmation Template Endpoint
+ * GET -> /api/templates/hotel/confirmation/agent/6a15467827cdbbb8d1982f82
+ */
+router.get(
+    "/templates/hotel/confirmation/agent/:id", authenticateJWT, bookingTemplateController.renderAgentConfirmation
+);
+
 
 export default router;

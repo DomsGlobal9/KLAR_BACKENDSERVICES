@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Booking Cancelled Successfully</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #2c3e50;
+            background-color: #f4f6f9;
+            padding: 22mm 20mm;
+            font-size: 11pt;
+            line-height: 1.5;
+        }
+        .main-container { width: 100%; max-width: 850px; margin: 0 auto; }
+        
+        /* Premium Header Layout */
+        .brand-header-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .brand-header-table td { vertical-align: middle; }
+        .logo-img { height: 48px; max-width: 200px; object-fit: contain; display: block; }
+        .header-meta-box { text-align: right; }
+        .header-meta-label { font-size: 8.5pt; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+
+        /* Cancelled Banner Card matching screenshot exactly */
+        .status-banner { 
+            background: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 14px; 
+            padding: 30px 26px; 
+            margin-bottom: 25px; 
+            text-align: center;
+            width: 100%;
+        }
+        .cancel-icon-circle {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            background-color: #fef2f2;
+            color: #ef4444;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 50px;
+            font-size: 22pt;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        .main-title { font-size: 22pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; margin-bottom: 6px; }
+        .sub-res-id { font-size: 11pt; color: #64748b; margin-bottom: 14px; }
+        .pill-badge-cancelled { display: inline-block; padding: 5px 16px; border-radius: 20px; font-size: 8.5pt; font-weight: 700; text-transform: uppercase; background-color: #fef2f2; color: #b91c1c; border: 1px solid #fee2e2; }
+
+        .full-width-card { 
+            background-color: #ffffff; 
+            border-radius: 14px; 
+            border: 1px solid #e2e8f0; 
+            padding: 24px; 
+            margin-bottom: 22px;
+            width: 100%;
+        }
+        .section-label { font-size: 9.5pt; font-weight: 700; text-transform: uppercase; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 18px; letter-spacing: 0.5px; }
+        
+        /* Route Timeline graphic track */
+        .route-timeline { position: relative; padding-left: 30px; margin: 5px 0; }
+        .route-node { position: absolute; left: 0; width: 14px; height: 14px; border-radius: 50%; border: 3px solid #ffffff; box-shadow: 0 0 0 2px #0f294d; }
+        .node-pickup { top: 4px; background-color: #0f294d; }
+        .node-drop { bottom: 4px; background-color: #ea580c; }
+        .line-connector { position: absolute; left: 6px; top: 18px; bottom: 18px; width: 2px; background-color: #cbd5e1; }
+        .route-heading { font-size: 8.5pt; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 3px; }
+        .route-detail-txt { font-size: 11.5pt; font-weight: 600; color: #0f294d; margin-bottom: 20px; line-height: 1.4; width: 100%; }
+
+        .data-grid-table { width: 100%; border-collapse: collapse; }
+        .data-grid-table td { width: 33.33%; vertical-align: top; }
+        .item-label { font-size: 8.5pt; color: #64748b; font-weight: 600; margin-bottom: 3px; text-transform: uppercase; }
+        .item-value { font-size: 12pt; font-weight: 700; color: #0f294d; }
+
+        /* Refund Summary split columns view */
+        .split-summary-table { width: 100%; border-collapse: collapse; }
+        .split-summary-table td { width: 50%; vertical-align: top; }
+        .passenger-name { font-size: 13pt; font-weight: 700; color: #0f294d; margin-bottom: 4px; }
+        
+        .ledger-table { width: 100%; border-collapse: collapse; }
+        .ledger-table td { padding: 8px 0; font-size: 10.5pt; border-bottom: 1px dashed #e2e8f0; color: #475569; }
+        .ledger-table tr:last-child td { border-bottom: none; }
+        .ledger-val { text-align: right; font-weight: 600; color: #0f294d; }
+        .ledger-val.fee { color: #b91c1c; }
+
+        .refund-notice-box { margin-top: 15px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 15px; color: #166534; font-size: 10pt; font-weight: 500; }
+        .footer { margin-top: 40px; text-align: center; font-size: 9.5pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="main-container">
+
+    <table class="brand-header-table">
+        <tr>
+            <td><img src="{{logoSrc}}" alt="Klar Travels Logo" class="logo-img" /></td>
+            <td class="header-meta-box">
+                <div class="header-meta-label">Booking Reference</div>
+                <div style="font-weight: 700; color:#0f294d; font-size:11.5pt;">{{bookingId}}</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="status-banner">
+        <div class="cancel-icon-circle">✕</div>
+        <div class="main-title">Booking Cancelled Successfully</div>
+        <div class="sub-res-id">Booking ID: <strong>{{bookingId}}</strong></div>
+        <div><span class="pill-badge-cancelled">Status: Cancelled</span></div>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">📉 Refund Summary</div>
+        <table class="split-summary-table">
+            <tr>
+                <td>
+                    <div class="passenger-name">{{passengerName}}</div>
+                    <div style="font-size: 10.5pt; color: #475569;">📞 {{passengerPhone}}</div>
+                    <div style="font-size: 10.5pt; color: #475569; margin-top: 2px;">✉ {{passengerEmail}}</div>
+                </td>
+                <td style="padding-left: 30px; border-left: 1px dashed #cbd5e1;">
+                    <table class="ledger-table">
+                        <tr>
+                            <td>Amount Paid</td>
+                            <td class="ledger-val">₹{{grossAmount}}</td>
+                        </tr>
+                        <tr>
+                            <td>Cancellation Fee</td>
+                            <td class="ledger-val fee">₹{{cancellationFee}}</td>
+                        </tr>
+                        <tr style="font-weight: bold; font-size: 12pt;">
+                            <td style="color: #0f294d; padding-top: 12px;">Total Refund</td>
+                            <td class="ledger-val" style="font-size: 16pt; color: #16a34a; padding-top: 12px;">₹{{refundAmount}}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+        <div class="refund-notice-box">
+            ⓘ The refund will be credited back to your original payment method within 5–7 business days.
+        </div>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">📍 Trip Breakdown</div>
+        <div class="route-timeline">
+            <div class="route-node node-pickup"></div>
+            <div class="line-connector"></div>
+            <div class="route-heading">Pickup Point</div>
+            <div class="route-detail-txt">{{sourceAddress}}</div>
+            
+            <div class="route-node node-drop"></div>
+            <div class="route-heading">Destination Location</div>
+            <div class="route-detail-txt" style="margin-bottom:0;">{{destAddress}}</div>
+        </div>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">🚗 Vehicle Details</div>
+        <table class="data-grid-table">
+            <tr>
+                <td>
+                    <div class="item-label">Vehicle Classification</div>
+                    <div class="item-value">{{vehicleClass}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Estimated Route Parameters</div>
+                    <div class="item-value">{{distance}} / {{duration}}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        {{helpline}}<br>
+        <span style="font-size: 8.5pt; color:#cbd5e1; margin-top: 5px; display:inline-block;">Klar Travels System Cancellation Statement.</span>
+    </div>
+
+</div>
+</body>
+</html>
