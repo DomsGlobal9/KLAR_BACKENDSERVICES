@@ -62,6 +62,11 @@ export const envConfig = {
     EMAIL_SERVICE: process.env.EMAIL_SERVICE || "",
 
     /**
+     * Payment Service
+     */
+    PAYMENT_SERVICE: process.env.PAYMENT_SERVICE || "",
+
+    /**
      * CORS
      */
     CORS: {

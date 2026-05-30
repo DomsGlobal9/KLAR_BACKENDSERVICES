@@ -12,8 +12,8 @@ import flightDocumentRoute from "./flight-client-template.route";
 import flightBookingAgencyTemplateRoute from "./flight-agency-template.routes"
 const router = Router();
 
-router.use("/fare", fareRoutes); // 2.
-router.use("/seat", seatRoutes); // 5.
+router.use("/fare", fareRoutes);
+router.use("/seat", seatRoutes);
 router.use("/book", bookingRoutes);
 router.use("/cancel", cancelRoute);
 router.use("/update", updateRoute);
