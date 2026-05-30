@@ -45,8 +45,13 @@ export class WalletUtil {
 
             return response.data && response.data.success;
         } catch (error: any) {
+            const isNetworkError = error.code === "ECONNREFUSED" || error.code === "ENOTFOUND" || error.code === "ECONNRESET";
+            const authMessage = error.response?.data?.message;
+            const errorMessage = isNetworkError
+                ? `Auth service is unreachable (${env.authServiceUrl}). Ensure auth-service is running.`
+                : authMessage || "Wallet deduction failed";
             console.error("[WalletUtil] Error deducting balance:", error.response?.data || error.message);
-            throw new Error(error.response?.data?.message || "Wallet deduction failed");
+            throw new Error(errorMessage);
         }
     }
 

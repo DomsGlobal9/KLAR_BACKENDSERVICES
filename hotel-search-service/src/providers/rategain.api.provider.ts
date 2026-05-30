@@ -87,7 +87,7 @@ export class RateGainApiProvider {
         const rateGainPayload: any = {
             propertyID: propertyId, // v1.5.3 spec uses propertyID (capital ID)
             PropertyCode: payload.PropertyCode || payload.propertyCode,
-            BrandCode: payload.BrandCode || payload.brandCode,
+            BrandCode: payload.BrandCode || payload.brandCode || "N/A",
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
             CountryCode: payload.CountryCode || payload.countryCode,
