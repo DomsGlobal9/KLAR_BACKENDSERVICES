@@ -7,4 +7,5 @@ export enum UserStatus {
     REJECTED = "REJECTED",
     BLOCKED = "BLOCKED",
     TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS",
+    INACTIVE = "INACTIVE",
 }

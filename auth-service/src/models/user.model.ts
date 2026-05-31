@@ -10,6 +10,7 @@ import { WalletSchema } from "./wallet.model";
 export interface IUser extends Document {
     clientType: ClientType;
     email: string;
+    loginType?: string;
     mobile: string;
     passwordHash: string;
     roles: Roles[];
@@ -18,11 +19,13 @@ export interface IUser extends Document {
     pendingReason?: string;
     rejectedReason?: string;
 
+    memberName?: string;
     businessProfile?: any;
     verification?: any;
     wallet?: any;
 
     createdBy?: mongoose.Types.ObjectId;
+    updatedBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -35,6 +38,17 @@ const UserSchema = new Schema<IUser>(
             type: String,
             enum: Object.values(ClientType),
             required: true,
+        },
+
+        memberName: {
+            type: String,
+            required: false,
+        },
+
+        loginType: {
+            type: String,
+            required: false,
+            default: 'EMAIL',
         },
 
         email: {
@@ -88,7 +102,13 @@ const UserSchema = new Schema<IUser>(
         verification: {
             type: VerificationSchema,
         },
+
         createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+
+        updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
         },

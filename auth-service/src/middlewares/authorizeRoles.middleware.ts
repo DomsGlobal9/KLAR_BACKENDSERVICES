@@ -9,6 +9,8 @@ export const authorizeRoles = (...allowedRoles: string[]) => {
 
         const user = (req as any).user;
 
+        console.log("******** USER WE get\n", user);
+
         if (!user) {
             return res.status(401).json({
                 success: false,
