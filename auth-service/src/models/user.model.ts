@@ -33,9 +33,10 @@ export interface IUser extends Document {
     clientType: ClientType;
 
     fullName?: string;
+    memberName?: string;
 
     email: string;
-    loginType?: string;
+
     mobile: string;
 
     passwordHash?: string;
@@ -59,7 +60,6 @@ export interface IUser extends Document {
 
     rejectedReason?: string;
 
-    memberName?: string;
     businessProfile?: any;
 
     verification?: any;
@@ -68,6 +68,10 @@ export interface IUser extends Document {
 
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
+
+
+    /* TIMESTAMPS */
+
     createdAt: Date;
 
     updatedAt: Date;
@@ -88,15 +92,19 @@ const UserSchema = new Schema<IUser>(
             required: true,
         },
 
-        memberName: {
+
+        /* =========================
+           BASIC INFO
+        ========================= */
+
+        fullName: {
             type: String,
-            required: false,
+            trim: true,
         },
 
-        loginType: {
+        memberName: {
             type: String,
-            required: false,
-            default: 'EMAIL',
+            trim: true,
         },
 
         email: {
@@ -136,6 +144,7 @@ const UserSchema = new Schema<IUser>(
             type: String,
             enum: Object.values(LoginType),
             required: true,
+            default: LoginType.EMAIL,
         },
 
         googleId: {
@@ -192,6 +201,11 @@ const UserSchema = new Schema<IUser>(
             type: VerificationSchema,
         },
 
+        wallet: {
+            type: WalletSchema,
+        },
+
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -201,6 +215,7 @@ const UserSchema = new Schema<IUser>(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
         },
+
     },
     {
         timestamps: true,
@@ -234,6 +249,16 @@ UserSchema.index(
 
 
 /* =========================
+   VIRTUAL: Get display name (prefers memberName, then fullName, then email)
+========================= */
+
+UserSchema.virtual('displayName').get(function (this: IUser) {
+    return this.memberName || this.fullName || this.email.split('@')[0];
+});
+
+
+
+/* =========================
    EXPORT
 ========================= */
 
@@ -241,121 +266,3 @@ export const UserModel = mongoose.model<IUser>(
     "User",
     UserSchema
 );
-
-
-
-
-
-
-
-
-
-
-
-
-// import mongoose, { Schema, Document } from "mongoose";
-// import { ClientType } from "../constants/clientTypes";
-// import { UserStatus } from "../constants/userStatus";
-// import { Roles } from "../constants/roles";
-
-// import { BusinessProfileSchema } from "./businessProfile.schema";
-// import { VerificationSchema } from "./verification.schema";
-// import { WalletSchema } from "./wallet.model";
-
-// export interface IUser extends Document {
-//     clientType: ClientType;
-//     email: string;
-//     mobile: string;
-//     passwordHash: string;
-//     roles: Roles[];
-//     status: UserStatus;
-//     blockReason?: string;
-//     pendingReason?: string;
-//     rejectedReason?: string;
-//     businessProfile?: any;
-//     verification?: any;
-//     wallet?: any;
-//     createdBy?: mongoose.Types.ObjectId;
-//     createdAt: Date;
-//     updatedAt: Date;
-// }
-
-
-
-// const UserSchema = new Schema<IUser>(
-//     {
-//         clientType: {
-//             type: String,
-//             enum: Object.values(ClientType),
-//             required: true,
-//         },
-
-//         email: {
-//             type: String,
-//             required: true,
-//             lowercase: true,
-//             trim: true,
-//         },
-
-//         mobile: {
-//             type: String,
-//             required: true,
-//         },
-
-//         passwordHash: {
-//             type: String,
-//             required: true,
-//         },
-
-//         roles: {
-//             type: [String],
-//             enum: Object.values(Roles),
-//             default: [Roles.USER],
-//         },
-
-//         status: {
-//             type: String,
-//             enum: Object.values(UserStatus),
-//             default: UserStatus.REGISTERED,
-//         },
-
-//         blockReason: {
-//             type: String,
-//             trim: true,
-//         },
-
-//         pendingReason: {
-//             type: String,
-//             trim: true,
-//         },
-
-//         rejectedReason: {
-//             type: String,
-//             trim: true,
-//         },
-
-//         businessProfile: {
-//             type: BusinessProfileSchema,
-//         },
-
-//         verification: {
-//             type: VerificationSchema,
-//         },
-//         createdBy: {
-//             type: mongoose.Schema.Types.ObjectId,
-//             ref: "User",
-//         },
-//     },
-//     {
-//         timestamps: true,
-//     }
-// );
-
-
-// UserSchema.index(
-//     { email: 1, clientType: 1 },
-//     { unique: true }
-// );
-
-
-// export const UserModel = mongoose.model<IUser>("User", UserSchema);
