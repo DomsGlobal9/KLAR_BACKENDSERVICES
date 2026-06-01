@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+
 import { ClientType } from "../constants/clientTypes";
 import { UserStatus } from "../constants/userStatus";
 import { Roles } from "../constants/roles";
@@ -7,34 +8,103 @@ import { BusinessProfileSchema } from "./businessProfile.schema";
 import { VerificationSchema } from "./verification.schema";
 import { WalletSchema } from "./wallet.model";
 
+
+
+/* =========================
+   LOGIN TYPES
+========================= */
+
+export enum LoginType {
+    EMAIL = "email",
+    MOBILE = "mobile",
+    GOOGLE = "google",
+}
+
+
+
+/* =========================
+   USER INTERFACE
+========================= */
+
 export interface IUser extends Document {
+
+    /* COMMON */
+
     clientType: ClientType;
+
+    fullName?: string;
+    memberName?: string;
+
     email: string;
+
     mobile: string;
-    passwordHash: string;
+
+    passwordHash?: string;
+
     roles: Roles[];
+
+    loginType: LoginType;
+
     status: UserStatus;
+
+    googleId?: string;
+
+    googlePhoto?: string;
+
+
+    /* B2B ONLY */
+
     blockReason?: string;
+
     pendingReason?: string;
+
     rejectedReason?: string;
 
     businessProfile?: any;
+
     verification?: any;
+
     wallet?: any;
 
     createdBy?: mongoose.Types.ObjectId;
+    updatedBy?: mongoose.Types.ObjectId;
+
+
+    /* TIMESTAMPS */
+
     createdAt: Date;
+
     updatedAt: Date;
 }
 
 
 
+/* =========================
+   USER SCHEMA
+========================= */
+
 const UserSchema = new Schema<IUser>(
     {
+
         clientType: {
             type: String,
             enum: Object.values(ClientType),
             required: true,
+        },
+
+
+        /* =========================
+           BASIC INFO
+        ========================= */
+
+        fullName: {
+            type: String,
+            trim: true,
+        },
+
+        memberName: {
+            type: String,
+            trim: true,
         },
 
         email: {
@@ -47,12 +117,17 @@ const UserSchema = new Schema<IUser>(
         mobile: {
             type: String,
             required: true,
+            trim: true,
         },
 
         passwordHash: {
             type: String,
-            required: true,
         },
+
+
+        /* =========================
+           ROLES
+        ========================= */
 
         roles: {
             type: [String],
@@ -60,11 +135,43 @@ const UserSchema = new Schema<IUser>(
             default: [Roles.USER],
         },
 
+
+        /* =========================
+           LOGIN
+        ========================= */
+
+        loginType: {
+            type: String,
+            enum: Object.values(LoginType),
+            required: true,
+            default: LoginType.EMAIL,
+        },
+
+        googleId: {
+            type: String,
+            sparse: true,
+            unique: true,
+        },
+
+        googlePhoto: {
+            type: String,
+        },
+
+
+        /* =========================
+           STATUS
+        ========================= */
+
         status: {
             type: String,
             enum: Object.values(UserStatus),
-            default: UserStatus.REGISTERED,
+            default: UserStatus.ACTIVE,
         },
+
+
+        /* =========================
+           ADMIN / MODERATION
+        ========================= */
 
         blockReason: {
             type: String,
@@ -81,6 +188,11 @@ const UserSchema = new Schema<IUser>(
             trim: true,
         },
 
+
+        /* =========================
+           B2B SECTIONS
+        ========================= */
+
         businessProfile: {
             type: BusinessProfileSchema,
         },
@@ -88,10 +200,22 @@ const UserSchema = new Schema<IUser>(
         verification: {
             type: VerificationSchema,
         },
+
+        wallet: {
+            type: WalletSchema,
+        },
+
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
         },
+
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+
     },
     {
         timestamps: true,
@@ -99,10 +223,46 @@ const UserSchema = new Schema<IUser>(
 );
 
 
+
+/* =========================
+   INDEXES
+========================= */
+
 UserSchema.index(
     { email: 1, clientType: 1 },
     { unique: true }
 );
 
+UserSchema.index(
+    { mobile: 1, clientType: 1 },
+    { unique: true }
+);
 
-export const UserModel = mongoose.model<IUser>("User", UserSchema);
+UserSchema.index(
+    { googleId: 1 },
+    {
+        unique: true,
+        sparse: true,
+    }
+);
+
+
+
+/* =========================
+   VIRTUAL: Get display name (prefers memberName, then fullName, then email)
+========================= */
+
+UserSchema.virtual('displayName').get(function (this: IUser) {
+    return this.memberName || this.fullName || this.email.split('@')[0];
+});
+
+
+
+/* =========================
+   EXPORT
+========================= */
+
+export const UserModel = mongoose.model<IUser>(
+    "User",
+    UserSchema
+);
