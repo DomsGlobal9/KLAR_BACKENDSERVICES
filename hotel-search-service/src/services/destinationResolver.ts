@@ -176,20 +176,6 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
 
     const isIndianQuery = normalizedQuery.toLowerCase().includes("india") || normalizedQuery.toLowerCase().includes("goa");
 
-    // NEW: Direct Hotel Name Lookup (Speed Optimization)
-    // If user searches "Hotel Name, City" or just "Hotel Name"
-    const nameToSearch = normalizedQuery.split(',')[0].trim();
-    if (nameToSearch.length > 5) {
-        const directMatches = await HotelModel.find({
-            $text: { $search: `"${nameToSearch}"` }
-        }).select("tjHotelId").limit(5).lean();
-
-        if (directMatches && directMatches.length > 0) {
-            console.log(`[DEBUG] resolveForTJ: Direct hotel name match for "${nameToSearch}": ${directMatches[0].tjHotelId}`);
-            return directMatches.map((m: any) => m.tjHotelId);
-        }
-    }
-
     const geo = preResolvedGeo !== undefined ? preResolvedGeo : await resolveCityToCoords(normalizedQuery);
 
     if (geo) {

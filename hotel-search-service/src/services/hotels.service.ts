@@ -22,18 +22,7 @@ export class HotelsService {
         // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
         const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
 
-        // Secondary Check: If it matches a specific hotel name in our DB
-        let isDirectHotelName = false;
-        if (!isDirectHotelId) {
-            const { HotelModel } = require("../models/Hotel.model");
-            const nameToSearch = searchPayload.destination.split(',')[0].trim();
-            if (nameToSearch.length > 5) {
-                const directMatch = await HotelModel.findOne({ $text: { $search: `"${nameToSearch}"` } }).select("_id").lean();
-                if (directMatch) isDirectHotelName = true;
-            }
-        }
-
-        const isDirectSearch = isDirectHotelId || isDirectHotelName;
+        const isDirectSearch = isDirectHotelId;
 
         if (isDirectSearch) {
             console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);

@@ -6,6 +6,7 @@ import { RMService } from "../services/rm.service";
 import { OTPService } from "../services/otp.service";
 
 import { OTPType } from "../models/otp.model";
+import { AuthenticatedRequest } from "../middlewares/authentication.middleware";
 
 export const createRM = async (
     req: Request,
@@ -250,11 +251,14 @@ export const updateRM = async (
  * Get all RMs with pagination
  */
 export const getAllRMs = async (
-    req: Request,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
 ) => {
     try {
+        console.log("The REQ :\n", req.user);
+        const userId = req.user?.userId;
+
         // Get query parameters for pagination and filtering
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
@@ -277,7 +281,7 @@ export const getAllRMs = async (
         }
 
         // Get all RMs
-        const result = await RMService.getAllRMs(page, limit, search, status);
+        const result = await RMService.getAllRMs(userId as string, page, limit, search, status);
 
         return res.status(200).json({
             success: true,

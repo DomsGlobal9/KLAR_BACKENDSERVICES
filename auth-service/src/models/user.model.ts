@@ -201,9 +201,9 @@ const UserSchema = new Schema<IUser>(
             type: VerificationSchema,
         },
 
-        wallet: {
-            type: WalletSchema,
-        },
+        // wallet: {
+        //     type: WalletSchema,
+        // },
 
 
         createdBy: {

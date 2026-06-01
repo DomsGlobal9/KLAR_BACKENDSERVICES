@@ -64,8 +64,19 @@ class BookingLocalController {
 
             if (response.data.success) {
                 console.log("✅ TOKEN VALID - Returning user data");
+
+                // Try different possible field names
+                const userId = response.data.data.userId ||
+                    response.data.data.id ||
+                    response.data.data._id;
+
+                if (!userId) {
+                    console.error("❌ No user ID found in auth response:", response.data.data);
+                    throw new Error("No user ID in token validation response");
+                }
+
                 return {
-                    id: response.data.data.userId,
+                    id: userId,
                     email: response.data.data.email,
                     roles: response.data.data.roles || ['user'],
                     clientType: response.data.data.clientType || 'B2C'
@@ -356,25 +367,33 @@ class BookingLocalController {
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
+            console.log("\n========== GET USER BOOKINGS ==========");
             const token = this.extractToken(req);
 
             if (!token) {
+                console.log("❌ No token found");
                 return res.status(401).json({
                     success: false,
                     message: "Authorization token missing",
                 });
             }
 
+            console.log("✅ Token found, validating...");
             const userData = await this.validateToken(token);
 
+            console.log("✅ User data after validation:", userData);
+
             if (!userData?.id) {
+                console.log("❌ No user ID in userData");
                 return res.status(400).json({
                     success: false,
                     message: "Invalid user data",
                 });
             }
 
+            console.log(`✅ Fetching bookings for user: ${userData.id}`);
             const bookings = await BookingService.getBookingsByUserId(userData.id);
+            console.log(`✅ Found ${bookings.length} bookings`);
 
             return res.status(200).json({
                 success: true,
@@ -382,6 +401,7 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
+            console.log("❌ Error:", error.message);
             return res.status(400).json({
                 success: false,
                 message: error.message,
