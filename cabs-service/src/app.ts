@@ -21,7 +21,7 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.use("/api/cabs", routes);
-app.use("/",         routes); // also mount at root for direct calls
+app.use("/",         routes);
 
 app.use(errorHandler);
 
