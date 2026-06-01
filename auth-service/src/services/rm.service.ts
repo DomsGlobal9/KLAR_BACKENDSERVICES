@@ -235,16 +235,17 @@ export class RMService {
      * Get all RMs with pagination and filtering
      */
     public static async getAllRMs(
+        userId: string,
         page: number = 1,
         limit: number = 10,
         search?: string,
-        status?: string
+        status?: string,
     ) {
         const skip = (page - 1) * limit;
 
-
         let query: any = {
-            roles: { $in: [Roles.RM] }
+            roles: { $in: [Roles.RM] },
+            createdBy: userId, // Mandatory
         };
 
         if (status && status !== 'all') {
@@ -268,21 +269,8 @@ export class RMService {
             .limit(limit)
             .populate('createdBy', 'email memberName');
 
-
-        const formattedRMs = rms.map(rm => ({
-            id: rm._id,
-            memberName: rm.memberName,
-            email: rm.email,
-            mobile: rm.mobile,
-            role: rm.roles[0],
-            status: rm.status,
-            createdBy: rm.createdBy,
-            createdAt: rm.createdAt,
-            updatedAt: rm.updatedAt,
-        }));
-
         return {
-            data: formattedRMs,
+            data: rms,
             pagination: {
                 page,
                 limit,

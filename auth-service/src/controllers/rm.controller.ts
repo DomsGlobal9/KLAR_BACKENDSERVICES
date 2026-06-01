@@ -255,6 +255,8 @@ export const getAllRMs = async (
     next: NextFunction
 ) => {
     try {
+        const userId = req.user?.userId;
+
         // Get query parameters for pagination and filtering
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
@@ -277,7 +279,7 @@ export const getAllRMs = async (
         }
 
         // Get all RMs
-        const result = await RMService.getAllRMs(page, limit, search, status);
+        const result = await RMService.getAllRMs(userId as string, page, limit, search, status);
 
         return res.status(200).json({
             success: true,
