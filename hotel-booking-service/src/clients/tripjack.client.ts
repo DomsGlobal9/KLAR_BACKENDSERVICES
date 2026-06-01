@@ -24,7 +24,7 @@ export const tripJackHmsClient = axios.create({
  */
 export const tripJackOmsClient = axios.create({
     baseURL: env.tripJack.omsBaseUrl,
-    timeout: 60000,
+    timeout: 120000, // 120s — confirm-book can be slow (payment processing)
     headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",

@@ -185,7 +185,6 @@ class BookingService {
     }) {
         const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
 
-        // First, update the SSR data using the specific repository method
         if (travellers?.length) {
             for (const traveller of travellers) {
                 await this.bookingRepo.updateTravellerSSR(
@@ -239,9 +238,8 @@ class BookingService {
 
         const mapped = mapToTripjackBooking(tripjackPayload);
 
-        console.log("MAPPED PAYLOAD:", JSON.stringify(mapped, null, 2));
-
         const response = await TripjackBookingService.book(mapped);
+        console.log("#############################################");
 
         if (response.data.status.success === true) {
             const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);

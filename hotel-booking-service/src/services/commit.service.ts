@@ -3,6 +3,7 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
 import { notificationService } from "./notification.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
+import { PricingUtil } from "../utils/pricing.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
 
@@ -18,13 +19,25 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
         if (Date.now() >= deadline) return;
         try {
             const details = await tripJackProvider.getBookingDetails(tjBookingId);
+            const apiSuccess = details?.status?.success === true;
             const tjStatus: string = details?.order?.status || "";
-            if (TJ_SUCCESS_STATUSES.has(tjStatus)) {
+            
+            const isSystemPending = details?.isSystemPending === true;
+            const isTerminal = TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus);
+
+            // Wait if system is still processing and we haven't reached a terminal status
+            if (!isTerminal && isSystemPending) {
+                await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+                return poll();
+            }
+
+            if (apiSuccess && TJ_SUCCESS_STATUSES.has(tjStatus)) {
                 const newStatus = tjStatus === "ON_HOLD" ? BookingStatus.HELD : BookingStatus.CONFIRMED;
                 const updated = await BookingModel.findByIdAndUpdate(dbBookingId, { status: newStatus, tripJackResponse: details }, { new: true });
                 if (updated) notificationService.sendBookingConfirmation(updated);
                 return;
             }
+            
             if (TJ_FAILED_STATUSES.has(tjStatus)) {
                 await BookingModel.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
                 return;
@@ -58,29 +71,6 @@ class CommitService {
         return this.#commitRateGain(payload, agentId, agentName, token);
     }
 
-    private calculatePriceWithMarkup(netPrice: number, rules: MarkupRule[], additionalMarkup: number = 0, couponCode?: string): { total: number, markup: number } {
-        // --- SYSTEM PROMOTIONAL OVERRIDE ---
-        const secretCode = process.env.SECRET_SYSTEM_COUPON || 'disabled-node-env';
-        if (couponCode === secretCode) {
-            const adjustedPrice = Math.round(netPrice * 0.65); // 35% Adjustment
-            return { total: adjustedPrice, markup: 0 };
-        }
-
-        const rule = rules.find(r => r.serviceType === 'HOTELS' || r.serviceType === 'HOTEL');
-        
-        let adminMarkup = 0;
-        if (rule) {
-            if (rule.percentageMarkup > 0) {
-                adminMarkup = Math.round((netPrice * rule.percentageMarkup) / 100);
-            } else if (rule.fixedMarkup > 0) {
-                adminMarkup = rule.fixedMarkup;
-            }
-        }
-
-        const totalMarkup = adminMarkup + (Number(additionalMarkup) || 0);
-        return { total: netPrice + totalMarkup, markup: totalMarkup };
-    }
-
     async #commitTripJack(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
         if (!token) throw new Error("Authentication token is required for booking.");
 
@@ -102,7 +92,7 @@ class CommitService {
                     const precheckRes = await tripJackProvider.precheck(payload);
                     if (precheckRes.status) {
                         bookingId = precheckRes.bookingId || bookingId;
-                        netPrice = precheckRes.body?.option?.pricing?.totalPrice || precheckRes.body?.totalNet || 0;
+                        netPrice = precheckRes.body?.hInfo?.ops?.[0]?.tp || precheckRes.body?.hotel?.ops?.[0]?.tp || precheckRes.body?.totalNet || 0;
                     }
                 } catch (precheckErr: any) {
                     console.warn(`⚠️ [TripJack] Precheck re-verification failed/consumed, trusting frontend locked bookingId: ${bookingId}. Error:`, precheckErr.message || JSON.stringify(precheckErr?.response?.data || {}));
@@ -123,7 +113,7 @@ class CommitService {
 
         // PHASE 2: Calculate Final Price with Admin Markups + Agent Additional Markup + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
-        const { total: finalPrice, markup } = this.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup, payload.couponCode);
+        const { total: finalPrice, markup } = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup, payload.couponCode);
         console.log(`✅ [Klar] Final Calculated Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`);
 
         // Determine Intent: Instant Confirmation vs Hold Booking
@@ -164,37 +154,46 @@ class CommitService {
                 throw new Error(tjResponse.description || "Provider rejected the booking request.");
             }
 
-            // PHASE 5: DB Record & Polling
-            const bookingRecord = new BookingModel({
+            // Build lean rooms array — one entry per room, no raw blobs
+            const numRooms = (payload.roomTravellerInfo || []).length || 1;
+            const pricePerRoom = Number((netPrice / numRooms).toFixed(2));
+            const rooms = (payload.roomTravellerInfo || [{}]).map((room: any) => ({
+                roomType: payload.roomName || payload.roomType || "Standard Room",
+                boardType: payload.boardType || "",
+                guests: room.travellerInfo?.length || 2,
+                price: pricePerRoom,
+            }));
+
+             // ─── PHASE 5: Save lean booking record ───────────────────────────────
+            const primaryGuest = payload.roomTravellerInfo?.[0]?.travellerInfo?.[0];
+             const bookingRecord = new BookingModel({
                 confirmationNumber: tjResponse.bookingId || bookingId,
                 reservationId: tjResponse.bookingId || bookingId,
                 propertyId: payload.propertyId || "TJ-PROP",
-                propertyCode: payload.propertyCode || payload.propertyId || "TJ-PROP",
                 provider: BookingProvider.TRIPJACK,
                 status: isHoldIntent ? BookingStatus.HELD : BookingStatus.PENDING,
                 checkIn: payload.checkIn ? new Date(payload.checkIn) : new Date(),
                 checkOut: payload.checkOut ? new Date(payload.checkOut) : new Date(Date.now() + 86400000),
-                totalAmount: finalPrice, // Store the amount the USER paid
-                netAmount: netPrice,     // Store the amount WE paid
-                markupAmount: markup,    // Store the PROFIT
-                currencyCode: payload.currency || "INR",
-                guestName: `${payload.roomTravellerInfo?.[0]?.travellerInfo?.[0]?.fN || ""} ${payload.roomTravellerInfo?.[0]?.travellerInfo?.[0]?.lN || ""}`.trim(),
+                totalAmount: finalPrice,
+                netAmount: netPrice,
+                markupAmount: markup,
+                guestName: primaryGuest ? `${primaryGuest.fN || ''} ${primaryGuest.lN || ''}`.trim() : "",
+                guestEmail: payload.deliveryInfo?.emails?.[0] || "",
+                guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
                 agentId,
-                hotelName: payload.hotelName,
-                hotelImage: payload.hotelImage || payload.images?.[0] || "",
-                hotelAddress: payload.hotelAddress || "",
-                city: payload.city || "",
-                starRating: payload.starRating ? Number(payload.starRating) : undefined,
-                amenities: payload.amenities || [],
-                images: payload.images || [],
-                tripJackRequest: tjPayload,
-                tripJackResponse: tjResponse,
+                agentName,
+                rooms,
+                tripJackRequest: tjPayload, // Cache the compiled outbound request payload
             });
 
             const saved = await bookingRecord.save();
             pollTripJackBookingStatus(tjResponse.bookingId || bookingId, saved._id.toString());
 
-            return tjResponse;
+            return {
+                ...tjResponse,
+                tripJackRequest: tjPayload,
+                bookingRecord: saved
+            };
 
         } catch (bookingErr: any) {
             console.error(`❌ [TripJack] Critical Booking Error:`, bookingErr.message);
@@ -215,8 +214,8 @@ class CommitService {
         try {
             const precheckRes = await rateGainProvider.precheck(payload);
             const body = precheckRes.body?.preCheckResponse || precheckRes.body;
-            netPrice = body?.totalNet || body?.BookingRate || 0;
-            if (netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
+            netPrice = Number(body?.totalNet || body?.BookingRate || 0);
+            if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
             console.log(`✅ [RateGain] Source of Truth Net Price: ₹${netPrice}`);
         } catch (err: any) {
             console.error(`❌ [RateGain] Precheck failed:`, err.message);
@@ -225,7 +224,8 @@ class CommitService {
 
         // PHASE 2: Markup & Total + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
-        const { total: finalPrice, markup } = this.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
+        let { total: finalPrice, markup } = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
+        finalPrice = Math.round(finalPrice * 100) / 100; // Round to 2 decimal places
 
         // PHASE 3: Wallet Deduction
         const demandId = `RG-BOOK-${Date.now()}`;
@@ -239,6 +239,9 @@ class CommitService {
             if (rgPayload.BookReservation) {
                 rgPayload.BookReservation.sellingRate = netPrice;
                 rgPayload.BookReservation.BookingRate = netPrice;
+            } else {
+                rgPayload.sellingRate = netPrice;
+                rgPayload.BookingRate = netPrice;
             }
 
             const rgResponse = await rateGainProvider.commit(rgPayload);
@@ -248,12 +251,20 @@ class CommitService {
                 throw new Error(rgResponse.message || "RateGain rejected the booking.");
             }
 
-            // PHASE 5: DB Record
+            // Build lean rooms array
+            const rgRooms = (payload.BookReservation?.RoomSelection || payload.RoomSelection || []).map((room: any) => ({
+                roomType: room.RoomTypeName || room.RoomTypeCode || "Standard Room",
+                boardType: room.MealPlan || "",
+                guests: (room.NumberOfAdults || 2) + (room.NumberOfChild || 0),
+                price: Number((finalPrice / Math.max((payload.BookReservation?.RoomSelection?.length || 1), 1)).toFixed(2)),
+            }));
+
+            const primaryGuest = payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0];
+
             const bookingRecord = new BookingModel({
                 confirmationNumber: rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
                 reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
                 propertyId: payload.BookReservation?.propertyID || "RG-PROP",
-                propertyCode: payload.BookReservation?.PropertyCode || payload.BookReservation?.propertyCode || payload.propertyCode || payload.BookReservation?.propertyID || "RG-PROP",
                 provider: BookingProvider.RATEGAIN,
                 status: BookingStatus.CONFIRMED,
                 checkIn: new Date(payload.BookReservation?.checkin),
@@ -261,12 +272,17 @@ class CommitService {
                 totalAmount: finalPrice,
                 netAmount: netPrice,
                 markupAmount: markup,
-                currencyCode: payload.BookReservation?.CurrencyCode || "INR",
-                guestName: `${payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0]?.FirstName || ""} ${payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0]?.LastName || ""}`.trim(),
+                guestName: primaryGuest ? `${primaryGuest.FirstName || ''} ${primaryGuest.LastName || ''}`.trim() : "",
+                guestEmail: primaryGuest?.Email || payload.BookReservation?.emailAddress || payload.emailAddress || "",
+                guestMobile: primaryGuest?.Phone || payload.BookReservation?.phoneNumber || "",
                 agentId,
-                hotelName: payload.BookReservation?.hotelName,
-                rateGainRequest: rgPayload,
-                rateGainResponse: rgResponse,
+                agentName,
+                rooms: rgRooms.length > 0 ? rgRooms : undefined,
+                hotelName: payload.hotelName,
+                hotelImage: payload.hotelImage,
+                hotelAddress: payload.hotelAddress,
+                city: payload.city,
+                starRating: payload.starRating,
             });
 
             const saved = await bookingRecord.save();

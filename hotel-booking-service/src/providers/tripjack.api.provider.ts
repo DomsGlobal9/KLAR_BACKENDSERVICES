@@ -46,15 +46,30 @@ export class TripJackApiProvider {
             correlationId,
             optionId,
             reviewHash,
-            hotelId: finalHid,
             hid: finalHid,
         };
 
         try {
             console.log(`[TripJack] Sending v3 Review Request to HMS:`, JSON.stringify(tjPayload, null, 2));
+            const serializedReviewPayload = JSON.stringify(tjPayload);
+            console.log(`[NETWORK BOUNDARY] TripJack HMS Review Request Serialized Payload: ${serializedReviewPayload}`);
             const res = await tripJackHmsClient.post("/hms/v3/hotel/review", tjPayload);
 
             const data = res.data;
+
+            // FIX: Override response IDs to match requested IDs to prevent mismatch in booking flow
+            const originalHotelId = topPropertyId || topPropertyID || topHid || hid;
+            
+            if (data?.hotelId) data.hotelId = originalHotelId;
+            if (data?.optionId) data.optionId = optionId;
+            
+            if (data?.hotel) {
+                if (data.hotel.hotelId) data.hotel.hotelId = originalHotelId;
+                if (data.hotel.optionId) data.hotel.optionId = optionId;
+            }
+            if (data?.option) {
+                if (data.option.optionId) data.option.optionId = optionId;
+            }
             
             // Check for internal TripJack errors (False Positives)
             if (data?.status?.success === false) {
@@ -76,6 +91,8 @@ export class TripJackApiProvider {
                 statusCode: 200,
                 description: "TripJack Review Success",
                 bookingId,          // ← expose at top level for the frontend
+                hotelId: originalHotelId,
+                optionId: optionId,
                 body: data,
             };
         } catch (error: any) {
@@ -121,10 +138,10 @@ export class TripJackApiProvider {
                     const pt = (traveller.pt || traveller.paxType || "ADULT").trim().toUpperCase();
 
                     const mappedTraveller: any = { 
-                        fN: capsFN, firstName: sentFN,
-                        lN: capsLN, lastName: sentLN,
-                        ti: ti, title: ti,
-                        pt: pt, paxType: pt
+                        fN: capsFN,
+                        lN: capsLN,
+                        ti: ti,
+                        pt: pt
                     };
 
                     if (pt === "ADULT") {
@@ -155,6 +172,7 @@ export class TripJackApiProvider {
             roomTravellerInfo,
             deliveryInfo,
             paymentInfos,
+            gstInfo,
         } = payload;
 
         if (!bookingId) throw new Error("[TripJack Book] bookingId is required");
@@ -172,11 +190,21 @@ export class TripJackApiProvider {
             }
         };
 
+        if (gstInfo?.gstNumber) {
+            tjPayload.gstInfo = {
+                gstNumber: gstInfo.gstNumber.trim().toUpperCase(),
+                registeredName: (gstInfo.registeredName || gstInfo.companyName || 'KLAR').trim(),
+            };
+            console.log(`[TripJack] Book: Including gstInfo for GST passthrough:`, tjPayload.gstInfo);
+        }
+
         if (paymentInfos && paymentInfos.length > 0) {
             tjPayload.paymentInfos = paymentInfos;
         }
 
         console.log(`[TripJack] Book Request (${bookingId}):`, JSON.stringify(tjPayload, null, 2));
+        const serializedBookPayload = JSON.stringify(tjPayload);
+        console.log(`[NETWORK BOUNDARY] TripJack Book Request Serialized Payload: ${serializedBookPayload}`);
 
         try {
             const res = await tripJackOmsClient.post("/oms/v3/hotel/book", tjPayload);
