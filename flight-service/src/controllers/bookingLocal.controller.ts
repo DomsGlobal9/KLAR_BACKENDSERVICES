@@ -13,41 +13,26 @@ class BookingLocalController {
     }
 
     private extractToken = (req: Request): string | null => {
-        // ✅ ADD THIS LOG
-        console.log("\n----- EXTRACTING TOKEN -----");
-        console.log("Authorization header:", req.headers.authorization);
-        console.log("Cookies:", req.cookies);
 
         const authHeader = req.headers.authorization;
 
         if (authHeader?.startsWith("Bearer ")) {
             const token = authHeader.split(" ")[1];
-            console.log("✅ Token extracted from Authorization header");
-            console.log("Token preview:", token.substring(0, 50) + "...");
             this.currentToken = token;
             return token;
         }
 
         if (req.cookies?.token) {
             const token = req.cookies.token;
-            console.log("✅ Token extracted from cookies");
-            console.log("Token preview:", token.substring(0, 50) + "...");
             this.currentToken = token;
             return token;
         }
 
-        console.log("❌ No token found anywhere");
         return null;
     };
 
     private validateToken = async (token: string): Promise<any> => {
         try {
-            // ✅ ADD THESE LOGS
-            console.log("\n----- VALIDATE TOKEN CALLED -----");
-            console.log("Auth Service URL:", this.authServiceUrl);
-            console.log("Full URL:", `${this.authServiceUrl}/auth/validate-token`);
-            console.log("Token being sent:", token.substring(0, 50) + "...");
-
             const response = await axios.post(
                 `${this.authServiceUrl}/auth/validate-token`,
                 {},
@@ -58,14 +43,8 @@ class BookingLocalController {
                 }
             );
 
-            // ✅ ADD THIS LOG - See what Auth Service returned
-            console.log("Auth Service Response Status:", response.status);
-            console.log("Auth Service Response Data:", JSON.stringify(response.data, null, 2));
 
             if (response.data.success) {
-                console.log("✅ TOKEN VALID - Returning user data");
-
-                // Try different possible field names
                 const userId = response.data.data.userId ||
                     response.data.data.id ||
                     response.data.data._id;
@@ -112,11 +91,8 @@ class BookingLocalController {
 
     private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
-            console.log("Wallet balance call");
 
             const token = this.currentToken;
-
-            console.log({ bookingId, totalPrice, token });
 
             if (!token) {
                 throw new Error("Token missing for wallet deduction");
@@ -132,8 +108,6 @@ class BookingLocalController {
                 }
             );
 
-            console.log("Wallet balance response we got", response.data);
-
             return response.data;
 
         } catch (error: any) {
@@ -147,11 +121,9 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
-            console.log("Wallet balance check call");
 
             const token = this.currentToken;
 
-            console.log({ bookingId, totalPrice, token });
 
             if (!token) {
                 return {
@@ -173,7 +145,6 @@ class BookingLocalController {
 
 
             const walletBalanceCheckResponse = response.data;
-            console.log("@@@@@@@@@@@@@@@ The walletBalanceCheckResponse we got", response);
 
             return walletBalanceCheckResponse;
 
@@ -188,14 +159,8 @@ class BookingLocalController {
 
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
-            // ✅ ADD THIS LOG - Check if request is coming
-            console.log("\n========== CREATE BOOKING CALLED ==========");
-            console.log("Headers received:", JSON.stringify(req.headers, null, 2));
-
             const token = this.extractToken(req);
 
-            // ✅ ADD THIS LOG - Check if token exists
-            console.log("Token extracted:", token ? `${token.substring(0, 50)}...` : "NO TOKEN");
 
             if (!token) {
                 console.log("❌ NO TOKEN - Returning 401");
@@ -205,10 +170,7 @@ class BookingLocalController {
                 });
             }
 
-            console.log("✅ TOKEN FOUND - Attempting validation...");
             const userData = await this.validateToken(token);
-
-            console.log("✅ VALIDATION SUCCESS - User data:", userData);
 
             if (!userData) {
                 return res.status(400).json({
