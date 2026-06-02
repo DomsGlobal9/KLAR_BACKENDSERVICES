@@ -1,6 +1,7 @@
 import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
-import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
+import { BookingStatus, BookingProvider } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 
 async function pollTripJackCancellationStatus(bookingId: string, query: any, cancelChargesInfo: any): Promise<void> {
     const POLL_INTERVAL_MS = 5000;
@@ -23,7 +24,7 @@ async function pollTripJackCancellationStatus(bookingId: string, query: any, can
             if (apiSuccess && isTerminal) {
                 const dbStatus = finalStatus === "CANCELLED" ? BookingStatus.CANCELLED : BookingStatus.FAILED;
                 if (Object.keys(query).length > 0) {
-                    await BookingModel.findOneAndUpdate(query, {
+                    await hotelBookingRepository.findOneAndUpdate(query, {
                         status: dbStatus,
                         tripJackResponse: details,
                         cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
@@ -38,7 +39,7 @@ async function pollTripJackCancellationStatus(bookingId: string, query: any, can
             // Map CANCELLATION_PENDING (or other active states) to PENDING in the DB
             if (finalStatus === "CANCELLATION_PENDING") {
                 if (Object.keys(query).length > 0) {
-                    await BookingModel.findOneAndUpdate(query, {
+                    await hotelBookingRepository.findOneAndUpdate(query, {
                         status: BookingStatus.PENDING,
                         tripJackResponse: details
                     });
@@ -95,7 +96,7 @@ class CancelService {
             let actualTargetId = confirmationNumber || bookingId;
 
             if (Object.keys(query).length > 0) {
-                const booking = await BookingModel.findOne(query).lean();
+                const booking = await hotelBookingRepository.findOne(query, true);
                 if (booking && booking.provider === BookingProvider.TRIPJACK) {
                     isDbTripJack = true;
                     if (booking.confirmationNumber) actualTargetId = booking.confirmationNumber;
@@ -112,7 +113,7 @@ class CancelService {
                 if (isSuccessAck) {
                     // Update database immediately to CANCELLED upon success acknowledgment
                     if (Object.keys(query).length > 0) {
-                        await BookingModel.findOneAndUpdate(query, { 
+                        await hotelBookingRepository.findOneAndUpdate(query, { 
                             status: BookingStatus.CANCELLED,
                             tripJackResponse: tjResponse?.body,
                             cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
@@ -166,7 +167,7 @@ class CancelService {
 
             if (Object.keys(query).length > 0) {
                 console.log(`🔍 Looking up booking in DB with query:`, JSON.stringify(query));
-                const booking = await BookingModel.findOne(query).lean();
+                const booking = await hotelBookingRepository.findOne(query, true);
 
                 if (booking) {
                     console.log(`📦 Found booking in DB: ${booking.confirmationNumber}`);
@@ -260,7 +261,7 @@ class CancelService {
                         ]
                     };
 
-                    const updated = await BookingModel.findOneAndUpdate(
+                    const updated = await hotelBookingRepository.findOneAndUpdate(
                         query,
                         { 
                             status: BookingStatus.CANCELLED,
@@ -309,7 +310,7 @@ class CancelService {
             ]
         };
 
-        const booking = await BookingModel.findOne(query).lean();
+        const booking = await hotelBookingRepository.findOne(query, true);
         if (!booking) {
             throw new Error("Booking not found");
         }

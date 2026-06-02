@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { CRON_TIME } from "../../config/cron.config";
-import { CabBookingModel, CabBookingStatus } from "../../models/CabBooking.model";
+import { CabBookingStatus } from "../../models/CabBooking.model";
+import { cabBookingRepository } from "../../repositories/cabBooking.repository";
 import { tripJackCabsProvider } from "../../providers/tripjack.cabs.provider";
 
 let isRunning = false;
@@ -26,9 +27,7 @@ const executeBookingStatusCron = async () => {
     isRunning = true;
 
     try {
-        const bookings = await CabBookingModel.find({
-            status: CabBookingStatus.PENDING
-        });
+        const bookings = await cabBookingRepository.getBookingsByStatus(CabBookingStatus.PENDING);
 
         if (!bookings.length) {
             return;
@@ -69,19 +68,7 @@ const processSingleBooking = async (booking: any) => {
         }
 
         if (newStatus !== booking.status) {
-            booking.status = newStatus;
-            
-            // Optionally update the stored response
-            if (!booking.tripJackResponse) {
-                 booking.tripJackResponse = {};
-            }
-            if (!booking.tripJackResponse.data) {
-                 booking.tripJackResponse.data = {};
-            }
-            booking.tripJackResponse.data.status = finalStatus || newStatus;
-            booking.tripJackResponse.data.paymentStatus = finalPaymentStatus;
-            
-            await booking.save();
+            await cabBookingRepository.updateBookingStatusAndResponse(idToSync, newStatus, detailsRes);
             console.log(`[Cabs] Updated Booking: ${idToSync} | ${booking.status} -> ${newStatus}`);
         }
         

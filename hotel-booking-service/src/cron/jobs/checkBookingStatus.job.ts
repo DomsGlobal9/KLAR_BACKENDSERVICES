@@ -1,7 +1,8 @@
 import cron from "node-cron";
 import { CRON_TIME } from "../../config/cron.config";
 import { bookingsService } from "../../services/bookings.service";
-import { BookingModel, BookingStatus, BookingProvider } from "../../models/Booking.model";
+import { BookingStatus, BookingProvider } from "../../models/Booking.model";
+import { hotelBookingRepository } from "../../repositories/hotelBooking.repository";
 
 let isRunning = false;
 
@@ -32,10 +33,10 @@ const executeBookingStatusCron = async () => {
         /**
          * Get all pending and held bookings
          */
-        const bookings = await BookingModel.find({
+        const bookings = await hotelBookingRepository.find({
             status: { $in: [BookingStatus.PENDING, BookingStatus.HELD] },
             provider: BookingProvider.TRIPJACK
-        });
+        }, null, undefined, undefined, true);
 
         /**
          * No bookings found

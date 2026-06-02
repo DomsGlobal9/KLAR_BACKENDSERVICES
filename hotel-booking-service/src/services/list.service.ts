@@ -1,4 +1,5 @@
-import { BookingModel, BookingStatus } from "../models/Booking.model";
+import { BookingStatus } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 
 class ListService {
     async list(query: { status?: string; page?: number; limit?: number; agentId?: any }) {
@@ -21,12 +22,8 @@ class ListService {
         const skip = (page - 1) * limit;
 
         const [bookings, total] = await Promise.all([
-            BookingModel.find(filter)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .lean(),
-            BookingModel.countDocuments(filter),
+            hotelBookingRepository.find(filter, { createdAt: -1 }, skip, limit, true),
+            hotelBookingRepository.countDocuments(filter),
         ]);
 
         return {

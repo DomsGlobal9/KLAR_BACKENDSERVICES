@@ -1,9 +1,11 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { BookingRequest } from "../models/tripjack.types";
 import { env } from "../config/env";
-import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
+import { CabBookingStatus } from "../models/CabBooking.model";
+import { cabBookingRepository } from "../repositories/cabBooking.repository";
 import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
 import { WalletUtil } from "../utils/wallet.util";
+import { notificationService } from "./notification.service";
 
 class BookingService {
     private getAgentDetail(payload: any) {
@@ -213,7 +215,7 @@ class BookingService {
                 const opt = payload.quotationInfo;
                 const pricing = payload.pricingInfo;
 
-                await CabBookingModel.create({
+                const savedBooking = await cabBookingRepository.createBooking({
                     bookingId,
                     correlationId: finalPayload.correlationId,
                     userId: payload.userId || "guest", // Save userId from payload
@@ -243,6 +245,10 @@ class BookingService {
                     tripJackResponse: response
                 });
                 console.log(`✅ [BookingService] Saved booking ${bookingId} to DB.`);
+
+                if (savedBooking.status === CabBookingStatus.CONFIRMED) {
+                    notificationService.sendBookingConfirmation(savedBooking);
+                }
             } catch (dbError) {
                 console.error("❌ [BookingService] Failed to save booking to DB:", dbError);
                 // We don't throw here to avoid failing a successful TripJack booking

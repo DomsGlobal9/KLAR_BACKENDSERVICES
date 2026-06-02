@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { CRON_TIME } from "../../config/cron.config";
-import { BookingModel, BookingStatus } from "../../models/Booking.model";
+import { BookingStatus } from "../../models/Booking.model";
+import { hotelBookingRepository } from "../../repositories/hotelBooking.repository";
 
 let isRunning = false;
 
@@ -34,13 +35,13 @@ const executeDeleteExpiredBookingsCron = async () => {
         const twentyFourHoursAgo = new Date();
         twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
-        const result = await BookingModel.deleteMany({
-            status: { $in: [BookingStatus.PENDING, BookingStatus.HELD] },
-            createdAt: { $lt: twentyFourHoursAgo }
-        });
+        const deletedCount = await hotelBookingRepository.deleteExpiredBookings(
+            [BookingStatus.PENDING, BookingStatus.HELD], 
+            twentyFourHoursAgo
+        );
 
         console.log(
-            `Expired PENDING/HELD hotel bookings deleted: ${result.deletedCount}`
+            `[CRON] Expired PENDING hotel bookings deleted: ${deletedCount}`
         );
 
     } catch (error: any) {

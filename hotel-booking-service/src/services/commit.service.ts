@@ -1,6 +1,7 @@
 import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
-import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
+import { BookingStatus, BookingProvider } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { notificationService } from "./notification.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
 import { PricingUtil } from "../utils/pricing.util";
@@ -33,13 +34,13 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
 
             if (apiSuccess && TJ_SUCCESS_STATUSES.has(tjStatus)) {
                 const newStatus = tjStatus === "ON_HOLD" ? BookingStatus.HELD : BookingStatus.CONFIRMED;
-                const updated = await BookingModel.findByIdAndUpdate(dbBookingId, { status: newStatus, tripJackResponse: details }, { new: true });
+                const updated = await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: newStatus, tripJackResponse: details }, { new: true });
                 if (updated) notificationService.sendBookingConfirmation(updated);
                 return;
             }
             
             if (TJ_FAILED_STATUSES.has(tjStatus)) {
-                await BookingModel.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
+                await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
                 return;
             }
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -147,7 +148,7 @@ class CommitService {
 
              // ─── PHASE 5: Save lean booking record ───────────────────────────────
             const primaryGuest = payload.roomTravellerInfo?.[0]?.travellerInfo?.[0];
-             const bookingRecord = new BookingModel({
+             const saved = await hotelBookingRepository.createBooking({
                 confirmationNumber: tjResponse.bookingId || bookingId,
                 reservationId: tjResponse.bookingId || bookingId,
                 propertyId: payload.propertyId || "TJ-PROP",
@@ -161,13 +162,12 @@ class CommitService {
                 guestName: primaryGuest ? `${primaryGuest.fN || ''} ${primaryGuest.lN || ''}`.trim() : "",
                 guestEmail: payload.deliveryInfo?.emails?.[0] || "",
                 guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
-                agentId,
-                agentName,
+                agentId: agentId || undefined,
+                agentName: agentName || undefined,
                 rooms,
                 tripJackRequest: tjPayload, // Cache the compiled outbound request payload
             });
 
-            const saved = await bookingRecord.save();
             pollTripJackBookingStatus(tjResponse.bookingId || bookingId, saved._id.toString());
 
             return {
@@ -242,7 +242,7 @@ class CommitService {
 
             const primaryGuest = payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0];
 
-            const bookingRecord = new BookingModel({
+            const saved = await hotelBookingRepository.createBooking({
                 confirmationNumber: rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
                 reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
                 propertyId: payload.BookReservation?.propertyID || "RG-PROP",
@@ -256,8 +256,8 @@ class CommitService {
                 guestName: primaryGuest ? `${primaryGuest.FirstName || ''} ${primaryGuest.LastName || ''}`.trim() : "",
                 guestEmail: primaryGuest?.Email || payload.BookReservation?.emailAddress || payload.emailAddress || "",
                 guestMobile: primaryGuest?.Phone || payload.BookReservation?.phoneNumber || "",
-                agentId,
-                agentName,
+                agentId: agentId || undefined,
+                agentName: agentName || undefined,
                 rooms: rgRooms.length > 0 ? rgRooms : undefined,
                 hotelName: payload.hotelName,
                 hotelImage: payload.hotelImage,
@@ -266,7 +266,6 @@ class CommitService {
                 starRating: payload.starRating,
             });
 
-            const saved = await bookingRecord.save();
             notificationService.sendBookingConfirmation(saved);
 
             return rgResponse;
