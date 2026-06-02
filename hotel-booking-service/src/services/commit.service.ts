@@ -81,35 +81,13 @@ class CommitService {
         // Actually, we need to call precheck if bookingId is missing, or trust the precheckResponse if provided securely.
         // For real OTA security, we fetch the latest price.
         
-        let netPrice = 0;
         let bookingId = payload.bookingId;
+        if (!bookingId) throw new Error("Booking ID is required from frontend.");
 
-        try {
-            // If the frontend already consumed the reviewHash to lock the bookingId, calling precheck again might fail.
-            // Catch any review hash expired / 15 mins error gracefully and fall back to the existing locked bookingId and net price.
-            if (payload.optionId && payload.reviewHash) {
-                try {
-                    const precheckRes = await tripJackProvider.precheck(payload);
-                    if (precheckRes.status) {
-                        bookingId = precheckRes.bookingId || bookingId;
-                        netPrice = precheckRes.body?.hInfo?.ops?.[0]?.tp || precheckRes.body?.hotel?.ops?.[0]?.tp || precheckRes.body?.totalNet || 0;
-                    }
-                } catch (precheckErr: any) {
-                    console.warn(`⚠️ [TripJack] Precheck re-verification failed/consumed, trusting frontend locked bookingId: ${bookingId}. Error:`, precheckErr.message || JSON.stringify(precheckErr?.response?.data || {}));
-                    if (!bookingId) throw precheckErr; // Throw only if we don't have a valid bookingId to fall back to
-                }
-            }
-            
-            if (!netPrice) {
-                netPrice = payload.paymentInfos?.[0]?.amount || payload.totalPrice || payload.amount || 0;
-            }
-            
-            if (netPrice <= 0) throw new Error("Invalid price returned from provider or payload.");
-            console.log(`✅ [TripJack] Source of Truth Net Price: ₹${netPrice}`);
-        } catch (err: any) {
-            console.error(`❌ [TripJack] Precheck verification failed:`, err.message);
-            throw err;
-        }
+        let netPrice = payload.paymentInfos?.[0]?.amount || payload.totalPrice || payload.amount || 0;
+        if (netPrice <= 0) throw new Error("Invalid price returned from provider or payload.");
+        
+        console.log(`✅ [TripJack] Trusted Frontend Net Price: ₹${netPrice}`);
 
         // PHASE 2: Calculate Final Price with Admin Markups + Agent Additional Markup + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
@@ -137,8 +115,11 @@ class CommitService {
         // PHASE 4: Provider Booking (Send ONLY Net Price)
         try {
             const tjPayload = {
-                ...payload,
                 bookingId,
+                type: "HOTEL",
+                roomTravellerInfo: payload.roomTravellerInfo,
+                deliveryInfo: payload.deliveryInfo,
+                ...(payload.gstInfo && { gstInfo: payload.gstInfo }),
                 // Guaranteed positive net amount injection for instant confirmations; strict omission for holds
                 paymentInfos: !isHoldIntent ? [{ amount: netPrice }] : undefined
             };

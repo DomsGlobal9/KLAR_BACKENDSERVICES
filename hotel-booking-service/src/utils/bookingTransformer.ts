@@ -28,7 +28,8 @@ export const compileTravellerPayload = (formData: any, providerContext: any) => 
             fN: gIdx === 0 && rIdx > 0 ? `${cleanFN}R${rIdx + 1}`.toUpperCase() : cleanFN,
             lN: cleanLN,
             ...(g.pan && { pan: g.pan.toUpperCase() }),
-            ...(g.passport && { pNum: g.passport.toUpperCase() })
+            ...(g.passport && { pNum: g.passport.toUpperCase() }),
+            ...(g.age && { age: g.age })
           };
         })
       })),

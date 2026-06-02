@@ -121,7 +121,7 @@ export class TripJackApiProvider {
         return roomTravellerInfo?.map((room: any) => {
             if (!room.travellerInfo) return room;
             return {
-                travellerInfo: room.travellerInfo.map((traveller: any) => {
+                travellerInfo: room.travellerInfo.map((traveller: any, index: number) => {
                     const rawFN = (traveller.fN || traveller.firstName || "Guest").toString().replace(/[^a-zA-Z]/g, '');
                     const rawLN = (traveller.lN || traveller.lastName || "User").toString().replace(/[^a-zA-Z]/g, '');
                     
@@ -144,9 +144,15 @@ export class TripJackApiProvider {
                         pt: pt
                     };
 
+                    if (index === 0) {
+                        mappedTraveller.isLeadGuest = true;
+                    }
+
                     if (pt === "ADULT") {
                         if (traveller.pan) mappedTraveller.pan = traveller.pan.replace(/\s+/g, '').trim().toUpperCase();
                         if (traveller.pNum) mappedTraveller.pNum = traveller.pNum.replace(/\s+/g, '').trim().toUpperCase();
+                    } else if (pt === "CHILD" && traveller.age) {
+                        mappedTraveller.age = Number(traveller.age);
                     }
                     return mappedTraveller;
                 })
