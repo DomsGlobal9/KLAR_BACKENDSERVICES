@@ -13,11 +13,24 @@ const POLL_TIMEOUT_MS = 180000;
 
 const TJ_SUCCESS_STATUSES = new Set(["SUCCESS", "ON_HOLD"]);
 const TJ_FAILED_STATUSES = new Set(["ABORTED", "FAILED", "CANCELLED"]);
+const TJ_PENDING_STATUSES = new Set(["PAYMENT_SUCCESS", "PAYMENT_PENDING", "PENDING", "IN_PROGRESS", "CANCELLATION_PENDING"]);
 
 async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: string): Promise<void> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     const poll = async (): Promise<void> => {
-        if (Date.now() >= deadline) return;
+        if (Date.now() >= deadline) {
+            console.log(`[TripJack] Polling timeout reached for ${tjBookingId}. Saving last known state.`);
+            try {
+                const details = await tripJackProvider.getBookingDetails(tjBookingId);
+                const tjStatus: string = details?.order?.status || "";
+                if (TJ_PENDING_STATUSES.has(tjStatus)) {
+                    await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: BookingStatus.PENDING, tripJackResponse: details });
+                }
+            } catch (e: any) {
+                console.warn(`[TripJack] Failed to fetch final state on timeout for ${tjBookingId}:`, e.message);
+            }
+            return;
+        }
         try {
             const details = await tripJackProvider.getBookingDetails(tjBookingId);
             const apiSuccess = details?.status?.success === true;
@@ -27,7 +40,7 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
             const isTerminal = TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus);
 
             // Wait if system is still processing and we haven't reached a terminal status
-            if (!isTerminal && isSystemPending) {
+            if (!isTerminal && (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus))) {
                 await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
                 return poll();
             }
@@ -43,6 +56,8 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
                 await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
                 return;
             }
+            
+            // If it's an unrecognized status, just wait and poll again
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
             return poll();
         } catch (err: any) {

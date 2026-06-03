@@ -243,6 +243,10 @@ export class TripJackApiProvider {
                     checkOutTime,
                     reviewHash,
                     correlationId,
+                    policies: staticData?.policies || staticData?.hotelInfo?.policies || pricingData?.policies || [],
+                    fees: staticData?.fees || staticData?.hotelInfo?.fees || pricingData?.fees || [],
+                    checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || pricingData?.checkInInstructions || "",
+                    specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || pricingData?.specialInstructions || "",
                     location: {
                         lat: staticData?.locale?.coordinates?.lat || pricingData.coordinates?.lat || pricingData.latitude,
                         lng: staticData?.locale?.coordinates?.long || pricingData.coordinates?.long || pricingData.longitude,
@@ -299,6 +303,10 @@ export class TripJackApiProvider {
                         checkOutTime: staticData?.hotelInfo?.checkOutTime || "",
                         reviewHash: "",
                         correlationId: error.response.data.correlationId || correlationId,
+                        policies: staticData?.policies || staticData?.hotelInfo?.policies || [],
+                        fees: staticData?.fees || staticData?.hotelInfo?.fees || [],
+                        checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || "",
+                        specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || "",
                         location: { 
                             lat: staticData?.locale?.coordinates?.lat || localHotel?.location?.coordinates?.[1] || 0, 
                             lng: staticData?.locale?.coordinates?.long || localHotel?.location?.coordinates?.[0] || 0 
