@@ -16,6 +16,7 @@ export const authenticateJWT = (
 ): Response | void => {
     try {
         const token = extractTokenFromRequest(req);
+        console.log("getting toen:", token);
 
         if (!token) {
             return res.status(401).json({
@@ -36,6 +37,7 @@ export const authenticateJWT = (
         }
 
         req.user = decoded;
+        console.log("request data i get", req.user);
 
         if (process.env.NODE_ENV === 'development') {
             console.log(`User authenticated: ${decoded.userId} (${decoded.email})`);
