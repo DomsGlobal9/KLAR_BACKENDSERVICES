@@ -53,6 +53,7 @@ export class TripJackApiProvider {
             console.log(`[TripJack] Sending v3 Review Request to HMS:`, JSON.stringify(tjPayload, null, 2));
             const serializedReviewPayload = JSON.stringify(tjPayload);
             console.log(`[NETWORK BOUNDARY] TripJack HMS Review Request Serialized Payload: ${serializedReviewPayload}`);
+            
             const res = await tripJackHmsClient.post("/hms/v3/hotel/review", tjPayload);
 
             const data = res.data;

@@ -206,17 +206,9 @@ class CommitService {
         console.log(`[RateGain] Starting Secure OTA Flow for Agent: ${agentId}`);
 
         // PHASE 1: Verify Price with Provider
-        let netPrice = 0;
-        try {
-            const precheckRes = await rateGainProvider.precheck(payload);
-            const body = precheckRes.body?.preCheckResponse || precheckRes.body;
-            netPrice = Number(body?.totalNet || body?.BookingRate || 0);
-            if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
-            console.log(`✅ [RateGain] Source of Truth Net Price: ₹${netPrice}`);
-        } catch (err: any) {
-            console.error(`❌ [RateGain] Precheck failed:`, err.message);
-            throw err;
-        }
+        let netPrice = Number(payload.totalPrice || payload.amount || 0);
+        if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
+        console.log(`✅ [RateGain] Trusted Frontend Net Price: ₹${netPrice}`);
 
         // PHASE 2: Markup & Total + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
@@ -225,13 +217,14 @@ class CommitService {
 
         // PHASE 3: Wallet Deduction
         const demandId = `RG-BOOK-${Date.now()}`;
-        const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || 'RateGain Hotel'}`);
+        const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || 'RateGain Hotel'}`);
         if (!paymentProcessed) throw new Error("Wallet deduction failed.");
 
         // PHASE 4: Provider Booking
         try {
             // Update payload with verified net price
-            const rgPayload = { ...payload };
+            // The unified payload has the RateGain payload inside bookingPayload
+            const rgPayload = { ...(payload.bookingPayload || payload) };
             if (rgPayload.BookReservation) {
                 rgPayload.BookReservation.sellingRate = netPrice;
                 rgPayload.BookReservation.BookingRate = netPrice;
