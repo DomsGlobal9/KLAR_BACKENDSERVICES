@@ -94,20 +94,20 @@ export class BookingPaymentController {
                 });
             }
 
-            return true;
+            // return true;
 
-            // res.status(200).json({
-            //     success: true,
-            //     message: "Sufficient balance available for booking payment",
-            //     data: {
-            //         hasSufficientBalance: result.hasSufficientBalance,
-            //         currentBalance: result.currentBalance,
-            //         requiredAmount: result.requiredAmount,
-            //         shortfallAmount: result.shortfallAmount,
-            //         bookingId: result.bookingId,
-            //         isAlreadyPaid: result.isAlreadyPaid,
-            //     },
-            // });
+            res.status(200).json({
+                success: true,
+                message: "Sufficient balance available for booking payment",
+                data: {
+                    hasSufficientBalance: result.hasSufficientBalance,
+                    currentBalance: result.currentBalance,
+                    requiredAmount: result.requiredAmount,
+                    shortfallAmount: result.shortfallAmount,
+                    bookingId: result.bookingId,
+                    isAlreadyPaid: result.isAlreadyPaid,
+                },
+            });
         } catch (err: any) {
             next(err);
         }
