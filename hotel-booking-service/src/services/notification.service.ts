@@ -1,5 +1,6 @@
 import axios from "axios";
 import { IBooking } from "../models/Booking.model";
+import { generateHotelVoucherHTML } from "../templates/hotelConfirmationTemplate";
 
 /**
  * Service to handle external notifications (Email, etc.)
@@ -53,23 +54,15 @@ class NotificationService {
 
             console.log(`[NotificationService] Sending confirmation to: ${recipientList.join(', ')}`);
 
+            const htmlContent = generateHotelVoucherHTML(booking);
+
             const payload = {
                 to: recipientList,
-                data: {
-                    confirmationNumber: booking.confirmationNumber,
-                    hotelName: booking.hotelName || "Hotel",
-                    hotelImage: booking.hotelImage,
-                    guestName: booking.guestName || "Guest",
-                    checkIn: booking.checkIn.toISOString(),
-                    checkOut: booking.checkOut.toISOString(),
-                    totalAmount: booking.totalAmount,
-                    currency: booking.currencyCode,
-                    roomType: booking.roomType || (booking.rooms?.[0]?.roomType) || "Room",
-                    agentName: booking.agentName
-                }
+                subject: `Hotel Booking Confirmation - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`,
+                html: htmlContent
             };
 
-            const response = await axios.post(`${this.emailServiceUrl}/email/send-booking-confirmation`, payload);
+            const response = await axios.post(`${this.emailServiceUrl}/email/send`, payload);
             console.log(`[NotificationService] Email service response:`, response.data);
             return response.data;
         } catch (error: any) {

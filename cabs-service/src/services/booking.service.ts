@@ -1,8 +1,11 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { BookingRequest } from "../models/tripjack.types";
 import { env } from "../config/env";
-import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
+import { CabBookingStatus } from "../models/CabBooking.model";
+import { cabBookingRepository } from "../repositories/cabBooking.repository";
 import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
+import { WalletUtil } from "../utils/wallet.util";
+import { notificationService } from "./notification.service";
 
 class BookingService {
     private getAgentDetail(payload: any) {
@@ -13,7 +16,9 @@ class BookingService {
         };
     }
 
-    async book(payload: any) {
+    async book(payload: any, token?: string, user?: any) {
+        if (!token) throw { status: 401, message: "Authentication token is required for booking" };
+
         if (!payload.journeyInfo || !payload.passengerDetail) {
             throw { status: 400, message: "Missing journeyInfo or passengerDetail" };
         }
@@ -100,6 +105,28 @@ class BookingService {
 
         console.log("[BookingService] Final Payload to TripJack:", JSON.stringify(finalPayload, null, 2));
 
+        const amount = Number(payload.pricingInfo?.grossAmount || 0);
+        
+        // Deduct from Klar Wallet BEFORE TripJack booking
+        if (amount > 0) {
+            const { hasBalance } = await WalletUtil.checkInternalBalance(token, amount);
+            if (!hasBalance) {
+                throw { status: 400, message: "Insufficient balance in internal Klar Wallet" };
+            }
+            
+            const deductSuccess = await WalletUtil.deductBalance(
+                token, 
+                amount, 
+                finalPayload.quotationInfo.quoteId, 
+                `Cabs Booking - ${payload.routeDetail?.origin?.displayAddress} to ${payload.routeDetail?.destination?.displayAddress}`
+            );
+            
+            if (!deductSuccess) {
+                throw { status: 400, message: "Wallet deduction failed" };
+            }
+            console.log(`✅ [BookingService] Successfully deducted ₹${amount} from Klar Wallet`);
+        }
+
         const response = await tripJackCabsProvider.createBooking(finalPayload);
 
         const bookingId = response?.data?.id || response?.data?.bookingId;
@@ -110,7 +137,6 @@ class BookingService {
 
         if (bookingId) {
             try {
-                const amount = Number(payload.pricingInfo?.grossAmount || 0);
                 if (amount > 0) {
                     const paymentPayload = {
                         bookingId,
@@ -159,7 +185,13 @@ class BookingService {
                                 response.data.status = "FAILED";
                                 response.data.paymentStatus = finalPaymentStatus || "REFUND_SUCCESS";
                             }
-                            console.error(`❌ [BookingService] Booking ${bookingId} FAILED by vendor. Auto-refunded.`);
+                            console.error(`❌ [BookingService] Booking ${bookingId} FAILED by vendor. Auto-refunded TripJack payment.`);
+                            
+                            // Also refund the Klar Wallet
+                            if (amount > 0) {
+                                await WalletUtil.refundBalance(token, amount, bookingId, "Auto-refund: TripJack booking failed");
+                                console.log(`✅ [BookingService] Refunded ₹${amount} to Klar Wallet for failed booking ${bookingId}`);
+                            }
                         } else {
                             // If still pending/processing after 10s, return optimistic success to avoid blocking agent
                             status = CabBookingStatus.CONFIRMED;
@@ -183,7 +215,7 @@ class BookingService {
                 const opt = payload.quotationInfo;
                 const pricing = payload.pricingInfo;
 
-                await CabBookingModel.create({
+                const savedBooking = await cabBookingRepository.createBooking({
                     bookingId,
                     correlationId: finalPayload.correlationId,
                     userId: payload.userId || "guest", // Save userId from payload
@@ -213,6 +245,10 @@ class BookingService {
                     tripJackResponse: response
                 });
                 console.log(`✅ [BookingService] Saved booking ${bookingId} to DB.`);
+
+                if (savedBooking.status === CabBookingStatus.CONFIRMED) {
+                    notificationService.sendBookingConfirmation(savedBooking);
+                }
             } catch (dbError) {
                 console.error("❌ [BookingService] Failed to save booking to DB:", dbError);
                 // We don't throw here to avoid failing a successful TripJack booking

@@ -1,6 +1,7 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { PaymentRequest } from "../models/tripjack.types";
-import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
+import { CabBookingStatus } from "../models/CabBooking.model";
+import { cabBookingRepository } from "../repositories/cabBooking.repository";
 
 class OrderService {
     async getBookingDetails(bookingIds: string) {
@@ -12,9 +13,7 @@ class OrderService {
         if (!userId) throw { status: 400, message: "userId is required" };
         
         // Return all bookings for the user, newest first
-        return await CabBookingModel.find({
-            userId
-        }).sort({ createdAt: -1 }).lean();
+        return await cabBookingRepository.getBookingsByUserId(userId);
     }
 
     async createPayment(payload: PaymentRequest) {

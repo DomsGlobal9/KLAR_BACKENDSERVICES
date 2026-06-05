@@ -1,6 +1,7 @@
 import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
-import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
+import { BookingStatus, BookingProvider } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { notificationService } from "./notification.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
 import { PricingUtil } from "../utils/pricing.util";
@@ -12,11 +13,24 @@ const POLL_TIMEOUT_MS = 180000;
 
 const TJ_SUCCESS_STATUSES = new Set(["SUCCESS", "ON_HOLD"]);
 const TJ_FAILED_STATUSES = new Set(["ABORTED", "FAILED", "CANCELLED"]);
+const TJ_PENDING_STATUSES = new Set(["PAYMENT_SUCCESS", "PAYMENT_PENDING", "PENDING", "IN_PROGRESS", "CANCELLATION_PENDING"]);
 
 async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: string): Promise<void> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     const poll = async (): Promise<void> => {
-        if (Date.now() >= deadline) return;
+        if (Date.now() >= deadline) {
+            console.log(`[TripJack] Polling timeout reached for ${tjBookingId}. Saving last known state.`);
+            try {
+                const details = await tripJackProvider.getBookingDetails(tjBookingId);
+                const tjStatus: string = details?.order?.status || "";
+                if (TJ_PENDING_STATUSES.has(tjStatus)) {
+                    await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: BookingStatus.PENDING, tripJackResponse: details });
+                }
+            } catch (e: any) {
+                console.warn(`[TripJack] Failed to fetch final state on timeout for ${tjBookingId}:`, e.message);
+            }
+            return;
+        }
         try {
             const details = await tripJackProvider.getBookingDetails(tjBookingId);
             const apiSuccess = details?.status?.success === true;
@@ -26,22 +40,24 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
             const isTerminal = TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus);
 
             // Wait if system is still processing and we haven't reached a terminal status
-            if (!isTerminal && isSystemPending) {
+            if (!isTerminal && (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus))) {
                 await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
                 return poll();
             }
 
             if (apiSuccess && TJ_SUCCESS_STATUSES.has(tjStatus)) {
                 const newStatus = tjStatus === "ON_HOLD" ? BookingStatus.HELD : BookingStatus.CONFIRMED;
-                const updated = await BookingModel.findByIdAndUpdate(dbBookingId, { status: newStatus, tripJackResponse: details }, { new: true });
+                const updated = await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: newStatus, tripJackResponse: details }, { new: true });
                 if (updated) notificationService.sendBookingConfirmation(updated);
                 return;
             }
             
             if (TJ_FAILED_STATUSES.has(tjStatus)) {
-                await BookingModel.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
+                await hotelBookingRepository.findByIdAndUpdate(dbBookingId, { status: BookingStatus.FAILED, tripJackResponse: details });
                 return;
             }
+            
+            // If it's an unrecognized status, just wait and poll again
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
             return poll();
         } catch (err: any) {
@@ -81,35 +97,13 @@ class CommitService {
         // Actually, we need to call precheck if bookingId is missing, or trust the precheckResponse if provided securely.
         // For real OTA security, we fetch the latest price.
         
-        let netPrice = 0;
         let bookingId = payload.bookingId;
+        if (!bookingId) throw new Error("Booking ID is required from frontend.");
 
-        try {
-            // If the frontend already consumed the reviewHash to lock the bookingId, calling precheck again might fail.
-            // Catch any review hash expired / 15 mins error gracefully and fall back to the existing locked bookingId and net price.
-            if (payload.optionId && payload.reviewHash) {
-                try {
-                    const precheckRes = await tripJackProvider.precheck(payload);
-                    if (precheckRes.status) {
-                        bookingId = precheckRes.bookingId || bookingId;
-                        netPrice = precheckRes.body?.hInfo?.ops?.[0]?.tp || precheckRes.body?.hotel?.ops?.[0]?.tp || precheckRes.body?.totalNet || 0;
-                    }
-                } catch (precheckErr: any) {
-                    console.warn(`⚠️ [TripJack] Precheck re-verification failed/consumed, trusting frontend locked bookingId: ${bookingId}. Error:`, precheckErr.message || JSON.stringify(precheckErr?.response?.data || {}));
-                    if (!bookingId) throw precheckErr; // Throw only if we don't have a valid bookingId to fall back to
-                }
-            }
-            
-            if (!netPrice) {
-                netPrice = payload.paymentInfos?.[0]?.amount || payload.totalPrice || payload.amount || 0;
-            }
-            
-            if (netPrice <= 0) throw new Error("Invalid price returned from provider or payload.");
-            console.log(`✅ [TripJack] Source of Truth Net Price: ₹${netPrice}`);
-        } catch (err: any) {
-            console.error(`❌ [TripJack] Precheck verification failed:`, err.message);
-            throw err;
-        }
+        let netPrice = payload.paymentInfos?.[0]?.amount || payload.totalPrice || payload.amount || 0;
+        if (netPrice <= 0) throw new Error("Invalid price returned from provider or payload.");
+        
+        console.log(`✅ [TripJack] Trusted Frontend Net Price: ₹${netPrice}`);
 
         // PHASE 2: Calculate Final Price with Admin Markups + Agent Additional Markup + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
@@ -137,8 +131,11 @@ class CommitService {
         // PHASE 4: Provider Booking (Send ONLY Net Price)
         try {
             const tjPayload = {
-                ...payload,
                 bookingId,
+                type: "HOTEL",
+                roomTravellerInfo: payload.roomTravellerInfo,
+                deliveryInfo: payload.deliveryInfo,
+                ...(payload.gstInfo && { gstInfo: payload.gstInfo }),
                 // Guaranteed positive net amount injection for instant confirmations; strict omission for holds
                 paymentInfos: !isHoldIntent ? [{ amount: netPrice }] : undefined
             };
@@ -166,7 +163,7 @@ class CommitService {
 
              // ─── PHASE 5: Save lean booking record ───────────────────────────────
             const primaryGuest = payload.roomTravellerInfo?.[0]?.travellerInfo?.[0];
-             const bookingRecord = new BookingModel({
+             const saved = await hotelBookingRepository.createBooking({
                 confirmationNumber: tjResponse.bookingId || bookingId,
                 reservationId: tjResponse.bookingId || bookingId,
                 propertyId: payload.propertyId || "TJ-PROP",
@@ -180,13 +177,12 @@ class CommitService {
                 guestName: primaryGuest ? `${primaryGuest.fN || ''} ${primaryGuest.lN || ''}`.trim() : "",
                 guestEmail: payload.deliveryInfo?.emails?.[0] || "",
                 guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
-                agentId,
-                agentName,
+                agentId: agentId || undefined,
+                agentName: agentName || undefined,
                 rooms,
                 tripJackRequest: tjPayload, // Cache the compiled outbound request payload
             });
 
-            const saved = await bookingRecord.save();
             pollTripJackBookingStatus(tjResponse.bookingId || bookingId, saved._id.toString());
 
             return {
@@ -210,17 +206,9 @@ class CommitService {
         console.log(`[RateGain] Starting Secure OTA Flow for Agent: ${agentId}`);
 
         // PHASE 1: Verify Price with Provider
-        let netPrice = 0;
-        try {
-            const precheckRes = await rateGainProvider.precheck(payload);
-            const body = precheckRes.body?.preCheckResponse || precheckRes.body;
-            netPrice = Number(body?.totalNet || body?.BookingRate || 0);
-            if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
-            console.log(`✅ [RateGain] Source of Truth Net Price: ₹${netPrice}`);
-        } catch (err: any) {
-            console.error(`❌ [RateGain] Precheck failed:`, err.message);
-            throw err;
-        }
+        let netPrice = Number(payload.totalPrice || payload.amount || 0);
+        if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
+        console.log(`✅ [RateGain] Trusted Frontend Net Price: ₹${netPrice}`);
 
         // PHASE 2: Markup & Total + Secret Coupon
         const markupRules = await WalletUtil.getMarkupRules(token);
@@ -229,13 +217,14 @@ class CommitService {
 
         // PHASE 3: Wallet Deduction
         const demandId = `RG-BOOK-${Date.now()}`;
-        const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || 'RateGain Hotel'}`);
+        const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || 'RateGain Hotel'}`);
         if (!paymentProcessed) throw new Error("Wallet deduction failed.");
 
         // PHASE 4: Provider Booking
         try {
             // Update payload with verified net price
-            const rgPayload = { ...payload };
+            // The unified payload has the RateGain payload inside bookingPayload
+            const rgPayload = { ...(payload.bookingPayload || payload) };
             if (rgPayload.BookReservation) {
                 rgPayload.BookReservation.sellingRate = netPrice;
                 rgPayload.BookReservation.BookingRate = netPrice;
@@ -261,7 +250,7 @@ class CommitService {
 
             const primaryGuest = payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0];
 
-            const bookingRecord = new BookingModel({
+            const saved = await hotelBookingRepository.createBooking({
                 confirmationNumber: rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
                 reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
                 propertyId: payload.BookReservation?.propertyID || "RG-PROP",
@@ -275,8 +264,8 @@ class CommitService {
                 guestName: primaryGuest ? `${primaryGuest.FirstName || ''} ${primaryGuest.LastName || ''}`.trim() : "",
                 guestEmail: primaryGuest?.Email || payload.BookReservation?.emailAddress || payload.emailAddress || "",
                 guestMobile: primaryGuest?.Phone || payload.BookReservation?.phoneNumber || "",
-                agentId,
-                agentName,
+                agentId: agentId || undefined,
+                agentName: agentName || undefined,
                 rooms: rgRooms.length > 0 ? rgRooms : undefined,
                 hotelName: payload.hotelName,
                 hotelImage: payload.hotelImage,
@@ -285,7 +274,6 @@ class CommitService {
                 starRating: payload.starRating,
             });
 
-            const saved = await bookingRecord.save();
             notificationService.sendBookingConfirmation(saved);
 
             return rgResponse;

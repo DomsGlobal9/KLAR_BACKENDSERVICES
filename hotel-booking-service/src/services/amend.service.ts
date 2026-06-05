@@ -1,11 +1,11 @@
-import { BookingModel } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { tripJackProvider } from "../providers/tripjack.provider";
 
 class AmendService {
     async getModificationPolicy(confirmationNumber: string) {
         if (!confirmationNumber) throw { status: 400, message: "ConfirmationNumber is required" };
 
-        const booking = await BookingModel.findOne({ confirmationNumber }).lean();
+        const booking = await hotelBookingRepository.findOne({ confirmationNumber }, true);
         if (!booking) throw { status: 404, message: "Booking not found" };
 
         // For RateGain, modificationPolicies are stored in the body of the response
@@ -28,7 +28,7 @@ class AmendService {
 
     async getModificationPricing(payload: any) {
         const { confirmationNumber, checkIn, checkOut, rooms } = payload;
-        const booking = await BookingModel.findOne({ confirmationNumber });
+        const booking = await hotelBookingRepository.findOne({ confirmationNumber });
         if (!booking) throw { status: 404, message: "Booking not found" };
 
         if (booking.provider === "tripjack") {
@@ -52,7 +52,7 @@ class AmendService {
 
     async commitModification(payload: any) {
         const { confirmationNumber, checkIn, checkOut } = payload;
-        const booking = await BookingModel.findOne({ confirmationNumber });
+        const booking = await hotelBookingRepository.findOne({ confirmationNumber });
         if (!booking) throw { status: 404, message: "Booking not found" };
 
         if (booking.provider === "tripjack") {
@@ -62,7 +62,7 @@ class AmendService {
 
         // RateGain Mock: Update dates in DB to reflect Oct modification
         console.log(`[RateGain Mock] Modifying booking ${confirmationNumber} to: ${checkIn} -> ${checkOut}`);
-        const updated = await BookingModel.findOneAndUpdate(
+        const updated = await hotelBookingRepository.findOneAndUpdate(
             { confirmationNumber },
             { 
                 checkIn: new Date(checkIn), 

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { TripJackApiProvider } from "../providers/tripjack.api.provider";
-import { BookingModel, BookingStatus } from "../models/Booking.model";
+import { BookingStatus } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 
 /**
  * Controller to confirm a previously HELD booking.
@@ -9,7 +10,7 @@ import { BookingModel, BookingStatus } from "../models/Booking.model";
 export const confirmController = async (req: Request, res: Response) => {
     try {
         const bookingId = req.body.bookingId;
-        const booking = await BookingModel.findOne({
+        const booking = await hotelBookingRepository.findOne({
             $or: [{ confirmationNumber: bookingId }, { reservationId: bookingId }]
         });
 

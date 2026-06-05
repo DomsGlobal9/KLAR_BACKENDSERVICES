@@ -1,4 +1,5 @@
-import { BookingModel, BookingProvider, BookingStatus } from "../models/Booking.model";
+import { BookingProvider, BookingStatus } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 
 import { tripJackProvider } from "../providers/tripjack.provider";
 
@@ -9,7 +10,7 @@ class BookingsService {
      */
     async getAllBookings() {
         try {
-            const bookings = await BookingModel.find().sort({ createdAt: -1 });
+            const bookings = await hotelBookingRepository.find({}, { createdAt: -1 });
             
             // Fire-and-forget background sync for any HELD or PENDING bookings
             setTimeout(() => {
@@ -43,7 +44,7 @@ class BookingsService {
                 query.$or.push({ _id: id });
             }
 
-            let booking = await BookingModel.findOne(query);
+            let booking = await hotelBookingRepository.findOne(query);
 
             // Sync live status for HELD or PENDING bookings from TripJack
             if (booking && (booking.status === BookingStatus.HELD || booking.status === BookingStatus.PENDING) && booking.provider === BookingProvider.TRIPJACK) {
@@ -68,8 +69,7 @@ class BookingsService {
                         if (newStatus !== booking.status) {
                             booking.status = newStatus;
                             // Optionally save the updated response payload
-                            booking.tripJackResponse = tjDetails;
-                            await booking.save();
+                            await hotelBookingRepository.findByIdAndUpdate(booking._id, { status: newStatus, tripJackResponse: tjDetails });
                         }
                     }
                 } catch (syncErr: any) {
