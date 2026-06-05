@@ -197,7 +197,7 @@ export class AuthService {
         const user = await UserModel.findOne({
             email: email.toLowerCase(),
             clientType,
-            status: "ACTIVE",
+            status: UserStatus.ACTIVE,
         });
 
         if (!user) {
