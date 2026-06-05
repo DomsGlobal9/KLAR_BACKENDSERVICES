@@ -98,11 +98,12 @@ export class TripJackApiProvider {
             const pricingRes = await tripJackClient.post("/hms/v3/hotel/pricing", tjPayload);
             console.log(`[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`);
 
-            // If local cache is missing and staticData hasn't resolved yet, wait a brief grace period (max 500ms)
-            if (!staticData && !localHotel) {
+            // Always wait for staticData to resolve (max 5000ms grace period) 
+            // because localHotel does NOT contain room-level images.
+            if (!staticData) {
                 await Promise.race([
                     staticDetailPromise,
-                    new Promise(resolve => setTimeout(resolve, 500))
+                    new Promise(resolve => setTimeout(resolve, 5000))
                 ]);
             }
 
@@ -118,12 +119,8 @@ export class TripJackApiProvider {
                 ? Object.values(staticData.amenities).map((a: any) => a.name)
                 : (pricingData.amenities || []);
 
-            const hotelImages: string[] = staticData?.images
-                ? staticData.images.map((img: any) => {
-                    const links = img.links || {};
-                    const firstLink = Object.values(links)[0] as any;
-                    return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
-                }).filter(Boolean)
+            const hotelImages: any[] = staticData?.images
+                ? staticData.images
                 : (Array.isArray(pricingData.images) && pricingData.images.length ? pricingData.images : (pricingData.img ? [pricingData.img] : (localHotel?.images || [])));
 
             const description = staticData?.descriptions?.default || staticData?.desc || pricingData.desc || "";
@@ -142,15 +139,41 @@ export class TripJackApiProvider {
 
                 // Try to find room-specific images in staticData
                 const roomId = opt.roomInfo?.[0]?.id;
-                const roomStatic = staticData?.rooms?.[roomId];
+                const roomNameStr = (opt.roomInfo?.[0]?.name || opt.name || opt.roomName || "").toLowerCase().trim();
+                let roomStatic: any = null;
+                if (staticData?.rooms) {
+                    const staticRoomsArray = Object.values(staticData.rooms);
+                    
+                    // Try exact match first
+                    roomStatic = staticRoomsArray.find((r: any) => String(r?.id) === String(roomId));
+                    
+                    // If not found OR if found but has no images, steal images from a duplicate room!
+                    if (!roomStatic || !roomStatic.images || roomStatic.images.length === 0) {
+                        if (roomNameStr) {
+                            const matchingRooms = staticRoomsArray.filter((r: any) => {
+                                const staticName = (r?.name || "").toLowerCase().trim();
+                                return staticName && (staticName === roomNameStr || staticName.includes(roomNameStr) || roomNameStr.includes(staticName));
+                            });
+
+                            const roomWithImages = matchingRooms.find((r: any) => r.images && Array.isArray(r.images) && r.images.length > 0);
+                            
+                            if (roomWithImages) {
+                                // If we already had an exact match but it lacked images, just append the images
+                                if (roomStatic) {
+                                    roomStatic.images = roomWithImages.images;
+                                } else {
+                                    roomStatic = roomWithImages;
+                                }
+                            } else if (!roomStatic && matchingRooms.length > 0) {
+                                roomStatic = matchingRooms[0];
+                            }
+                        }
+                    }
+                }
                 let roomImages = []; // Strictly no fallback to hotelImages
 
                 if (roomStatic?.images && Array.isArray(roomStatic.images) && roomStatic.images.length > 0) {
-                    roomImages = roomStatic.images.map((img: any) => {
-                        const links = img.links || {};
-                        const firstLink = Object.values(links)[0] as any;
-                        return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
-                    }).filter(Boolean);
+                    roomImages = roomStatic.images;
                 } else if (opt.roomInfo?.[0]?.images && Array.isArray(opt.roomInfo[0].images) && opt.roomInfo[0].images.length > 0) {
                     roomImages = opt.roomInfo[0].images;
                 }
@@ -200,6 +223,7 @@ export class TripJackApiProvider {
                     amenities: optionAmenities,
                     hotelFacility: optionAmenities.map((name: string) => ({ facilityName: name })),
                     images: roomImages,
+                    bed_config: roomStatic?.bed_config || opt.roomInfo?.[0]?.bed_config || null,
                     checkInTime,
                     checkOutTime,
                     rawOption: opt,
