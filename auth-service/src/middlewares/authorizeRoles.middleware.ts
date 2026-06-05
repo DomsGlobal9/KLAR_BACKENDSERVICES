@@ -9,8 +9,6 @@ export const authorizeRoles = (...allowedRoles: string[]) => {
 
         const user = (req as any).user;
 
-        console.log("******** USER WE get\n", user);
-
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -18,9 +16,7 @@ export const authorizeRoles = (...allowedRoles: string[]) => {
             });
         }
 
-        const hasRole = user.roles?.some(
-            (role: string) => allowedRoles.includes(role)
-        );
+        const hasRole = allowedRoles.includes(user.roles);
 
         if (!hasRole) {
             return res.status(403).json({

@@ -89,26 +89,17 @@ export class RMService {
          * Create RM user
          */
         const user = new UserModel({
-
             clientType: ClientType.B2B,
-
             memberName: memberName,
-
             email: email.toLowerCase(),
-
             mobile,
-
             passwordHash,
-
-            roles: [Roles.RM],
-
+            roles: Roles.RM,
             status: UserStatus.ACTIVE,
-
             verification: {
                 status: VerificationStatus.APPROVED,
                 verifiedAt: new Date(),
             },
-
             createdBy,
         });
 
@@ -158,7 +149,7 @@ export class RMService {
             throw new NotFoundError("RM not found");
         }
 
-        if (!existingRM.roles.includes(Roles.RM)) {
+        if (existingRM.roles !== Roles.RM) {
             throw new BadRequestError("User is not an RM");
         }
 
@@ -187,7 +178,7 @@ export class RMService {
             if (role !== Roles.RM) {
                 throw new BadRequestError("Invalid role for RM");
             }
-            existingRM.roles = [Roles.RM];
+            existingRM.roles = Roles.RM;
         }
 
         if (password) {
@@ -244,8 +235,8 @@ export class RMService {
         const skip = (page - 1) * limit;
 
         let query: any = {
-            roles: { $in: [Roles.RM] },
-            createdBy: userId, // Mandatory
+            roles: Roles.RM,
+            createdBy: userId,
         };
 
         if (status && status !== 'all') {
@@ -292,7 +283,7 @@ export class RMService {
 
         const rm = await UserModel.findOne({
             _id: rmId,
-            roles: { $in: [Roles.RM] }
+            roles: Roles.RM,
         })
             .select('-passwordHash')
             .populate('createdBy', 'email memberName');
@@ -306,7 +297,7 @@ export class RMService {
             memberName: rm.memberName,
             email: rm.email,
             mobile: rm.mobile,
-            role: rm.roles[0],
+            role: rm.roles,
             status: rm.status,
             blockReason: rm.blockReason,
             createdBy: rm.createdBy,
@@ -320,16 +311,16 @@ export class RMService {
      */
     public static async getRMStats() {
         const totalRMs = await UserModel.countDocuments({
-            roles: { $in: [Roles.RM] }
+            roles: Roles.RM,
         });
 
         const activeRMs = await UserModel.countDocuments({
-            roles: { $in: [Roles.RM] },
+            roles: Roles.RM,
             status: UserStatus.ACTIVE
         });
 
         const inactiveRMs = await UserModel.countDocuments({
-            roles: { $in: [Roles.RM] },
+            roles: Roles.RM,
             status: UserStatus.INACTIVE
         });
 

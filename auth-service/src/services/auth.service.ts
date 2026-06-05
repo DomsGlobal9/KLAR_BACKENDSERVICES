@@ -35,7 +35,7 @@ export interface AuthResponse {
         id: string;
         email: string;
         token?: string;
-        roles: string[];
+        roles: string;
         clientType: ClientType;
         status: UserStatus;
         verificationStatus: VerificationStatus;
@@ -120,29 +120,23 @@ export class AuthService {
          */
         const user = new UserModel({
             clientType: ClientType.B2B,
-
             email: businessEmail.toLowerCase(),
             mobile: businessMobile,
-
             passwordHash,
-
-            roles: [Roles.B2B_ADMIN],
+            roles: Roles.B2B_ADMIN,
 
             /**
              * ACTIVE by default
              */
             status: UserStatus.ACTIVE,
-
             businessProfile: {
                 businessName,
                 businessType,
                 contactPerson,
                 businessEmail,
                 businessMobile,
-
                 gstNumber: data.gstNumber,
                 panNumber: data.panNumber,
-
                 address: data.address,
                 city: data.city,
                 country: data.country,
@@ -171,12 +165,9 @@ export class AuthService {
          */
         const wallet = new Wallet({
             userId: user._id,
-
             balance: 0,
             currency: "INR",
-
             status: WalletStatus.ACTIVE,
-
             emailAlerts: true,
             smsAlerts: false,
         });
@@ -257,7 +248,6 @@ export class AuthService {
         };
     }
 
-    // Optional: Add refresh token functionality
     public async refreshToken(refreshToken: string): Promise<AuthResponse> {
         if (!refreshToken) {
             throw new UnauthorizedError('Refresh token is required');

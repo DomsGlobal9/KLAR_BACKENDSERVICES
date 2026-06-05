@@ -6,7 +6,7 @@ export interface TokenPayload {
   userId: string;
   email: string;
   clientType: string;
-  roles: string[];
+  roles: string;
 }
 
 export class JWTUtil {

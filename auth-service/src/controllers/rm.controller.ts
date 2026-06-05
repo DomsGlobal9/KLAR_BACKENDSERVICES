@@ -104,7 +104,6 @@ export const verifyCreateRMOTP = async (
 ) => {
 
     try {
-
         const {
             memberName,
             email,

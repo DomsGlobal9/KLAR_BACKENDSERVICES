@@ -60,6 +60,7 @@ export const requestSignupOTP = async (
       message: "OTP generated successfully",
       otp: otpDoc.otp,
     });
+
   } catch (err) {
     next(err);
   }
@@ -77,10 +78,8 @@ export const verifySignupOTP = async (
       contactPerson,
       businessMobile,
       password,
-
       gstNumber,
       panNumber,
-
       address,
       city,
       country,
@@ -109,15 +108,11 @@ export const verifySignupOTP = async (
       businessName,
       businessType,
       contactPerson,
-
       businessEmail: email.toLowerCase(),
       businessMobile,
-
       password,
-
       gstNumber,
       panNumber,
-
       address,
       city,
       country,
