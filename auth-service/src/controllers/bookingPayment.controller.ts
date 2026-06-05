@@ -6,49 +6,6 @@ import { BadRequestError } from "../errors/AppError";
 
 export class BookingPaymentController {
 
-    static async pay(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-        console.log("******************** Entered Here in AUTH-BOOKING-PAYMENT-CONTROLLER");
-        try {
-            if (!req.user) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Unauthorized",
-                });
-            }
-
-            const { bookingId, totalPrice } = req.body;
-
-            if (!bookingId) {
-                throw new BadRequestError("Booking ID is required");
-            }
-
-            if (!totalPrice || totalPrice <= 0) {
-                throw new BadRequestError("Invalid amount");
-            }
-
-            const result = await BookingPaymentService.payForBooking(
-                new Types.ObjectId(req.user.userId),
-                bookingId,
-                totalPrice
-            );
-
-            res.status(200).json({
-                success: true,
-                message: result.isDuplicate
-                    ? "Payment already processed"
-                    : "Payment successful",
-                data: {
-                    transactionId: result.transaction._id,
-                    amount: result.transaction.amount,
-                    balance: result.wallet.balance,
-                    isDuplicate: result.isDuplicate,
-                },
-            });
-        } catch (err: any) {
-            next(err);
-        }
-    }
-
     static async checkBalance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
             if (!req.user) {
@@ -108,6 +65,52 @@ export class BookingPaymentController {
             //         isAlreadyPaid: result.isAlreadyPaid,
             //     },
             // });
+        } catch (err: any) {
+            next(err);
+        }
+    }
+
+    static async pay(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+
+        try {
+            if (!req.user) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Unauthorized",
+                });
+            }
+
+            const userRole = req.user.roles;
+
+            const { bookingId, totalPrice } = req.body;
+
+            if (!bookingId) {
+                throw new BadRequestError("Booking ID is required");
+            }
+
+            if (!totalPrice || totalPrice <= 0) {
+                throw new BadRequestError("Invalid amount");
+            }            
+
+            const result = await BookingPaymentService.payForBooking(
+                new Types.ObjectId(req.user.userId),
+                userRole,
+                bookingId,
+                totalPrice
+            );
+
+            res.status(200).json({
+                success: true,
+                message: result.isDuplicate
+                    ? "Payment already processed"
+                    : "Payment successful",
+                data: {
+                    transactionId: result.transaction?._id,
+                    amount: result.transaction?.amount,
+                    balance: result.wallet?.balance,
+                    isDuplicate: result.isDuplicate,
+                },
+            });
         } catch (err: any) {
             next(err);
         }

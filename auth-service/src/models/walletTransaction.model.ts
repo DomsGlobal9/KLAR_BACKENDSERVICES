@@ -14,7 +14,7 @@ const walletTransactionSchema = new Schema(
         },
         type: {
             type: String,
-            enum: ["TOP_UP", "DEBIT", "REFUND", "WITHDRAW"],
+            enum: ["TOP_UP", "DEBIT", "REFUND", "WITHDRAW", "CREDIT"],
             required: true,
         },
         direction: {

@@ -42,7 +42,15 @@ export class WalletService {
     ) {
         const wallet = await Wallet.findById(walletId);
 
-        if (!wallet || wallet.balance < amount) {
+        if (!wallet) {
+            throw new Error("Wallet not found");
+        }
+
+        if (wallet.balance == null) {
+            throw new Error("Wallet balance is not available");
+        }
+
+        if (wallet.balance < amount) {
             throw new Error("Insufficient wallet balance");
         }
 

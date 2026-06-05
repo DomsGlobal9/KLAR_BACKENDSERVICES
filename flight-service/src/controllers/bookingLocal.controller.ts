@@ -264,33 +264,33 @@ class BookingLocalController {
             }
 
             // Check wallet balance first
-            const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
+            // const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
             // If balance check failed or insufficient balance
-            if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
-                return res.status(400).json({
-                    success: false,
-                    message: balanceCheck.message,
-                    data: {
-                        currentBalance: balanceCheck.currentBalance,
-                        requiredAmount: balanceCheck.requiredAmount,
-                        shortfallAmount: balanceCheck.shortfallAmount,
-                        isAlreadyPaid: balanceCheck.isAlreadyPaid
-                    }
-                });
-            }
+            // if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
+            //     return res.status(400).json({
+            //         success: false,
+            //         message: balanceCheck.message,
+            //         data: {
+            //             currentBalance: balanceCheck.currentBalance,
+            //             requiredAmount: balanceCheck.requiredAmount,
+            //             shortfallAmount: balanceCheck.shortfallAmount,
+            //             isAlreadyPaid: balanceCheck.isAlreadyPaid
+            //         }
+            //     });
+            // }
 
             // If already paid, return appropriate response
-            if (balanceCheck.isAlreadyPaid) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Booking already paid",
-                    data: {
-                        bookingId,
-                        isAlreadyPaid: true
-                    }
-                });
-            }
+            // if (balanceCheck.isAlreadyPaid) {
+            //     return res.status(400).json({
+            //         success: false,
+            //         message: "Booking already paid",
+            //         data: {
+            //             bookingId,
+            //             isAlreadyPaid: true
+            //         }
+            //     });
+            // }
 
             // Proceed with booking only if balance is sufficient
             const result = await BookingService.updateAndTriggerBooking({

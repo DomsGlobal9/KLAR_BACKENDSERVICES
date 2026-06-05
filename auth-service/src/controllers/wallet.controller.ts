@@ -133,8 +133,14 @@ export class WalletController {
                 throw new BadRequestError("Wallet is blocked");
             }
 
+            if (wallet.balance == null) {
+                throw new BadRequestError('Wallet balance is not available');
+            }
+
             if (wallet.balance < amount) {
-                throw new BadRequestError(`Insufficient balance. Available: ${wallet.balance}`);
+                throw new BadRequestError(
+                    `Insufficient balance. Available: ${wallet.balance}`
+                );
             }
 
             const transaction = await WalletService.debit(
