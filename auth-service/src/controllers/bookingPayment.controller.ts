@@ -151,7 +151,6 @@
 
 
 
-
 import { Response, NextFunction } from "express";
 import { Types } from "mongoose";
 import { AuthenticatedRequest } from "../middlewares/authentication.middleware";
@@ -229,24 +228,6 @@ export class BookingPaymentController {
                 Number(totalPrice)
             );
 
-            if (!result.hasSufficientBalance) {
-                return res.status(400).json({
-                    success: false,
-                    message: result.isAlreadyPaid
-                        ? "Booking already paid"
-                        : `Insufficient wallet balance.\nRequired: ${result.requiredAmount}.\nAvailable: ${result.currentBalance}.\nShortfall: ${result.shortfallAmount}`,
-                    data: {
-                        hasSufficientBalance: result.hasSufficientBalance,
-                        currentBalance: result.currentBalance,
-                        requiredAmount: result.requiredAmount,
-                        shortfallAmount: result.shortfallAmount,
-                        bookingId: result.bookingId,
-                        isAlreadyPaid: result.isAlreadyPaid,
-                        walletUsed: result.walletUsed,
-                    },
-                });
-            }
-
             return res.status(200).json({
                 success: true,
                 message: "Sufficient balance available for booking payment",
@@ -261,7 +242,7 @@ export class BookingPaymentController {
                 },
             });
         } catch (err: any) {
-            next(err);
+            next(err); // Catching thrown explicit balance errors to route through your AppError handler
         }
     }
 }

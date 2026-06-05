@@ -121,8 +121,6 @@
 
 
 
-
-
 import { Types } from "mongoose";
 import { BookingPaymentRepository } from "../repositories/bookingPayment.repository";
 import { BadRequestError, NotFoundError } from "../errors/AppError";
@@ -182,7 +180,13 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        // 1. Check for existing duplicate payment entry first
+        // 1. Fetch user document
+        const userDoc = await BookingPaymentRepository.getUserDocumentById(userId);
+        if (!userDoc) {
+            throw new NotFoundError("User account document not found");
+        }
+
+        // 2. Check for duplicate payments
         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
         if (existingPayment) {
             return {
@@ -196,36 +200,34 @@ export class BookingPaymentService {
             };
         }
 
-        // 2. Fetch the target wallet matching this user identity
-        let activeWallet = await BookingPaymentRepository.getWallet(userId);
+        // 3. Evaluate matching entity types
+        const isChildCompany = userDoc.roles === "B2B_ADMIN" && userDoc.businessProfile && userDoc.createdBy;
+        const isParentRM = userDoc.roles === "RM" && userDoc.createdBy;
 
-        if (!activeWallet) {
-            throw new NotFoundError("Wallet configuration not found for this user context");
-        }
+        if (isChildCompany) {
+            // --- CHILD COMPANY VALIDATION ---
+            const childWallet = await BookingPaymentRepository.getWallet(userDoc._id);
+            if (!childWallet) throw new NotFoundError("Child company wallet not found");
 
-        // 3. Evaluate balance criteria
-        if (activeWallet.balance >= totalPrice) {
-            return {
-                hasSufficientBalance: true,
-                currentBalance: activeWallet.balance,
-                requiredAmount: totalPrice,
-                shortfallAmount: 0,
-                bookingId,
-                isAlreadyPaid: false,
-                walletUsed: "PRIMARY",
-            };
-        }
+            // Option A: Child has enough funds
+            if (childWallet.balance >= totalPrice) {
+                return {
+                    hasSufficientBalance: true,
+                    currentBalance: childWallet.balance,
+                    requiredAmount: totalPrice,
+                    shortfallAmount: 0,
+                    bookingId,
+                    isAlreadyPaid: false,
+                    walletUsed: "CHILD",
+                };
+            }
 
-        // 4. Fallback checking: If primary wallet lacks funds, verify if a parent creator fallback wallet exists
-        // (Assuming your hierarchical wallet schema marks relational sub-accounts or fallback fields)
-        if ((activeWallet as any).createdBy || (activeWallet as any).parentWalletId) {
-            const parentQuery = (activeWallet as any).createdBy 
-                ? { userId: new Types.ObjectId((activeWallet as any).createdBy) }
-                : { _id: new Types.ObjectId((activeWallet as any).parentWalletId) };
+            // Option B: Fallback to Parent wallet
+            const parentId = new Types.ObjectId(userDoc.createdBy);
+            const parentWallet = await BookingPaymentRepository.getWallet(parentId);
+            if (!parentWallet) throw new NotFoundError("Parent company wallet not found");
 
-            const parentWallet = await BookingPaymentRepository.findWallet(parentQuery);
-
-            if (parentWallet && parentWallet.balance >= totalPrice) {
+            if (parentWallet.balance >= totalPrice) {
                 return {
                     hasSufficientBalance: true,
                     currentBalance: parentWallet.balance,
@@ -236,17 +238,53 @@ export class BookingPaymentService {
                     walletUsed: "PARENT_FALLBACK",
                 };
             }
-        }
 
-        // Default shortfall response if all paths fall short
-        return {
-            hasSufficientBalance: false,
-            currentBalance: activeWallet.balance,
-            requiredAmount: totalPrice,
-            shortfallAmount: totalPrice - activeWallet.balance,
-            bookingId,
-            isAlreadyPaid: false,
-            walletUsed: "INSUFFICIENT_FUNDS",
-        };
+            // Neither company has enough money -> Throw Error
+            throw new BadRequestError(
+                `Insufficient funds in both Child and Parent wallets. Total required: ${totalPrice}. Child Balance: ${childWallet.balance}, Parent Fallback Balance: ${parentWallet.balance}`
+            );
+
+        } else if (isParentRM) {
+            // --- PARENT RM VALIDATION ---
+            const parentCompanyId = new Types.ObjectId(userDoc.createdBy);
+            const parentWallet = await BookingPaymentRepository.getWallet(parentCompanyId);
+            if (!parentWallet) throw new NotFoundError("Parent company wallet not found for this RM");
+
+            if (parentWallet.balance >= totalPrice) {
+                return {
+                    hasSufficientBalance: true,
+                    currentBalance: parentWallet.balance,
+                    requiredAmount: totalPrice,
+                    shortfallAmount: 0,
+                    bookingId,
+                    isAlreadyPaid: false,
+                    walletUsed: "PARENT",
+                };
+            }
+
+            // Parent wallet lacks money -> Throw Error
+            throw new BadRequestError(
+                `Insufficient balance in Parent wallet for this RM booking. Required: ${totalPrice}, Available: ${parentWallet.balance}`
+            );
+
+        } else {
+            // --- FALLBACK FOR PARENT ADMINS ---
+            const standardWallet = await BookingPaymentRepository.getWallet(userDoc._id);
+            if (!standardWallet) throw new NotFoundError("Wallet profile context not found");
+
+            if (standardWallet.balance >= totalPrice) {
+                return {
+                    hasSufficientBalance: true,
+                    currentBalance: standardWallet.balance,
+                    requiredAmount: totalPrice,
+                    shortfallAmount: 0,
+                    bookingId,
+                    isAlreadyPaid: false,
+                    walletUsed: "PARENT_ADMIN",
+                };
+            }
+
+            throw new BadRequestError(`Insufficient balance. Required: ${totalPrice}, Available: ${standardWallet.balance}`);
+        }
     }
 }

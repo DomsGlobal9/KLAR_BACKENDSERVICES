@@ -69,17 +69,14 @@
 
 
 
-
-
+import mongoose, { Types } from "mongoose";
 import { Wallet } from "../models/wallet.model";
 import { WalletTransaction } from "../models/walletTransaction.model";
-import { Types } from "mongoose";
 
 export class BookingPaymentRepository {
-
-    // Flexible finder to look up wallets by any property query block
-    static async findWallet(query: object) {
-        return Wallet.findOne(query);
+    
+    static async getUserDocumentById(userId: Types.ObjectId): Promise<any> {
+        return mongoose.connection.db?.collection("users").findOne({ _id: userId });
     }
 
     static async getWallet(userId: Types.ObjectId) {
