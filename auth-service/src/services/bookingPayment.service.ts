@@ -15,6 +15,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleRMBalanceCheck] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
+
         const parentAdminId = user.createdBy;
         if (!parentAdminId) {
             throw new BadRequestError("RM is not associated with any B2B_ADMIN");
@@ -42,6 +44,8 @@ export class BookingPaymentService {
         const hasSufficientBalance = parentWallet.balance >= totalPrice;
         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - parentWallet.balance;
 
+        console.log("[handleRMBalanceCheck] Result - hasSufficientBalance:", hasSufficientBalance, "currentBalance:", parentWallet.balance);
+
         return {
             hasSufficientBalance,
             currentBalance: parentWallet.balance,
@@ -58,10 +62,13 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleB2BAdminBalanceCheck] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
+
         const wallet = await BookingPaymentRepository.getWallet(userId);
         if (!wallet) throw new NotFoundError("Wallet not found");
 
         const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
+        console.log("[handleB2BAdminBalanceCheck] isSubCompany:", isSubCompany);
 
         if (isSubCompany) {
             return await this.handleSubCompanyBalanceCheck(userId, user, wallet, bookingId, totalPrice);
@@ -77,6 +84,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleSubCompanyBalanceCheck] Start - userId:", userId, "subCompanyBalance:", subCompanyWallet.balance, "totalPrice:", totalPrice);
+
         const parentAdminId = user.createdBy;
         const parentAdmin = await UserModel.findById(parentAdminId);
 
@@ -104,8 +113,10 @@ export class BookingPaymentService {
 
         // Check if sub-company has sufficient balance on its own
         const hasSubCompanySufficientBalance = subCompanyWallet.balance >= totalPrice;
+        console.log("[handleSubCompanyBalanceCheck] hasSubCompanySufficientBalance:", hasSubCompanySufficientBalance);
 
         if (hasSubCompanySufficientBalance) {
+            console.log("[handleSubCompanyBalanceCheck] Sub-company has sufficient balance alone");
             return {
                 hasSufficientBalance: true,
                 currentBalance: subCompanyWallet.balance,
@@ -116,9 +127,11 @@ export class BookingPaymentService {
             };
         }
 
-        // Sub-company doesn't have enough, check if parent has enough
+        // Sub-company has 0 or negative balance, check parent wallet only
         const hasParentSufficientBalance = parentWallet.balance >= totalPrice;
-        const shortfallAmount = totalPrice - subCompanyWallet.balance;
+        const shortfallAmount = hasParentSufficientBalance ? 0 : totalPrice - parentWallet.balance;
+
+        console.log("[handleSubCompanyBalanceCheck] hasParentSufficientBalance:", hasParentSufficientBalance);
 
         return {
             hasSufficientBalance: hasParentSufficientBalance,
@@ -142,6 +155,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleParentAdminBalanceCheck] Start - userId:", userId, "balance:", wallet.balance, "totalPrice:", totalPrice);
+
         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
         const isAlreadyPaid = !!existingPayment;
 
@@ -151,6 +166,8 @@ export class BookingPaymentService {
 
         const hasSufficientBalance = wallet.balance >= totalPrice;
         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - wallet.balance;
+
+        console.log("[handleParentAdminBalanceCheck] hasSufficientBalance:", hasSufficientBalance);
 
         return {
             hasSufficientBalance,
@@ -168,6 +185,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleRMPayment] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
+
         const parentAdminId = user.createdBy;
         if (!parentAdminId) {
             throw new BadRequestError("RM is not associated with any B2B_ADMIN");
@@ -217,6 +236,8 @@ export class BookingPaymentService {
             status: "SUCCESS",
         });
 
+        console.log("[handleRMPayment] Payment successful - newBalance:", updatedParentWallet.balance);
+
         return {
             transaction: transaction,
             wallet: updatedParentWallet,
@@ -230,11 +251,13 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        const wallet = await BookingPaymentRepository.getWallet(userId);
+        console.log("[handleB2BAdminPayment] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
 
+        const wallet = await BookingPaymentRepository.getWallet(userId);
         if (!wallet) throw new NotFoundError("Wallet not found");
 
         const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
+        console.log("[handleB2BAdminPayment] isSubCompany:", isSubCompany);
 
         if (isSubCompany) {
             return await this.handleSubCompanyPayment(userId, user, wallet, bookingId, totalPrice);
@@ -250,6 +273,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleSubCompanyPayment] Start - userId:", userId, "subCompanyBalance:", subCompanyWallet.balance, "totalPrice:", totalPrice);
+
         const parentAdminId = user.createdBy;
         const parentAdmin = await UserModel.findById(parentAdminId);
 
@@ -274,9 +299,11 @@ export class BookingPaymentService {
 
         // Check if sub-company has sufficient balance
         const hasSufficientBalance = subCompanyWallet.balance >= totalPrice;
+        console.log("[handleSubCompanyPayment] hasSufficientBalance:", hasSufficientBalance);
 
         if (hasSufficientBalance) {
-            // Simple deduction from sub-company only
+            console.log("[handleSubCompanyPayment] Sub-company has sufficient balance, deducting only from sub-company");
+
             const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
                 subCompanyWallet._id,
                 totalPrice
@@ -306,19 +333,18 @@ export class BookingPaymentService {
             };
         }
 
-        // Insufficient balance - need parent intervention with negative balance for sub-company
-        const subCompanyBalance = subCompanyWallet.balance;
-        const remainingAmount = totalPrice - subCompanyBalance;
+        // Sub-company has 0 or negative balance - deduct from parent only
+        console.log("[handleSubCompanyPayment] Sub-company has 0 or negative balance, deducting from parent only");
+        console.log("[handleSubCompanyPayment] Parent wallet balance:", parentWallet.balance);
 
-        // Check if parent has enough balance for the remaining amount
-        if (parentWallet.balance < remainingAmount) {
+        // Check if parent has enough balance
+        if (parentWallet.balance < totalPrice) {
             throw new BadRequestError(
-                `Insufficient combined balance. Sub-company has: ${subCompanyBalance}, ` +
-                `Parent has: ${parentWallet.balance}. Need: ${totalPrice}`
+                `Insufficient balance in parent wallet. Available: ${parentWallet.balance}, Required: ${totalPrice}`
             );
         }
 
-        // Step 1: Deduct FULL amount from parent wallet
+        // Deduct FULL amount from parent wallet
         const updatedParentWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
             parentWallet._id,
             totalPrice
@@ -337,14 +363,14 @@ export class BookingPaymentService {
             paymentMethod: "WALLET",
             referenceType: "BOOKING",
             referenceId: bookingId,
-            description: `Booking payment for ${bookingId} (parent covering full amount)`,
+            description: `Booking payment for ${bookingId} (paid by parent admin)`,
             status: "SUCCESS",
         });
 
-        // Step 2: Deduct sub-company's ENTIRE balance (will go to negative if not enough)
+        // Deduct same amount from sub-company (making it more negative)
         const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
             subCompanyWallet._id,
-            subCompanyBalance
+            totalPrice
         );
 
         if (!updatedSubCompanyWallet) {
@@ -358,60 +384,27 @@ export class BookingPaymentService {
             userId: userId,
             type: "DEBIT",
             direction: "DEBIT",
-            amount: subCompanyBalance,
+            amount: totalPrice,
             paymentMethod: "WALLET",
             referenceType: "BOOKING",
             referenceId: bookingId,
-            description: `Booking payment for ${bookingId} (sub-company entire balance deducted)`,
+            description: `Booking payment for ${bookingId} (sub-company debt to parent)`,
             status: "SUCCESS",
         });
 
-        // Step 3: Calculate negative balance for sub-company
-        const negativeBalance = subCompanyBalance - totalPrice;
-
-        // Step 4: Reimburse parent with sub-company's deducted amount
-        const reimbursedParentWallet = await BookingPaymentRepository.addBalance(
-            parentWallet._id,
-            subCompanyBalance
-        );
-
-        if (!reimbursedParentWallet) {
-            throw new BadRequestError("Failed to reimburse parent wallet");
-        }
-
-        const reimbursementTransaction = await BookingPaymentRepository.createTransaction({
-            walletId: parentWallet._id,
-            userId: parentAdminId,
-            type: "CREDIT",
-            direction: "CREDIT",
-            amount: subCompanyBalance,
-            paymentMethod: "WALLET",
-            referenceType: "REIMBURSEMENT",
-            referenceId: bookingId,
-            description: `Reimbursement from sub-company ${userId} for booking ${bookingId}`,
-            status: "SUCCESS",
-        });
-
-        // Step 5: Set negative balance on sub-company wallet
-        const finalSubCompanyWallet = await BookingPaymentRepository.setBalance(
-            subCompanyWallet._id,
-            negativeBalance
-        );
+        console.log("[handleSubCompanyPayment] Payment successful - Parent newBalance:", updatedParentWallet.balance, "SubCompany newBalance:", updatedSubCompanyWallet.balance);
 
         return {
             transaction: parentTransaction,
-            wallet: reimbursedParentWallet,
+            wallet: updatedParentWallet,
             isDuplicate: false,
             hierarchicalDetails: {
                 subCompanyPreviousBalance: subCompanyWallet.balance,
-                subCompanyDeducted: subCompanyBalance,
-                subCompanyNegativeBalance: negativeBalance,
-                subCompanyCurrentBalance: negativeBalance,
+                subCompanyDeducted: totalPrice,
+                subCompanyNewBalance: updatedSubCompanyWallet.balance,
                 parentPreviousBalance: parentWallet.balance,
                 parentDeducted: totalPrice,
-                parentReimbursed: subCompanyBalance,
-                parentNetDeducted: totalPrice - subCompanyBalance,
-                parentCurrentBalance: reimbursedParentWallet.balance,
+                parentNewBalance: updatedParentWallet.balance,
             },
         };
     }
@@ -422,8 +415,11 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[handleParentAdminPayment] Start - userId:", userId, "balance:", wallet.balance, "totalPrice:", totalPrice);
+
         const existing = await BookingPaymentRepository.checkExistingPayment(bookingId);
         if (existing) {
+            console.log("[handleParentAdminPayment] Duplicate payment detected");
             return {
                 transaction: existing,
                 wallet: wallet,
@@ -455,6 +451,8 @@ export class BookingPaymentService {
             status: "SUCCESS",
         });
 
+        console.log("[handleParentAdminPayment] Payment successful - newBalance:", updatedWallet.balance);
+
         return {
             transaction: transaction,
             wallet: updatedWallet,
@@ -471,10 +469,13 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[checkWalletBalance] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
+
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
         const userRole = user.roles;
+        console.log("[checkWalletBalance] userRole:", userRole);
 
         if (userRole === "RM") {
             return await this.handleRMBalanceCheck(userId, user, bookingId, totalPrice);
@@ -485,6 +486,7 @@ export class BookingPaymentService {
         }
 
         // Fallback for other roles
+        console.log("[checkWalletBalance] Fallback for other roles");
         const wallet = await BookingPaymentRepository.getWallet(userId);
         if (!wallet) {
             throw new NotFoundError("Wallet not found");
@@ -500,6 +502,8 @@ export class BookingPaymentService {
         const balance = wallet.balance;
         const hasSufficientBalance = balance >= totalPrice;
         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - balance;
+
+        console.log("[checkWalletBalance] Result - hasSufficientBalance:", hasSufficientBalance, "currentBalance:", balance);
 
         return {
             hasSufficientBalance,
@@ -517,6 +521,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
+        console.log("[payForBooking] Start - userId:", userId, "userRole:", userRole, "bookingId:", bookingId, "totalPrice:", totalPrice);
+
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
@@ -531,6 +537,25 @@ export class BookingPaymentService {
         throw new BadRequestError(`Unsupported role: ${userRole}`);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // import { Types } from "mongoose";
 // import { BookingPaymentRepository } from "../repositories/bookingPayment.repository";
