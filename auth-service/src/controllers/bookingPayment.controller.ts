@@ -39,15 +39,16 @@ export class BookingPaymentController {
                     success: false,
                     message: result.isAlreadyPaid
                         ? "Booking already paid"
-                        : `Insufficient wallet balance.\nRequired: ${result.requiredAmount}.\nAvailable: ${result.currentBalance}.\nShortfall: ${result.shortfallAmount}`,
-                    data: {
-                        hasSufficientBalance: result.hasSufficientBalance,
-                        currentBalance: result.currentBalance,
-                        requiredAmount: result.requiredAmount,
-                        shortfallAmount: result.shortfallAmount,
-                        bookingId: result.bookingId,
-                        isAlreadyPaid: result.isAlreadyPaid,
-                    },
+                        // : `Insufficient wallet balance.\nRequired: ${result.requiredAmount}.\nAvailable: ${result.currentBalance}.\nShortfall: ${result.shortfallAmount}`,
+                        : `Insufficient wallet balance`,
+                    // data: {
+                    //     hasSufficientBalance: result.hasSufficientBalance,
+                    //     currentBalance: result.currentBalance,
+                    //     requiredAmount: result.requiredAmount,
+                    //     shortfallAmount: result.shortfallAmount,
+                    //     bookingId: result.bookingId,
+                    //     isAlreadyPaid: result.isAlreadyPaid,
+                    // },
                 });
             }
 
