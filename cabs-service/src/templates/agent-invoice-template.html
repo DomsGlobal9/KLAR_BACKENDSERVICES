@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Agent Financial Statement Invoice</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #2c3e50;
+            background-color: #f4f6f9;
+            padding: 22mm 20mm;
+            font-size: 11pt;
+            line-height: 1.5;
+        }
+        .main-container { width: 100%; max-width: 850px; margin: 0 auto; }
+        
+        /* Premium Branding Header */
+        .brand-header-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .brand-header-table td { vertical-align: middle; }
+        .logo-img { height: 52px; max-width: 220px; object-fit: contain; display: block; }
+        
+        /* Extended Top Right B2B Pricing Panel Header Block */
+        .header-meta-box { text-align: right; line-height: 1.4; }
+        .header-meta-label { font-size: 8.5pt; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+        .header-meta-price-row { font-size: 10pt; color: #475569; font-weight: 500; margin-bottom: 3px; }
+        .header-meta-price-row strong { color: #0f294d; font-weight: 600; }
+        .header-meta-value-huge { font-size: 21pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; margin-top: 4px; }
+
+        /* Full Width Status Container Card Banner */
+        .status-banner { 
+            background: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 14px; 
+            padding: 22px 26px; 
+            margin-bottom: 25px; 
+            display: table; 
+            width: 100%;
+        }
+        .status-cell-left { display: table-cell; vertical-align: middle; }
+        .status-cell-right { display: table-cell; text-align: right; vertical-align: middle; }
+        
+        .statement-icon-circle {
+            display: inline-block;
+            width: 44px;
+            height: 44px;
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 44px;
+            font-size: 18pt;
+            font-weight: bold;
+            margin-right: 16px;
+            vertical-align: middle;
+        }
+        .header-text-group { display: inline-block; vertical-align: middle; }
+        .main-title { font-size: 20pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; }
+        .sub-res-id { font-size: 11pt; color: #64748b; margin-top: 2px; }
+        
+        .pill-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 8.5pt; font-weight: 700; text-transform: uppercase; margin-left: 8px; }
+        .badge-pending { background-color: #fff7ed; color: #c2410c; }
+        .badge-confirmed { background-color: #e6f7ed; color: #268e4c; }
+        .pill-b2b-type { background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+        /* 100% Full-Width Block Component Cards layout framework matches client template */
+        .full-width-card { 
+            background-color: #ffffff; 
+            border-radius: 14px; 
+            border: 1px solid #e2e8f0; 
+            padding: 26px; 
+            margin-bottom: 25px;
+            width: 100%;
+        }
+        
+        .section-label { font-size: 10pt; font-weight: 700; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 20px; letter-spacing: 0.5px; }
+        
+        /* Multi-Column Layout Data Tables */
+        .data-grid-table { width: 100%; border-collapse: collapse; }
+        .data-grid-table td { width: 33.33%; padding: 4px 15px 4px 0; vertical-align: top; }
+        .data-grid-table td:last-child { padding-right: 0; }
+        
+        .item-label { font-size: 9pt; color: #64748b; font-weight: 500; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .item-value { font-size: 11.5pt; font-weight: 600; color: #0f294d; }
+        
+        .badge-feature { background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 6px; font-size: 8.5pt; font-weight: bold; margin-right: 6px; text-transform: uppercase; }
+
+        /* Double Column Horizontal Summary workspace structure links */
+        .split-summary-table { width: 100%; border-collapse: collapse; }
+        .split-summary-table td { width: 50%; vertical-align: top; }
+        
+        .passenger-info-box { line-height: 1.5; }
+        .passenger-name { font-size: 13pt; font-weight: 700; color: #0f294d; margin-bottom: 4px; }
+        .passenger-meta { font-size: 10.5pt; color: #475569; margin-bottom: 2px; }
+
+        /* Sub Ledger Internal Grid */
+        .internal-ledger-list { width: 100%; border-collapse: collapse; }
+        .internal-ledger-list td { padding: 6px 0; font-size: 10.5pt; border-bottom: 1px dashed #f1f5f9; color: #475569; }
+        .internal-ledger-list tr:last-child td { border-bottom: none; }
+        .ledger-bold-val { text-align: right; font-weight: 600; color: #0f294d; }
+
+        .fare-calculation-box { text-align: right; height: 100%; }
+        .amount-due-label { font-size: 11pt; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+        .amount-due-numeric { font-size: 26pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; }
+
+        .policy-list { padding-left: 20px; font-size: 10.5pt; color: #475569; }
+        .policy-list li { margin-bottom: 8px; line-height: 1.5; }
+
+        .assistance-container { background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #e2e8f0; margin-top: 15px; display: table; width: 100%; }
+        .assistance-cell { display: table-cell; width: 50%; vertical-align: top; }
+
+        .footer { margin-top: 45px; text-align: center; font-size: 9.5pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="main-container">
+
+    <table class="brand-header-table">
+        <tr>
+            <td>
+                <img src="{{logoSrc}}" alt="Klar Travels Logo" class="logo-img" />
+            </td>
+            <td class="header-meta-box">
+                <div class="header-meta-label">Booking Reference</div>
+                <div style="font-weight: 700; color:#0f294d; font-size:12pt; margin-bottom:10px; letter-spacing: 0.3px;">{{bookingId}}</div>
+                
+                <div class="header-meta-price-row">Net Supplier Cost: <strong>₹{{netPrice}}</strong></div>
+                <div class="header-meta-price-row">Taxes & GST Fees: <strong>₹{{totalTax}}</strong></div>
+                <div class="header-meta-price-row">Configured Markup: <strong>₹{{agentMarkup}}</strong></div>
+                
+                <div class="header-meta-label" style="margin-top: 8px;">Total Amount Paid</div>
+                <div class="header-meta-value-huge">₹{{grossAmount}}</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="status-banner">
+        <div class="status-cell-left">
+            <div class="statement-icon-circle">📋</div>
+            <div class="header-text-group">
+                <h1 class="main-title">{{templateHeaderTitle}}</h1>
+                <div class="sub-res-id">Statement Booking Reference ID: <strong>{{bookingId}}</strong></div>
+            </div>
+        </div>
+        <div class="status-cell-right">
+            <span class="pill-badge {{statusBadgeClass}}">{{status}}</span>
+            <span class="pill-badge pill-b2b-type">B2B Financial View</span>
+        </div>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">🏢 Agency & Account Context</div>
+        <table class="data-grid-table">
+            <tr>
+                <td>
+                    <div class="item-label">Agency Partner</div>
+                    <div class="item-value">{{agencyName}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Channel Email Address</div>
+                    <div class="item-value">{{agencyEmail}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Account Representative</div>
+                    <div class="item-value">{{passengerName}}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">📍 Route Logistics Parameters</div>
+        <table class="data-grid-table">
+            <tr>
+                <td style="width: 40%;">
+                    <div class="item-label">Pickup Point Location</div>
+                    <div class="item-value">{{sourceAddress}}</div>
+                </td>
+                <td style="width: 40%;">
+                    <div class="item-label">Dropoff Destination Point</div>
+                    <div class="item-value">{{destAddress}}</div>
+                </td>
+                <td style="width: 20%;">
+                    <div class="item-label">Parameters Schedule</div>
+                    <div class="item-value">📅 {{pickupDate}}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">🚗 Vehicle Logistics Profile</div>
+        <table class="data-grid-table">
+            <tr>
+                <td>
+                    <div class="item-label">Vehicle Classification</div>
+                    <div class="item-value">{{vehicleClass}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Estimated Route Parameters</div>
+                    <div class="item-value">{{distance}} / {{duration}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Amenities Profile</div>
+                    <div class="item-value" style="margin-top: 3px;"><span class="badge-feature">WIFI</span><span class="badge-feature">WATER</span></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="full-width-card" style="border: 1px solid #cbd5e1; background-color: #ffffff;">
+        <table class="split-summary-table">
+            <tr>
+                <td style="padding-right: 25px;">
+                    <div class="section-label" style="border-bottom: none; margin-bottom: 12px; padding-bottom: 0;">👥 Passenger Details</div>
+                    <div class="passenger-info-box">
+                        <div class="passenger-name">{{passengerName}}</div>
+                        <div class="passenger-meta">📞 Mobile contact: {{passengerPhone}}</div>
+                        <div class="passenger-meta">✉ Email: {{passengerEmail}}</div>
+                    </div>
+                </td>
+                <td style="border-left: 1px dashed #cbd5e1; padding-left: 25px;">
+                    <div class="section-label" style="border-bottom: none; margin-bottom: 12px; padding-bottom: 0;">📋 Ledger Financial Statement</div>
+                    <table class="internal-ledger-list">
+                        <tr>
+                            <td>Net Supplier Cost (Base price)</td>
+                            <td class="ledger-bold-val">₹{{netPrice}}</td>
+                        </tr>
+                        <tr>
+                            <td>Taxes & Service Fees (GST)</td>
+                            <td class="ledger-bold-val">₹{{totalTax}}</td>
+                        </tr>
+                        <tr>
+                            <td>Agent Configured Custom Markup Price</td>
+                            <td class="ledger-bold-val">₹{{agentMarkup}}</td>
+                        </tr>
+                    </table>
+                    <div class="fare-calculation-box">
+                        <div class="amount-due-label">Total Amount Paid</div>
+                        <div class="amount-due-numeric">₹{{grossAmount}}</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">📜 Cancellation & Terms Profile</div>
+        <ul class="policy-list">
+            {{dynamicTerms}}
+        </ul>
+
+        <div class="section-label" style="margin-top: 22px; margin-bottom: 12px;">📦 Package Inclusions</div>
+        <ul class="policy-list">
+            {{dynamicInclusions}}
+        </ul>
+
+        <div class="section-label" style="margin-top: 22px; margin-bottom: 12px;">🚫 Package Exclusions</div>
+        <ul class="policy-list">
+            {{dynamicExclusions}}
+        </ul>
+
+        <div class="assistance-container">
+            <div class="assistance-cell">
+                <div class="item-label" style="color: #ea580c;">💁 Meet & Greet Assistance</div>
+                <div style="font-weight: 700; color: #0f294d; margin-top: 1px;">{{meetAndGreet}}</div>
+                <div style="font-size: 9.5pt; color: #64748b; margin-top: 2px;">Included Waiting Parameters: <strong>{{waitingTime}}</strong></div>
+            </div>
+            <div class="assistance-cell" style="padding-left: 15px;">
+                <div class="item-label">🧳 Baggage Policy Rule</div>
+                <ul class="policy-list" style="padding-left: 0; list-style-position: inside; margin-bottom: 0; font-size: 10pt; color: #334155;">
+                    {{dynamicBaggage}}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        {{helpline}}<br>
+        <span style="font-size: 8.5pt; color:#cbd5e1; margin-top: 8px; display:inline-block;">Confidential Document Statement — Internal B2B Channel Affiliate Records Ledger Audit Only. Generated automatically.</span>
+    </div>
+
+</div>
+</body>
+</html>
