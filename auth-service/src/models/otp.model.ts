@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export enum OTPType {
     SIGNUP = "SIGNUP",
     LOGIN = "LOGIN",
+    PASSWORD_RESET = "password_reset"
 }
 
 export interface IOTP extends Document {

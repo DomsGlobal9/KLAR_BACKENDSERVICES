@@ -287,6 +287,17 @@ export class B2CUserRepository {
             { new: true }
         );
     }
+
+    /* =====================================================
+   ADDITIONAL VALIDATION
+===================================================== */
+
+    async getUserWithDetails(email: string): Promise<IUser | null> {
+        return await UserModel.findOne({
+            email: email.toLowerCase(),
+            clientType: ClientType.B2C,
+        }).select('+passwordHash'); // Ensure password hash is included if needed
+    }
 }
 
 export default B2CUserRepository;
