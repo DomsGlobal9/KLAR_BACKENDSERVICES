@@ -50,7 +50,7 @@ export interface SignupResponse {
     status: UserStatus;
 }
 
-class PasswordUtil {
+export class PasswordUtil {
     private static instance: PasswordUtil;
 
     private constructor() { }
@@ -301,6 +301,7 @@ export class AuthService {
             clientType: user.clientType,
             status: user.status,
             verificationStatus: user.verification?.status,
+            createdBy: user.createdBy || '',
         };
     }
 
@@ -345,3 +346,4 @@ export class AuthService {
         };
     }
 }
+
