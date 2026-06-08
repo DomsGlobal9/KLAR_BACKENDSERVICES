@@ -121,15 +121,17 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
-
             const token = this.currentToken;
-
 
             if (!token) {
                 return {
-                    status: 404,
                     success: false,
                     message: "Token missing for wallet balance check",
+                    hasSufficientBalance: false,
+                    currentBalance: 0,
+                    requiredAmount: Number(totalPrice),
+                    shortfallAmount: Number(totalPrice),
+                    isAlreadyPaid: false
                 };
             }
 
@@ -143,16 +145,31 @@ class BookingLocalController {
                 }
             );
 
-
             const walletBalanceCheckResponse = response.data;
 
-            return walletBalanceCheckResponse;
+            console.log("Wallet balance API response:", JSON.stringify(walletBalanceCheckResponse, null, 2));
+
+            return {
+                success: walletBalanceCheckResponse.success,
+                hasSufficientBalance: walletBalanceCheckResponse.data?.hasSufficientBalance || false,
+                currentBalance: walletBalanceCheckResponse.data?.currentBalance || 0,
+                requiredAmount: walletBalanceCheckResponse.data?.requiredAmount || Number(totalPrice),
+                shortfallAmount: walletBalanceCheckResponse.data?.shortfallAmount || Number(totalPrice),
+                isAlreadyPaid: walletBalanceCheckResponse.data?.isAlreadyPaid || false,
+                message: walletBalanceCheckResponse.message
+            };
 
         } catch (error: any) {
+            console.error("Wallet balance check error:", error);
+
             return {
-                status: 400,
                 success: false,
                 message: error.response?.data?.message || error.message || "Wallet balance check failed",
+                hasSufficientBalance: false,
+                currentBalance: 0,
+                requiredAmount: Number(totalPrice),
+                shortfallAmount: Number(totalPrice),
+                isAlreadyPaid: false
             };
         }
     };
@@ -246,7 +263,7 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+            console.log("BOOKING LOCAL STARTED @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
             const {
                 bookingId,
                 travellers,
@@ -263,14 +280,15 @@ class BookingLocalController {
                 });
             }
 
-            // Check wallet balance first
+            console.log("Checking wallet balance @@@@@@@@@@@@@@");
             const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
+            console.log("Balance Check Result:", balanceCheck);
 
-            // If balance check failed or insufficient balance
+            // Check if balance check failed or insufficient balance
             if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
                 return res.status(400).json({
                     success: false,
-                    message: balanceCheck.message,
+                    message: balanceCheck.message || "Insufficient wallet balance",
                     data: {
                         currentBalance: balanceCheck.currentBalance,
                         requiredAmount: balanceCheck.requiredAmount,
@@ -280,7 +298,7 @@ class BookingLocalController {
                 });
             }
 
-            // If already paid, return appropriate response
+            // Check if already paid
             if (balanceCheck.isAlreadyPaid) {
                 return res.status(400).json({
                     success: false,
@@ -292,7 +310,7 @@ class BookingLocalController {
                 });
             }
 
-            // Proceed with booking only if balance is sufficient
+            console.log("Wallet balance sufficient, proceeding with booking update and trigger...");
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
                 travellers,
@@ -311,6 +329,7 @@ class BookingLocalController {
 
             // Deduct wallet after successful booking
             await this.deductWalletBalance(bookingId, totalPrice);
+            console.log("Wallet balance deducted successfully");
 
             return res.status(200).json({
                 success: true,

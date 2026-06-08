@@ -4,8 +4,8 @@ import { authenticateJWT } from "../middlewares/authentication.middleware";
 
 const router = Router();
 
-router.post("/pay", authenticateJWT, BookingPaymentController.pay);
 router.get("/check-balance/:bookingId", authenticateJWT, BookingPaymentController.checkBalance);
+router.post("/pay", authenticateJWT, BookingPaymentController.pay);
 
 
 export default router;

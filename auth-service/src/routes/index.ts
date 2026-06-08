@@ -8,6 +8,7 @@ import bookingRoutes from "./bookingPayment.routes";
 import { Wallet } from "../models/wallet.model";
 import { UserModel } from "../models/user.model";
 import rmRoutes from "./rm.routes";
+import companyRoutes from "./company.routes";
 import b2cAuthRoutes from "./b2cAuth.routes";
 
 const router = Router();
@@ -80,13 +81,15 @@ router.post("/debug/fix-wallet", async (req, res) => {
 
 // ============================================================
 
-router.use("/markup", markupRoutes);
-router.use("/auth/b2c", b2cAuthRoutes);
-router.use("/auth", authRoutes);
-router.use("/admin/verifications", adminRoutes);
-router.use("/wallet", walletRoutes);
-router.use("/dashboard", dashboardRoutes);
-router.use("/book", bookingRoutes);
 router.use("/rm", rmRoutes);
+router.use("/auth", authRoutes);
+router.use("/book", bookingRoutes);
+router.use("/wallet", walletRoutes);
+router.use("/markup", markupRoutes);
+router.use("/company", companyRoutes);
+router.use("/auth/b2c", b2cAuthRoutes);
+router.use("/dashboard", dashboardRoutes);
+router.use("/admin/verifications", adminRoutes);
+
 
 export default router;

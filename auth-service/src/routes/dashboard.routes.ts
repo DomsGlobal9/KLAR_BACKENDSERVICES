@@ -1,4 +1,3 @@
-// routes/dashboard.routes.ts
 import { Router } from "express";
 import { DashboardController } from "../controllers/dashboard.controller";
 import { authenticateJWT } from "../middlewares/authentication.middleware";
