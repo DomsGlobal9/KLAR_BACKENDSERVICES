@@ -41,11 +41,13 @@ const UserSchema = new Schema<IUser>(
             required: true,
             lowercase: true,
             trim: true,
+            unique: true,
         },
 
         mobile: {
             type: String,
             required: true,
+            unique: true,
         },
 
         passwordHash: {
