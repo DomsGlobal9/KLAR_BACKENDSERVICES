@@ -125,6 +125,11 @@ function mapRGHotel(h: any): UnifiedHotel {
     if (imagesList.length > 0) break; // use first room that has images
   }
 
+  if (imagesList.length === 0) {
+    const hotelImgs = h.images ?? h.image ?? h.imageUrl ?? h.hotelImages ?? h.imageURL ?? h.hotelImage ?? [];
+    imagesList = Array.isArray(hotelImgs) ? hotelImgs : (hotelImgs ? [hotelImgs] : []);
+  }
+
   return {
     hotelId: `RG:${h.propertyId}`,
     source: "RG",
