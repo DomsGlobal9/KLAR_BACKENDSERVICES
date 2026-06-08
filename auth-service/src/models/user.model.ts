@@ -50,6 +50,8 @@ export interface IUser extends Document {
     wallet?: any;
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
+    resetPasswordToken?: string;
+    resetPasswordExpires?: Date;
 
     /* TIMESTAMPS */
     createdAt: Date;
@@ -178,6 +180,15 @@ const UserSchema = new Schema<IUser>(
 
         verification: {
             type: VerificationSchema,
+        },
+
+        resetPasswordToken: {
+            type: String,
+            sparse: true,
+        },
+
+        resetPasswordExpires: {
+            type: Date,
         },
 
 
