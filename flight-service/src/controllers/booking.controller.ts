@@ -4,6 +4,9 @@ import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 
 class BookingController {
+    getConfirmationPdf(arg0: string, getConfirmationPdf: any) {
+        throw new Error("Method not implemented.");
+    }
 
     async instantBook(req: Request, res: Response) {
         try {
