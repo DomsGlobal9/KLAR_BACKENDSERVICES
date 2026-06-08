@@ -49,16 +49,40 @@ class BookingLocalController {
             );
 
             if (response.data.success) {
+                const userId = response.data.data.userId ||
+                    response.data.data.id ||
+                    response.data.data._id;
+
+                if (!userId) {
+                    console.error("❌ No user ID found in auth response:", response.data.data);
+                    throw new Error("No user ID in token validation response");
+                }
+
                 return {
-                    id: response.data.data.id,
+                    id: userId,
                     email: response.data.data.email,
                     roles: response.data.data.roles || ["user"],
                     clientType: response.data.data.clientType || "B2C",
                 };
             }
 
+            console.log("❌ TOKEN INVALID - success: false");
             throw new Error("Token validation failed");
         } catch (error: any) {
+            console.log("\n🔴 VALIDATION ERROR 🔴");
+            console.log("Error message:", error.message);
+
+            if (error.response) {
+                console.log("Error Status:", error.response.status);
+                console.log("Error Data:", JSON.stringify(error.response.data, null, 2));
+                console.log("Error Headers:", error.response.headers);
+            } else if (error.request) {
+                console.log("No response received from Auth Service");
+                console.log("Request:", error.request);
+            } else {
+                console.log("Error setting up request:", error.message);
+            }
+
             throw new Error(
                 error.response?.data?.message ||
                 error.message ||
@@ -169,44 +193,17 @@ class BookingLocalController {
         }
     };
 
-    private PaymentStatusCheck = async (orderId: string): Promise<any> => {
-        try {
-            console.log("PAYMENT Status Check: \n", orderId);
-
-            const response = await axios.get(
-                `${this.paymentServiceUrl}/razorpay/razorpay-order/${orderId}`
-            );
-
-            if (!response?.data?.success === true) {
-                return {
-                    status: 400,
-                    success: false,
-                    message: "Payment status check failed",
-                }
-            }
-
-            return response.data.data;
-
-        } catch (error: any) {
-            return {
-                status: 400,
-                success: false,
-                message: error.response?.data?.message || error.message || "Wallet balance check failed",
-            };
-        }
-    };
-
-
     // *************************************************************************
-    // ************************  Private Functions  ****************************
+    // ************************  Public Functions  ****************************
     // *************************************************************************
-
 
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
+            console.log("📝 createLocalBooking - START");
             const token = this.extractToken(req);
 
             if (!token) {
+                console.log("❌ createLocalBooking - No token");
                 return res.status(401).json({
                     success: false,
                     message: "Authorization token missing",
@@ -214,8 +211,10 @@ class BookingLocalController {
             }
 
             const userData = await this.validateToken(token);
+            console.log("👤 createLocalBooking - User validated:", userData?.id);
 
             if (!userData) {
+                console.log("❌ createLocalBooking - No user data");
                 return res.status(400).json({
                     success: false,
                     message: "User Data not found",
@@ -223,6 +222,7 @@ class BookingLocalController {
             }
 
             const result = await BookingService.createInitialBooking(req.body, userData);
+            console.log("✅ createLocalBooking - SUCCESS, Booking ID:", result?.bookingId);
 
             return res.status(201).json({
                 success: true,
@@ -230,6 +230,7 @@ class BookingLocalController {
                 data: result,
             });
         } catch (error: any) {
+            console.log("❌ createLocalBooking - ERROR:", error.message);
             return res.status(400).json({
                 success: false,
                 message: error.message,
@@ -284,6 +285,7 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
             const {
                 bookingId,
                 travellers,
@@ -373,7 +375,7 @@ class BookingLocalController {
                     message: "Error while perform updating or booking"
                 });
             }
-            
+
             if (userData.clientType === 'B2B') {
                 await this.deductWalletBalance(bookingId, totalPrice);
             }
