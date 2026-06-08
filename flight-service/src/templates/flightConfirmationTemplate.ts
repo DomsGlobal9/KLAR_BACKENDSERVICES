@@ -1,9 +1,11 @@
 export const flightConfirmationTemplate = (data: any): string => {
     const order = data?.order || {};
     const air = data?.itemInfos?.AIR || {};
-    const tripInfos = air?.tripInfos?.[0]?.sI || [];
-    const travellers = air?.travellerInfos || [];
-    const fare = air?.totalPriceInfo?.totalFareDetail?.fC || {};
+    const tripInfos =
+        air?.TripInformation?.[0]?.SegmentInformation || [];
+    const travellers = air?.TravellerInformation || [];
+    const fare =
+        air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
 
     const passenger = travellers[0] || {};
 
@@ -38,35 +40,80 @@ export const flightConfirmationTemplate = (data: any): string => {
 
     const segmentHtml = tripInfos
         .map((seg: any) => {
+            const airline =
+                seg?.FlightDetails?.AirlineInfo?.AirlineName || "-";
+
+            const airlineCode =
+                seg?.FlightDetails?.AirlineInfo?.SSRCode || "-";
+
+            const flightNumber =
+                seg?.FlightDetails?.FirstName || "-";
+
             return `
-            <div class="flight-box">
-                <div class="flight-top">
-                    ${seg?.fD?.aI?.name || ""} ${seg?.fD?.aI?.code || ""}-${seg?.fD?.fN || ""}
-                </div>
+        <div class="flight-box">
 
-                <div class="route">
-
-                    <div class="airport">
-                        <div class="code">${seg?.da?.code || "-"}</div>
-                        <div class="city">${seg?.da?.city || "-"}</div>
-                        <div class="time">${formatDateTime(seg?.dt)}</div>
-                    </div>
-
-                    <div class="center">
-                        <div class="line">
-                            ${seg?.duration || 0} mins • ${seg?.stops === 0 ? "Non-stop" : seg?.stops + " Stop"}
-                        </div>
-                        ✈
-                    </div>
-
-                    <div class="airport" style="text-align:right">
-                        <div class="code">${seg?.aa?.code || "-"}</div>
-                        <div class="city">${seg?.aa?.city || "-"}</div>
-                        <div class="time">${formatDateTime(seg?.at)}</div>
-                    </div>
-
-                </div>
+            <div class="flight-top">
+                ${airline} (${airlineCode}) - ${flightNumber}
             </div>
+
+            <div class="route">
+
+                <div class="airport">
+                    <div class="code">
+                        ${seg?.DepartureAirport?.cityCode || "-"}
+                    </div>
+
+                    <div class="city">
+                        ${seg?.DepartureAirport?.city || "-"}
+                    </div>
+
+                    <div class="time">
+                        ${formatDateTime(seg?.DepartureTime)}
+                    </div>
+
+                    <div class="city">
+                        ${seg?.DepartureAirport?.terminal || ""}
+                    </div>
+                </div>
+
+                <div class="center">
+
+                    <div class="line">
+                        ${seg?.Duration || 0} mins
+                    </div>
+
+                    <div class="line">
+                        ${seg?.NumberOfStops === 0
+                    ? "Non-stop"
+                    : `${seg?.NumberOfStops} Stop`}
+                    </div>
+
+                    ✈
+                </div>
+
+                <div class="airport" style="text-align:right">
+
+                    <div class="code">
+                        ${seg?.ArrivalAirport?.cityCode || "-"}
+                    </div>
+
+                    <div class="city">
+                        ${seg?.ArrivalAirport?.city || "-"}
+                    </div>
+
+                    <div class="time">
+                        ${formatDateTime(seg?.ArrivalTime)}
+                    </div>
+
+                    <div class="city">
+                        ${seg?.ArrivalAirport?.terminal || ""}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
         `;
         })
         .join("");
@@ -259,7 +306,7 @@ color:#64748b;
 
 <div class="card">
 <div class="label">Booking ID</div>
-<div class="value">${order?.bookingId || "-"}</div>
+<div class="value">${order?.BookingId || "-"}</div>
 </div>
 
 <div class="card">
@@ -274,7 +321,7 @@ color:#64748b;
 
 <div class="card">
 <div class="label">Amount Paid</div>
-<div class="value">${formatCurrency(order?.amount)}</div>
+<div class="value">${formatCurrency(order?.Amount)}</div>
 </div>
 
 </div>
@@ -288,24 +335,26 @@ color:#64748b;
 <div class="card">
 <div class="label">Passenger Name</div>
 <div class="value">
-${passenger?.ti || ""} ${passenger?.fN || ""} ${passenger?.lN || ""}
+${passenger?.Title || ""} ${passenger?.FirstName || ""} ${passenger?.LastName || ""}
 </div>
 </div>
 
 <div class="card">
 <div class="label">Passenger Type</div>
-<div class="value">${passenger?.pt || "-"}</div>
+<div class="value">${passenger?.PaxType || "-"}</div>
 </div>
 
 <div class="card">
 <div class="label">Cabin Class</div>
-<div class="value">${passenger?.fd?.cc || "-"}</div>
+<div class="value">${passenger?.FareDetails?.CabinClass || "-"}</div>
 </div>
 
 <div class="card">
 <div class="label">Baggage</div>
 <div class="value">
-${passenger?.fd?.bI?.iB || "-"} + ${passenger?.fd?.bI?.cB || "-"}
+${passenger?.FareDetails?.BaggageInfo?.CheckInBaggage || "-"}
++
+${passenger?.FareDetails?.BaggageInfo?.ClassCode || "-"}
 </div>
 </div>
 
@@ -323,17 +372,17 @@ ${segmentHtml}
 <table>
 <tr>
 <td>Base Fare</td>
-<td>${formatCurrency(fare?.BF)}</td>
+<td>${formatCurrency(fare?.BaseFare)}</td>
 </tr>
 
 <tr>
 <td>Taxes & Fees</td>
-<td>${formatCurrency(fare?.TAF)}</td>
+<td>${formatCurrency(fare?.TotalAdditionalFare)}</td>
 </tr>
 
 <tr class="grand">
 <td>Total Paid</td>
-<td>${formatCurrency(fare?.TF)}</td>
+<td>${formatCurrency(fare?.TotalFare)}</td>
 </tr>
 </table>
 </div>
@@ -345,12 +394,12 @@ ${segmentHtml}
 
 <div class="card">
 <div class="label">Email</div>
-<div class="value">${order?.contactInfo?.emails?.[0] || "-"}</div>
+<div class="value">${order?.DeliveryInformation?.Emails?.[0] || "-"}</div>
 </div>
 
 <div class="card">
 <div class="label">Phone</div>
-<div class="value">${order?.contactInfo?.contacts?.[0] || "-"}</div>
+<div class="value">${order?.DeliveryInformation?.Contacts?.[0] || "-"}</div>
 </div>
 
 </div>

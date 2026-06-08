@@ -9,6 +9,7 @@ import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
 import { FrontendBookingPayload } from "../types/booking.types";
 import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
+import { json } from "zod";
 
 
 class BookingService {
@@ -22,8 +23,7 @@ class BookingService {
     ) {
         try {
 
-            console.log("BOOKING SERVICE:\n", { to, subject, html });
-            await axios.post(`${envConfig.EMAIL_SERVICE}/send`, {
+            await axios.post(`${envConfig.EMAIL_SERVICE}/email/send`, {
                 to,
                 subject,
                 html
@@ -242,8 +242,10 @@ class BookingService {
         console.log("#############################################");
 
         if (response.data.status.success === true) {
+
             const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
 
+            console.log("Booking status i get: ", JSON.stringify(tripjackBookingStatus, null, 2));
             await this.bookingRepo.updateBookingStatus(
                 bookingId,
                 tripjackBookingStatus?.order?.status

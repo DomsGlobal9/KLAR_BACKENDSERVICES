@@ -14,7 +14,12 @@ export class EmailService {
     public static async sendEmail(
         payload: SendEmailPayload
     ) {
+        console.log("========== EMAIL PAYLOAD ==========");
+        console.log(JSON.stringify(payload, null, 2));
+        console.log("===================================");
         try {
+            console.log("EMAIL PAYLOAD >>>");
+            console.log(JSON.stringify(payload, null, 2));
             const response = await axios.post(
                 `${envConfig.EMAIL.EMAIL_SERVICE_URL}/email/send`,
                 payload
