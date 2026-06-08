@@ -155,7 +155,7 @@ export class TripJackApiProvider {
                                 return staticName && (staticName === roomNameStr || staticName.includes(roomNameStr) || roomNameStr.includes(staticName));
                             });
 
-                            const roomWithImages = matchingRooms.find((r: any) => r.images && Array.isArray(r.images) && r.images.length > 0);
+                            const roomWithImages = matchingRooms.find((r: any) => (r as any).images && Array.isArray((r as any).images) && (r as any).images.length > 0) as any;
                             
                             if (roomWithImages) {
                                 // If we already had an exact match but it lacked images, just append the images
@@ -165,7 +165,7 @@ export class TripJackApiProvider {
                                     roomStatic = roomWithImages;
                                 }
                             } else if (!roomStatic && matchingRooms.length > 0) {
-                                roomStatic = matchingRooms[0];
+                                roomStatic = matchingRooms[0] as any;
                             }
                         }
                     }
