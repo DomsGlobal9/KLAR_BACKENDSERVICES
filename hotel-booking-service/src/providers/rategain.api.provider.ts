@@ -7,21 +7,59 @@ export class RateGainApiProvider {
      * Validate rate and availability before committing a booking.
      */
     async precheck(payload: any) {
-        const booking = payload.BookReservation || {};
+        const booking = payload.BookReservation || payload;
         const rawPropertyId = (booking.propertyID || booking.PropertyId || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
-                ...booking,
-                propertyID: rawPropertyId, // v1.5.3 uses propertyID (capital ID)
+                ResStatus: booking.ResStatus || 1,
+                CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
+                GuaranteeMethod: booking.GuaranteeMethod || "CreditCard",
+                GuaranteeType: booking.GuaranteeType || "Guarantee",
+                propertyID: rawPropertyId,
                 PropertyId: rawPropertyId,
                 PropertyCode: booking.PropertyCode || rawPropertyId,
-                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`, // v1.5.3 uses EchoToken
-                RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
-                    ...rs,
-                    NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
-                    NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
-                    NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
-                }))
+                BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+                checkin: booking.checkin || booking.checkIn,
+                checkout: booking.checkout || booking.checkOut,
+                CountryCode: booking.CountryCode || "IN",
+                Currency: booking.Currency || booking.CurrencyCode || "INR",
+                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
+                Session: booking.Session || "",
+                RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
+                    const mappedRs: any = {
+                        RoomTypeCode: rs.RoomTypeCode || "Standard",
+                        NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
+                        NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
+                        NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
+                        RoomSelectionKey: rs.RoomSelectionKey || "",
+                        RoomRate: rs.RoomRate || 0,
+                        BoardName: rs.BoardName || "ROOM ONLY",
+                        Guest: (rs.Guest || []).map((g: any) => ({
+                            FirstName: g.FirstName || "Guest",
+                            LastName: g.LastName || "Guest",
+                            Primary: g.Primary !== false,
+                            Email: g.Email || "[EMAIL_ADDRESS]",
+                            EmailType: g.EmailType || 1,
+                            ProfileType: g.ProfileType || 1,
+                            Phone: g.Phone || "0000000000",
+                            Line1: g.Line1 || "N/A",
+                            City: g.City || "N/A",
+                            StateCode: g.StateCode || "TN",
+                            CountryCode: g.CountryCode || "IN",
+                            PostalCode: g.PostalCode || "600001"
+                        }))
+                    };
+                    if (rs.allocationDetails) mappedRs.allocationDetails = rs.allocationDetails;
+                    if (rs.Children && rs.Children.length > 0) {
+                        mappedRs.Children = rs.Children.map((c: any) => ({
+                            type: "Child",
+                            age: c.age || 5
+                        }));
+                    }
+                    if (rs.SpecialRequest) mappedRs.SpecialRequest = rs.SpecialRequest;
+                    if (rs.Comment) mappedRs.Comment = rs.Comment;
+                    return mappedRs;
+                })
             },
         };
 
@@ -40,29 +78,67 @@ export class RateGainApiProvider {
      * Finalize and commit a hotel reservation.
      */
     async commit(payload: any) {
-        const booking = payload.BookReservation || {};
+        const booking = payload.BookReservation || payload;
         const now = new Date().toISOString();
 
         const rawPropertyId = (booking.propertyID || booking.PropertyId || booking.propertyId || booking.PropertyCode || "").toString().replace(/^RG:/, "");
         const consolidatedPayload = {
             BookReservation: {
-                ...booking,
-                propertyID: rawPropertyId, // v1.5.3 uses propertyID (capital ID)
+                ResStatus: booking.ResStatus || 1,
+                CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
+                GuaranteeMethod: booking.GuaranteeMethod || "CreditCard",
+                GuaranteeType: booking.GuaranteeType || "Guarantee",
+                propertyID: rawPropertyId,
                 PropertyId: rawPropertyId,
                 PropertyCode: booking.PropertyCode || rawPropertyId,
+                BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+                checkin: booking.checkin || booking.checkIn,
+                checkout: booking.checkout || booking.checkOut,
+                CountryCode: booking.CountryCode || "US",
+                Currency: booking.Currency || booking.CurrencyCode || "USD",
                 DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
                 ReservationDate: booking.ReservationDate || now,
                 TimeStamp: booking.TimeStamp || now,
-                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`, // v1.5.3 uses EchoToken
-                // v1.5.3: SellingRate for B2C Net+Commission model. Spec uses both cases, supporting both.
-                SellingRate: booking.SellingRate || booking.sellingRate,
-                sellingRate: booking.sellingRate || booking.SellingRate,
-                RoomSelection: (booking.RoomSelection || []).map((rs: any) => ({
-                    ...rs,
-                    NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
-                    NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
-                    NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
-                }))
+                EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
+                Session: booking.Session || "",
+                SellingRate: booking.SellingRate || booking.sellingRate || booking.BookingRate,
+                BookingRate: booking.BookingRate || booking.SellingRate || booking.sellingRate,
+                sellingRate: booking.sellingRate || booking.SellingRate || booking.BookingRate,
+                RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
+                    const mappedRs: any = {
+                        RoomTypeCode: rs.RoomTypeCode || "Standard",
+                        NumberOfRooms: rs.NumberOfRooms || rs.numberOfRooms || 1,
+                        NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
+                        NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
+                        RoomSelectionKey: rs.RoomSelectionKey || "",
+                        RoomRate: rs.RoomRate || 0,
+                        BoardName: rs.BoardName || "ROOM ONLY",
+                        Guest: (rs.Guest || []).map((g: any) => ({
+                            FirstName: g.FirstName || "Guest",
+                            LastName: g.LastName || "Guest",
+                            Primary: g.Primary !== false,
+                            Email: g.Email || "guest@example.com",
+                            EmailType: g.EmailType || 1,
+                            ProfileType: g.ProfileType || 1,
+                            Phone: g.Phone || "0000000000",
+                            Line1: g.Line1 || "N/A",
+                            City: g.City || "N/A",
+                            StateCode: g.StateCode || "N/A",
+                            CountryCode: g.CountryCode || "US",
+                            PostalCode: g.PostalCode || "00000"
+                        }))
+                    };
+                    if (rs.allocationDetails) mappedRs.allocationDetails = rs.allocationDetails;
+                    if (rs.Children && rs.Children.length > 0) {
+                        mappedRs.Children = rs.Children.map((c: any) => ({
+                            type: "Child",
+                            age: c.age || 5
+                        }));
+                    }
+                    if (rs.SpecialRequest) mappedRs.SpecialRequest = rs.SpecialRequest;
+                    if (rs.Comment) mappedRs.Comment = rs.Comment;
+                    return mappedRs;
+                })
             },
         };
 

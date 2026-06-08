@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { precheckController } from "../controllers/precheck.controller";
 import { commitController } from "../controllers/commit.controller";
-import { cancelController } from "../controllers/cancel.controller";
+import { cancelController, getCancelChargesController } from "../controllers/cancel.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
+import { getPricingSummaryController } from "../controllers/pricing.controller";
 import { getBookings, getBookingDetails } from "../controllers/bookings.controller";
 import { confirmController } from "../controllers/confirm.controller";
 import { bookingTemplateController } from "../controllers/booking-template.controller";
@@ -51,6 +52,8 @@ router.post("/precheck", authenticateJWT, precheckController);
 router.post("/commit", authenticateJWT, commitController);
 router.post("/confirm", authenticateJWT, confirmController);
 router.post("/cancel", authenticateJWT, cancelController);
+router.get("/cancel/charges", authenticateJWT, getCancelChargesController);
+router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);

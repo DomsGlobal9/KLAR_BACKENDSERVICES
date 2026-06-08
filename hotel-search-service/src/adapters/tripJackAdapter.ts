@@ -76,8 +76,8 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                 checkIn: req.checkin,
                 checkOut: req.checkout,
                 rooms: req.rooms.map((r) => ({
-                    adults: r.adults,
-                    children: r.children || undefined,
+                    adults: Number(r.adults),
+                    children: Number(r.children || 0),
                     childAge: r.childAges?.length ? r.childAges : undefined,
                 })),
                 currency: req.currency ?? "INR",

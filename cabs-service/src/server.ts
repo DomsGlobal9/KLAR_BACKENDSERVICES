@@ -2,6 +2,7 @@ import app from "./app";
 import { env } from "./config/env";
 import mongoose from "mongoose";
 import dns from "node:dns/promises";
+import { initializeCronJobs } from "./cron";
 
 dns.setServers(["1.1.1.1", "1.0.0.1"]);
 
@@ -13,6 +14,7 @@ async function bootstrap() {
             console.log("⏳ Connecting to MongoDB...");
             await mongoose.connect(env.mongoUri);
             console.log("✅ MongoDB Connected.");
+            initializeCronJobs();
         } else {
             console.warn("⚠️ MONGODB_URI is not set. Persistence is disabled.");
         }

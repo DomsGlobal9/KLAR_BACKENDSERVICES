@@ -69,11 +69,8 @@ class BookingLocalController {
 
     private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
-            console.log("Wallet balance call");
 
             const token = this.currentToken;
-
-            console.log({ bookingId, totalPrice, token });
 
             if (!token) {
                 throw new Error("Token missing for wallet deduction");
@@ -89,8 +86,6 @@ class BookingLocalController {
                 }
             );
 
-            console.log("Wallet balance response we got", response.data);
-
             return response.data;
 
         } catch (error: any) {
@@ -104,17 +99,17 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
-            console.log("Wallet balance check call");
-
             const token = this.currentToken;
-
-            console.log({ bookingId, totalPrice, token });
 
             if (!token) {
                 return {
-                    status: 404,
                     success: false,
                     message: "Token missing for wallet balance check",
+                    hasSufficientBalance: false,
+                    currentBalance: 0,
+                    requiredAmount: Number(totalPrice),
+                    shortfallAmount: Number(totalPrice),
+                    isAlreadyPaid: false
                 };
             }
 
@@ -128,10 +123,42 @@ class BookingLocalController {
                 }
             );
 
-
             const walletBalanceCheckResponse = response.data;
 
             return walletBalanceCheckResponse;
+
+        } catch (error: any) {
+            console.error("Wallet balance check error:", error);
+
+            return {
+                success: false,
+                message: error.response?.data?.message || error.message || "Wallet balance check failed",
+                hasSufficientBalance: false,
+                currentBalance: 0,
+                requiredAmount: Number(totalPrice),
+                shortfallAmount: Number(totalPrice),
+                isAlreadyPaid: false
+            };
+        }
+    };
+
+    private PaymentStatusCheck = async (orderId: string): Promise<any> => {
+        try {
+            console.log("PAYMENT Status Check: \n", orderId);
+
+            const response = await axios.get(
+                `${this.paymentServiceUrl}/razorpay/razorpay-order/${orderId}`
+            );
+
+            if (!response?.data?.success === true) {
+                return {
+                    status: 400,
+                    success: false,
+                    message: "Payment status check failed",
+                }
+            }
+
+            return response.data.data;
 
         } catch (error: any) {
             return {
@@ -368,25 +395,33 @@ class BookingLocalController {
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
+            console.log("\n========== GET USER BOOKINGS ==========");
             const token = this.extractToken(req);
 
             if (!token) {
+                console.log("❌ No token found");
                 return res.status(401).json({
                     success: false,
                     message: "Authorization token missing",
                 });
             }
 
+            console.log("✅ Token found, validating...");
             const userData = await this.validateToken(token);
 
+            console.log("✅ User data after validation:", userData);
+
             if (!userData?.id) {
+                console.log("❌ No user ID in userData");
                 return res.status(400).json({
                     success: false,
                     message: "Invalid user data",
                 });
             }
 
+            console.log(`✅ Fetching bookings for user: ${userData.id}`);
             const bookings = await BookingService.getBookingsByUserId(userData.id);
+            console.log(`✅ Found ${bookings.length} bookings`);
 
             return res.status(200).json({
                 success: true,
@@ -394,6 +429,7 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
+            console.log("❌ Error:", error.message);
             return res.status(400).json({
                 success: false,
                 message: error.message,

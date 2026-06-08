@@ -1,8 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-/**
- * Booking status enum
- */
 export enum BookingStatus {
     CONFIRMED = 'CONFIRMED',
     CANCELLED = 'CANCELLED',
@@ -11,93 +8,102 @@ export enum BookingStatus {
     HELD = 'HELD'
 }
 
-/**
- * Provider enum - which OTA supplied this booking
- */
 export enum BookingProvider {
     RATEGAIN = 'rategain',
     TRIPJACK = 'tripjack',
 }
 
-/**
- * Optional: Structured room schema (recommended)
- */
 export interface IRoom {
     roomType?: string;
+    boardType?: string;
     guests?: number;
     price?: number;
-    [key: string]: any;
 }
 
-/**
- * Booking interface
- */
+export interface ICancellationPolicy {
+    isRefundable: boolean;
+    deadline?: string;      // ISO date string
+    penalty?: number;       // Amount to be charged
+}
+
 export interface IBooking extends Document {
-    confirmationNumber: string;
+    // ─── Identifiers ───────────────────────────────
+    confirmationNumber: string;   // Provider's booking ID (TG-XXXXX)
     reservationId: string;
     propertyId: string;
-    propertyCode: string;
     provider: BookingProvider;
     status: BookingStatus;
+
+    // ─── Stay Details ──────────────────────────────
     checkIn: Date;
     checkOut: Date;
-    totalAmount: number;
-    netAmount?: number;
-    markupAmount?: number;
-    currencyCode: string;
-    guestName?: string;
-    agentId?: string;
-    agentName?: string;
-    userId?: string;
-    userName?: string;
     rooms: IRoom[];
 
-    // --- Hotel display fields (shown on My Bookings & Detail pages) ---
+    // ─── Pricing (stored in INR) ───────────────────
+    totalAmount: number;          // What agent paid (net + markup)
+    netAmount: number;            // What we paid TripJack/RG
+    markupAmount: number;         // Klar's earnings
+    currencyCode: string;
+
+    // ─── Hotel Display Fields ──────────────────────
     hotelName?: string;
     hotelImage?: string;
     hotelAddress?: string;
     city?: string;
     starRating?: number;
     roomType?: string;
-    amenities?: string[];
-    images?: string[];
 
-    // --- Raw provider payloads ---
-    rateGainRequest?: any;
-    rateGainResponse?: any;
+    // ─── Guest & Agent ─────────────────────────────
+    guestName?: string;
+    guestEmail?: string;
+    guestMobile?: string;
+    agentId?: string;
+    agentName?: string;
+    userId?: string;
+
+    // ─── Cancellation ──────────────────────────────
+    cancellationPolicy?: ICancellationPolicy;
+    cancelCharge?: number;
+    cancellationDetails?: any;
+
+    // ─── Provider Request/Response cache ───────────
     tripJackRequest?: any;
     tripJackResponse?: any;
+    rateGainRequest?: any;
+    rateGainResponse?: any;
+    propertyCode?: string;
+
+    // ─── Provider Error (for failed bookings only) ─
+    failureReason?: string;
 
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-/**
- * Room sub-schema
- */
 const roomSchema = new Schema<IRoom>(
     {
         roomType: { type: String },
+        boardType: { type: String },
         guests: { type: Number },
         price: { type: Number }
     },
-    { _id: false, strict: false }
+    { _id: false }
 );
 
-/**
- * Booking schema
- */
+const cancellationPolicySchema = new Schema<ICancellationPolicy>(
+    {
+        isRefundable: { type: Boolean, default: false },
+        deadline: { type: String },
+        penalty: { type: Number },
+    },
+    { _id: false }
+);
+
 const bookingSchema = new Schema<IBooking>(
     {
-        confirmationNumber: {
-            type: String,
-            required: true,
-            index: true,
-            unique: true
-        },
+        confirmationNumber: { type: String, required: true, index: true, unique: true },
         reservationId: { type: String, required: true },
         propertyId: { type: String, required: true },
-        propertyCode: { type: String, required: false },
 
         provider: {
             type: String,
@@ -115,45 +121,52 @@ const bookingSchema = new Schema<IBooking>(
 
         checkIn: { type: Date, required: true },
         checkOut: { type: Date, required: true },
+        rooms: { type: [roomSchema], default: [] },
 
+        // Pricing
         totalAmount: { type: Number, required: true },
-        netAmount: { type: Number },     // The original API price
-        markupAmount: { type: Number },  // Klar's earnings
-        currencyCode: { type: String, required: true },
+        netAmount: { type: Number, required: true },
+        markupAmount: { type: Number, default: 0 },
+        currencyCode: { type: String, required: true, default: 'INR' },
 
-        guestName: { type: String },
-        agentId: { type: String, index: true },
-        agentName: { type: String },
-        userId: { type: String, index: true },
-        userName: { type: String },
-
-        // Hotel display fields (both providers)
+        // Hotel display
         hotelName: { type: String },
         hotelImage: { type: String },
         hotelAddress: { type: String },
         city: { type: String },
         starRating: { type: Number },
         roomType: { type: String },
-        amenities: { type: [String], default: [] },
-        images: { type: [String], default: [] },
 
-        rooms: {
-            type: [roomSchema],
-            default: []
-        },
+        // Guest & Agent
+        guestName: { type: String },
+        guestEmail: { type: String },
+        guestMobile: { type: String },
+        agentId: { type: String, index: true },
+        agentName: { type: String },
+        userId: { type: String, index: true },
 
-        // Raw provider payloads
-        rateGainRequest: { type: Schema.Types.Mixed },
-        rateGainResponse: { type: Schema.Types.Mixed },
+        // Cancellation
+        cancellationPolicy: { type: cancellationPolicySchema },
+        cancelCharge: { type: Number },
+        cancellationDetails: { type: Schema.Types.Mixed },
+
+        // Provider logs/cache
         tripJackRequest: { type: Schema.Types.Mixed },
         tripJackResponse: { type: Schema.Types.Mixed },
+        rateGainRequest: { type: Schema.Types.Mixed },
+        rateGainResponse: { type: Schema.Types.Mixed },
+        propertyCode: { type: String },
+
+        // Only for debugging failed bookings
+        failureReason: { type: String },
     },
     {
         timestamps: true
     }
 );
 
-bookingSchema.index({ reservationId: 1 });
+bookingSchema.index({ agentId: 1, createdAt: -1 });
+bookingSchema.index({ userId: 1, createdAt: -1 });
 bookingSchema.index({ propertyId: 1, checkIn: 1 });
 
 export const BookingModel: Model<IBooking> =

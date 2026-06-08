@@ -43,7 +43,13 @@ class FareController {
 
     async getMultiCityFares(req: Request, res: Response) {
         try {
-            const { sessionId, legIndex, flightKey } = req.body;
+            const { sessionId, flightKey } = req.body;
+
+            let { legIndex } = req.body;
+
+            if (Array.isArray(legIndex)) {
+                legIndex = legIndex[0];
+            }
 
             if (legIndex === undefined || !flightKey || !sessionId) {
                 return res.status(400).json({
@@ -51,6 +57,8 @@ class FareController {
                     message: "sessionId, legIndex and flightKey are required"
                 });
             }
+
+            console.log('********************\n', {sessionId,flightKey, legIndex });
 
             const data = await FareService.getMultiCityFares(
                 sessionId,

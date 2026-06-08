@@ -16,9 +16,7 @@ export const authorizeRoles = (...allowedRoles: string[]) => {
             });
         }
 
-        const hasRole = user.roles?.some(
-            (role: string) => allowedRoles.includes(role)
-        );
+        const hasRole = allowedRoles.includes(user.roles);
 
         if (!hasRole) {
             return res.status(403).json({
