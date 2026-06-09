@@ -837,6 +837,96 @@ export class B2CAuthService {
                 "Login successful",
         };
     }
+
+    /* =====================================================
+   FORGOT PASSWORD / PASSWORD RESET
+===================================================== */
+
+    async requestPasswordResetOTP(
+        email: string,
+        mobileNumber: string
+    ): Promise<{
+        otp: string;
+        message: string;
+    }> {
+        // Find user by email
+        const user = await this.userRepository.findByEmail(email);
+
+        if (!user) {
+            throw new Error("No account found with this email address");
+        }
+
+        // Verify user status
+        if (user.status !== UserStatus.ACTIVE) {
+            throw new Error(`Account is ${user.status.toLowerCase()}`);
+        }
+
+        // Verify mobile number matches
+        if (user.mobile !== mobileNumber) {
+            throw new Error("Mobile number does not match our records");
+        }
+
+        // Check if user has email-based login (can't reset password for Google login users)
+        if (user.loginType !== LoginType.EMAIL) {
+            throw new Error("Password reset is only available for email-based accounts. Please use Google login.");
+        }
+
+        // Generate OTP for password reset
+        const otpDoc = await OTPService.generateOTP(
+            email.toLowerCase(),
+            OTPType.PASSWORD_RESET
+        );
+
+        // TODO: Send OTP via email
+        // You can integrate your email service here
+        // await EmailService.sendPasswordResetOTP(email, otpDoc.otp);
+
+        return {
+            otp: otpDoc.otp,
+            message: "Password reset OTP sent to your registered email address",
+        };
+    }
+
+    async resetPassword(
+        email: string,
+        otp: string,
+        newPassword: string
+    ): Promise<void> {
+        // Verify OTP
+        await OTPService.verifyOTP(
+            email.toLowerCase(),
+            otp,
+            OTPType.PASSWORD_RESET
+        );
+
+        // Get user
+        const user = await this.userRepository.findByEmail(email);
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        if (user.status !== UserStatus.ACTIVE) {
+            throw new Error(`Account is ${user.status.toLowerCase()}`);
+        }
+
+        // Check if user has email-based login
+        if (user.loginType !== LoginType.EMAIL) {
+            throw new Error("Password reset is only available for email-based accounts");
+        }
+
+        // Hash new password
+        const hashedPassword = await this.passwordUtil.hashPassword(newPassword);
+
+        // Update password
+        await this.userRepository.updatePassword(
+            user._id.toString(),
+            hashedPassword
+        );
+
+        // Optional: Invalidate all existing sessions/tokens
+        // You might want to implement token blacklisting or force logout
+    }
 }
 
 

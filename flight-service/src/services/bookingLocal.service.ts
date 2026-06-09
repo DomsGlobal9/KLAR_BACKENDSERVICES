@@ -21,15 +21,11 @@ class BookingService {
         html: string
     ) {
         try {
-
-            console.log("BOOKING SERVICE:\n", { to, subject, html });
             await axios.post(`${envConfig.EMAIL_SERVICE}/send`, {
                 to,
                 subject,
                 html
             });
-
-            console.log("Email sent successfully");
         } catch (error: any) {
             console.error(
                 "Email send failed:",
@@ -217,7 +213,6 @@ class BookingService {
             throw new Error("Failed to get updated booking");
         }
 
-        console.log("FINAL UPDATED BOOKING TRAVELLERS:", JSON.stringify(updatedBooking.travellers, null, 2));
 
         // Prepare payload for Tripjack
         const tripjackPayload: FrontendBookingPayload = {
@@ -239,7 +234,6 @@ class BookingService {
         const mapped = mapToTripjackBooking(tripjackPayload);
 
         const response = await TripjackBookingService.book(mapped);
-        console.log("#############################################");
 
         if (response.data.status.success === true) {
             const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
@@ -284,7 +278,7 @@ class BookingService {
 
     async getBookingDetails(bookingId: string, userId: string) {
         if (!bookingId) {
-            throw new Error("bookingId is required");
+            throw new Error("bookingId is required"); 
         }
 
         const booking = await this.bookingRepo.getBookingByIdAndUser(

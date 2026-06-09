@@ -108,6 +108,28 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 }
 
 function mapRGHotel(h: any): UnifiedHotel {
+  // Extract room-level images from options or roomRates
+  let imagesList: any[] = [];
+  const roomSources = [
+    ...(Array.isArray(h.options) ? h.options : []),
+    ...(Array.isArray(h.roomRates) ? h.roomRates : []),
+    ...(Array.isArray(h.rooms) ? h.rooms : []),
+  ];
+
+  for (const room of roomSources) {
+    const roomImgs =
+      room.roomImages ?? room.images ?? room.image ??
+      room.imageUrl ?? room.imageUrlPath ?? room.roomImage ?? [];
+    const arr = Array.isArray(roomImgs) ? roomImgs : (roomImgs ? [roomImgs] : []);
+    imagesList.push(...arr);
+    if (imagesList.length > 0) break; // use first room that has images
+  }
+
+  if (imagesList.length === 0) {
+    const hotelImgs = h.images ?? h.image ?? h.imageUrl ?? h.hotelImages ?? h.imageURL ?? h.hotelImage ?? [];
+    imagesList = Array.isArray(hotelImgs) ? hotelImgs : (hotelImgs ? [hotelImgs] : []);
+  }
+
   return {
     hotelId: `RG:${h.propertyId}`,
     source: "RG",
@@ -115,12 +137,13 @@ function mapRGHotel(h: any): UnifiedHotel {
     address: h.address || "",
     city: h.city || "",
     country: h.countryName || "",
-    starRating: parseFloat(h.categoryCode) || 0,
+    starRating: parseFloat(h.categoryCode) || parseFloat(h.starRating) || parseFloat(h.rating) || 0,
     latitude: h.latitude || 0,
     longitude: h.longitude || 0,
-    images: (h.images ?? []).filter(Boolean),
+    images: imagesList.filter(Boolean),
     price: h.price || 0,
     currency: h.currency || "INR",
+    mealBasis: h.boardName || h.boardType || h.mealPlan || h.mealBasis || (h.roomRates && h.roomRates[0]?.boardName) || (h.options && h.options[0]?.boardName) || undefined,
     hotelSegment: h.accTypeDesc || h.accMultiDesc || 'Hotel',
     accTypeDesc: h.accTypeDesc,
     accMultiDesc: h.accMultiDesc,

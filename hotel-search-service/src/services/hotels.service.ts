@@ -116,14 +116,26 @@ Reported Total to UI:      ${totalToUI}
         const { HotelModel } = require("../models/Hotel.model");
         const { RGDestinationModel } = require("../models/RGDestination.model");
 
-        const rgDests = await RGDestinationModel.find({
-            destName: { $regex: query, $options: "i" }
-        }).limit(5).lean();
-
-        // Use $text index for blazing fast name/city searches instead of slow $regex collection scans
-        const hotels = await HotelModel.find({
-            $text: { $search: query }
-        }).limit(15).lean();
+        // Execute both queries concurrently for maximum speed
+        const [rgDests, hotels] = await Promise.all([
+            // Use $text index for blazing fast destination searches
+            RGDestinationModel.find(
+                { $text: { $search: query } },
+                { score: { $meta: "textScore" } }
+            )
+            .sort({ score: { $meta: "textScore" } })
+            .limit(5)
+            .lean(),
+            
+            // Use $text index for blazing fast name/city searches
+            HotelModel.find(
+                { $text: { $search: query } },
+                { score: { $meta: "textScore" } }
+            )
+            .sort({ score: { $meta: "textScore" } })
+            .limit(15)
+            .lean()
+        ]);
 
         const suggestions = [
             ...rgDests.map((d: any) => ({

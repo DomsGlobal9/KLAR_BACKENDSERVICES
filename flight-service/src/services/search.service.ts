@@ -6,6 +6,7 @@ import tripjackConfig from "../config/tripjack.config";
 import RedisCacheService from "../cache/redisCache.service";
 import { Filter, FilterStats } from "../types/filter.types";
 import { FlightFilter } from "../utils/sorter/filter.utils";
+import { FlightSegment } from "../types/returnFilter.types";
 import { OneWayNormalizer } from "../normalizers/oneway.normalizer";
 import { ReturnNormalizer } from "../normalizers/return.normalizer";
 import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
@@ -13,7 +14,7 @@ import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
 import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 import { MultiCityFlightFilter } from "../utils/sorter/multiFilter.utils";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
-import { FlightSegment } from "../types/returnFilter.types";
+import MarkupInterceptor from "../services/markup.interceptor";
 
 class SearchService {
 
@@ -30,6 +31,7 @@ class SearchService {
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
         try {
+            // Step 1: Call Tripjack API
             const rawResponse = await axios.post(
                 url,
                 { searchQuery: payload },
@@ -41,10 +43,15 @@ class SearchService {
                 }
             );
 
-            let normalized = OneWayNormalizer.transform(rawResponse);
+            // Step 2: Apply markup to the response
+            const markedUpResponse = MarkupInterceptor.applyMarkupToFlightSearch(rawResponse.data);
+
+            // Step 3: Pass the marked-up response to normalizer
+            let normalized = OneWayNormalizer.transform({ data: markedUpResponse });
 
             const originalCount = normalized.length;
 
+            // Step 4: Apply filters (if any)
             if (filters && filters.length > 0) {
                 const validation = FlightFilter.validateFilters(filters);
                 if (validation.isValid) {
@@ -54,10 +61,12 @@ class SearchService {
                 }
             }
 
+            // Step 5: Apply sorting (if any)
             if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
                 normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
             }
 
+            // Step 6: Calculate stats (if needed)
             let stats: FilterStats | undefined;
             if (includeStats) {
                 stats = FlightFilter.getFilterStats(normalized);
@@ -65,10 +74,12 @@ class SearchService {
                 stats.filteredFlights = normalized.length;
             }
 
+            // Step 7: Save to cache
             await RedisCacheService.set(sessionId, {
-                raw: rawResponse?.data?.searchResult?.tripInfos,
+                raw: markedUpResponse?.searchResult?.tripInfos,
             }, 1800);
 
+            // Step 8: Return response
             const response: any = {
                 sessionId,
                 flights: normalized
@@ -284,7 +295,8 @@ class SearchService {
         legIndex?: number,
         filters?: Filter[],
         applyToLegs?: number[] | 'all',
-        includeStats: boolean = false
+        includeStats: boolean = false,
+        includeFareRules: boolean = false,
     ) {
         const sessionId = uuidv4();
 
@@ -390,6 +402,161 @@ class SearchService {
                 }
             }
 
+            if (includeFareRules && normalized.length > 0) {
+                if (isInternational) {
+                    const allFareIds: string[] = [];
+                    const fareIdToItineraryMap = new Map();
+
+                    const tripInfos = rawResponse?.data?.searchResult?.tripInfos;
+                    const combos = tripInfos?.COMBO || [];
+
+                    for (let i = 0; i < combos.length; i++) {
+                        const combo = combos[i];
+                        if (combo.totalPriceList && combo.totalPriceList.length > 0) {
+                            for (const fare of combo.totalPriceList) {
+                                if (fare.id) {
+                                    allFareIds.push(fare.id);
+                                    fareIdToItineraryMap.set(fare.id, i);
+                                }
+                            }
+                        }
+                    }
+
+                    const uniqueFareIds = [...new Set(allFareIds)];
+                    const fareRulesMap = new Map();
+
+                    for (const fareId of uniqueFareIds) {
+                        try {
+                            const fareRuleUrl = `${config.BASE_URL}${config.FARE_RULE}`;
+                            const fareRuleResponse = await axios.post(
+                                fareRuleUrl,
+                                {
+                                    flowType: "SEARCH",
+                                    id: fareId
+                                },
+                                {
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        apikey: tripjackConfig.API_KEY,
+                                    }
+                                }
+                            );
+                            fareRulesMap.set(fareId, fareRuleResponse.data);
+                        } catch (error) {
+                            console.error(`Failed to fetch fare rule for ${fareId}:`, error);
+                            fareRulesMap.set(fareId, null);
+                        }
+                    }
+
+                    for (let i = 0; i < normalized.length; i++) {
+                        const itinerary = normalized[i];
+                        const originalCombo = combos[i];
+
+                        if (originalCombo && originalCombo.totalPriceList) {
+                            itinerary.availableFares = [];
+
+                            for (const fare of originalCombo.totalPriceList) {
+                                const fareRule = fareRulesMap.get(fare.id);
+                                const refundPolicy = this.extractRefundPolicyFromFareRule(fareRule);
+
+                                itinerary.availableFares.push({
+                                    fareId: fare.id,
+                                    fareIdentifier: fare.fareIdentifier,
+                                    price: fare.fd?.ADULT?.fC?.TF || 0,
+                                    refundable: refundPolicy?.isRefundable || false,
+                                    refundPolicy: refundPolicy,
+                                    fareRule: fareRule
+                                });
+                            }
+
+                            const cheapestFare = itinerary.availableFares.reduce((min: any, curr: any) => {
+                                return curr.price < min.price ? curr : min;
+                            }, itinerary.availableFares[0]);
+
+                            if (cheapestFare) {
+                                itinerary.refundable = cheapestFare.refundable;
+                                itinerary.refundPolicy = cheapestFare.refundPolicy;
+                            }
+                        }
+
+                        if (itinerary.legs && itinerary.legs.length > 0) {
+                            for (const leg of itinerary.legs) {
+                                if (originalCombo && originalCombo.totalPriceList) {
+                                    leg.availableFares = itinerary.availableFares;
+                                    leg.refundable = itinerary.refundable;
+                                    leg.refundPolicy = itinerary.refundPolicy;
+                                }
+                            }
+                        }
+                    }
+                } else if (isDomestic) {
+                    const tripInfos = rawResponse?.data?.searchResult?.tripInfos;
+
+                    for (let legIdx = 0; legIdx < normalized.length; legIdx++) {
+                        const leg = normalized[legIdx];
+                        const legFlights = tripInfos?.[String(legIdx)] || [];
+
+                        for (let flightIdx = 0; flightIdx < leg.flights.length; flightIdx++) {
+                            const flight = leg.flights[flightIdx];
+                            const originalFlight = legFlights[flightIdx];
+
+                            if (originalFlight && originalFlight.totalPriceList) {
+                                flight.availableFares = [];
+
+                                for (const fare of originalFlight.totalPriceList) {
+                                    try {
+                                        const fareRuleUrl = `${config.BASE_URL}${config.FARE_RULE}`;
+                                        const fareRuleResponse = await axios.post(
+                                            fareRuleUrl,
+                                            {
+                                                flowType: "SEARCH",
+                                                id: fare.id
+                                            },
+                                            {
+                                                headers: {
+                                                    "Content-Type": "application/json",
+                                                    apikey: tripjackConfig.API_KEY,
+                                                }
+                                            }
+                                        );
+
+                                        const refundPolicy = this.extractRefundPolicyFromFareRule(fareRuleResponse.data);
+
+                                        flight.availableFares.push({
+                                            fareId: fare.id,
+                                            fareIdentifier: fare.fareIdentifier,
+                                            price: fare.fd?.ADULT?.fC?.TF || 0,
+                                            refundable: refundPolicy?.isRefundable || false,
+                                            refundPolicy: refundPolicy,
+                                            fareRule: fareRuleResponse.data
+                                        });
+                                    } catch (error) {
+                                        console.error(`Failed to fetch fare rule for ${fare.id}:`, error);
+                                        flight.availableFares.push({
+                                            fareId: fare.id,
+                                            fareIdentifier: fare.fareIdentifier,
+                                            price: fare.fd?.ADULT?.fC?.TF || 0,
+                                            refundable: false,
+                                            refundPolicy: null,
+                                            fareRule: null
+                                        });
+                                    }
+                                }
+
+                                const cheapestFare = flight.availableFares.reduce((min: any, curr: any) => {
+                                    return curr.price < min.price ? curr : min;
+                                }, flight.availableFares[0]);
+
+                                if (cheapestFare) {
+                                    flight.refundable = cheapestFare.refundable;
+                                    flight.refundPolicy = cheapestFare.refundPolicy;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             await RedisCacheService.set(
                 sessionId,
                 {
@@ -420,6 +587,22 @@ class SearchService {
 
             throw error;
         }
+    }
+
+    private extractRefundPolicyFromFareRule(fareRule: any): any {
+        if (!fareRule) return null;
+
+        const rules = fareRule?.fareRules || fareRule?.rules || fareRule;
+
+        return {
+            isRefundable: rules?.isRefundable || false,
+            cancellationFee: rules?.cancellationFee || 0,
+            refundableAmount: rules?.refundableAmount || 0,
+            cancellationDeadline: rules?.lastCancellationDate || rules?.cancellationDeadline,
+            currency: rules?.currency || 'INR',
+            penaltyDetails: rules?.penalties || rules?.cancellationPenalties || [],
+            termsAndConditions: rules?.terms || rules?.fareTerms || []
+        };
     }
 }
 
