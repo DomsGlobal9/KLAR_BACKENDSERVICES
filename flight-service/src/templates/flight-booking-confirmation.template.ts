@@ -1,11 +1,17 @@
 export const flightBookingConfirmationTemplate = (data: any, logoBase64: string): string => {
     const order = data?.order || {};
     const air = data?.itemInfos?.AIR || {};
-    const trip = air?.TripInformation?.[0] || {};
-    const segments = trip?.SegmentInformation || [];
+    const trips = air?.TripInformation || [];
+
+    const allSegments = trips.flatMap(
+        (trip: any) => trip?.SegmentInformation || []
+    );
 
     // FIX: Look into the local database tracking array fallback if Tripjack payload arrays are empty of meta-records
-    const passenger = air?.TravellerInformation?.[0] || data?.travellers?.[0] || {};
+    const passengers =
+        air?.TravellerInformation ||
+        data?.travellers ||
+        [];
     const fare = air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
 
     const formatDate = (dateStr: string) => {
@@ -31,17 +37,26 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     // AIRTIGHT PNR EXTRACTION PIPELINE
     let resolvedPnr = 'N/A';
 
-    if (passenger?.pnrDetails && Object.keys(passenger.pnrDetails).length > 0) {
-        resolvedPnr = Object.values(passenger.pnrDetails)[0] as string;
-    } else if (passenger?.pnr) {
-        resolvedPnr = passenger.pnr;
+    if (passengers && passengers.length > 0) {
+        const passenger = passengers[0];
+        if (passenger?.pnrDetails && Object.keys(passenger.pnrDetails).length > 0) {
+            resolvedPnr = Object.values(passenger.pnrDetails)[0] as string;
+        } else if (passenger?.pnr) {
+            resolvedPnr = passenger.pnr;
+        } else if (data?.pnr) {
+            resolvedPnr = data.pnr;
+        } else if (order?.Pnr || order?.pnr) {
+            resolvedPnr = order.Pnr || order.pnr;
+        }
     } else if (data?.pnr) {
         resolvedPnr = data.pnr;
     } else if (order?.Pnr || order?.pnr) {
         resolvedPnr = order.Pnr || order.pnr;
-    } else if (segments.length > 0) {
+    }
+
+    if (resolvedPnr === 'N/A' && allSegments.length > 0) {
         // Scans through your Segment information lists to capture deep nested PNR references
-        for (const seg of segments) {
+        for (const seg of allSegments) {
             const tiArray = seg?.BaggageInfo?.tI || seg?.BaggageInfo?.ti || [];
             if (tiArray[0]?.pnrDetails && Object.keys(tiArray[0].pnrDetails).length > 0) {
                 resolvedPnr = Object.values(tiArray[0].pnrDetails)[0] as string;
@@ -53,44 +68,79 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         }
     }
 
-    // Normalized fallbacks to handle database property case configurations (Title vs title)
-    const title = passenger.Title || passenger.title || 'Mr/Ms';
-    const firstName = passenger.FirstName || passenger.firstName || '';
-    const lastName = passenger.LastName || passenger.lastName || '';
-    const cabinClass = passenger.FareDetails?.CabinClass || passenger.paxType || 'ECONOMY';
-    const classCode = passenger.FareDetails?.ClassCode || 'T';
+    // Get passenger details for display
+    const getPassengerDetails = (p: any) => {
+        const title = p.Title || p.title || 'Mr/Ms';
+        const firstName = p.FirstName || p.firstName || '';
+        const lastName = p.LastName || p.lastName || '';
+        const cabinClass = p.FareDetails?.CabinClass || p.paxType || 'ECONOMY';
+        const classCode = p.FareDetails?.ClassCode || 'T';
 
-    // Seat
-    const seatInfo =
-        passenger?.SSR_Seat_Information &&
-        Object.values(passenger.SSR_Seat_Information)[0] as any;
+        // Seat
+        const seatNumber =
+            p?.SSR_Seat_Information &&
+                Object.keys(p.SSR_Seat_Information).length > 0
+                ? Object.entries(p.SSR_Seat_Information)
+                    .map(([route, seat]: any) =>
+                        `${route}: ${seat?.seatNo || "N/A"}`
+                    )
+                    .join("<br>")
+                : "Not Selected";
 
-    const seatNumber = seatInfo?.seatNo || "Not Selected";
+        // Meal
+        const mealName =
+            p?.SSR_Meal_Information &&
+                Object.keys(p.SSR_Meal_Information).length > 0
+                ? Object.entries(p.SSR_Meal_Information)
+                    .map(([route, meal]: any) =>
+                        `${route}: ${meal?.Description || "N/A"}`
+                    )
+                    .join("<br>")
+                : "Not Included";
+        // Baggage
+        const baggageValue =
+            p?.SSR_Baggage_Information &&
+                Object.keys(p.SSR_Baggage_Information).length > 0
+                ? Object.entries(p.SSR_Baggage_Information)
+                    .map(([route, bag]: any) =>
+                        `${route}: ${bag?.Description || "N/A"}`
+                    )
+                    .join("<br>")
+                : p?.FareDetails?.BaggageInfo?.CheckInBaggage || "N/A";
 
-    // Meal
-    const mealInfo =
-        passenger?.SSR_Meal_Information &&
-        Object.values(passenger.SSR_Meal_Information)[0] as any;
+        // Handle baggage formatting to ensure space between number and unit (e.g., 15KG -> 15 KG)
+        let rawBaggage = baggageValue || '15 KG';
+        let formattedBaggage = String(rawBaggage).trim();
+        const baggageMatch = formattedBaggage.match(/^(\d+)\s*([a-zA-Z]+)$/);
+        if (baggageMatch) {
+            formattedBaggage = `${baggageMatch[1]} ${baggageMatch[2].toUpperCase()}`;
+        }
 
-    const mealName = mealInfo?.Description || "Not Included";
+        return {
+            title,
+            firstName,
+            lastName,
+            cabinClass,
+            classCode,
+            seatNumber,
+            mealName,
+            baggageValue: formattedBaggage,
+            pnrDetails: p.pnrDetails || {}
+        };
+    };
 
-    // Baggage
-    const baggageInfo =
-        passenger?.SSR_Baggage_Information &&
-        Object.values(passenger.SSR_Baggage_Information)[0] as any;
-
-    const baggageValue =
-        baggageInfo?.Description ||
-        passenger?.FareDetails?.BaggageInfo?.CheckInBaggage ||
-        "N/A";
-
-    // Handle baggage formatting to ensure space between number and unit (e.g., 15KG -> 15 KG)
-    let rawBaggage = passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 KG';
-    let formattedBaggage = String(rawBaggage).trim();
-    const baggageMatch = formattedBaggage.match(/^(\d+)\s*([a-zA-Z]+)$/);
-    if (baggageMatch) {
-        formattedBaggage = `${baggageMatch[1]} ${baggageMatch[2].toUpperCase()}`;
-    }
+    // Get first passenger for display in some sections
+    const firstPassenger = passengers.length > 0 ? getPassengerDetails(passengers[0]) : {
+        title: '',
+        firstName: '',
+        lastName: '',
+        cabinClass: '',
+        classCode: '',
+        seatNumber: '',
+        mealName: '',
+        baggageValue: '',
+        pnrDetails: {}
+    };
 
     return `
     <html>
@@ -109,7 +159,14 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
 
             .section-tag { font-size: 11px; font-weight: 800; color: #10b981; margin: 30px 0 10px; text-transform: uppercase; }
             
-            .pass-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+            .pass-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 15px;
+    margin-bottom: 20px;
+}
             .meta-box .val { font-size: 15px; font-weight: 700; color: #1e293b; margin-top: 4px; display: block; }
 
             .route-card { background: #f8fafc; border-radius: 24px; padding: 30px; margin: 30px 0; display: flex; align-items: center; justify-content: space-between; }
@@ -152,16 +209,71 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         </div>
 
         <div class="section-tag">Passenger Information</div>
-        <div class="pass-grid">
-            <div class="meta-box"><span class="label-sm">Name</span><span class="val">${title} ${firstName} ${lastName}</span></div>
-            <div class="meta-box"><span class="label-sm">PNR</span><span class="val">${resolvedPnr}</span></div>
-            <div class="meta-box"><span class="label-sm">Ticket Type</span><span class="val">${cabinClass} (${classCode})</span></div>
-        </div>
+        ${passengers.map((p: any) => {
+        const details = getPassengerDetails(p);
+        const passengerPnr = details.pnrDetails && Object.keys(details.pnrDetails).length > 0
+            ? Object.values(details.pnrDetails).join(", ")
+            : (p.pnr || resolvedPnr);
 
-        ${segments.map((seg: any) => `
+        return `
+            <div class="pass-grid">
+    <div class="meta-box">
+        <span class="label-sm">Name</span>
+        <span class="val">
+            ${details.title} ${details.firstName} ${details.lastName}
+        </span>
+    </div>
+
+    <div class="meta-box">
+        <span class="label-sm">PNR</span>
+        <span class="val">
+            ${passengerPnr}
+        </span>
+    </div>
+
+    <div class="meta-box">
+        <span class="label-sm">Class</span>
+        <span class="val">
+            ${details.cabinClass}
+        </span>
+    </div>
+
+    <div class="meta-box">
+        <span class="label-sm">Seat</span>
+        <span class="val">
+            ${details.seatNumber}
+        </span>
+    </div>
+
+    <div class="meta-box">
+        <span class="label-sm">Meal</span>
+        <span class="val">
+            ${details.mealName}
+        </span>
+    </div>
+
+    <div class="meta-box">
+        <span class="label-sm">Baggage</span>
+        <span class="val">
+            ${details.baggageValue}
+        </span>
+    </div>
+</div>
+            `;
+    }).join("")}
+
+    <div class="section-tag">
+    Flight Segments (${allSegments.length})
+</div>
+
+        ${allSegments.map((seg: any) => `
         <div class="route-card">
             <div class="apt-group">
-                <div class="apt-code">${seg.DepartureAirport?.cityCode || 'N/A'}</div>
+                <div class="apt-code">
+                    ${seg.DepartureAirport?.cityCode ||
+        seg.DepartureAirport?.SSRCode ||
+        'N/A'}
+                </div>
                 <div class="apt-name">${seg.DepartureAirport?.city || 'N/A'}</div>
                 <div class="flight-time">${new Date(seg.DepartureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
                 <div class="label-sm">${formatDate(seg.DepartureTime)}</div>
@@ -179,38 +291,6 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             </div>
         </div>
         `).join('')}
-
-        <div class="icon-grid">
-            <div class="icon-item">
-    <div class="icon-circle">💺</div>
-    <div class="icon-text-group">
-        <div class="icon-label">Seat</div>
-        <div class="icon-val">${seatNumber}</div>
-    </div>
-</div>
-            <div class="icon-item">
-                <div class="icon-circle">🎒</div>
-                <div class="icon-text-group">
-                    <div class="icon-label">Baggage</div>
-                    // <div class="icon-val">${formattedBaggage}</div>
-                    <div class="icon-val">${baggageValue}</div>
-                </div>
-            </div>
-            <div class="icon-item">
-                <div class="icon-circle">🍽</div>
-                <div class="icon-text-group">
-                    <div class="icon-label">Meal Preference</div>
-                    <div class="icon-val">${mealName}</div>
-                </div>
-            </div>
-            <div class="icon-item">
-                <div class="icon-circle">📊</div>
-                <div class="icon-text-group">
-                    <div class="icon-label">Class</div>
-                    <div class="icon-val">${cabinClass}</div>
-                </div>
-            </div>
-        </div>
 
         <div class="info-card">
             <div class="info-grid">
