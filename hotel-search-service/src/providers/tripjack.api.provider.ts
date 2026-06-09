@@ -119,8 +119,13 @@ export class TripJackApiProvider {
                 ? Object.values(staticData.amenities).map((a: any) => a.name)
                 : (pricingData.amenities || []);
 
-            const hotelImages: any[] = staticData?.images
-                ? staticData.images
+            const hotelImages: string[] = (staticData?.images && Array.isArray(staticData.images))
+                ? staticData.images.map((img: any) => {
+                    if (typeof img === 'string') return img;
+                    const links = img.links || {};
+                    const firstLink = Object.values(links)[0] as any;
+                    return links["1000px"]?.href || links["default"]?.href || firstLink?.href || img.url || img.src || img.href || "";
+                }).filter(Boolean)
                 : (Array.isArray(pricingData.images) && pricingData.images.length ? pricingData.images : (pricingData.img ? [pricingData.img] : (localHotel?.images || [])));
 
             const description = staticData?.descriptions?.default || staticData?.desc || pricingData.desc || "";
@@ -155,7 +160,7 @@ export class TripJackApiProvider {
                                 return staticName && (staticName === roomNameStr || staticName.includes(roomNameStr) || roomNameStr.includes(staticName));
                             });
 
-                            const roomWithImages = matchingRooms.find((r: any) => r.images && Array.isArray(r.images) && r.images.length > 0);
+                            const roomWithImages: any = matchingRooms.find((r: any) => r.images && Array.isArray(r.images) && r.images.length > 0);
                             
                             if (roomWithImages) {
                                 // If we already had an exact match but it lacked images, just append the images
@@ -170,13 +175,19 @@ export class TripJackApiProvider {
                         }
                     }
                 }
-                let roomImages = []; // Strictly no fallback to hotelImages
-
+                let roomRawImages: any[] = [];
                 if (roomStatic?.images && Array.isArray(roomStatic.images) && roomStatic.images.length > 0) {
-                    roomImages = roomStatic.images;
+                    roomRawImages = roomStatic.images;
                 } else if (opt.roomInfo?.[0]?.images && Array.isArray(opt.roomInfo[0].images) && opt.roomInfo[0].images.length > 0) {
-                    roomImages = opt.roomInfo[0].images;
+                    roomRawImages = opt.roomInfo[0].images;
                 }
+
+                const roomImages = roomRawImages.map((img: any) => {
+                    if (typeof img === 'string') return img;
+                    const links = img.links || {};
+                    const firstLink = Object.values(links)[0] as any;
+                    return links["1000px"]?.href || links["default"]?.href || firstLink?.href || img.url || img.src || img.href || "";
+                }).filter(Boolean);
 
                 const optionIdStr = opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
                 return {

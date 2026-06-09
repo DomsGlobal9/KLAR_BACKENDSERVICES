@@ -84,10 +84,40 @@ export class RateGainApiProvider {
      */
     async getAllProducts(payload: any) {
         const propertyId = (payload.PropertyId || payload.propertyID || payload.propertyId || "").toString().replace("RG:", "");
+        
+        let propertyCode = payload.PropertyCode || payload.propertyCode;
+        let brandCode = payload.BrandCode || payload.brandCode;
+
+        // Dynamic resolution for direct URL access or refreshed page (where PropertyCode was fallback/UUID)
+        const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+        if (!propertyCode || isUuid(propertyCode) || !brandCode) {
+            console.log(`[RateGain] PropertyCode/BrandCode missing or UUID. Resolving dynamically for propertyId: ${propertyId}...`);
+            try {
+                const searchRes = await this.getBestProperties({
+                    PropertyId: propertyId,
+                    checkin: payload.checkin || payload.checkIn,
+                    checkout: payload.checkout || payload.checkOut,
+                    Rooms: payload.Rooms || payload.rooms || [{ adults: 2 }],
+                    CountryCode: payload.CountryCode || payload.countryCode || "IN",
+                    Currency: payload.Currency || payload.currency || "INR",
+                });
+                if (searchRes?.body && searchRes.body.length > 0) {
+                    const matchedHotel = searchRes.body.find((h: any) => h.propertyId === propertyId) || searchRes.body[0];
+                    if (matchedHotel) {
+                        propertyCode = matchedHotel.propertyCode;
+                        brandCode = matchedHotel.brandCode;
+                        console.log(`[RateGain] Resolved PropertyCode: ${propertyCode}, BrandCode: ${brandCode}`);
+                    }
+                }
+            } catch (err: any) {
+                console.error(`[RateGain] Failed to resolve propertyCode dynamically:`, err.message);
+            }
+        }
+
         const rateGainPayload: any = {
             propertyID: propertyId, // v1.5.3 spec uses propertyID (capital ID)
-            PropertyCode: payload.PropertyCode || payload.propertyCode,
-            BrandCode: payload.BrandCode || payload.brandCode || "N/A",
+            PropertyCode: propertyCode,
+            BrandCode: brandCode || "N/A",
             checkin: payload.checkin || payload.checkIn,
             checkout: payload.checkout || payload.checkOut,
             CountryCode: payload.CountryCode || payload.countryCode,
@@ -123,6 +153,13 @@ export class RateGainApiProvider {
         try {
             console.log(`[RateGain] Requesting Products: ${JSON.stringify(rateGainPayload, null, 2)}`);
             const res = await rateGainClient.post("/api/SmartDistribution/getproducts", rateGainPayload);
+            
+            // Enrich response body with propertyCode and brandCode for frontend persistence
+            if (res.data && res.data.body) {
+                res.data.body.propertyCode = rateGainPayload.PropertyCode;
+                res.data.body.brandCode = rateGainPayload.BrandCode;
+            }
+            
             return res.data;
         } catch (error: any) {
             console.error("[RateGain] GetProducts Error:", error.response?.status, error.response?.data?.description || error.message);

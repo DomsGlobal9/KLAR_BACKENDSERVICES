@@ -119,7 +119,12 @@ export async function syncTJHotels() {
                 const cityName = (hotel.address?.city?.name || hotel.cityName || "").toLowerCase().trim();
                 const addressStr = hotel.address?.adr || hotel.address || "";
                 const imageUrls = Array.isArray(hotel.images)
-                    ? hotel.images.map((img: any) => typeof img === 'string' ? img : img.url).filter(Boolean)
+                    ? hotel.images.map((img: any) => {
+                        if (typeof img === 'string') return img;
+                        const links = img.links || {};
+                        const firstLink = Object.values(links)[0] as any;
+                        return links["1000px"]?.href || links["default"]?.href || firstLink?.href || img.url || img.src || img.href || "";
+                    }).filter(Boolean)
                     : [];
 
                 return {
