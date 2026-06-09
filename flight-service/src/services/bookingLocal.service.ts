@@ -8,7 +8,8 @@ import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
 import { FrontendBookingPayload } from "../types/booking.types";
-import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
+import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
+import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
 import { json } from "zod";
 
 
@@ -260,13 +261,45 @@ class BookingService {
                 console.warn("No email found for booking:", updatedBooking.bookingId);
                 return response.data;
             } else {
-                const html = flightConfirmationTemplate(tripjackBookingStatus);
+
+                const templateData = {
+                    ...tripjackBookingStatus,
+                    travellers: updatedBooking.travellers,
+                    totalPrice: updatedBooking.totalPrice,
+                    tripjackPrice: updatedBooking.tripjackPrice,
+                    markupPrice: updatedBooking.markupPrice
+                };
+
+                // Always send customer email (B2C + B2B)
+                const customerHtml = flightBookingConfirmationTemplate(
+                    templateData,
+                    ""
+                );
 
                 await this.sendEmail(
                     to,
                     `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
-                    html
+                    customerHtml
                 );
+
+                // Send agency email only for B2B
+                if (updatedBooking.userInfo?.clientType === "B2B") {
+
+                    const agencyHtml = flightAgencyBookingConfirmationTemplate(
+                        templateData,
+                        ""
+                    );
+
+                    const agencyEmail = updatedBooking.userInfo?.email;
+
+                    if (agencyEmail) {
+                        await this.sendEmail(
+                            agencyEmail,
+                            `Agency Booking Confirmation - ${updatedBooking.bookingId}`,
+                            agencyHtml
+                        );
+                    }
+                }
             }
 
             return response.data;
@@ -286,7 +319,7 @@ class BookingService {
 
     async getBookingDetails(bookingId: string, userId: string) {
         if (!bookingId) {
-            throw new Error("bookingId is required"); 
+            throw new Error("bookingId is required");
         }
 
         const booking = await this.bookingRepo.getBookingByIdAndUser(
