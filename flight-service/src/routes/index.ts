@@ -23,4 +23,6 @@ router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
 router.use("/client-booking-document", flightDocumentRoute);
 router.use("/agency", flightBookingAgencyTemplateRoute);
+
+
 export default router;  
