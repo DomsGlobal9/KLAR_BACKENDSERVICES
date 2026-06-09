@@ -11,6 +11,7 @@ class CancellationController {
             validateCancellationPayload(payload);
 
             const response = await CancellationService.getCharges(payload);
+            console.log("14 cancellation.controller.ts getCharges response >>>", response);
 
             return res.status(200).json({
                 success: true,

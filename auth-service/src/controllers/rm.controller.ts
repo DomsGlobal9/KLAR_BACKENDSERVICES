@@ -104,7 +104,6 @@ export const verifyCreateRMOTP = async (
 ) => {
 
     try {
-
         const {
             memberName,
             email,
@@ -256,7 +255,6 @@ export const getAllRMs = async (
     next: NextFunction
 ) => {
     try {
-        console.log("The REQ :\n", req.user);
         const userId = req.user?.userId;
 
         // Get query parameters for pagination and filtering

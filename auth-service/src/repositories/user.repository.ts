@@ -118,6 +118,20 @@ export class UserRepository {
         return !!result;
     }
 
+    async getUserBusinessDetails(userId: string): Promise<Partial<IUser> | null> {
+        const user = await UserModel.findOne({
+            _id: userId,
+            roles: Roles.B2B_ADMIN,
+        }).select({
+            businessProfile: 1,
+            clientType: 1,
+            roles: 1,
+            status: 1
+        });
+
+        return user;
+    }
+
 }
 
 export default UserRepository;

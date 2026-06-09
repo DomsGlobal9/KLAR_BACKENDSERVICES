@@ -4,6 +4,8 @@ import * as bookingController from "../controllers/booking.controller";
 import * as orderController from "../controllers/order.controller";
 import * as amendmentController from "../controllers/amendment.controller";
 import { authenticateJWT } from "../middlewares/auth.middleware";
+import { getClientInvoicePdf, getAgentInvoicePdf } from "../controllers/invoice-pdf.controller";
+
 
 const router = Router();
 
@@ -23,5 +25,13 @@ router.post("/payment/create", authenticateJWT, orderController.createPayment);
 // ─── Amendment Routes ────────────────────────────────────────────────────
 router.get("/amendment/charges", amendmentController.getAmendmentCharges);
 router.post("/amendment/cancel", amendmentController.processCancellation);
+
+
+
+
+// Confirmation and Cancellation PDF Routes
+router.get("/pdf/client-invoice/:bookingId", getClientInvoicePdf);
+router.get("/pdf/agent-invoice/:bookingId", getAgentInvoicePdf);
+
 
 export default router;
