@@ -3,7 +3,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     const air = data?.itemInfos?.AIR || {};
     const trip = air?.TripInformation?.[0] || {};
     const segments = trip?.SegmentInformation || [];
-    
+
     // FIX: Look into the local database tracking array fallback if Tripjack payload arrays are empty of meta-records
     const passenger = air?.TravellerInformation?.[0] || data?.travellers?.[0] || {};
     const fare = air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
@@ -18,10 +18,10 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     const formatDuration = (totalMinutes: any): string => {
         const mins = parseInt(totalMinutes, 10);
         if (isNaN(mins) || mins <= 0) return '0 HR';
-        
+
         const hours = Math.floor(mins / 60);
         const remainingMinutes = mins % 60;
-        
+
         if (remainingMinutes === 0) {
             return `${hours} HR`;
         }
@@ -59,6 +59,30 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     const lastName = passenger.LastName || passenger.lastName || '';
     const cabinClass = passenger.FareDetails?.CabinClass || passenger.paxType || 'ECONOMY';
     const classCode = passenger.FareDetails?.ClassCode || 'T';
+
+    // Seat
+    const seatInfo =
+        passenger?.SSR_Seat_Information &&
+        Object.values(passenger.SSR_Seat_Information)[0] as any;
+
+    const seatNumber = seatInfo?.seatNo || "Not Selected";
+
+    // Meal
+    const mealInfo =
+        passenger?.SSR_Meal_Information &&
+        Object.values(passenger.SSR_Meal_Information)[0] as any;
+
+    const mealName = mealInfo?.Description || "Not Included";
+
+    // Baggage
+    const baggageInfo =
+        passenger?.SSR_Baggage_Information &&
+        Object.values(passenger.SSR_Baggage_Information)[0] as any;
+
+    const baggageValue =
+        baggageInfo?.Description ||
+        passenger?.FareDetails?.BaggageInfo?.CheckInBaggage ||
+        "N/A";
 
     // Handle baggage formatting to ensure space between number and unit (e.g., 15KG -> 15 KG)
     let rawBaggage = passenger.FareDetails?.BaggageInfo?.CheckInBaggage || '15 KG';
@@ -139,7 +163,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             <div class="apt-group">
                 <div class="apt-code">${seg.DepartureAirport?.cityCode || 'N/A'}</div>
                 <div class="apt-name">${seg.DepartureAirport?.city || 'N/A'}</div>
-                <div class="flight-time">${new Date(seg.DepartureTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</div>
+                <div class="flight-time">${new Date(seg.DepartureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
                 <div class="label-sm">${formatDate(seg.DepartureTime)}</div>
             </div>
             <div class="path-area">
@@ -150,7 +174,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             <div class="apt-group" style="text-align: right;">
                 <div class="apt-code">${seg.ArrivalAirport?.cityCode || 'N/A'}</div>
                 <div class="apt-name">${seg.ArrivalAirport?.city || 'N/A'}</div>
-                <div class="flight-time">${new Date(seg.ArrivalTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}</div>
+                <div class="flight-time">${new Date(seg.ArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
                 <div class="label-sm">${formatDate(seg.ArrivalTime)}</div>
             </div>
         </div>
@@ -158,24 +182,25 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
 
         <div class="icon-grid">
             <div class="icon-item">
-                <div class="icon-circle">💺</div>
-                <div class="icon-text-group">
-                    <div class="icon-label">Seat</div>
-                    <div class="icon-val">Confirmed</div>
-                </div>
-            </div>
+    <div class="icon-circle">💺</div>
+    <div class="icon-text-group">
+        <div class="icon-label">Seat</div>
+        <div class="icon-val">${seatNumber}</div>
+    </div>
+</div>
             <div class="icon-item">
                 <div class="icon-circle">🎒</div>
                 <div class="icon-text-group">
                     <div class="icon-label">Baggage</div>
-                    <div class="icon-val">${formattedBaggage}</div>
+                    // <div class="icon-val">${formattedBaggage}</div>
+                    <div class="icon-val">${baggageValue}</div>
                 </div>
             </div>
             <div class="icon-item">
                 <div class="icon-circle">🍽</div>
                 <div class="icon-text-group">
                     <div class="icon-label">Meal Preference</div>
-                    <div class="icon-val">${passenger.FareDetails?.MealIncluded ? 'Included' : 'Not Included'}</div>
+                    <div class="icon-val">${mealName}</div>
                 </div>
             </div>
             <div class="icon-item">
