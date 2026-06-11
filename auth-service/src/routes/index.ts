@@ -1,15 +1,13 @@
 import { Router } from "express";
+import rmRoutes from "./rm.routes";
 import authRoutes from "./auth.routes";
 import adminRoutes from "./admin.routes";
 import walletRoutes from "./wallet.routes";
 import markupRoutes from "./markup.routes";
-import dashboardRoutes from "./dashboard.routes";
-import bookingRoutes from "./bookingPayment.routes";
-import { Wallet } from "../models/wallet.model";
-import { UserModel } from "../models/user.model";
-import rmRoutes from "./rm.routes";
 import companyRoutes from "./company.routes";
 import b2cAuthRoutes from "./b2cAuth.routes";
+import dashboardRoutes from "./dashboard.routes";
+import bookingRoutes from "./bookingPayment.routes";
 
 const router = Router();
 
@@ -17,8 +15,6 @@ const router = Router();
 router.get("/health", (_req, res) => {
     res.json({ status: "OK" });
 });
-
-// ============================================================
 
 router.use("/rm", rmRoutes);
 router.use("/auth", authRoutes);

@@ -37,4 +37,5 @@ router.get("/:companyId", authenticateJWT, authorizeRoles(Roles.B2B_ADMIN), getC
  */
 router.put("/update/:companyId", authenticateJWT, authorizeRoles(Roles.B2B_ADMIN), updateCompany);
 
+
 export default router;

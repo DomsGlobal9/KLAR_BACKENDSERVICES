@@ -22,9 +22,9 @@ export const createCompany = async (
             address,
             city,
             country,
+            limit,
         } = req.body;
 
-        // Validations
         if (!businessName) {
             return res.status(400).json({
                 success: false,
@@ -88,7 +88,7 @@ export const createCompany = async (
             });
         }
 
-        // Email format validation
+        
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(businessEmail)) {
             return res.status(400).json({
@@ -97,17 +97,13 @@ export const createCompany = async (
             });
         }
 
-        // Validate company creation (check if email already exists)
         await CompanyService.validateCompanyCreation(businessEmail);
 
-        // Send OTP
         await OTPService.generateOTP(
             businessEmail.toLowerCase(),
             OTPType.SIGNUP
         );
 
-        // Store company data temporarily in res.locals or a cache service
-        // For now, we'll store in res.locals (will be used in verify endpoint)
         res.locals.companyData = {
             businessName,
             businessType,
@@ -120,6 +116,7 @@ export const createCompany = async (
             address,
             city,
             country,
+            limit,
         };
 
         return res.status(200).json({
@@ -153,10 +150,10 @@ export const verifyCreateCompany = async (
             address,
             city,
             country,
+            limit,
             otp,
         } = req.body;
 
-        // Validations
         if (!businessName || !businessType || !contactPerson ||
             !businessEmail || !businessMobile || !password ||
             !address || !city || !country || !otp) {
@@ -166,7 +163,7 @@ export const verifyCreateCompany = async (
             });
         }
 
-        // Email format validation
+        
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(businessEmail)) {
             return res.status(400).json({
@@ -175,17 +172,17 @@ export const verifyCreateCompany = async (
             });
         }
 
-        // Verify OTP
+        
         await OTPService.verifyOTP(
             businessEmail.toLowerCase(),
             otp,
             OTPType.SIGNUP
         );
 
-        // Get current user (parent B2B_ADMIN)
+        
         const currentUser = (req as any).user;
 
-        // Create sub-company
+        
         const result = await CompanyService.createSubCompany({
             businessName,
             businessType,
@@ -198,6 +195,7 @@ export const verifyCreateCompany = async (
             address,
             city,
             country,
+            limit,
             createdBy: currentUser.userId,
         });
 

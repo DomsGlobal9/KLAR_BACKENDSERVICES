@@ -28,7 +28,8 @@ export interface CreateSubCompanyInput {
     address: string;
     city: string;
     country: string;
-    createdBy: string; // Parent B2B_ADMIN ID
+    limit?: number;
+    createdBy: string;
 }
 
 export interface UpdateSubCompanyInput {
@@ -43,6 +44,7 @@ export interface UpdateSubCompanyInput {
     address?: string;
     city?: string;
     country?: string;
+    limit?: number;
     status?: UserStatus;
     blockReason?: string;
 }
@@ -80,10 +82,11 @@ export class CompanyService {
             address,
             city,
             country,
+            limit,
             createdBy,
         } = data;
 
-        // Verify parent admin exists
+
         const parentAdmin = await UserModel.findById(createdBy);
         if (!parentAdmin) {
             throw new NotFoundError("Parent admin not found");
@@ -93,17 +96,18 @@ export class CompanyService {
             throw new UnauthorizedError("Only B2B_ADMIN can create sub-companies");
         }
 
-        // Hash password
+
         const passwordHash = await bcrypt.hash(password, 10);
 
-        // Create sub-company user
+
         const user = new UserModel({
             clientType: ClientType.B2B,
             email: businessEmail.toLowerCase(),
             mobile: businessMobile,
             passwordHash,
-            roles: Roles.B2B_ADMIN, // Same role as parent
-            status: UserStatus.ACTIVE, // ACTIVE by default
+            roles: Roles.B2B_ADMIN,
+            status: UserStatus.ACTIVE,
+            limit,
             businessProfile: {
                 businessName,
                 businessType,
@@ -117,19 +121,20 @@ export class CompanyService {
                 country,
             },
             verification: {
-                status: VerificationStatus.APPROVED, // AUTO-VERIFIED
+                status: VerificationStatus.APPROVED,
                 verifiedAt: new Date(),
             },
-            createdBy: new mongoose.Types.ObjectId(createdBy), // Track parent
+            createdBy: new mongoose.Types.ObjectId(createdBy),
         });
 
         await user.save();
 
-        // Create wallet for sub-company
+
         const wallet = new Wallet({
             userId: user._id,
             balance: 0,
             currency: "INR",
+            limit: limit,
             status: WalletStatus.ACTIVE,
             emailAlerts: true,
             smsAlerts: false,
@@ -137,7 +142,6 @@ export class CompanyService {
 
         await wallet.save();
 
-        // Send email notification
         await EmailService.sendEmail({
             to: businessEmail,
             subject: "Welcome! Your Sub-Company Account has been Created",
@@ -210,7 +214,7 @@ export class CompanyService {
             .skip(skip)
             .limit(limit);
 
-        // Get wallets for each company
+
         const companiesWithWallets = await Promise.all(
             companies.map(async (company) => {
                 const wallet = await Wallet.findOne({ userId: company._id });
@@ -218,8 +222,9 @@ export class CompanyService {
                     id: company._id,
                     email: company.email,
                     mobile: company.mobile,
-                    role: company.roles,
+                    role: company.roles,    
                     status: company.status,
+                    limit: company.limit,
                     businessProfile: company.businessProfile,
                     createdBy: company.createdBy,
                     createdAt: company.createdAt,
@@ -228,6 +233,7 @@ export class CompanyService {
                         balance: wallet.balance,
                         currency: wallet.currency,
                         status: wallet.status,
+                        limit: wallet.limit,
                     } : null,
                 };
             })
@@ -272,6 +278,7 @@ export class CompanyService {
             mobile: company.mobile,
             role: company.roles,
             status: company.status,
+            limit: company.limit,
             blockReason: company.blockReason,
             businessProfile: company.businessProfile,
             verification: company.verification,
@@ -283,6 +290,7 @@ export class CompanyService {
                 balance: wallet.balance,
                 currency: wallet.currency,
                 status: wallet.status,
+                limit: wallet.limit,
                 emailAlerts: wallet.emailAlerts,
                 smsAlerts: wallet.smsAlerts,
             } : null,
@@ -316,6 +324,18 @@ export class CompanyService {
             company.mobile = updateData.businessMobile;
         }
 
+        if (updateData.limit !== undefined) {
+            company.limit = updateData.limit;
+        }
+
+        if (updateData.limit !== undefined) {
+            const wallet = await Wallet.findOne({ userId: company._id });
+            if (wallet) {
+                wallet.limit = updateData.limit;
+                await wallet.save();
+            }
+        }
+
         if (updateData.status) {
             const validStatuses = [UserStatus.ACTIVE, UserStatus.INACTIVE, UserStatus.BLOCKED];
             if (!validStatuses.includes(updateData.status)) {
@@ -346,7 +366,7 @@ export class CompanyService {
             if (updateData.country) company.businessProfile.country = updateData.country;
         }
 
-        // Update email if changed
+
         if (updateData.businessEmail && updateData.businessEmail !== company.email) {
             const emailExists = await UserModel.findOne({
                 email: updateData.businessEmail.toLowerCase(),
@@ -358,7 +378,7 @@ export class CompanyService {
             company.email = updateData.businessEmail.toLowerCase();
         }
 
-        // Update password if provided
+
         if (updateData.password) {
             company.passwordHash = await bcrypt.hash(updateData.password, 10);
         }
@@ -366,7 +386,7 @@ export class CompanyService {
         company.updatedAt = new Date();
         await company.save();
 
-        // Get wallet
+
         const wallet = await Wallet.findOne({ userId: company._id });
 
         return {
