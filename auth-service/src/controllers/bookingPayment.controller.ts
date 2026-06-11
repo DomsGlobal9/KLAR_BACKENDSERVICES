@@ -8,6 +8,7 @@ export class BookingPaymentController {
 
     static async checkBalance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
+            console.log("***************** BALANCE check API call");
             if (!req.user) {
                 return res.status(401).json({
                     success: false,

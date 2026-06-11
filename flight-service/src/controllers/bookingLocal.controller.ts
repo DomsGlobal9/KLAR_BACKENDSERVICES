@@ -62,7 +62,7 @@ class BookingLocalController {
                     id: userId,
                     email: response.data.data.email,
                     roles: response.data.data.roles || ["user"],
-                    clientType: response.data.data.clientType || "B2C",
+                    clientType: response.data.data.clientType || "b2c",
                 };
             }
 
@@ -123,6 +123,8 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
+            console.log("WALLET BALANCE CHECK - BOOK Local Service running");
+
             const token = this.currentToken;
 
             if (!token) {
@@ -314,6 +316,8 @@ class BookingLocalController {
 
             const userData = await this.validateToken(token);
 
+            console.log("BOOKING LOCAL - USER VALIDATION", userData);
+
             if (!userData?.clientType) {
                 return res.status(400).json({
                     success: false,
@@ -321,7 +325,7 @@ class BookingLocalController {
                 });
             }
 
-            if (userData.clientType === 'B2C') {
+            if (userData.clientType === 'b2c') {
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
 
                 if (paymentStatus.status != "SUCCESS") {
@@ -332,7 +336,7 @@ class BookingLocalController {
                 }
             }
 
-            if (userData.clientType === 'B2B') {
+            if (userData.clientType === 'b2b') {
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
                 if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
@@ -376,7 +380,7 @@ class BookingLocalController {
                 });
             }
 
-            if (userData.clientType === 'B2B') {
+            if (userData.clientType === 'b2c') {
                 await this.deductWalletBalance(bookingId, totalPrice);
             }
 

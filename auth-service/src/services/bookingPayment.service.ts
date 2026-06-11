@@ -119,17 +119,44 @@ export class BookingPaymentService {
 
         const hasSubCompanySufficientBalance = subCompanyWallet.balance >= totalPrice;
 
+        // If sub-company has sufficient balance (positive and enough)
         if (hasSubCompanySufficientBalance) {
+            const effectiveLimit = -(subCompanyWallet.limit);
+            const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+            const wouldExceedLimit = newBalanceAfterDeduction < effectiveLimit;
+
             return {
-                hasSufficientBalance: true,
+                hasSufficientBalance: !wouldExceedLimit,
                 currentBalance: subCompanyWallet.balance,
                 requiredAmount: totalPrice,
-                shortfallAmount: 0,
+                shortfallAmount: wouldExceedLimit ? (effectiveLimit - newBalanceAfterDeduction) : 0,
                 bookingId,
                 isAlreadyPaid,
+                limitInfo: wouldExceedLimit ? {
+                    limit: effectiveLimit,
+                    wouldResultIn: newBalanceAfterDeduction,
+                    message: `Payment would exceed wallet limit of ${effectiveLimit}`
+                } : undefined
             };
         }
 
+        // If sub-company has insufficient balance (including 0 or negative)
+        // FIRST check if payment would exceed the limit
+        const effectiveLimit = -(subCompanyWallet.limit);
+        const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+        const wouldExceedLimit = newBalanceAfterDeduction < effectiveLimit;
+
+        // If payment would exceed the limit, throw error immediately
+        if (wouldExceedLimit) {
+            throw new Error('Wallet limit exceed. Contact with parent company.')
+            // throw new BadRequestError(
+            //     `Payment would exceed wallet limit. Current balance: ${subCompanyWallet.balance}, ` +
+            //     `Limit: ${effectiveLimit}, Attempted deduction: ${totalPrice}, ` +
+            //     `Would result in: ${newBalanceAfterDeduction}`
+            // );
+        }
+
+        // Only after confirming limit is not exceeded, check parent wallet
         const hasParentSufficientBalance = parentWallet.balance >= totalPrice;
         const shortfallAmount = hasParentSufficientBalance ? 0 : totalPrice - parentWallet.balance;
 
@@ -319,9 +346,37 @@ export class BookingPaymentService {
             throw new BadRequestError("Parent wallet balance is not available");
         }
 
+
         const hasSufficientBalance = subCompanyWallet.balance >= totalPrice;
 
+        if (!hasSufficientBalance) {
+            const effectiveLimit = -(subCompanyWallet.limit);
+            const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+            const wouldExceedLimit = newBalanceAfterDeduction < effectiveLimit;
+
+            if (wouldExceedLimit) {
+                throw new BadRequestError(
+                    `Payment would exceed wallet limit. Current balance: ${subCompanyWallet.balance}, ` +
+                    `Limit: ${effectiveLimit}, Attempted deduction: ${totalPrice}, ` +
+                    `Would result in: ${newBalanceAfterDeduction}`
+                );
+            }
+        }
+
         if (hasSufficientBalance) {
+
+            const effectiveLimit = -(subCompanyWallet.limit);
+            const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+
+            if (newBalanceAfterDeduction < effectiveLimit) {
+                const shortfall = effectiveLimit - newBalanceAfterDeduction;
+                throw new BadRequestError(
+                    `Payment would exceed wallet limit. Current balance: ${subCompanyWallet.balance}, ` +
+                    `Limit: ${effectiveLimit}, Attempted deduction: ${totalPrice}, ` +
+                    `Would result in: ${newBalanceAfterDeduction} (Shortfall from limit: ${shortfall})`
+                );
+            }
+
             const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
                 subCompanyWallet._id,
                 totalPrice
@@ -362,6 +417,7 @@ export class BookingPaymentService {
             };
         }
 
+
         if (parentWallet.balance < totalPrice) {
             throw new BadRequestError(
                 `Insufficient balance in parent wallet. Available: ${parentWallet.balance}, Required: ${totalPrice}`
@@ -390,12 +446,14 @@ export class BookingPaymentService {
             status: "SUCCESS",
         });
 
+
         const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
             subCompanyWallet._id,
             totalPrice
         );
 
         if (!updatedSubCompanyWallet) {
+
             await BookingPaymentRepository.addBalance(parentWallet._id, totalPrice);
             throw new BadRequestError("Failed to deduct from sub-company wallet");
         }

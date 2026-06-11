@@ -182,7 +182,6 @@ export class CompanyService {
     ) {
         const skip = (page - 1) * limit;
 
-        // Verify parent admin exists
         const parentAdmin = await UserModel.findById(parentAdminId);
         if (!parentAdmin) {
             throw new NotFoundError("Parent admin not found");
