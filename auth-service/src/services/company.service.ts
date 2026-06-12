@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { UserModel } from "../models/user.model";
 import { Wallet } from "../models/wallet.model";
+import { WalletTransaction } from "../models/walletTransaction.model";
 import { ClientType } from "../constants/clientTypes";
 import { UserStatus } from "../constants/userStatus";
 import { VerificationStatus } from "../constants/verificationStatus";
@@ -47,6 +48,7 @@ export interface UpdateSubCompanyInput {
     limit?: number;
     status?: UserStatus;
     blockReason?: string;
+    settlementAmount?: number;
 }
 
 export class CompanyService {
@@ -221,7 +223,7 @@ export class CompanyService {
                     id: company._id,
                     email: company.email,
                     mobile: company.mobile,
-                    role: company.roles,    
+                    role: company.roles,
                     status: company.status,
                     limit: company.limit,
                     businessProfile: company.businessProfile,
@@ -318,7 +320,68 @@ export class CompanyService {
             throw new NotFoundError("Sub-company not found or access denied");
         }
 
-        // Update basic fields
+        if (updateData.settlementAmount !== undefined && updateData.settlementAmount > 0) {
+            const settlementAmount = updateData.settlementAmount;
+
+
+            const parentWallet = await Wallet.findOne({ userId: new mongoose.Types.ObjectId(parentAdminId) });
+            if (!parentWallet) {
+                throw new NotFoundError("Parent wallet not found");
+            }
+
+
+            const subCompanyWallet = await Wallet.findOne({ userId: company._id });
+            if (!subCompanyWallet) {
+                throw new NotFoundError("Sub-company wallet not found");
+            }
+
+
+            const currentSubCompanyBalance = subCompanyWallet.balance || 0;
+            const debtAmount = currentSubCompanyBalance < 0 ? Math.abs(currentSubCompanyBalance) : 0;
+            const parentKeepAmount = Math.min(settlementAmount, debtAmount);
+            const subCompanyCreditAmount = settlementAmount - parentKeepAmount;
+
+            const newSubCompanyBalance = currentSubCompanyBalance + settlementAmount;
+            subCompanyWallet.balance = newSubCompanyBalance;
+            await subCompanyWallet.save();
+
+            const newParentBalance = (parentWallet.balance || 0) + parentKeepAmount;
+            parentWallet.balance = newParentBalance;
+            await parentWallet.save();
+
+            if (parentKeepAmount > 0) {
+                await WalletTransaction.create({
+                    walletId: parentWallet._id,
+                    userId: new mongoose.Types.ObjectId(parentAdminId),
+                    type: "CREDIT",
+                    direction: "CREDIT",
+                    amount: parentKeepAmount,
+                    paymentMethod: "CASH_SETTLEMENT",
+                    referenceType: "SETTLEMENT",
+                    referenceId: companyId,
+                    description: `Settlement received from sub-company ${company.businessProfile?.businessName || company.email} for debt clearance`,
+                    status: "SUCCESS",
+                });
+            }
+
+            if (settlementAmount > 0) {
+                await WalletTransaction.create({
+                    walletId: subCompanyWallet._id,
+                    userId: company._id,
+                    type: "CREDIT",
+                    direction: "CREDIT",
+                    amount: settlementAmount,
+                    paymentMethod: "CASH_SETTLEMENT",
+                    referenceType: "SETTLEMENT",
+                    referenceId: companyId,
+                    description: `Cash settlement of ₹${settlementAmount} added to wallet`,
+                    status: "SUCCESS",
+                });
+            }
+
+            delete updateData.settlementAmount;
+        }
+
         if (updateData.businessMobile) {
             company.mobile = updateData.businessMobile;
         }
@@ -365,7 +428,6 @@ export class CompanyService {
             if (updateData.country) company.businessProfile.country = updateData.country;
         }
 
-
         if (updateData.businessEmail && updateData.businessEmail !== company.email) {
             const emailExists = await UserModel.findOne({
                 email: updateData.businessEmail.toLowerCase(),
@@ -377,14 +439,12 @@ export class CompanyService {
             company.email = updateData.businessEmail.toLowerCase();
         }
 
-
         if (updateData.password) {
             company.passwordHash = await bcrypt.hash(updateData.password, 10);
         }
 
         company.updatedAt = new Date();
         await company.save();
-
 
         const wallet = await Wallet.findOne({ userId: company._id });
 
@@ -400,6 +460,7 @@ export class CompanyService {
                 balance: wallet.balance,
                 currency: wallet.currency,
                 status: wallet.status,
+                limit: wallet.limit,
             } : null,
         };
     }
