@@ -182,21 +182,29 @@ export function mapToUnifiedEmailData(
   tripjackData: any,
   localBookingData: Booking
 ): UnifiedEmailData {
-  const tripInformation = tripjackData?.itemInfos?.AIR?.TripInformation?.[0];
-  const segments = tripInformation?.SegmentInformation || [];
+  // CHANGE: Get ALL segments from ALL trips (not just first trip)
+  const allTrips = tripjackData?.itemInfos?.AIR?.TripInformation || [];
+  const allSegments: any[] = [];
+  
+  allTrips.forEach((trip: any) => {
+    if (trip.SegmentInformation && Array.isArray(trip.SegmentInformation)) {
+      allSegments.push(...trip.SegmentInformation);
+    }
+  });
+  
   const travellerInfo = tripjackData?.itemInfos?.AIR?.TravellerInformation?.[0] || {};
   
-  // Get SSR data from Tripjack
   const seatInfo = travellerInfo.SSR_Seat_Information || {};
   const baggageInfo = travellerInfo.SSR_Baggage_Information || {};
   const mealInfo = travellerInfo.SSR_Meal_Information || {};
   const pnrDetails = travellerInfo.pnrDetails || {};
 
-  // Map flights with unique keys
-  const flights = segments.map((segment: any, index: number) => {
+  // Map flights using allSegments (not segments)
+  const flights = allSegments.map((segment: any, index: number) => {
     const uniqueKey = getUniqueSegmentKey(segment, index);
     const baggageData = segment.BaggageInfo?.tI?.[0]?.FareDetails?.BaggageInfo;
-    const pnr = pnrDetails[getDisplayRoute(segment)] || 
+    const route = getDisplayRoute(segment);
+    const pnr = pnrDetails[route] || 
                 pnrDetails[uniqueKey] || 
                 Object.values(pnrDetails)[0] as string || 
                 'N/A';
@@ -228,30 +236,26 @@ export function mapToUnifiedEmailData(
       duration: segment.Duration || 0,
       stops: segment.NumberOfStops || 0,
       cabinClass: segment.BaggageInfo?.tI?.[0]?.FareDetails?.CabinClass || 'ECONOMY',
-      checkInBaggage: baggageData?.CheckInBaggage || '',
-      cabinBaggage: baggageData?.ClassCode || '',
+      checkInBaggage: baggageData?.CheckInBaggage || '15 KG',
+      cabinBaggage: baggageData?.ClassCode || '7 Kg',
       pnr: pnr,
     };
   });
 
-  // Map travellers with their SSR data per segment
+  // Rest of the code remains exactly the same from here
   const travellers = localBookingData.travellers.map((localTraveller: any, travellerIndex: number) => {
-    // Find corresponding traveller in Tripjack data
     const tripjackTraveller = tripjackData?.itemInfos?.AIR?.TravellerInformation?.find(
       (t: any) => t.FirstName === localTraveller.firstName && t.LastName === localTraveller.lastName
     ) || travellerInfo;
 
-    // Build seats array for this traveller
     const seats: Array<any> = [];
     const baggage: Array<any> = [];
     const meals: Array<any> = [];
 
-    // Process each segment
-    segments.forEach((segment: any, segIndex: number) => {
+    allSegments.forEach((segment: any, segIndex: number) => {
       const route = getDisplayRoute(segment);
       const uniqueKey = getUniqueSegmentKey(segment, segIndex);
       
-      // Get seat for this segment
       const seatData = (tripjackTraveller?.SSR_Seat_Information || seatInfo)[route] || 
                        (tripjackTraveller?.SSR_Seat_Information || seatInfo)[uniqueKey];
       if (seatData?.seatNo) {
@@ -262,7 +266,6 @@ export function mapToUnifiedEmailData(
         });
       }
 
-      // Get baggage for this segment
       const bagData = (tripjackTraveller?.SSR_Baggage_Information || baggageInfo)[route] ||
                       (tripjackTraveller?.SSR_Baggage_Information || baggageInfo)[uniqueKey];
       if (bagData?.Description) {
@@ -274,7 +277,6 @@ export function mapToUnifiedEmailData(
         });
       }
 
-      // Get meal for this segment
       const mealData = (tripjackTraveller?.SSR_Meal_Information || mealInfo)[route] ||
                        (tripjackTraveller?.SSR_Meal_Information || mealInfo)[uniqueKey];
       if (mealData?.Description) {
@@ -286,20 +288,18 @@ export function mapToUnifiedEmailData(
       }
     });
 
-    // If no seats found from SSR, try from local booking
     if (seats.length === 0 && localTraveller.ssrSeatInfos) {
       localTraveller.ssrSeatInfos.forEach((seat: any, idx: number) => {
         if (idx < flights.length) {
           seats.push({
             segmentKey: flights[idx].uniqueKey,
             seatNumber: seat.code,
-            route: getDisplayRoute(segments[idx]),
+            route: getDisplayRoute(allSegments[idx]),
           });
         }
       });
     }
 
-    // If no baggage found from SSR, try from local booking
     if (baggage.length === 0 && localTraveller.ssrBaggageInfos) {
       localTraveller.ssrBaggageInfos.forEach((bag: any, idx: number) => {
         if (idx < flights.length) {
@@ -307,7 +307,7 @@ export function mapToUnifiedEmailData(
             segmentKey: flights[idx].uniqueKey,
             code: bag.code,
             description: `Excess Baggage`,
-            route: getDisplayRoute(segments[idx]),
+            route: getDisplayRoute(allSegments[idx]),
           });
         }
       });
@@ -337,7 +337,7 @@ export function mapToUnifiedEmailData(
       email: tripjackData.order?.EmergencyContactInformation?.Emails?.[0] || localBookingData.emergencyContact?.email || '',
       phone: tripjackData.order?.EmergencyContactInformation?.Contacts?.[0] || localBookingData.emergencyContact?.phone || '',
     },
-    flights: flights,
+    flights: flights,  // Using allSegments mapped flights
     travellers: travellers,
     priceBreakdown: {
       tripjackPrice: localBookingData.tripjackPrice || 0,

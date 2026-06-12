@@ -316,11 +316,42 @@ class BookingService {
                 // }
 
                 // Create template data with both structures
+                // Transform flights to match template's expected structure
+                const transformedSegments = unifiedEmailData.flights.map(flight => ({
+                    DepartureAirport: {
+                        cityCode: flight.from.code,
+                        SSRCode: flight.from.code,
+                        city: flight.from.city,
+                        AirlineName: flight.from.name,
+                        country: flight.from.country,
+                        terminal: flight.from.terminal
+                    },
+                    ArrivalAirport: {
+                        cityCode: flight.to.code,
+                        SSRCode: flight.to.code,
+                        city: flight.to.city,
+                        AirlineName: flight.to.name,
+                        country: flight.to.country,
+                        terminal: flight.to.terminal
+                    },
+                    DepartureTime: flight.departureTime,
+                    ArrivalTime: flight.arrivalTime,
+                    Duration: flight.duration,
+                    NumberOfStops: flight.stops,
+                    FlightDetails: {
+                        AirlineInfo: {
+                            SSRCode: flight.airlineCode,
+                            AirlineName: flight.airline
+                        },
+                        FirstName: flight.flightNumber,
+                        EquipmentType: flight.equipmentType
+                    }
+                }));
+
                 const templateData = {
                     unifiedData: unifiedEmailData,
-                    // Map unified data to what template expects
-                    allSegments: unifiedEmailData.flights || [],     // ← flights → allSegments
-                    passengers: unifiedEmailData.travellers || [],   // ← travellers → passengers
+                    allSegments: transformedSegments,  // Use transformed segments instead of flights
+                    passengers: unifiedEmailData.travellers || [],
                     order: { BookingId: unifiedEmailData.bookingId },
                     totalPrice: unifiedEmailData.priceBreakdown?.totalPrice
                 };
