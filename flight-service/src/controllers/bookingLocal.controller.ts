@@ -91,7 +91,7 @@ class BookingLocalController {
         }
     };
 
-    private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
+    private deductWalletBalance = async (bookingId: string, totalPrice: string, userId?: string): Promise<any> => {
         try {
 
             const token = this.currentToken;
@@ -102,7 +102,7 @@ class BookingLocalController {
 
             const response = await axios.post(
                 `${this.authServiceUrl}/book/pay`,
-                { bookingId, totalPrice },
+                { bookingId, totalPrice, userId },
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -110,7 +110,11 @@ class BookingLocalController {
                 }
             );
 
+            console.log("****************** The deduct wallet balance: \n", response);
+
             return response.data;
+
+
 
         } catch (error: any) {
             throw new Error(
@@ -175,6 +179,8 @@ class BookingLocalController {
             const response = await axios.get(
                 `${this.paymentServiceUrl}/razorpay/razorpay-order/${orderId}`
             );
+
+            console.log("#################\n", response);
 
             if (!response?.data?.success === true) {
                 return {
@@ -287,7 +293,6 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
             const {
                 bookingId,
                 travellers,
@@ -316,8 +321,6 @@ class BookingLocalController {
 
             const userData = await this.validateToken(token);
 
-            console.log("BOOKING LOCAL - USER VALIDATION", userData);
-
             if (!userData?.clientType) {
                 return res.status(400).json({
                     success: false,
@@ -328,7 +331,7 @@ class BookingLocalController {
             if (userData.clientType === 'b2c') {
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
 
-                if (paymentStatus.status != "SUCCESS") {
+                if (paymentStatus.status != "paid") {
                     return res.status(400).json({
                         success: false,
                         message: "Payment not completed for this booking",
@@ -339,7 +342,10 @@ class BookingLocalController {
             if (userData.clientType === 'b2b') {
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
-                if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
+                if (
+                    balanceCheck.success != true ||
+                    balanceCheck.data.hasSufficientBalance != true
+                ) {
                     return res.status(400).json({
                         success: false,
                         message: balanceCheck.message,
@@ -381,7 +387,18 @@ class BookingLocalController {
             }
 
             if (userData.clientType === 'b2c') {
-                await this.deductWalletBalance(bookingId, totalPrice);
+                await this.deductWalletBalance(
+                    bookingId,
+                    totalPrice,
+                    '6a1ed2fb290ce7d307b05784'
+                );
+            }
+
+            if (userData.clientType === 'b2b') {
+                await this.deductWalletBalance(
+                    bookingId,
+                    totalPrice
+                );
             }
 
             return res.status(200).json({
@@ -391,7 +408,6 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
-            console.log("$$$$$$$$$$$$$$$$$ Entering into catch in UPDATE-AND-BOOK");
             return res.status(400).json({
                 success: false,
                 message: error.message

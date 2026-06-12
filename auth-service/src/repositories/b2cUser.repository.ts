@@ -54,7 +54,7 @@ export class B2CUserRepository {
 
             loginType: userData.loginType,
 
-            roles: [userData.role || Roles.USER],
+            roles: userData.role || Roles.USER,
 
             status: UserStatus.ACTIVE,
 

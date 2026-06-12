@@ -781,14 +781,12 @@ export class BookingPaymentService {
             return await this.handleRMBalanceCheck(userId, user, bookingId, totalPrice);
         }
 
-        if (userRole === "B2B_ADMIN") {
+        if (userRole === "B2B_ADMIN" || userRole === 'USER') {
             return await this.handleB2BAdminBalanceCheck(userId, user, bookingId, totalPrice);
         }
 
         const wallet = await BookingPaymentRepository.getWallet(userId);
-        if (!wallet) {
-            throw new NotFoundError("Wallet not found");
-        }
+        if (!wallet) throw new NotFoundError("Wallet not found");
 
         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
         const isAlreadyPaid = !!existingPayment;
@@ -818,15 +816,21 @@ export class BookingPaymentService {
         totalPrice: number
     ) {
 
+        console.log("The PAYLOAD WE GOT: \n", {userId, userRole, bookingId, totalPrice});
+
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
         if (userRole === "RM") {
-            return await this.handleRMPayment(userId, user, bookingId, totalPrice);
+            const result = await this.handleRMPayment(userId, user, bookingId, totalPrice);
+            console.log("@@@@@@@@@@@@ The result we got role RM", result);
+            return result;
         }
 
-        if (userRole === "B2B_ADMIN") {
-            return await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
+        if (userRole === "B2B_ADMIN" || userRole === "USER") {
+            const result = await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
+            console.log("@@@@@@@@@@@@ The result we got role B2B_ADMIN", result);
+            return result;
         }
 
         throw new BadRequestError(`Unsupported role: ${userRole}`);

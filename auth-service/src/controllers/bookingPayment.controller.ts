@@ -17,18 +17,22 @@ export class BookingPaymentController {
             }
 
             const { bookingId } = req.params;
-            const { totalPrice } = req.query;
+            const { totalPrice, userId } = req.query;
 
             if (!bookingId) {
                 throw new BadRequestError("Booking ID is required");
             }
 
-            if (!totalPrice || Number(totalPrice) <= 0) {
+            if (Number(totalPrice) <= 0) {
                 throw new BadRequestError("Invalid amount");
             }
 
+            const targetUserId = userId
+                ? new Types.ObjectId(userId as string)
+                : new Types.ObjectId(req.user.userId);
+
             const result = await BookingPaymentService.checkWalletBalance(
-                new Types.ObjectId(req.user.userId),
+                targetUserId,
                 bookingId as string,
                 Number(totalPrice)
             );
@@ -44,7 +48,8 @@ export class BookingPaymentController {
                     success: false,
                     message: result.isAlreadyPaid
                         ? "Booking already paid"
-                        : "Insufficient wallet balance",
+                        // : "Insufficient wallet balance",
+                        : "Server error. Try again after sometime",
                     data: {
                         hasSufficientBalance: result.hasSufficientBalance,
                         currentBalance: result.currentBalance,
@@ -99,7 +104,7 @@ export class BookingPaymentController {
 
             const userRole = req.user.roles;
 
-            const { bookingId, totalPrice } = req.body;
+            const { bookingId, totalPrice, userId } = req.body;
 
             if (!bookingId) {
                 throw new BadRequestError("Booking ID is required");
@@ -109,8 +114,12 @@ export class BookingPaymentController {
                 throw new BadRequestError("Invalid amount");
             }
 
+             const targetUserId = userId
+                ? new Types.ObjectId(userId as string)
+                : new Types.ObjectId(req.user.userId);
+
             const result = await BookingPaymentService.payForBooking(
-                new Types.ObjectId(req.user.userId),
+                targetUserId,
                 userRole,
                 bookingId,
                 totalPrice
