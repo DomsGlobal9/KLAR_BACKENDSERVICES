@@ -1,20 +1,20 @@
 export const flightBookingConfirmationTemplate = (data: any, logoBase64: string): string => {
     // Use unified data structure if available, fallback to old structure
     const unifiedData = data.unifiedData || data;
-    
+
     // For backward compatibility, support both old and new structure
     const order = unifiedData.order || { BookingId: unifiedData.bookingId };
     const flights = unifiedData.flights || [];
     const travellers = unifiedData.travellers || [];
     const priceBreakdown = unifiedData.priceBreakdown || {};
-    
+
     // Old structure fallbacks
     const air = unifiedData?.itemInfos?.AIR || {};
     const trips = air?.TripInformation || [];
     const allSegments = unifiedData.allSegments || trips.flatMap((trip: any) => trip?.SegmentInformation || []);
     const passengers = unifiedData.passengers || air?.TravellerInformation || travellers;
     const fare = unifiedData.fare || air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
-    
+
     // Use totalPrice from priceBreakdown or fallback to old structure
     const totalAmount = priceBreakdown.totalPrice || fare.NetFare || data.totalPrice || 0;
 
@@ -40,12 +40,12 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
 
     // AIRTIGHT PNR EXTRACTION PIPELINE (Updated for unified data)
     let resolvedPnr = unifiedData.bookingPnr || 'N/A';
-    
+
     if (resolvedPnr === 'N/A' && flights.length > 0) {
         // Get PNR from first flight in unified structure
         resolvedPnr = flights[0]?.pnr || 'N/A';
     }
-    
+
     if (resolvedPnr === 'N/A' && passengers && passengers.length > 0) {
         const passenger = passengers[0];
         if (passenger?.pnrDetails && Object.keys(passenger.pnrDetails).length > 0) {
@@ -58,7 +58,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
             resolvedPnr = order.Pnr || order.pnr;
         }
     }
-    
+
     if (resolvedPnr === 'N/A' && allSegments.length > 0) {
         // Scans through your Segment information lists to capture deep nested PNR references
         for (const seg of allSegments) {
@@ -75,45 +75,69 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
 
     // Get passenger details for display (Updated for unified data)
     const getPassengerDetails = (p: any) => {
-        const title = p.Title || p.title || 'Mr/Ms';
+        console.log("Passenger data:", JSON.stringify(p, null, 2));
+        console.log("Seats array:", p.seats);
+        console.log("Meals array:", p.meals);
+        console.log("Baggage array:", p.baggage);
+        const title = p.Title || p.title || '';
         const firstName = p.FirstName || p.firstName || '';
         const lastName = p.LastName || p.lastName || '';
         const cabinClass = p.FareDetails?.CabinClass || p.cabinClass || p.paxType || 'ECONOMY';
         const classCode = p.FareDetails?.ClassCode || p.classCode || 'T';
 
-        // Seat (handle both unified and old structure)
+        // Handle unified data structure (seats array)
         let seatNumber = "Not Selected";
-        if (p.seatNumbers && Object.keys(p.seatNumbers).length > 0) {
-            seatNumber = Object.entries(p.seatNumbers)
-                .map(([route, seat]: any) => `${route}: ${seat || "N/A"}`)
+        if (p.seats && p.seats.length > 0) {
+            seatNumber = p.seats
+                .map((seat: any) => `${seat.route || seat.segmentKey}: ${seat.seatNumber || "N/A"}`)
                 .join("<br>");
-        } else if (p?.SSR_Seat_Information && Object.keys(p.SSR_Seat_Information).length > 0) {
+        }
+        // Handle old structure: SSR_Seat_Information
+        else if (p?.SSR_Seat_Information && Object.keys(p.SSR_Seat_Information).length > 0) {
             seatNumber = Object.entries(p.SSR_Seat_Information)
                 .map(([route, seat]: any) => `${route}: ${seat?.seatNo || "N/A"}`)
                 .join("<br>");
         }
+        // Handle seatNumbers structure
+        else if (p.seatNumbers && Object.keys(p.seatNumbers).length > 0) {
+            seatNumber = Object.entries(p.seatNumbers)
+                .map(([route, seat]: any) => `${route}: ${seat || "N/A"}`)
+                .join("<br>");
+        }
 
-        // Meal
+        // Handle unified meal data
         let mealName = "Not Included";
-        if (p?.SSR_Meal_Information && Object.keys(p.SSR_Meal_Information).length > 0) {
+        if (p.meals && p.meals.length > 0) {
+            mealName = p.meals
+                .map((meal: any) => `${meal.route || meal.segmentKey}: ${meal.description || "N/A"}`)
+                .join("<br>");
+        }
+        else if (p?.SSR_Meal_Information && Object.keys(p.SSR_Meal_Information).length > 0) {
             mealName = Object.entries(p.SSR_Meal_Information)
                 .map(([route, meal]: any) => `${route}: ${meal?.Description || "N/A"}`)
                 .join("<br>");
         }
-        
-        // Baggage
+
+        // Handle unified baggage data
         let baggageValue = "N/A";
-        if (p.baggageInfo) {
+        if (p.baggage && p.baggage.length > 0) {
+            baggageValue = p.baggage
+                .map((bag: any) => `${bag.route || bag.segmentKey}: ${bag.description || "N/A"}`)
+                .join("<br>");
+        }
+        else if (p.baggageInfo) {
             baggageValue = p.baggageInfo;
-        } else if (p?.SSR_Baggage_Information && Object.keys(p.SSR_Baggage_Information).length > 0) {
+        }
+        else if (p?.SSR_Baggage_Information && Object.keys(p.SSR_Baggage_Information).length > 0) {
             baggageValue = Object.entries(p.SSR_Baggage_Information)
                 .map(([route, bag]: any) => `${route}: ${bag?.Description || "N/A"}`)
                 .join("<br>");
-        } else if (p?.FareDetails?.BaggageInfo?.CheckInBaggage) {
+        }
+        else if (p?.FareDetails?.BaggageInfo?.CheckInBaggage) {
             baggageValue = p.FareDetails.BaggageInfo.CheckInBaggage;
         }
 
-        // Handle baggage formatting to ensure space between number and unit (e.g., 15KG -> 15 KG)
+        // Handle baggage formatting
         let rawBaggage = baggageValue || '15 KG';
         let formattedBaggage = String(rawBaggage).trim();
         const baggageMatch = formattedBaggage.match(/^(\d+)\s*([a-zA-Z]+)$/);

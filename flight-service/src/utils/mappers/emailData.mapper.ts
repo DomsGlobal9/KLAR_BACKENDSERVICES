@@ -228,8 +228,8 @@ export function mapToUnifiedEmailData(
       duration: segment.Duration || 0,
       stops: segment.NumberOfStops || 0,
       cabinClass: segment.BaggageInfo?.tI?.[0]?.FareDetails?.CabinClass || 'ECONOMY',
-      checkInBaggage: baggageData?.CheckInBaggage || '15 KG',
-      cabinBaggage: baggageData?.ClassCode || '7 Kg',
+      checkInBaggage: baggageData?.CheckInBaggage || '',
+      cabinBaggage: baggageData?.ClassCode || '',
       pnr: pnr,
     };
   });
