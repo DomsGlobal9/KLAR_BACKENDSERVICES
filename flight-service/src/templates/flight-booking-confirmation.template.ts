@@ -501,60 +501,76 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
 
         <!-- Passenger Information Section -->
         <div class="section-badge">✈️ Passengers & details</div>
-        ${passengers.map((p: any) => {
-            const details = getPassengerDetails(p);
-            const passengerPnr = details.pnrDetails && Object.keys(details.pnrDetails).length > 0
-                ? Object.values(details.pnrDetails).join(", ")
-                : (p.pnr || resolvedPnr);
-            return `
-            <div class="passenger-grid">
-                <div class="info-chip">
-                    <span class="label-sm">Full name</span>
-                    <span class="val">${details.title} ${details.firstName} ${details.lastName}</span>
+${passengers.map((p: any) => {
+        const details = getPassengerDetails(p);
+
+        // Build route-specific PNRs
+        const pnrByRoute = details.pnrDetails && Object.keys(details.pnrDetails).length > 0
+            ? details.pnrDetails
+            : {};
+
+        const hasRoutePnrs = Object.keys(pnrByRoute).length > 0;
+
+        return `
+    <div class="passenger-grid">
+        <div class="info-chip">
+            <span class="label-sm">Full name</span>
+            <span class="val">${details.title} ${details.firstName} ${details.lastName}</span>
+        </div>
+        <div class="info-chip">
+            <span class="label-sm">Cabin class</span>
+            <span class="val">${details.cabinClass}</span>
+        </div>
+        ${!hasRoutePnrs ? `
+        <div class="info-chip">
+            <span class="label-sm">PNR / Record locator</span>
+            <span class="val">${resolvedPnr}</span>
+        </div>
+        ` : ''}
+        <div class="info-chip">
+            <span class="label-sm">Meal preference</span>
+            <span class="val seat-baggage-multi">${details.mealName}</span>
+        </div>
+        <div class="info-chip">
+            <span class="label-sm">Check-in baggage</span>
+            <span class="val">${details.baggageValue}</span>
+        </div>
+    </div>
+    
+    ${hasRoutePnrs ? `
+    <div style="margin-top: -16px; margin-bottom: 16px; background: #f8fafc; border-radius: 16px; padding: 12px 20px;">
+        <div style="font-size: 11px; font-weight: 700; color: #5b6e8c; text-transform: uppercase; margin-bottom: 8px;">PNR by Route</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+            ${Object.entries(pnrByRoute).map(([route, pnrValue]: [string, any]) => `
+                <div style="background: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <strong style="color: #1e4f8a;">${route}:</strong> ${pnrValue}
                 </div>
-                <div class="info-chip">
-                    <span class="label-sm">PNR / Record locator</span>
-                    <span class="val">${passengerPnr}</span>
-                </div>
-                <div class="info-chip">
-                    <span class="label-sm">Cabin class</span>
-                    <span class="val">${details.cabinClass}</span>
-                </div>
-                <div class="info-chip">
-                    <span class="label-sm">Seat assignment</span>
-                    <span class="val seat-baggage-multi">${details.seatNumber !== "Not Selected" ? details.seatNumber : "—"}</span>
-                </div>
-                <div class="info-chip">
-                    <span class="label-sm">Meal preference</span>
-                    <span class="val seat-baggage-multi">${details.mealName}</span>
-                </div>
-                <div class="info-chip">
-                    <span class="label-sm">Check-in baggage</span>
-                    <span class="val">${details.baggageValue}</span>
-                </div>
-            </div>
-            `;
-        }).join("")}
+            `).join('')}
+        </div>
+    </div>
+    ` : ''}
+    `;
+    }).join("")}
 
         <!-- Flight segments display -->
         <div class="section-badge">🛫 Flight itinerary (${allSegments.length} segment${allSegments.length !== 1 ? 's' : ''})</div>
         ${allSegments.length > 0 ? allSegments.map((seg: any) => {
-            const depCode = seg.DepartureAirport?.cityCode || seg.DepartureAirport?.SSRCode || seg.from?.code || 'N/A';
-            const depCity = seg.DepartureAirport?.city || seg.from?.city || 'N/A';
-            const depTimeRaw = seg.DepartureTime || seg.departureTime;
-            const depTimeFormatted = depTimeRaw ? new Date(depTimeRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
-            const depDateFormatted = formatDate(depTimeRaw);
-            
-            const arrCode = seg.ArrivalAirport?.cityCode || seg.to?.code || 'N/A';
-            const arrCity = seg.ArrivalAirport?.city || seg.to?.city || 'N/A';
-            const arrTimeRaw = seg.ArrivalTime || seg.arrivalTime;
-            const arrTimeFormatted = arrTimeRaw ? new Date(arrTimeRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
-            const arrDateFormatted = formatDate(arrTimeRaw);
-            
-            const durationMins = seg.Duration || seg.duration;
-            const stops = seg.NumberOfStops !== undefined ? seg.NumberOfStops : 0;
-            const stopText = stops === 0 ? 'NON-STOP' : `${stops} STOP${stops > 1 ? 'S' : ''}`;
-            return `
+        const depCode = seg.DepartureAirport?.cityCode || seg.DepartureAirport?.SSRCode || seg.from?.code || 'N/A';
+        const depCity = seg.DepartureAirport?.city || seg.from?.city || 'N/A';
+        const depTimeRaw = seg.DepartureTime || seg.departureTime;
+        const depTimeFormatted = depTimeRaw ? new Date(depTimeRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+        const depDateFormatted = formatDate(depTimeRaw);
+
+        const arrCode = seg.ArrivalAirport?.cityCode || seg.to?.code || 'N/A';
+        const arrCity = seg.ArrivalAirport?.city || seg.to?.city || 'N/A';
+        const arrTimeRaw = seg.ArrivalTime || seg.arrivalTime;
+        const arrTimeFormatted = arrTimeRaw ? new Date(arrTimeRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+        const arrDateFormatted = formatDate(arrTimeRaw);
+
+        const durationMins = seg.Duration || seg.duration;
+        const stops = seg.NumberOfStops !== undefined ? seg.NumberOfStops : 0;
+        const stopText = stops === 0 ? 'NON-STOP' : `${stops} STOP${stops > 1 ? 'S' : ''}`;
+        return `
             <div class="flight-card">
                 <div class="flight-row">
                     <div class="airport-detail">
@@ -578,7 +594,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
                 </div>
             </div>
             `;
-        }).join('') : `
+    }).join('') : `
         <div class="flight-card" style="padding: 28px; text-align:center;">
             <div class="apt-code" style="font-size:18px;">⚠️ No flight segment data available</div>
             <div class="apt-city" style="margin-top:6px;">Please contact support for itinerary details</div>
@@ -589,26 +605,26 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         <div class="section-badge">🎒 Onboard & services</div>
         <div class="amenities-grid">
             ${(() => {
-                // Get first passenger details for amenities
-                const firstPax = passengers[0];
-                if (!firstPax) return '<div>No passenger data available</div>';
-                
-                const details = getPassengerDetails(firstPax);
-                
-                // Helper to parse route-specific details from formatted strings
-                const parseRouteDetails = (formattedString: string) => {
-                    if (!formattedString || formattedString === "Not Selected" || formattedString === "Not Included") {
-                        return [];
-                    }
-                    const lines = formattedString.split('<br>');
-                    return lines.filter(line => line.trim().length > 0);
-                };
-                
-                const seatRoutes = parseRouteDetails(details.seatNumber);
-                const mealRoutes = parseRouteDetails(details.mealName);
-                const baggageRoutes = parseRouteDetails(details.baggageValue);
-                
-                return `
+            // Get first passenger details for amenities
+            const firstPax = passengers[0];
+            if (!firstPax) return '<div>No passenger data available</div>';
+
+            const details = getPassengerDetails(firstPax);
+
+            // Helper to parse route-specific details from formatted strings
+            const parseRouteDetails = (formattedString: string) => {
+                if (!formattedString || formattedString === "Not Selected" || formattedString === "Not Included") {
+                    return [];
+                }
+                const lines = formattedString.split('<br>');
+                return lines.filter(line => line.trim().length > 0);
+            };
+
+            const seatRoutes = parseRouteDetails(details.seatNumber);
+            const mealRoutes = parseRouteDetails(details.mealName);
+            const baggageRoutes = parseRouteDetails(details.baggageValue);
+
+            return `
                 <div class="amenity-item">
                     <div class="icon-bg">🪑</div>
                     <div class="amenity-text">
@@ -644,7 +660,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
                     </div>
                 </div>
                 `;
-            })()}
+        })()}
         </div>
 
         <!-- Important & ID requirements -->

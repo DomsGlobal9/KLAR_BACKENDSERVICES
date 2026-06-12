@@ -259,6 +259,14 @@ class BookingService {
                 ourDatabaseBookingData as Booking
             );
 
+            console.log("========== EMAIL DATA DEBUG ==========");
+            console.log("Flights count:", unifiedEmailData.flights.length);
+            console.log("Flights with PNRs:", unifiedEmailData.flights.map(f => ({
+                route: `${f.from.code}-${f.to.code}`,
+                pnr: f.pnr
+            })));
+            console.log("======================================");
+
 
             console.log("Booking status i get: ", JSON.stringify(tripjackBookingStatus, null, 2));
             await this.bookingRepo.updateBookingStatus(
@@ -318,6 +326,7 @@ class BookingService {
                 // Create template data with both structures
                 // Transform flights to match template's expected structure
                 const transformedSegments = unifiedEmailData.flights.map(flight => ({
+                    SegmentID: flight.segmentId,
                     DepartureAirport: {
                         cityCode: flight.from.code,
                         SSRCode: flight.from.code,
@@ -348,12 +357,29 @@ class BookingService {
                     }
                 }));
 
+                const transformedTravellers = unifiedEmailData.travellers.map(traveller => ({
+                    ...traveller,
+                    pnrDetails: unifiedEmailData.flights.reduce((acc, flight, idx) => {
+                        if (flight.pnr && flight.pnr !== 'N/A') {
+                            const route = `${flight.from.code}-${flight.to.code}`;
+                            acc[route] = flight.pnr;
+                        }
+                        return acc;
+                    }, {} as Record<string, string>)
+                }));
+
                 const templateData = {
-                    unifiedData: unifiedEmailData,
-                    allSegments: transformedSegments,  // Use transformed segments instead of flights
-                    passengers: unifiedEmailData.travellers || [],
+                    unifiedData: {
+                        ...unifiedEmailData,
+                        travellers: transformedTravellers,
+                        bookingPnr: unifiedEmailData.flights.find(f => f.pnr && f.pnr !== 'N/A')?.pnr || 'N/A'
+                    },
+                    allSegments: transformedSegments,
+                    passengers: transformedTravellers,
                     order: { BookingId: unifiedEmailData.bookingId },
-                    totalPrice: unifiedEmailData.priceBreakdown?.totalPrice
+                    totalPrice: unifiedEmailData.priceBreakdown?.totalPrice,
+                    bookingId: unifiedEmailData.bookingId,
+                    pnr: unifiedEmailData.flights.find(f => f.pnr && f.pnr !== 'N/A')?.pnr || 'N/A'
                 };
 
                 const customerHtml = flightBookingConfirmationTemplate(

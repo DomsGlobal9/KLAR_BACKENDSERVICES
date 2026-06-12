@@ -185,15 +185,15 @@ export function mapToUnifiedEmailData(
   // CHANGE: Get ALL segments from ALL trips (not just first trip)
   const allTrips = tripjackData?.itemInfos?.AIR?.TripInformation || [];
   const allSegments: any[] = [];
-  
+
   allTrips.forEach((trip: any) => {
     if (trip.SegmentInformation && Array.isArray(trip.SegmentInformation)) {
       allSegments.push(...trip.SegmentInformation);
     }
   });
-  
+
   const travellerInfo = tripjackData?.itemInfos?.AIR?.TravellerInformation?.[0] || {};
-  
+
   const seatInfo = travellerInfo.SSR_Seat_Information || {};
   const baggageInfo = travellerInfo.SSR_Baggage_Information || {};
   const mealInfo = travellerInfo.SSR_Meal_Information || {};
@@ -204,15 +204,44 @@ export function mapToUnifiedEmailData(
     const uniqueKey = getUniqueSegmentKey(segment, index);
     const baggageData = segment.BaggageInfo?.tI?.[0]?.FareDetails?.BaggageInfo;
     const route = getDisplayRoute(segment);
-    const pnr = pnrDetails[route] || 
-                pnrDetails[uniqueKey] || 
-                Object.values(pnrDetails)[0] as string || 
-                'N/A';
-    
+
+    // Get PNR for this specific segment/route
+    let segmentPnr = 'N/A';
+
+    // Try to get PNR from pnrDetails using route key
+    if (pnrDetails[route]) {
+      segmentPnr = pnrDetails[route];
+    }
+    // Try using uniqueKey
+    else if (pnrDetails[uniqueKey]) {
+      segmentPnr = pnrDetails[uniqueKey];
+    }
+    // Try to find any PNR that might contain this route
+    else {
+      const matchingKey = Object.keys(pnrDetails).find(key =>
+        key.includes(route) || route.includes(key)
+      );
+      if (matchingKey) {
+        segmentPnr = pnrDetails[matchingKey];
+      }
+    }
+
+    // If still no PNR, check travellerInfo for this segment index
+    if (segmentPnr === 'N/A' && travellerInfo.pnrDetails) {
+      // Some APIs store PNRs as array values
+      const pnrValues = Object.values(travellerInfo.pnrDetails);
+      if (pnrValues[index]) {
+        segmentPnr = pnrValues[index] as string;
+      } else if (pnrValues[0]) {
+        segmentPnr = pnrValues[0] as string;
+      }
+    }
+
     return {
       segmentId: segment.SegmentID,
       segmentIndex: index,
       uniqueKey: uniqueKey,
+      route: route,  // Add route for reference
       airline: segment.FlightDetails?.AirlineInfo?.AirlineName || 'N/A',
       airlineCode: segment.FlightDetails?.AirlineInfo?.SSRCode || 'N/A',
       flightNumber: segment.FlightDetails?.FirstName || '',
@@ -238,7 +267,7 @@ export function mapToUnifiedEmailData(
       cabinClass: segment.BaggageInfo?.tI?.[0]?.FareDetails?.CabinClass || 'ECONOMY',
       checkInBaggage: baggageData?.CheckInBaggage || '15 KG',
       cabinBaggage: baggageData?.ClassCode || '7 Kg',
-      pnr: pnr,
+      pnr: segmentPnr,  // Route-specific PNR
     };
   });
 
@@ -255,9 +284,9 @@ export function mapToUnifiedEmailData(
     allSegments.forEach((segment: any, segIndex: number) => {
       const route = getDisplayRoute(segment);
       const uniqueKey = getUniqueSegmentKey(segment, segIndex);
-      
-      const seatData = (tripjackTraveller?.SSR_Seat_Information || seatInfo)[route] || 
-                       (tripjackTraveller?.SSR_Seat_Information || seatInfo)[uniqueKey];
+
+      const seatData = (tripjackTraveller?.SSR_Seat_Information || seatInfo)[route] ||
+        (tripjackTraveller?.SSR_Seat_Information || seatInfo)[uniqueKey];
       if (seatData?.seatNo) {
         seats.push({
           segmentKey: uniqueKey,
@@ -267,7 +296,7 @@ export function mapToUnifiedEmailData(
       }
 
       const bagData = (tripjackTraveller?.SSR_Baggage_Information || baggageInfo)[route] ||
-                      (tripjackTraveller?.SSR_Baggage_Information || baggageInfo)[uniqueKey];
+        (tripjackTraveller?.SSR_Baggage_Information || baggageInfo)[uniqueKey];
       if (bagData?.Description) {
         baggage.push({
           segmentKey: uniqueKey,
@@ -278,7 +307,7 @@ export function mapToUnifiedEmailData(
       }
 
       const mealData = (tripjackTraveller?.SSR_Meal_Information || mealInfo)[route] ||
-                       (tripjackTraveller?.SSR_Meal_Information || mealInfo)[uniqueKey];
+        (tripjackTraveller?.SSR_Meal_Information || mealInfo)[uniqueKey];
       if (mealData?.Description) {
         meals.push({
           segmentKey: uniqueKey,
