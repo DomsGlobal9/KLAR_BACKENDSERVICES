@@ -1,18 +1,22 @@
 export const flightBookingConfirmationTemplate = (data: any, logoBase64: string): string => {
-    const order = data?.order || {};
-    const air = data?.itemInfos?.AIR || {};
+    // Use unified data structure if available, fallback to old structure
+    const unifiedData = data.unifiedData || data;
+    
+    // For backward compatibility, support both old and new structure
+    const order = unifiedData.order || { BookingId: unifiedData.bookingId };
+    const flights = unifiedData.flights || [];
+    const travellers = unifiedData.travellers || [];
+    const priceBreakdown = unifiedData.priceBreakdown || {};
+    
+    // Old structure fallbacks
+    const air = unifiedData?.itemInfos?.AIR || {};
     const trips = air?.TripInformation || [];
-
-    const allSegments = trips.flatMap(
-        (trip: any) => trip?.SegmentInformation || []
-    );
-
-    // FIX: Look into the local database tracking array fallback if Tripjack payload arrays are empty of meta-records
-    const passengers =
-        air?.TravellerInformation ||
-        data?.travellers ||
-        [];
-    const fare = air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
+    const allSegments = unifiedData.allSegments || trips.flatMap((trip: any) => trip?.SegmentInformation || []);
+    const passengers = unifiedData.passengers || air?.TravellerInformation || travellers;
+    const fare = unifiedData.fare || air?.totalPriceInfo?.totalFareDetail?.FareComponents || {};
+    
+    // Use totalPrice from priceBreakdown or fallback to old structure
+    const totalAmount = priceBreakdown.totalPrice || fare.NetFare || data.totalPrice || 0;
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '';
@@ -34,10 +38,15 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         return `${hours} HR ${remainingMinutes} MIN`;
     };
 
-    // AIRTIGHT PNR EXTRACTION PIPELINE
-    let resolvedPnr = 'N/A';
-
-    if (passengers && passengers.length > 0) {
+    // AIRTIGHT PNR EXTRACTION PIPELINE (Updated for unified data)
+    let resolvedPnr = unifiedData.bookingPnr || 'N/A';
+    
+    if (resolvedPnr === 'N/A' && flights.length > 0) {
+        // Get PNR from first flight in unified structure
+        resolvedPnr = flights[0]?.pnr || 'N/A';
+    }
+    
+    if (resolvedPnr === 'N/A' && passengers && passengers.length > 0) {
         const passenger = passengers[0];
         if (passenger?.pnrDetails && Object.keys(passenger.pnrDetails).length > 0) {
             resolvedPnr = Object.values(passenger.pnrDetails)[0] as string;
@@ -48,12 +57,8 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         } else if (order?.Pnr || order?.pnr) {
             resolvedPnr = order.Pnr || order.pnr;
         }
-    } else if (data?.pnr) {
-        resolvedPnr = data.pnr;
-    } else if (order?.Pnr || order?.pnr) {
-        resolvedPnr = order.Pnr || order.pnr;
     }
-
+    
     if (resolvedPnr === 'N/A' && allSegments.length > 0) {
         // Scans through your Segment information lists to capture deep nested PNR references
         for (const seg of allSegments) {
@@ -68,45 +73,45 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
         }
     }
 
-    // Get passenger details for display
+    // Get passenger details for display (Updated for unified data)
     const getPassengerDetails = (p: any) => {
         const title = p.Title || p.title || 'Mr/Ms';
         const firstName = p.FirstName || p.firstName || '';
         const lastName = p.LastName || p.lastName || '';
-        const cabinClass = p.FareDetails?.CabinClass || p.paxType || 'ECONOMY';
-        const classCode = p.FareDetails?.ClassCode || 'T';
+        const cabinClass = p.FareDetails?.CabinClass || p.cabinClass || p.paxType || 'ECONOMY';
+        const classCode = p.FareDetails?.ClassCode || p.classCode || 'T';
 
-        // Seat
-        const seatNumber =
-            p?.SSR_Seat_Information &&
-                Object.keys(p.SSR_Seat_Information).length > 0
-                ? Object.entries(p.SSR_Seat_Information)
-                    .map(([route, seat]: any) =>
-                        `${route}: ${seat?.seatNo || "N/A"}`
-                    )
-                    .join("<br>")
-                : "Not Selected";
+        // Seat (handle both unified and old structure)
+        let seatNumber = "Not Selected";
+        if (p.seatNumbers && Object.keys(p.seatNumbers).length > 0) {
+            seatNumber = Object.entries(p.seatNumbers)
+                .map(([route, seat]: any) => `${route}: ${seat || "N/A"}`)
+                .join("<br>");
+        } else if (p?.SSR_Seat_Information && Object.keys(p.SSR_Seat_Information).length > 0) {
+            seatNumber = Object.entries(p.SSR_Seat_Information)
+                .map(([route, seat]: any) => `${route}: ${seat?.seatNo || "N/A"}`)
+                .join("<br>");
+        }
 
         // Meal
-        const mealName =
-            p?.SSR_Meal_Information &&
-                Object.keys(p.SSR_Meal_Information).length > 0
-                ? Object.entries(p.SSR_Meal_Information)
-                    .map(([route, meal]: any) =>
-                        `${route}: ${meal?.Description || "N/A"}`
-                    )
-                    .join("<br>")
-                : "Not Included";
+        let mealName = "Not Included";
+        if (p?.SSR_Meal_Information && Object.keys(p.SSR_Meal_Information).length > 0) {
+            mealName = Object.entries(p.SSR_Meal_Information)
+                .map(([route, meal]: any) => `${route}: ${meal?.Description || "N/A"}`)
+                .join("<br>");
+        }
+        
         // Baggage
-        const baggageValue =
-            p?.SSR_Baggage_Information &&
-                Object.keys(p.SSR_Baggage_Information).length > 0
-                ? Object.entries(p.SSR_Baggage_Information)
-                    .map(([route, bag]: any) =>
-                        `${route}: ${bag?.Description || "N/A"}`
-                    )
-                    .join("<br>")
-                : p?.FareDetails?.BaggageInfo?.CheckInBaggage || "N/A";
+        let baggageValue = "N/A";
+        if (p.baggageInfo) {
+            baggageValue = p.baggageInfo;
+        } else if (p?.SSR_Baggage_Information && Object.keys(p.SSR_Baggage_Information).length > 0) {
+            baggageValue = Object.entries(p.SSR_Baggage_Information)
+                .map(([route, bag]: any) => `${route}: ${bag?.Description || "N/A"}`)
+                .join("<br>");
+        } else if (p?.FareDetails?.BaggageInfo?.CheckInBaggage) {
+            baggageValue = p.FareDetails.BaggageInfo.CheckInBaggage;
+        }
 
         // Handle baggage formatting to ensure space between number and unit (e.g., 15KG -> 15 KG)
         let rawBaggage = baggageValue || '15 KG';
@@ -204,7 +209,7 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
                 <div class="label-sm">Booking Reference</div>
                 <div class="val-lg">${order.BookingId || 'N/A'}</div>
                 <div class="label-sm" style="margin-top: 10px;">Total Amount Paid</div>
-                <div class="price-blue">₹${(fare.NetFare || data.totalPrice || 0).toLocaleString('en-IN')}</div>
+                <div class="price-blue">₹${totalAmount.toLocaleString('en-IN')}</div>
             </div>
         </div>
 
@@ -266,31 +271,39 @@ export const flightBookingConfirmationTemplate = (data: any, logoBase64: string)
     Flight Segments (${allSegments.length})
 </div>
 
-        ${allSegments.map((seg: any) => `
+        ${allSegments.length > 0 ? allSegments.map((seg: any) => `
         <div class="route-card">
             <div class="apt-group">
                 <div class="apt-code">
                     ${seg.DepartureAirport?.cityCode ||
         seg.DepartureAirport?.SSRCode ||
+        seg.from?.code ||
         'N/A'}
                 </div>
-                <div class="apt-name">${seg.DepartureAirport?.city || 'N/A'}</div>
-                <div class="flight-time">${new Date(seg.DepartureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
-                <div class="label-sm">${formatDate(seg.DepartureTime)}</div>
+                <div class="apt-name">${seg.DepartureAirport?.city || seg.from?.city || 'N/A'}</div>
+                <div class="flight-time">${new Date(seg.DepartureTime || seg.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                <div class="label-sm">${formatDate(seg.DepartureTime || seg.departureTime)}</div>
             </div>
             <div class="path-area">
                 <div class="line"></div>
                 <span class="plane">✈</span>
-                <div class="dur">${formatDuration(seg.Duration)} • NON-STOP</div>
+                <div class="dur">${formatDuration(seg.Duration || seg.duration)} • ${seg.NumberOfStops === 0 ? 'NON-STOP' : `${seg.NumberOfStops} STOP`}</div>
             </div>
             <div class="apt-group" style="text-align: right;">
-                <div class="apt-code">${seg.ArrivalAirport?.cityCode || 'N/A'}</div>
-                <div class="apt-name">${seg.ArrivalAirport?.city || 'N/A'}</div>
-                <div class="flight-time">${new Date(seg.ArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
-                <div class="label-sm">${formatDate(seg.ArrivalTime)}</div>
+                <div class="apt-code">${seg.ArrivalAirport?.cityCode || seg.to?.code || 'N/A'}</div>
+                <div class="apt-name">${seg.ArrivalAirport?.city || seg.to?.city || 'N/A'}</div>
+                <div class="flight-time">${new Date(seg.ArrivalTime || seg.arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                <div class="label-sm">${formatDate(seg.ArrivalTime || seg.arrivalTime)}</div>
             </div>
         </div>
-        `).join('')}
+        `).join('') : `
+        <div class="route-card">
+            <div class="apt-group">
+                <div class="apt-code">N/A</div>
+                <div class="apt-name">No flight data available</div>
+            </div>
+        </div>
+        `}
 
         <div class="info-card">
             <div class="info-grid">

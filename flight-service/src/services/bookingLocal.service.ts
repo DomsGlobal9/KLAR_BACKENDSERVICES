@@ -11,6 +11,7 @@ import { FrontendBookingPayload } from "../types/booking.types";
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
 import { json } from "zod";
+import { mapToUnifiedEmailData } from "../utils/mappers/emailData.mapper";
 
 
 class BookingService {
@@ -244,7 +245,20 @@ class BookingService {
 
         if (response.data.status.success === true) {
 
+            /**
+             * Data getting from Tripjack
+             */
             const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
+            const ourDatabaseBookingData = await this.bookingRepo.getBookingById(updatedBooking.bookingId);
+            console.log("I am getting data from tripjack", JSON.stringify(tripjackBookingStatus, null, 2));
+            console.log("I am getting data from ourside", JSON.stringify(ourDatabaseBookingData, null, 2));
+
+            // Map data to unified format
+            const unifiedEmailData = mapToUnifiedEmailData(
+                tripjackBookingStatus,
+                ourDatabaseBookingData as Booking
+            );
+
 
             console.log("Booking status i get: ", JSON.stringify(tripjackBookingStatus, null, 2));
             await this.bookingRepo.updateBookingStatus(
@@ -253,8 +267,7 @@ class BookingService {
             );
 
             const to =
-                tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
-                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+                tripjackBookingStatus?.order?.DeliveryInformation?.Emails?.[0] ||
                 updatedBooking?.email || "";
 
             if (!to) {
@@ -262,17 +275,58 @@ class BookingService {
                 return response.data;
             } else {
 
+                //     const templateData = {
+                //         ...tripjackBookingStatus,
+                //         travellers: updatedBooking.travellers,
+                //         totalPrice: updatedBooking.totalPrice,
+                //         tripjackPrice: updatedBooking.tripjackPrice,
+                //         markupPrice: updatedBooking.markupPrice
+                //     };
+
+                //     // Always send customer email (B2C + B2B)
+                //     const customerHtml = flightBookingConfirmationTemplate(
+                //         templateData,
+                //         ""
+                //     );
+
+                //     await this.sendEmail(
+                //         to,
+                //         `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
+                //         customerHtml
+                //     );
+
+                //     // Send agency email only for B2B
+                //     if (updatedBooking.userInfo?.clientType === "B2B") {
+
+                //         const agencyHtml = flightAgencyBookingConfirmationTemplate(
+                //             templateData,
+                //             ""
+                //         );
+
+                //         const agencyEmail = updatedBooking.userInfo?.email;
+
+                //         if (agencyEmail) {
+                //             await this.sendEmail(
+                //                 agencyEmail,
+                //                 `Agency Booking Confirmation - ${updatedBooking.bookingId}`,
+                //                 agencyHtml
+                //             );
+                //         }
+                //     }
+                // }
+
+                // Create template data with both structures
                 const templateData = {
-                    ...tripjackBookingStatus,
-                    travellers: updatedBooking.travellers,
-                    totalPrice: updatedBooking.totalPrice,
-                    tripjackPrice: updatedBooking.tripjackPrice,
-                    markupPrice: updatedBooking.markupPrice
+                    unifiedData: unifiedEmailData,
+                    // Map unified data to what template expects
+                    allSegments: unifiedEmailData.flights || [],     // ← flights → allSegments
+                    passengers: unifiedEmailData.travellers || [],   // ← travellers → passengers
+                    order: { BookingId: unifiedEmailData.bookingId },
+                    totalPrice: unifiedEmailData.priceBreakdown?.totalPrice
                 };
 
-                // Always send customer email (B2C + B2B)
                 const customerHtml = flightBookingConfirmationTemplate(
-                    templateData,
+                    templateData,  // ← Pass the wrapped data
                     ""
                 );
 
@@ -284,7 +338,6 @@ class BookingService {
 
                 // Send agency email only for B2B
                 if (updatedBooking.userInfo?.clientType === "B2B") {
-
                     const agencyHtml = flightAgencyBookingConfirmationTemplate(
                         templateData,
                         ""
@@ -317,7 +370,7 @@ class BookingService {
         return await this.bookingRepo.getBookingsByUserId(userId);
     }
 
-    async getBookingDetails(bookingId: string, userId: string) {
+    async getBookingDetails(bookingId: string, userId?: string) {
         if (!bookingId) {
             throw new Error("bookingId is required");
         }

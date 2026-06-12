@@ -80,7 +80,7 @@ export class BookingRepository {
         }).sort({ createdAt: -1 });
     }
 
-    async getBookingByIdAndUser(bookingId: string, userId: string) {
+    async getBookingByIdAndUser(bookingId: string, userId?: string) {
         return await BookingModel.findOne({
             bookingId,
             "userInfo.id": userId
