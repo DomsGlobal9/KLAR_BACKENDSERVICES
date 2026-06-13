@@ -1,15 +1,16 @@
 import { Request, Response } from "express";
+import { Filter } from "../types/filter.types";
 import searchService from "../services/search.service";
 import FlightSearchValidator from "../utils/flightSearchValidator";
-import { SortField, SortOption, SortOrder } from "../types/sort.types";
-import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
-import { Filter } from "../types/filter.types";
 import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
+import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
+import { SortField, SortOption, SortOrder } from "../types/sort.types";
 import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 
 
 export const searchOneWayController = async (req: Request, res: Response) => {
     try {
+        console.log("*************** ALL the QUERY we got", req.query);
         const validationResult = FlightSearchValidator.validate(req.body);
 
         if (!validationResult.isValid) {
@@ -27,6 +28,7 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             });
         }
 
+        const printData = req.query.printData;
         const sortField = req.query.sortBy as SortField;
         const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
 
@@ -111,7 +113,8 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             req.body,
             sortOption,
             filters.length > 0 ? filters : undefined,
-            includeStats
+            includeStats,
+            printData as string | boolean,
         );
 
         return res.status(200).json({
