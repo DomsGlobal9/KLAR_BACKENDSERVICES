@@ -7,6 +7,7 @@ import RedisCacheService from "../cache/redisCache.service";
 import { Filter, FilterStats } from "../types/filter.types";
 import { FlightFilter } from "../utils/sorter/filter.utils";
 import { FlightSegment } from "../types/returnFilter.types";
+import MarkupInterceptor from "../services/markup.interceptor";
 import { OneWayNormalizer } from "../normalizers/oneway.normalizer";
 import { ReturnNormalizer } from "../normalizers/return.normalizer";
 import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
@@ -14,7 +15,6 @@ import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
 import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 import { MultiCityFlightFilter } from "../utils/sorter/multiFilter.utils";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
-import MarkupInterceptor from "../services/markup.interceptor";
 
 class SearchService {
 
@@ -45,8 +45,6 @@ class SearchService {
 
             const markedUpResponse = MarkupInterceptor.applyMarkupToFlightSearch(rawResponse.data);
 
-            console.log("PRINT dATA is", printData);
-
             if (printData == "true" || printData == true) {
                 let normalized = OneWayNormalizer.transformWithAllFares({ data: markedUpResponse });
                 const response: any = {
@@ -55,7 +53,10 @@ class SearchService {
                 return response;
             }
 
-            let normalized = OneWayNormalizer.transform({ data: markedUpResponse });
+            const normalizedResult = OneWayNormalizer.transform({ data: markedUpResponse });
+
+            let normalized = normalizedResult.flights;
+            const airlineStats = normalizedResult.airlineStats;
 
             const originalCount = normalized.length;
 
@@ -85,7 +86,8 @@ class SearchService {
 
             const response: any = {
                 sessionId,
-                flights: normalized
+                flights: normalized,
+                airlineStats
             };
 
             if (stats) {
@@ -111,7 +113,8 @@ class SearchService {
         sortTarget: 'onward' | 'return' | 'both' = 'both',
         filters?: Filter[],
         filterTarget: 'onward' | 'return' | 'both' = 'both',
-        includeStats: boolean = false
+        includeStats: boolean = false,
+        printData: boolean | string = false,
     ) {
         const sessionId = uuidv4();
 
@@ -131,7 +134,22 @@ class SearchService {
                 }
             );
 
-            let normalized = ReturnNormalizer.transform(rawResponse);
+            const normalizedResult = ReturnNormalizer.transform(rawResponse);
+
+            const airlineStats = normalizedResult.airlineStats;
+
+            let normalized: any;
+
+            if ('roundTrips' in normalizedResult) {
+                normalized = {
+                    roundTrips: normalizedResult.roundTrips
+                };
+            } else {
+                normalized = {
+                    onward: normalizedResult.onward,
+                    return: normalizedResult.return
+                };
+            }
 
             const isDomestic = 'onward' in normalized && 'return' in normalized;
             const isInternational = 'roundTrips' in normalized;
@@ -272,7 +290,8 @@ class SearchService {
 
             const response: any = {
                 sessionId,
-                flights: normalized
+                flights: normalized,
+                airlineStats
             };
 
             if (stats) {

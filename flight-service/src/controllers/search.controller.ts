@@ -10,7 +10,6 @@ import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 
 export const searchOneWayController = async (req: Request, res: Response) => {
     try {
-        console.log("*************** ALL the QUERY we got", req.query);
         const validationResult = FlightSearchValidator.validate(req.body);
 
         if (!validationResult.isValid) {
@@ -154,6 +153,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
             });
         }
 
+        const printData = req.query.printData;
         const sortField = req.query.sortBy as SortField;
         const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
         const sortTarget = (req.query.sortTarget as string) || 'both';
@@ -171,7 +171,6 @@ export const searchReturnController = async (req: Request, res: Response) => {
             validSortTarget = sortTarget;
         }
 
-        // ========== ADD FILTER EXTRACTION (similar to one-way) ==========
         const filters: Filter[] = [];
 
         if (req.body.filters?.airlines && Array.isArray(req.body.filters.airlines)) {
@@ -239,21 +238,22 @@ export const searchReturnController = async (req: Request, res: Response) => {
             }
         }
 
-        // Extract filter target (apply filters to onward, return, or both)
+
         const filterTarget = (req.body.filterTarget || 'both') as 'onward' | 'return' | 'both';
 
-        // Extract includeStats flag
-        const includeStats = req.query.includeStats === 'true';
-        // ========== END OF FILTER EXTRACTION ==========
 
-        // Pass filters to the service
+        const includeStats = req.query.includeStats === 'true';
+
+
+
         const data = await searchService.searchReturn(
             req.body,
             sortOption,
             validSortTarget,
             filters.length > 0 ? filters : undefined,
             filterTarget,
-            includeStats
+            includeStats,
+            printData as boolean | string,
         );
 
         const response: any = {

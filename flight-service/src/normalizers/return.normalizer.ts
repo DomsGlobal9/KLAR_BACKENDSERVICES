@@ -6,13 +6,22 @@ export class ReturnNormalizer {
         const tripInfos = tripJackResponse?.data?.searchResult?.tripInfos;
 
         if (tripInfos?.ONWARD && tripInfos?.RETURN) {
+
+            const onward = tripInfos.ONWARD.map((f: any) =>
+                this.mapFlight(f.sI, f.totalPriceList, false)
+            );
+
+            const returnFlights = tripInfos.RETURN.map((f: any) =>
+                this.mapFlight(f.sI, f.totalPriceList, true)
+            );
+
             return {
-                onward: tripInfos.ONWARD.map((f: any) =>
-                    this.mapFlight(f.sI, f.totalPriceList, false)
-                ),
-                return: tripInfos.RETURN.map((f: any) =>
-                    this.mapFlight(f.sI, f.totalPriceList, true)
-                )
+                onward,
+                return: returnFlights,
+                airlineStats: {
+                    onward: this.buildAirlineStats(onward),
+                    return: this.buildAirlineStats(returnFlights)
+                }
             };
         }
 
@@ -43,8 +52,15 @@ export class ReturnNormalizer {
                 };
             });
 
+            const onwardFlights = roundTrips.map((rt: any) => rt.onward);
+            const returnFlights = roundTrips.map((rt: any) => rt.return);
+
             return {
-                roundTrips
+                roundTrips,
+                airlineStats: {
+                    onward: this.buildAirlineStats(onwardFlights),
+                    return: this.buildAirlineStats(returnFlights)
+                }
             };
         }
 
@@ -143,5 +159,23 @@ export class ReturnNormalizer {
             ),
             stops: segments.length - 1
         };
+    }
+
+    private static buildAirlineStats(flights: any[]) {
+        const airlineMap: Record<string, number> = {};
+
+        flights.forEach((flight: any) => {
+            if (!flight?.airline) return;
+
+            airlineMap[flight.airline] =
+                (airlineMap[flight.airline] || 0) + 1;
+        });
+
+        return Object.entries(airlineMap)
+            .map(([airline, flights]) => ({
+                airline,
+                flights
+            }))
+            .sort((a, b) => b.flights - a.flights);
     }
 }
