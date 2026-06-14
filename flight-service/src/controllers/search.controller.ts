@@ -108,7 +108,7 @@ export const searchOneWayController = async (req: Request, res: Response) => {
 
         const includeStats = req.query.includeStats === 'true';
 
-        const data = await searchService.searchOneWay(
+        const result = await searchService.searchOneWay(
             req.body,
             sortOption,
             filters.length > 0 ? filters : undefined,
@@ -116,9 +116,19 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             printData as string | boolean,
         );
 
+        
+        if (result && typeof result === 'object' && 'isPdf' in result && result.isPdf) {
+            // Return PDF response
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=flight-search-results-${Date.now()}.pdf`);
+            res.setHeader('Content-Length', result.pdfBuffer.length);
+            return res.send(result.pdfBuffer);
+        }
+
+        
         return res.status(200).json({
             success: true,
-            data,
+            data: result,
             warnings: validationResult.warnings,
             filtersApplied: filters.length > 0 ? filters : undefined,
             sortApplied: sortOption || undefined
