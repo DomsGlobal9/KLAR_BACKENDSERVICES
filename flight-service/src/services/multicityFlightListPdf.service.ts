@@ -2,11 +2,10 @@ import path from 'path';
 import fs from 'fs/promises';
 import puppeteer from 'puppeteer';
 import Handlebars from 'handlebars';
+import { multicityFlightListPdfTemplate } from '../templates/multicityFlightListPdf.template';
 import { registerHandlebarsHelpers } from '../utils/helper/handlebars.helpers';
-import { returnFlightListPdfTemplate } from '../templates/returnFlightListPdf.template';
 
-
-export class ReturnFlightListPdfService {
+export class MultiCityFlightListPdfService {
 
     /**
      * Generate PDF from HTML template
@@ -48,14 +47,14 @@ export class ReturnFlightListPdfService {
     }
 
     /**
-     * Generate return flight details PDF
+     * Generate multicity flight details PDF
      */
-    static async generateReturnFlightDetailsPDF(flightData: any, logoBase64?: string): Promise<Buffer> {
+    static async generateMultiCityFlightDetailsPDF(flightData: any, logoBase64?: string): Promise<Buffer> {
         
         registerHandlebarsHelpers();
 
         
-        const compiledTemplate = Handlebars.compile(returnFlightListPdfTemplate);
+        const compiledTemplate = Handlebars.compile(multicityFlightListPdfTemplate);
 
         
         if (!logoBase64) {
@@ -84,41 +83,65 @@ export class ReturnFlightListPdfService {
         };
 
         if (flightData.type === 'domestic') {
-            
-            const onward = flightData.onward || [];
-            const returnFlights = flightData.return || [];
 
-            
-            const onwardPrices = onward.map((f: any) => f.cheapestFare?.price || 0);
-            const returnPrices = returnFlights.map((f: any) => f.cheapestFare?.price || 0);
-            const allPrices = [...onwardPrices, ...returnPrices];
+            const legs = flightData.legs || [];
+
+
+            let totalFlights = 0;
+            const legStats = legs.map((leg: any) => {
+                const flightCount = leg.flights?.length || 0;
+                totalFlights += flightCount;
+                return {
+                    legIndex: leg.legIndex,
+                    flightCount: flightCount
+                };
+            });
+
+
+            let allPrices: number[] = [];
+            legs.forEach((leg: any) => {
+                if (leg.flights) {
+                    leg.flights.forEach((flight: any) => {
+                        if (flight.cheapestFare?.price) {
+                            allPrices.push(flight.cheapestFare.price);
+                        }
+                    });
+                }
+            });
 
             processedData = {
                 ...processedData,
-                onward,
-                return: returnFlights,
-                totalOnward: onward.length,
-                totalReturn: returnFlights.length,
-                totalFlights: onward.length + returnFlights.length,
+                legs,
+                legStats,
+                totalFlights,
                 minPrice: allPrices.length > 0 ? Math.min(...allPrices) : 0,
                 maxPrice: allPrices.length > 0 ? Math.max(...allPrices) : 0,
-                uniqueAirlines: new Set([...onward, ...returnFlights].map((f: any) => f.airline)).size
+                totalLegs: legs.length
             };
         }
         else if (flightData.type === 'international') {
-            const roundTrips = flightData.roundTrips || [];
 
-            const prices = roundTrips.map((rt: any) => rt.totalPrice || 0);
+            const itineraries = flightData.itineraries || [];
+
+
+            const prices = itineraries.map((it: any) => it.totalPrice || 0);
+            const uniqueAirlines = new Set();
+
+            itineraries.forEach((it: any) => {
+                if (it.legs) {
+                    it.legs.forEach((leg: any) => {
+                        if (leg.airline) uniqueAirlines.add(leg.airline);
+                    });
+                }
+            });
 
             processedData = {
                 ...processedData,
-                roundTrips,
-                totalRoundTrips: roundTrips.length,
+                itineraries,
+                totalItineraries: itineraries.length,
                 minPrice: prices.length > 0 ? Math.min(...prices) : 0,
                 maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
-                uniqueAirlines: new Set(
-                    roundTrips.flatMap((rt: any) => [rt.onward?.airline, rt.return?.airline]).filter(Boolean)
-                ).size
+                uniqueAirlines: uniqueAirlines.size
             };
         }
 

@@ -261,7 +261,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
             printData as boolean | string,
         );
 
-        
+
         if (result && typeof result === 'object' && 'isPdf' in result && result.isPdf) {
             // Return PDF response
             res.setHeader('Content-Type', 'application/pdf');
@@ -270,7 +270,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
             return res.send(result.pdfBuffer);
         }
 
-        
+
         const response: any = {
             success: true,
             data: result,
@@ -319,6 +319,7 @@ export const searchMulticityController = async (req: Request, res: Response) => 
             });
         }
 
+        const printData = req.query.printData;
         const sortField = req.query.sortBy as SortField;
         const sortOrder = (req.query.sortOrder as SortOrder) || 'asc';
         const legIndex = req.query.legIndex ? parseInt(req.query.legIndex as string) : undefined;
@@ -409,18 +410,27 @@ export const searchMulticityController = async (req: Request, res: Response) => 
 
         const includeStats = req.query.includeStats === 'true';
 
-        const data = await searchService.searchMulticity(
+        const result = await searchService.searchMulticity(
             req.body,
             sortOption,
             legIndex,
             filters.length > 0 ? filters : undefined,
             applyToLegs,
-            includeStats
+            includeStats,
+            false,  // includeFareRules
+            printData as boolean | string,
         );
+
+        if (result && typeof result === 'object' && 'isPdf' in result && result.isPdf) {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=multicity-flight-search-results-${Date.now()}.pdf`);
+            res.setHeader('Content-Length', result.pdfBuffer.length);
+            return res.send(result.pdfBuffer);
+        }
 
         const response: any = {
             success: true,
-            data,
+            data: result,
             warnings: validationResult.warnings,
         };
 

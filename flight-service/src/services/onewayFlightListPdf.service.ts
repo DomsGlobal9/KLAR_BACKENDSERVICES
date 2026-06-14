@@ -55,7 +55,7 @@ export class OnewayFlightListPdfService {
 
         if (!logoBase64) {
             try {
-                const logoPath = path.join(__dirname, '../../assets/logo.png');
+                const logoPath = path.join(__dirname, '../assets/images/klar-travels-logo.png');
                 const logoBuffer = await fs.readFile(logoPath);
                 logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
             } catch (error) {
