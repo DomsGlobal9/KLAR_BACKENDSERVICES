@@ -18,10 +18,10 @@ export class ReturnNormalizer {
             return {
                 onward,
                 return: returnFlights,
-                airlineStats: {
-                    onward: this.buildAirlineStats(onward),
-                    return: this.buildAirlineStats(returnFlights)
-                }
+                airlineStats: this.buildAirlineStats([
+                    ...onward,
+                    ...returnFlights
+                ])
             };
         }
 
@@ -52,15 +52,14 @@ export class ReturnNormalizer {
                 };
             });
 
-            const onwardFlights = roundTrips.map((rt: any) => rt.onward);
-            const returnFlights = roundTrips.map((rt: any) => rt.return);
+            const allFlights = roundTrips.flatMap((rt: any) => [
+                rt.onward,
+                rt.return
+            ]).filter(Boolean);
 
             return {
                 roundTrips,
-                airlineStats: {
-                    onward: this.buildAirlineStats(onwardFlights),
-                    return: this.buildAirlineStats(returnFlights)
-                }
+                airlineStats: this.buildAirlineStats(allFlights)
             };
         }
 
