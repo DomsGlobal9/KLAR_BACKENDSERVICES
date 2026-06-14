@@ -15,6 +15,7 @@ import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
 import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 import { MultiCityFlightFilter } from "../utils/sorter/multiFilter.utils";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
+import { OnewayFlightListPdfService } from "./onewayFlightListPdf.service";
 
 class SearchService {
 
@@ -46,11 +47,57 @@ class SearchService {
             const markedUpResponse = MarkupInterceptor.applyMarkupToFlightSearch(rawResponse.data);
 
             if (printData == "true" || printData == true) {
-                let normalized = OneWayNormalizer.transformWithAllFares({ data: markedUpResponse });
-                const response: any = {
-                    flights: normalized
+                
+                let normalized = OneWayNormalizer.transformWithAllFares({
+                    data: markedUpResponse
+                });
+
+                const originalCount = normalized.length;
+
+                
+                if (filters && filters.length > 0) {
+                    const validation = FlightFilter.validateFilters(filters);
+                    if (validation.isValid) {
+                        normalized = FlightFilter.applyFilters(normalized, filters);
+                    } else {
+                        console.warn("Invalid filters:", validation.errors);
+                    }
+                }
+
+                
+                if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
+                    normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
+                }
+
+                
+                let stats: FilterStats | undefined;
+                if (includeStats) {
+                    stats = FlightFilter.getFilterStats(normalized);
+                    stats.totalFlights = originalCount;
+                    stats.filteredFlights = normalized.length;
+                }
+
+                
+                const flightData = {
+                    flights: normalized,
+                    searchParams: payload,
+                    filtersApplied: filters,
+                    sortApplied: sortOption,
+                    totalFlights: normalized.length,
+                    generatedAt: new Date().toISOString()
                 };
-                return response;
+
+                // if (stats) {
+                //     flightData.stats = stats;
+                // }
+
+                
+                const pdfBuffer = await OnewayFlightListPdfService.generateFlightDetailsPDF(flightData);
+
+                return {
+                    pdfBuffer,
+                    isPdf: true
+                };
             }
 
             const normalizedResult = OneWayNormalizer.transform({ data: markedUpResponse });
@@ -342,7 +389,7 @@ class SearchService {
                 MultiCityNormalizer.normalize(rawResponse.data);
 
             let normalized = normalizedResult.flights;
-            
+
             const airlineStats = normalizedResult.airlineStats;
 
             const isDomestic = normalized.length > 0 && 'flights' in normalized[0];
