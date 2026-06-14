@@ -10,7 +10,6 @@ import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
 import flightDocumentRoute from "./flight-client-template.route";
 import flightBookingAgencyTemplateRoute from "./flight-agency-template.routes";
-import OnewayFlightListPdfRoute from "./onewayFlightListPdf.route";
 
 
 const router = Router();
