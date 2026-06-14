@@ -338,7 +338,12 @@ class SearchService {
                 }
             );
 
-            let normalized = MultiCityNormalizer.normalize(rawResponse.data);
+            const normalizedResult =
+                MultiCityNormalizer.normalize(rawResponse.data);
+
+            let normalized = normalizedResult.flights;
+            
+            const airlineStats = normalizedResult.airlineStats;
 
             const isDomestic = normalized.length > 0 && 'flights' in normalized[0];
             const isInternational = normalized.length > 0 && 'legs' in normalized[0];
@@ -590,7 +595,8 @@ class SearchService {
 
             const response: any = {
                 sessionId,
-                flights: normalized
+                flights: normalized,
+                airlineStats
             };
 
             if (stats) {

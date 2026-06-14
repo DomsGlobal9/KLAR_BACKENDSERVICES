@@ -6,7 +6,12 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
 
     static normalize(searchResult: AnyObj) {
         const tripInfos = searchResult?.searchResult?.tripInfos;
-        if (!tripInfos) return [];
+        if (!tripInfos) {
+            return {
+                flights: [],
+                airlineStats: []
+            };
+        }
 
         const hasCombo = tripInfos.COMBO && Array.isArray(tripInfos.COMBO);
         const hasLegs = Object.keys(tripInfos).some(key => !isNaN(Number(key)));
@@ -23,10 +28,17 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             .filter(key => !isNaN(Number(key)))
             .sort((a, b) => Number(a) - Number(b));
 
-        return legKeys.map((key) => {
+        const legs = legKeys.map((key) => {
             const flights = tripInfos[key] || [];
             return this.mapLegToFlights(Number(key), flights);
         });
+
+        const allFlights = legs.flatMap((leg: any) => leg.flights);
+
+        return {
+            flights: legs,
+            airlineStats: this.buildAirlineStats(allFlights)
+        };
     }
 
     private static normalizeComboStructure(comboFlights: any[]) {
@@ -64,7 +76,28 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             result.push(itinerary);
         });
 
-        return result;
+        const airlineMap: Record<string, number> = {};
+
+        result.forEach((itinerary: any) => {
+            itinerary.legs?.forEach((leg: any) => {
+                if (!leg?.airline) return;
+
+                airlineMap[leg.airline] =
+                    (airlineMap[leg.airline] || 0) + 1;
+            });
+        });
+
+        const airlineStats = Object.entries(airlineMap)
+            .map(([airline, flights]) => ({
+                airline,
+                flights
+            }))
+            .sort((a, b) => b.flights - a.flights);
+
+        return {
+            flights: result,
+            airlineStats
+        };
     }
 
     private static mapSegmentsToLeg(segments: any[], totalPriceList: any[], legIndex: number) {
@@ -147,5 +180,23 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
                 };
             })
         };
+    }
+
+    private static buildAirlineStats(flights: any[]) {
+        const airlineMap: Record<string, number> = {};
+
+        flights.forEach((flight: any) => {
+            if (!flight?.airline) return;
+
+            airlineMap[flight.airline] =
+                (airlineMap[flight.airline] || 0) + 1;
+        });
+
+        return Object.entries(airlineMap)
+            .map(([airline, flights]) => ({
+                airline,
+                flights
+            }))
+            .sort((a, b) => b.flights - a.flights);
     }
 }
