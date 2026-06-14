@@ -116,7 +116,7 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             printData as string | boolean,
         );
 
-        
+
         if (result && typeof result === 'object' && 'isPdf' in result && result.isPdf) {
             // Return PDF response
             res.setHeader('Content-Type', 'application/pdf');
@@ -125,7 +125,7 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             return res.send(result.pdfBuffer);
         }
 
-        
+
         return res.status(200).json({
             success: true,
             data: result,
@@ -248,15 +248,10 @@ export const searchReturnController = async (req: Request, res: Response) => {
             }
         }
 
-
         const filterTarget = (req.body.filterTarget || 'both') as 'onward' | 'return' | 'both';
-
-
         const includeStats = req.query.includeStats === 'true';
 
-
-
-        const data = await searchService.searchReturn(
+        const result = await searchService.searchReturn(
             req.body,
             sortOption,
             validSortTarget,
@@ -266,9 +261,19 @@ export const searchReturnController = async (req: Request, res: Response) => {
             printData as boolean | string,
         );
 
+        
+        if (result && typeof result === 'object' && 'isPdf' in result && result.isPdf) {
+            // Return PDF response
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=return-flight-search-results-${Date.now()}.pdf`);
+            res.setHeader('Content-Length', result.pdfBuffer.length);
+            return res.send(result.pdfBuffer);
+        }
+
+        
         const response: any = {
             success: true,
-            data,
+            data: result,
             warnings: validationResult.warnings,
         };
 
