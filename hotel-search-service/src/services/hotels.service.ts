@@ -15,18 +15,17 @@ export class HotelsService {
         const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
         console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}`);
 
-        // 1. Resolve Location (Once)
-        const geoCenter = await resolveCityToCoords(searchPayload.destination);
-        searchPayload._geoCenter = geoCenter;
-
-        // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
-        const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
-
-        const isDirectSearch = isDirectHotelId;
+        const isDirectTJ = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
+        const isDirectRG = searchPayload.destination.startsWith('RG:');
+        const isDirectSearch = isDirectTJ || isDirectRG;
 
         if (isDirectSearch) {
-            console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
+            console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}".`);
         }
+
+        // 1. Resolve Location (Once) - Skip if direct search
+        const geoCenter = isDirectSearch ? null : await resolveCityToCoords(searchPayload.destination);
+        searchPayload._geoCenter = geoCenter;
 
         const finalResults: UnifiedHotel[] = [];
         let rgTotal = 0;
@@ -37,7 +36,7 @@ export class HotelsService {
         // 2. Define Providers based on Mode
         const providers: { name: string; task: Promise<void> }[] = [];
 
-        if ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) {
+        if ((mode === "UNIFIED" || mode === "RG_ONLY") && (!isDirectSearch || isDirectRG)) {
             providers.push({
                 name: "RG",
                 task: searchRG(searchPayload).then(res => {
@@ -51,7 +50,7 @@ export class HotelsService {
             });
         }
 
-        if (mode === "UNIFIED" || mode === "TJ_ONLY") {
+        if ((mode === "UNIFIED" || mode === "TJ_ONLY") && (!isDirectSearch || isDirectTJ)) {
             providers.push({
                 name: "TJ",
                 task: searchTJ(searchPayload).then(res => {
@@ -92,8 +91,8 @@ export class HotelsService {
 
         const totalDuration = Date.now() - totalStartTime;
 
-        const tjLog = (mode === "UNIFIED" || mode === "TJ_ONLY") ? `${tjCount} (Total: ${tjTotal})` : "[SKIPPED]";
-        const rgLog = ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) ? `${rgCount} (Total: ${rgTotal})` : "[SKIPPED]";
+        const tjLog = ((mode === "UNIFIED" || mode === "TJ_ONLY") && (!isDirectSearch || isDirectTJ)) ? `${tjCount} (Total: ${tjTotal})` : "[SKIPPED]";
+        const rgLog = ((mode === "UNIFIED" || mode === "RG_ONLY") && (!isDirectSearch || isDirectRG)) ? `${rgCount} (Total: ${rgTotal})` : "[SKIPPED]";
 
         console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

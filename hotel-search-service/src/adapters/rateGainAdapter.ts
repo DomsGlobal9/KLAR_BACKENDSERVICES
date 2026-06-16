@@ -4,12 +4,8 @@ import { rateGainProvider } from "../providers/rategain.provider";
 
 export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: UnifiedHotel[]; total: number }> {
   let destCode = (req.destinationCode || "").toString().trim() || null;
-  if (!destCode && req.destination) {
-    destCode = await resolveForRG(req.destination);
-    console.log(`[RateGain] Resolved destination "${req.destination}" to code: ${destCode}`);
-  }
+  const isDirectRG = req.destination?.startsWith("RG:");
 
-  const geo = req._geoCenter;
   const payload: any = {
     checkin: req.checkin,
     checkout: req.checkout,
@@ -24,7 +20,18 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     echoToken: `echo-${Date.now()}`
   };
 
-  if (destCode) {
+  if (isDirectRG) {
+    payload.propertyId = req.destination.replace("RG:", "");
+  } else if (!destCode && req.destination) {
+    destCode = await resolveForRG(req.destination);
+    console.log(`[RateGain] Resolved destination "${req.destination}" to code: ${destCode}`);
+  }
+
+  const geo = req._geoCenter;
+
+  if (payload.propertyId) {
+    // Search is for a direct property, no destCode or Geofilter needed
+  } else if (destCode) {
     payload.destinationCode = destCode;
   } else if (geo) {
     payload.Geofilter = {
