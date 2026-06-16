@@ -44,12 +44,12 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     const page = req.pageNo || 1;
 
     const targetCount = 30;
-    const CHUNK_SIZE = 10;
+    const CHUNK_SIZE = 20;
     const chunks: string[][] = [];
     for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
         chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
-    const batchSize = 3; // Fetch 3 chunks (30 IDs) per page
+    const batchSize = 2; // Fetch 2 chunks (40 IDs) per page
     const currentIdx = (page - 1) * batchSize;
 
     try {

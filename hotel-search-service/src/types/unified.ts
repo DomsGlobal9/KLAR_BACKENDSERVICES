@@ -43,6 +43,10 @@ export interface UnifiedHotel {
   amenities: string[];
   propertyCode?: string;
   brandCode?: string;
+  isMandatory?: boolean;
+  commissionAmt?: number;
+  commissionPct?: number;
+  sellingRate?: number;
   rawPayload: unknown;          // keep original for detail/book calls
   altDeal?: {                   // cross-provider comparison
     source: "RG" | "TJ";

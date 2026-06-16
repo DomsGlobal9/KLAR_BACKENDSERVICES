@@ -91,6 +91,27 @@ export const getPricingSummaryController = async (req: Request, res: Response) =
             couponCode
         );
 
+        // Enforce B2C RateGain Minimum Selling Price (MSP) if mandatory
+        const clientType = (req as any).user?.clientType || "B2C";
+        if (clientType === "B2C") {
+            let mspRequired = 0;
+            let enforceMsp = false;
+            for (const room of rooms) {
+                if (room.isMandatory || room.IsMandatory) {
+                    enforceMsp = true;
+                }
+                if (room.sellingRate || room.SellingRate) {
+                    mspRequired += Number(room.sellingRate || room.SellingRate);
+                }
+            }
+            if (enforceMsp && total < mspRequired) {
+                console.log(`[PricingSummary] Enforcing MSP: raising price from ₹${total} to ₹${mspRequired}`);
+                total = mspRequired;
+                markup = total - net;
+                adminMarkup = markup - (Number(additionalMarkup) || 0);
+            }
+        }
+
         // UI Matching Rounding Logic removed per Package-Based Selection requirements
 
         console.log(`[PricingSummary] Final: net=₹${net}, adminMarkup=₹${adminMarkup}, total=₹${total}`);

@@ -2,7 +2,7 @@ import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
 
-export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: UnifiedHotel[]; total: number }> {
+export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B2C" = "B2C"): Promise<{ hotels: UnifiedHotel[]; total: number }> {
   let destCode = (req.destinationCode || "").toString().trim() || null;
   const isDirectRG = req.destination?.startsWith("RG:");
 
@@ -86,7 +86,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         }
 
         if (isSuccess) {
-            const hotels = (res.body || []).map(mapRGHotel);
+            const hotels = (res.body || []).map((h: any) => mapRGHotel(h, clientType));
             allHotels.push(...hotels);
             if (total > maxTotal) maxTotal = total;
             
@@ -114,7 +114,7 @@ export async function searchRG(req: UnifiedSearchRequest): Promise<{ hotels: Uni
   }
 }
 
-function mapRGHotel(h: any): UnifiedHotel {
+function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   // ── Image extraction ──────────────────────────────────────────────────────
   // RG places images in different locations depending on endpoint version.
   // Priority: hotel-level images first, then room-level.
@@ -178,7 +178,35 @@ function mapRGHotel(h: any): UnifiedHotel {
   // RG bestproperties usually returns totalAmount as total stay.
   // If only per-night field found, mark it; otherwise treat as total.
   const isPerNight = !h.totalAmount && !h.totalRate && (h.displayRatePerNight || h.lowestRate || h.price) > 0;
-  const totalPrice = Number(rgRawPrice) || 0;
+  let totalPrice = Number(rgRawPrice) || 0;
+
+  let isMandatory = false;
+  let commissionAmt = 0;
+  let commissionPct = 0;
+  let sellingRate = 0;
+
+  if (clientType === "B2C") {
+    const b2cPrice =
+      h.sellingRate ||
+      (h.roomRates?.[0]?.sellingRate) ||
+      (h.options?.[0]?.sellingRate);
+    if (b2cPrice) {
+      totalPrice = Number(b2cPrice);
+      sellingRate = Number(b2cPrice);
+    }
+
+    isMandatory = h.IsMandatory === true || h.isMandatory === true || 
+                  h.roomRates?.[0]?.IsMandatory === true || h.roomRates?.[0]?.isMandatory === true ||
+                  h.options?.[0]?.IsMandatory === true || h.options?.[0]?.isMandatory === true;
+    
+    commissionAmt = Number(h.CommissionAmt || h.commissionAmt || 
+                           h.roomRates?.[0]?.CommissionAmt || h.roomRates?.[0]?.commissionAmt ||
+                           h.options?.[0]?.CommissionAmt || h.options?.[0]?.commissionAmt || 0);
+
+    commissionPct = Number(h.CommissionPct || h.commissionPct || 
+                           h.roomRates?.[0]?.CommissionPct || h.roomRates?.[0]?.commissionPct ||
+                           h.options?.[0]?.CommissionPct || h.options?.[0]?.commissionPct || 0);
+  }
 
   // Taxes: RG separates taxes in taxAmount/taxes/totalTax fields
   const rgTaxAmount =
@@ -216,6 +244,10 @@ function mapRGHotel(h: any): UnifiedHotel {
     amenities: h.hotelAmenities ?? [],
     propertyCode: h.propertyCode,
     brandCode: h.brandCode,
+    isMandatory,
+    commissionAmt,
+    commissionPct,
+    sellingRate: sellingRate || undefined,
     rawPayload: h
   };
 }

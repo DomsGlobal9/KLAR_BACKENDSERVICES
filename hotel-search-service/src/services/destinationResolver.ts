@@ -97,6 +97,32 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
 /**
  * Resolve a city query to a RateGain destination code.
  */
+function rateGainCodePriority(code: string): number {
+    const trimmed = (code || "").trim();
+    // GIATA code: exactly 6 alphanumeric characters containing at least one letter
+    if (/^[A-Z0-9]{6}$/i.test(trimmed) && /[A-Z]/i.test(trimmed)) {
+        return 3;
+    }
+    // 3-letter IATA code
+    if (/^[A-Z]{3}$/i.test(trimmed)) {
+        return 2;
+    }
+    return 1;
+}
+
+function selectBestRGDestination(dests: any[]): any {
+    if (!dests || dests.length === 0) return null;
+    const sorted = [...dests].sort((a, b) => {
+        const prioA = rateGainCodePriority(a.destCode);
+        const prioB = rateGainCodePriority(b.destCode);
+        if (prioA !== prioB) {
+            return prioB - prioA; // Higher priority first
+        }
+        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+    });
+    return sorted[0];
+}
+
 export async function resolveForRG(query: string): Promise<string | null> {
     const normalizedQuery = query.toLowerCase().trim();
 
@@ -108,24 +134,34 @@ export async function resolveForRG(query: string): Promise<string | null> {
     const words = normalizedQuery.split(/\s+/);
 
     // 1. Try exact or regex match (handles "dubai" -> "dubai united arab emirates")
-    // Use sort by updatedAt desc to get the most fresh codes if duplicates exist
-    let dest = await RGDestinationModel.findOne({
+    const exactMatches = await RGDestinationModel.find({
         $or: [
             { destName: { $regex: `^${normalizedQuery}$`, $options: "i" } },
             { destName: { $regex: `^${normalizedQuery}`, $options: "i" } }
         ]
-    }).sort({ updatedAt: -1 });
+    }).lean();
+    let dest = selectBestRGDestination(exactMatches);
 
     // 2. Fuzzy Text Search Fallback
     if (!dest) {
-        // IMPROVEMENT: Use phrase match or limit text search to prevent broad matches like "China" for "Shangqiu China"
-        const results = await RGDestinationModel.find({
-            $text: { $search: normalizedQuery }
-        }).sort({ score: { $meta: "textScore" }, updatedAt: -1 }).limit(3);
+        // IMPROVEMENT: Use phrase match or limit text search to prevent broad matches
+        const results = await RGDestinationModel.find(
+            { $text: { $search: normalizedQuery } },
+            { score: { $meta: "textScore" } }
+        ).limit(5).lean();
 
         if (results.length > 0) {
-            // Only accept if the name is reasonably similar to the query
-            const firstResult = results[0]!;
+            // Sort by textScore first, then GIATA code priority
+            const sortedResults = results.sort((a: any, b: any) => {
+                const scoreDiff = (b.score || 0) - (a.score || 0);
+                if (Math.abs(scoreDiff) > 0.1) return scoreDiff; // Prefer significantly higher text score
+                
+                const prioA = rateGainCodePriority(a.destCode);
+                const prioB = rateGainCodePriority(b.destCode);
+                return prioB - prioA;
+            });
+
+            const firstResult = sortedResults[0]!;
             const resNameLower = firstResult.destName.toLowerCase();
             const queryWords = normalizedQuery.split(/\s+/);
 
@@ -163,9 +199,10 @@ export async function resolveForRG(query: string): Promise<string | null> {
 
     // 3. First Word Fallback - Only as a last resort and if it's not a generic word
     if (!dest && words.length > 0 && !GENERIC_WORDS.includes(words[0]!)) {
-        dest = await RGDestinationModel.findOne({
+        const fallbackMatches = await RGDestinationModel.find({
             destName: { $regex: `^${words[0]}`, $options: "i" }
-        }).sort({ updatedAt: -1 });
+        }).lean();
+        dest = selectBestRGDestination(fallbackMatches);
     }
 
     const result = dest?.destCode || null;
@@ -198,7 +235,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
         const { lat, lng } = geo;
         console.log(`[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] for "${normalizedQuery}"`);
 
-        // Find hotels within 50km radius
+        // Find hotels within 20km radius
         let hotels = await HotelModel.find({
             location: {
                 $near: {
@@ -206,7 +243,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
                         type: "Point",
                         coordinates: [lng, lat]
                     },
-                    $maxDistance: 50000 // 50km
+                    $maxDistance: 20000 // 20km
                 }
             }
         })

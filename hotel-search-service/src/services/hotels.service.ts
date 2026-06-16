@@ -10,10 +10,10 @@ export class HotelsService {
      * Senior OTA Strategy: Concurrently fetch, partial return on slow providers, 
      * and high-efficiency deduplication.
      */
-    async searchHotels(searchPayload: UnifiedSearchRequest) {
+    async searchHotels(searchPayload: UnifiedSearchRequest, clientType: "B2B" | "B2C" = "B2C") {
         const totalStartTime = Date.now();
         const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
-        console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}`);
+        console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}, ClientType: ${clientType}`);
 
         const isDirectTJ = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
         const isDirectRG = searchPayload.destination.startsWith('RG:');
@@ -39,7 +39,7 @@ export class HotelsService {
         if ((mode === "UNIFIED" || mode === "RG_ONLY") && (!isDirectSearch || isDirectRG)) {
             providers.push({
                 name: "RG",
-                task: searchRG(searchPayload).then(res => {
+                task: searchRG(searchPayload, clientType).then(res => {
                     rgCount = res.hotels.length;
                     rgTotal = res.total;
                     finalResults.push(...res.hotels);
@@ -68,7 +68,7 @@ export class HotelsService {
         // Wait for all providers, but cap at 8 seconds for partial-result return (MMT-style).
         // If a provider hasn't responded in 8s we return what we have rather than blocking UI.
         const allTasks = providers.map(p => p.task);
-        const PARTIAL_RETURN_TIMEOUT_MS = 8000;
+        const PARTIAL_RETURN_TIMEOUT_MS = 12000;
 
         await Promise.race([
             Promise.allSettled(allTasks),
@@ -109,11 +109,41 @@ Reported Total to UI:      ${totalToUI}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         `);
 
+        let finalOutputHotels = deduplicatedResults;
+        if (geoCenter) {
+            // Extract meaningful query words (ignoring countries or short generic words)
+            const queryWords = searchPayload.destination
+                .toLowerCase()
+                .split(/[\s,]+/)
+                .filter(word => word.length > 2 && !['india', 'france', 'spain', 'italy', 'china', 'japan', 'hotel', 'resort', 'united', 'states'].includes(word));
+
+            finalOutputHotels = deduplicatedResults.filter(hotel => {
+                const lat = Number(hotel.latitude);
+                const lng = Number(hotel.longitude);
+                if (!lat || !lng) return true; // Keep if coordinates are missing/invalid to avoid false positives
+
+                const dist = getDistanceKm(geoCenter.lat, geoCenter.lng, lat, lng);
+
+                // 1. Close-in hotels (within 12km) are always kept (covers Paris proper & inner suburbs)
+                if (dist <= 12) return true;
+
+                // 2. For hotels further out (up to 80km), keep them ONLY if they explicitly belong to the target destination
+                const matchesQueryName = queryWords.some(word => 
+                    hotel.name.toLowerCase().includes(word) || 
+                    (hotel.city || '').toLowerCase().includes(word) || 
+                    (hotel.address || '').toLowerCase().includes(word)
+                );
+
+                return dist <= 80 && matchesQueryName;
+            });
+            console.log(`[GEO] In-memory filter: Reduced unified results from ${deduplicatedResults.length} to ${finalOutputHotels.length} hotels (using dual-zone geofence around ${geoCenter.lat}, ${geoCenter.lng})`);
+        }
+
         return {
-            results: deduplicatedResults,
-            body: deduplicatedResults, // Fallback for some frontend components
-            hotels: deduplicatedResults,
-            total: totalToUI
+            results: finalOutputHotels,
+            body: finalOutputHotels, // Fallback for some frontend components
+            hotels: finalOutputHotels,
+            total: Math.max(rgTotal + tjTotal, finalOutputHotels.length)
         };
     }
 
@@ -178,3 +208,15 @@ Reported Total to UI:      ${totalToUI}
 }
 
 export const hotelsService = new HotelsService();
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
