@@ -148,10 +148,10 @@ export class TripJackApiProvider {
                 let roomStatic: any = null;
                 if (staticData?.rooms) {
                     const staticRoomsArray = Object.values(staticData.rooms);
-                    
+
                     // Try exact match first
                     roomStatic = staticRoomsArray.find((r: any) => String(r?.id) === String(roomId));
-                    
+
                     // If not found OR if found but has no images, steal images from a duplicate room!
                     if (!roomStatic || !roomStatic.images || roomStatic.images.length === 0) {
                         if (roomNameStr) {
@@ -160,8 +160,8 @@ export class TripJackApiProvider {
                                 return staticName && (staticName === roomNameStr || staticName.includes(roomNameStr) || roomNameStr.includes(staticName));
                             });
 
-                            const roomWithImages: any = matchingRooms.find((r: any) => r.images && Array.isArray(r.images) && r.images.length > 0);
-                            
+                            const roomWithImages = matchingRooms.find((r: any) => (r as any).images && Array.isArray((r as any).images) && (r as any).images.length > 0) as any;
+
                             if (roomWithImages) {
                                 // If we already had an exact match but it lacked images, just append the images
                                 if (roomStatic) {
@@ -170,7 +170,7 @@ export class TripJackApiProvider {
                                     roomStatic = roomWithImages;
                                 }
                             } else if (!roomStatic && matchingRooms.length > 0) {
-                                roomStatic = matchingRooms[0];
+                                roomStatic = matchingRooms[0] as any;
                             }
                         }
                     }
@@ -292,12 +292,12 @@ export class TripJackApiProvider {
             };
         } catch (error: any) {
             console.error("[TripJack] GetProducts (Pricing) Error:", error.response?.status, error.response?.data || error.message);
-            
+
             // Handle Sold-Out/Unavailable hotels gracefully
             // TripJack returns 400 with options: [] when a hotel has no availability for the given dates
             if (error.response?.status === 400 && error.response?.data?.options?.length === 0) {
                 console.log(`[TripJack] Hotel ${rawId} is completely sold out or unavailable for these dates. Returning empty products array with static info.`);
-                
+
                 try {
                     // Try to wait for static detail to complete so we have the name and images
                     if (staticDetailPromise && !staticData) {
@@ -342,9 +342,9 @@ export class TripJackApiProvider {
                         fees: staticData?.fees || staticData?.hotelInfo?.fees || [],
                         checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || "",
                         specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || "",
-                        location: { 
-                            lat: staticData?.locale?.coordinates?.lat || localHotel?.location?.coordinates?.[1] || 0, 
-                            lng: staticData?.locale?.coordinates?.long || localHotel?.location?.coordinates?.[0] || 0 
+                        location: {
+                            lat: staticData?.locale?.coordinates?.lat || localHotel?.location?.coordinates?.[1] || 0,
+                            lng: staticData?.locale?.coordinates?.long || localHotel?.location?.coordinates?.[0] || 0
                         },
                         products: [],
                         options: [],

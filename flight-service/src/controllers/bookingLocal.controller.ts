@@ -6,14 +6,19 @@ import axios from "axios";
 class BookingLocalController {
 
     private authServiceUrl: string;
+    private paymentServiceUrl: string;
     private currentToken: string | null = null;
 
     constructor() {
         this.authServiceUrl = envConfig.AUTH_SERVICE;
+        this.paymentServiceUrl = envConfig.PAYMENT_SERVICE;
     }
 
-    private extractToken = (req: Request): string | null => {
+    // *************************************************************************
+    // ************************  Private Functions  ****************************
+    // *************************************************************************
 
+    private extractToken = (req: Request): string | null => {
         const authHeader = req.headers.authorization;
 
         if (authHeader?.startsWith("Bearer ")) {
@@ -43,7 +48,6 @@ class BookingLocalController {
                 }
             );
 
-
             if (response.data.success) {
                 const userId = response.data.data.userId ||
                     response.data.data.id ||
@@ -57,16 +61,14 @@ class BookingLocalController {
                 return {
                     id: userId,
                     email: response.data.data.email,
-                    roles: response.data.data.roles || ['user'],
-                    clientType: response.data.data.clientType || 'B2C'
+                    roles: response.data.data.roles || ["user"],
+                    clientType: response.data.data.clientType || "b2c",
                 };
             }
 
             console.log("❌ TOKEN INVALID - success: false");
             throw new Error("Token validation failed");
-
         } catch (error: any) {
-            // ✅ ADD THESE LOGS - See the exact error
             console.log("\n🔴 VALIDATION ERROR 🔴");
             console.log("Error message:", error.message);
 
@@ -89,7 +91,7 @@ class BookingLocalController {
         }
     };
 
-    private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
+    private deductWalletBalance = async (bookingId: string, totalPrice: string, userId?: string): Promise<any> => {
         try {
 
             const token = this.currentToken;
@@ -100,7 +102,7 @@ class BookingLocalController {
 
             const response = await axios.post(
                 `${this.authServiceUrl}/book/pay`,
-                { bookingId, totalPrice },
+                { bookingId, totalPrice, userId },
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -108,7 +110,11 @@ class BookingLocalController {
                 }
             );
 
+            console.log("****************** The deduct wallet balance: \n", response);
+
             return response.data;
+
+
 
         } catch (error: any) {
             throw new Error(
@@ -121,15 +127,19 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
+            console.log("WALLET BALANCE CHECK - BOOK Local Service running");
 
             const token = this.currentToken;
 
-
             if (!token) {
                 return {
-                    status: 404,
                     success: false,
                     message: "Token missing for wallet balance check",
+                    hasSufficientBalance: false,
+                    currentBalance: 0,
+                    requiredAmount: Number(totalPrice),
+                    shortfallAmount: Number(totalPrice),
+                    isAlreadyPaid: false
                 };
             }
 
@@ -143,10 +153,44 @@ class BookingLocalController {
                 }
             );
 
-
             const walletBalanceCheckResponse = response.data;
 
             return walletBalanceCheckResponse;
+
+        } catch (error: any) {
+            console.error("Wallet balance check error:", error);
+
+            return {
+                success: false,
+                message: error.response?.data?.message || error.message || "Wallet balance check failed",
+                hasSufficientBalance: false,
+                currentBalance: 0,
+                requiredAmount: Number(totalPrice),
+                shortfallAmount: Number(totalPrice),
+                isAlreadyPaid: false
+            };
+        }
+    };
+
+    private PaymentStatusCheck = async (orderId: string): Promise<any> => {
+        try {
+            console.log("PAYMENT Status Check: \n", orderId);
+
+            const response = await axios.get(
+                `${this.paymentServiceUrl}/razorpay/razorpay-order/${orderId}`
+            );
+
+            console.log("#################\n", response);
+
+            if (!response?.data?.success === true) {
+                return {
+                    status: 400,
+                    success: false,
+                    message: "Payment status check failed",
+                }
+            }
+
+            return response.data.data;
 
         } catch (error: any) {
             return {
@@ -157,13 +201,17 @@ class BookingLocalController {
         }
     };
 
+    // *************************************************************************
+    // ************************  Public Functions  ****************************
+    // *************************************************************************
+
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
+            console.log("📝 createLocalBooking - START");
             const token = this.extractToken(req);
 
-
             if (!token) {
-                console.log("❌ NO TOKEN - Returning 401");
+                console.log("❌ createLocalBooking - No token");
                 return res.status(401).json({
                     success: false,
                     message: "Authorization token missing",
@@ -171,8 +219,10 @@ class BookingLocalController {
             }
 
             const userData = await this.validateToken(token);
+            console.log("👤 createLocalBooking - User validated:", userData?.id);
 
             if (!userData) {
+                console.log("❌ createLocalBooking - No user data");
                 return res.status(400).json({
                     success: false,
                     message: "User Data not found",
@@ -180,18 +230,15 @@ class BookingLocalController {
             }
 
             const result = await BookingService.createInitialBooking(req.body, userData);
+            console.log("✅ createLocalBooking - SUCCESS, Booking ID:", result?.bookingId);
 
             return res.status(201).json({
                 success: true,
                 message: "Booking initialized successfully",
                 data: result,
             });
-
         } catch (error: any) {
-            // ✅ ADD THIS LOG - See the actual error
-            console.log("❌ CATCH BLOCK ERROR:", error.message);
-            console.log("❌ Full error:", error);
-
+            console.log("❌ createLocalBooking - ERROR:", error.message);
             return res.status(400).json({
                 success: false,
                 message: error.message,
@@ -246,14 +293,14 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
             const {
                 bookingId,
                 travellers,
                 tripjackPrice,
                 markupPrice,
                 totalPrice,
-                isHold
+                isHold,
+                orderId,
             } = req.body;
 
             if (!bookingId) {
@@ -263,36 +310,66 @@ class BookingLocalController {
                 });
             }
 
-            // Check wallet balance first
-            const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
+            const token = this.extractToken(req);
 
-            // If balance check failed or insufficient balance
-            if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
-                return res.status(400).json({
+            if (!token) {
+                return res.status(401).json({
                     success: false,
-                    message: balanceCheck.message,
-                    data: {
-                        currentBalance: balanceCheck.currentBalance,
-                        requiredAmount: balanceCheck.requiredAmount,
-                        shortfallAmount: balanceCheck.shortfallAmount,
-                        isAlreadyPaid: balanceCheck.isAlreadyPaid
-                    }
+                    message: "Authorization token missing",
                 });
             }
 
-            // If already paid, return appropriate response
-            if (balanceCheck.isAlreadyPaid) {
+            const userData = await this.validateToken(token);
+
+            if (!userData?.clientType) {
                 return res.status(400).json({
                     success: false,
-                    message: "Booking already paid",
-                    data: {
-                        bookingId,
-                        isAlreadyPaid: true
-                    }
+                    message: "Invalid user data",
                 });
             }
 
-            // Proceed with booking only if balance is sufficient
+            if (userData.clientType === 'b2c') {
+                const paymentStatus = await this.PaymentStatusCheck(orderId);
+
+                if (paymentStatus.status != "paid") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Payment not completed for this booking",
+                    });
+                }
+            }
+
+            if (userData.clientType === 'b2b') {
+                const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
+
+                if (
+                    balanceCheck.success != true ||
+                    balanceCheck.data.hasSufficientBalance != true
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message: balanceCheck.message,
+                        data: {
+                            currentBalance: balanceCheck.currentBalance,
+                            requiredAmount: balanceCheck.requiredAmount,
+                            shortfallAmount: balanceCheck.shortfallAmount,
+                            isAlreadyPaid: balanceCheck.isAlreadyPaid
+                        }
+                    });
+                }
+
+                if (balanceCheck.isAlreadyPaid) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Booking already paid",
+                        data: {
+                            bookingId,
+                            isAlreadyPaid: true
+                        }
+                    });
+                }
+            }
+
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
                 travellers,
@@ -309,8 +386,20 @@ class BookingLocalController {
                 });
             }
 
-            // Deduct wallet after successful booking
-            await this.deductWalletBalance(bookingId, totalPrice);
+            if (userData.clientType === 'b2c') {
+                await this.deductWalletBalance(
+                    bookingId,
+                    totalPrice,
+                    '6a1ed2fb290ce7d307b05784'
+                );
+            }
+
+            if (userData.clientType === 'b2b') {
+                await this.deductWalletBalance(
+                    bookingId,
+                    totalPrice
+                );
+            }
 
             return res.status(200).json({
                 success: true,
@@ -319,7 +408,6 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
-            console.log("$$$$$$$$$$$$$$$$$ Entering into catch in UPDATE-AND-BOOK");
             return res.status(400).json({
                 success: false,
                 message: error.message

@@ -5,6 +5,7 @@ export const getBookingDetails = async (req: Request, res: Response, next: NextF
     try {
         const { bookingIds } = req.query;
         const result = await orderService.getBookingDetails(bookingIds as string);
+        console.log("8 order.controller.ts - getBookingDetails - result:", JSON.stringify(result));
         res.status(200).json(result);
     } catch (error) {
         next(error);

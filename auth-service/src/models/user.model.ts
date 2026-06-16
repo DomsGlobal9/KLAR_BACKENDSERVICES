@@ -29,51 +29,33 @@ export enum LoginType {
 export interface IUser extends Document {
 
     /* COMMON */
-
     clientType: ClientType;
-
     fullName?: string;
     memberName?: string;
-
     email: string;
-
     mobile: string;
-
     passwordHash?: string;
-
-    roles: Roles[];
-
+    roles: Roles;
     loginType: LoginType;
-
     status: UserStatus;
-
     googleId?: string;
-
     googlePhoto?: string;
 
-
     /* B2B ONLY */
-
     blockReason?: string;
-
     pendingReason?: string;
-
     rejectedReason?: string;
-
     businessProfile?: any;
-
     verification?: any;
-
     wallet?: any;
-
+    limit?: Number;
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
-
+    resetPasswordToken?: string;
+    resetPasswordExpires?: Date;
 
     /* TIMESTAMPS */
-
     createdAt: Date;
-
     updatedAt: Date;
 }
 
@@ -112,12 +94,14 @@ const UserSchema = new Schema<IUser>(
             required: true,
             lowercase: true,
             trim: true,
+            unique: true,
         },
 
         mobile: {
             type: String,
             required: true,
             trim: true,
+            unique: true,
         },
 
         passwordHash: {
@@ -130,9 +114,9 @@ const UserSchema = new Schema<IUser>(
         ========================= */
 
         roles: {
-            type: [String],
+            type: String,
             enum: Object.values(Roles),
-            default: [Roles.USER],
+            default: Roles.USER,
         },
 
 
@@ -168,6 +152,12 @@ const UserSchema = new Schema<IUser>(
             default: UserStatus.ACTIVE,
         },
 
+        /* =========================
+           LIMIT
+        ========================= */        
+        limit: {
+            type: Number
+        },
 
         /* =========================
            ADMIN / MODERATION
@@ -201,9 +191,14 @@ const UserSchema = new Schema<IUser>(
             type: VerificationSchema,
         },
 
-        // wallet: {
-        //     type: WalletSchema,
-        // },
+        resetPasswordToken: {
+            type: String,
+            sparse: true,
+        },
+
+        resetPasswordExpires: {
+            type: Date,
+        },
 
 
         createdBy: {

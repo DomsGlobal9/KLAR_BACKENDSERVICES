@@ -4,8 +4,11 @@ import { AuthenticatedRequest } from "../middlewares/authentication.middleware";
 import { Types } from "mongoose";
 import { BadRequestError, NotFoundError } from "../errors/AppError";
 import { WalletTransaction } from "../models/walletTransaction.model";
+import { AuthService } from "../services/auth.service";
 
 export class WalletController {
+    // const authService = AuthService.getInstance();
+
     /**
      * Get wallet balance and details
      */
@@ -49,7 +52,6 @@ export class WalletController {
 
             const { amount, type, paymentMethod, referenceType, referenceId, description } = req.body;
 
-            // Validation
             if (!amount || typeof amount !== "number" || amount <= 0) {
                 throw new BadRequestError("Amount must be a positive number");
             }
@@ -64,8 +66,28 @@ export class WalletController {
 
             const wallet = await WalletService.getWallet(new Types.ObjectId(req.user.userId));
 
-            if (!wallet) {
-                throw new NotFoundError("Wallet not found");
+            console.log("@@@@@@@@@@@@ Wallet found for credit:", wallet);
+
+            if (!wallet || wallet.balance == null) {
+                throw new BadRequestError("Wallet balance is not available");
+            }
+
+            if (wallet.balance <= 0) {
+                const authService = AuthService.getInstance();
+                const userData = await authService.getCurrentUser(req.user.userId);
+                const parentWallet = await WalletService.getWallet(new Types.ObjectId(userData?.createdBy));
+                await WalletService.credit(
+                    parentWallet?._id as Types.ObjectId,
+                    new Types.ObjectId(req.user.userId),
+                    amount,
+                    {
+                        type,
+                        paymentMethod,
+                        referenceType: referenceType || null,
+                        referenceId: referenceId || null,
+                        description: description || `Wallet ${type.toLowerCase()}`,
+                    }
+                );
             }
 
             const transaction = await WalletService.credit(
@@ -81,7 +103,6 @@ export class WalletController {
                 }
             );
 
-            // Fetch updated wallet balance
             const updatedWallet = await WalletService.getWallet(new Types.ObjectId(req.user.userId));
 
             res.status(201).json({
@@ -133,8 +154,14 @@ export class WalletController {
                 throw new BadRequestError("Wallet is blocked");
             }
 
+            if (wallet.balance == null) {
+                throw new BadRequestError('Wallet balance is not available');
+            }
+
             if (wallet.balance < amount) {
-                throw new BadRequestError(`Insufficient balance. Available: ${wallet.balance}`);
+                throw new BadRequestError(
+                    `Insufficient balance. Available: ${wallet.balance}`
+                );
             }
 
             const transaction = await WalletService.debit(

@@ -22,9 +22,6 @@ class BookingService {
 
         const url = `${baseUrl}${endpoints.BOOK}`;
 
-        console.log("Tripjack URL >>>", url);
-        console.log("@@@@@@@@@@@@@@ The Booking payload", JSON.stringify(payload, null, 2));
-
         try {
             const response = await axios.post(url, payload, { headers });
             return response;
@@ -69,9 +66,6 @@ class BookingService {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
         const url = `${baseUrl}${endpoints.BOOKING_DETAILS}`;
-
-        console.log("Tripjack Booking Details URL >>>", url);
-        console.log("BookingId >>>", bookingId);
 
         try {
             const response = await axios.post(

@@ -1,4 +1,5 @@
 import { BaseFlightNormalizer } from "./baseFlight.normalizer";
+import { envConfig } from "../config/env.config";
 
 export class OneWayNormalizer {
 
@@ -20,7 +21,7 @@ export class OneWayNormalizer {
             const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
             const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
-            return {
+            const flightData: any = {
                 flightKey: BaseFlightNormalizer.getFlightKey(segments),
 
                 airline: first.fD.aI.name,
@@ -50,8 +51,15 @@ export class OneWayNormalizer {
 
                 stops: segments.length - 1,
 
-                price: cheapest.fd.ADULT.fC.TF
+                price: cheapest.fd.ADULT.fC.TF,
             };
+
+            if (cheapest.fd.ADULT.fC.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
+                flightData.original_price = cheapest.fd.ADULT.fC.originalTF;
+                flightData.markup = cheapest.fd.ADULT.fC.markup;
+            }
+
+            return flightData;
         });
     }
 }

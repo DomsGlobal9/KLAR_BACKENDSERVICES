@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Booking Confirmation - Agent Copy</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        @page { size: A4; margin: 0; }
+        body { font-family: 'Inter', sans-serif; color: #2C3E50; margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .page-container { width: 210mm; min-height: 297mm; padding: 25mm 20mm; box-sizing: border-box; position: relative; background: #ffffff; }
+        .header-layout { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+        .logo-container img { height: 45px; width: auto; object-fit: contain; display: block; }
+        .invoice-meta-panel { text-align: right; }
+        .invoice-title-label { font-size: 11px; font-weight: 500; color: #6A22E3; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2px; }
+        .invoice-main-heading { font-size: 38px; font-weight: 800; color: #1E293B; margin: 0 0 12px 0; line-height: 1; letter-spacing: -1px; }
+        .meta-text-line { display: flex; align-items: center; justify-content: flex-end; font-size: 13px; color: #64748B; margin: 4px 0; }
+        .meta-text-line strong { color: #0F172A; font-weight: 600; margin-left: 5px; }
+        .meta-text-line.status-line { color: #6A22E3; font-weight: 700; font-size: 13px; letter-spacing: 0.5px; margin-top: 8px; text-transform: uppercase; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+        .info-card-block { border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; background: #ffffff; }
+        .card-heading-layout { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .card-icon-wrapper { background: #F1F5F9; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #6A22E3; font-weight: bold; font-size: 14px; }
+        .card-title-text { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748B; }
+        .card-main-content-bold { font-size: 15px; font-weight: 700; color: #0F172A; margin: 0 0 6px 0; }
+        .card-body-text-line { font-size: 13px; color: #475569; margin: 3px 0; }
+        .section-header-row { display: flex; align-items: center; gap: 8px; margin: 30px 0 12px 0; }
+        .section-header-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #0F172A; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden; }
+        table th { background: #6A22E3; color: #ffffff; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 12px 16px; text-align: left; border: none; }
+        table td { padding: 14px 16px; font-size: 13px; color: #334155; border-bottom: 1px solid #E2E8F0; background: #ffffff; }
+        table tr:last-child td { border-bottom: none; }
+        .financial-table td.amount-cell { text-align: right; font-weight: 600; color: #0F172A; }
+        .financial-table tr.total-row td { color: #2ECC71; font-weight: 700; background: #F8FAFC; }
+        .grand-total-banner { background: linear-gradient(135deg, #2ECC71 0%, #1ABC9C 100%); border-radius: 12px; padding: 22px 30px; display: flex; justify-content: space-between; align-items: center; color: #ffffff; margin-top: 30px; }
+        .banner-left-label { display: flex; align-items: center; gap: 12px; }
+        .banner-icon-box { background: rgba(255, 255, 255, 0.2); border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .banner-label-string { font-size: 15px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        .banner-right-amount { font-size: 32px; font-weight: 900; letter-spacing: -0.5px; }
+        .banner-right-amount span { font-size: 18px; font-weight: 500; margin-right: 6px; }
+        .panel-alert-box { background-color: #FFF8EC; border: 1px solid #F5DAB1; color: #C67C13; padding: 15px 20px; font-size: 12px; border-radius: 8px; margin-top: 30px; line-height: 1.5; }
+        .bottom-footer-bar { position: absolute; bottom: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 15px 25px; }
+        .footer-left-claim { font-size: 11px; color: #64748B; }
+        .footer-badge-right { background: #ffffff; border: 1px solid #E2E8F0; border-radius: 20px; padding: 6px 14px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #475569; display: flex; align-items: center; gap: 6px; }
+        .dot-indicator { height: 6px; width: 6px; background-color: #2ECC71; border-radius: 50%; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="header-layout">
+            <div class="logo-container">
+                <img src="{{logoPath}}" alt="Klar Travels Logo">
+            </div>
+            <div class="invoice-meta-panel">
+                <div class="invoice-title-label">Reconciliation Ledger</div>
+                <h1 class="invoice-main-heading">AGENT RECON</h1>
+                <div class="meta-text-line">Original Booking ID: <strong>{{confirmationNumber}}</strong></div>
+                <div class="meta-text-line">{{metaDateLabel}}: <strong>{{metaDateValue}}</strong></div>
+                <div class="meta-text-line">Provider: <strong>{{provider}}</strong></div>
+                <div class="meta-text-line status-line">STATUS - {{status}}</div>
+            </div>
+        </div>
+
+        <div class="details-grid">
+            <div class="info-card-block">
+                <div class="card-heading-layout">
+                    <div class="card-icon-wrapper">👤</div>
+                    <div class="card-title-text">Client Details</div>
+                </div>
+                <div class="card-main-content-bold">{{guestName}}</div>
+                <div class="card-body-text-line">Email: {{clientEmail}}</div>
+                <div class="card-body-text-line">Phone: {{clientPhone}}</div>
+            </div>
+            <div class="info-card-block">
+                <div class="card-heading-layout">
+                    <div class="card-icon-wrapper">📋</div>
+                    <div class="card-title-text">Internal Specs</div>
+                </div>
+                <div class="card-main-content-bold">{{hotelName}}</div>
+                <div class="card-body-text-line">Reservation ID: <strong>{{reservationId}}</strong></div>
+                <div class="card-body-text-line">Property ID: <strong>{{propertyId}}</strong></div>
+            </div>
+        </div>
+
+        <div class="section-header-row">
+            <div class="section-header-title">📈 Financial Matrix Ledger</div>
+        </div>
+        <table class="financial-table">
+            <thead>
+                <tr>
+                    <th>Ledger Entry Designation</th>
+                    <th style="text-align: right;">Amount ({{currencyCode}})</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Base Core Cost (Net Provider Rate)</td>
+                    <td class="amount-cell">{{netAmount}}</td>
+                </tr>
+                <tr>
+                    <td>Applied Agency Markup Profit Margin</td>
+                    <td class="amount-cell">{{markupAmount}}</td>
+                </tr>
+                <tr class="total-row">
+                    <td>Total Financial Intake Collection (Client Face Total)</td>
+                    <td class="amount-cell">{{totalAmount}}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="section-header-row">
+            <div class="section-header-title">🛏️ Inventory Allocation</div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Room Type Class</th>
+                    <th style="text-align: center;">Rooms Count</th>
+                    <th>Inclusion Matrix</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{roomName}}</td>
+                    <td style="text-align: center;">{{roomsCount}}</td>
+                    <td>{{mealPlan}}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        {{passengerSectionHTML}}
+
+        <div class="grand-total-banner">
+            <div class="banner-left-label">
+                <div class="banner-icon-box">💰</div>
+                <div class="banner-label-string">Gross Collection Vector</div>
+            </div>
+            <div class="banner-right-amount"><span>{{currencyCode}}</span>{{totalAmount}}</div>
+        </div>
+
+        <div class="panel-alert-box">
+            <strong>System Operational Note:</strong> Adhering to internal software standards, all downstream transactions, modifications, and cancellations must trace back via backend logs linked explicitly to system execution profiles.
+        </div>
+
+        <div class="bottom-footer-bar">
+            <div class="footer-left-claim">
+                Internal Security Document. Confidential to Klar Travels and affiliate partners.
+            </div>
+            <div class="footer-badge-right">
+                <span class="dot-indicator"></span> Audited Session
+            </div>
+        </div>
+    </div>
+</body>
+</html>

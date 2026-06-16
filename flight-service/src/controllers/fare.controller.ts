@@ -58,8 +58,6 @@ class FareController {
                 });
             }
 
-            console.log('********************\n', {sessionId,flightKey, legIndex });
-
             const data = await FareService.getMultiCityFares(
                 sessionId,
                 Number(legIndex),

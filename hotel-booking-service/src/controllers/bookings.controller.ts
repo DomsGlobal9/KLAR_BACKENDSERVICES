@@ -24,6 +24,7 @@ export const getBookingDetails = async (req: any, res: Response) => {
     try {
         const id = req.params.id as string;
         const booking = await bookingsService.getBookingById(id);
+        console.log("27 bookigs.controller.ts getBookingDetails booking", JSON.stringify(booking));
 
         if (!booking) {
             return res.status(404).json({

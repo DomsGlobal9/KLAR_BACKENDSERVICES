@@ -1,3 +1,5 @@
+import { envConfig } from "../config";
+
 export class BaseFlightNormalizer {
 
     static getFlightKey(segments: any[]): string {
@@ -33,9 +35,29 @@ export class BaseFlightNormalizer {
     }
 
     static getCheapestFare(totalPriceList: any[]) {
-        return totalPriceList?.reduce((min, curr) => {
+        const cheapest = totalPriceList?.reduce((min, curr) => {
             return curr.fd.ADULT.fC.TF < min.fd.ADULT.fC.TF ? curr : min;
         });
+
+        if (cheapest && envConfig.PLATFORM_MARKUP.ENABLED) {
+            const originalPrice = cheapest.fd.ADULT.fC.TF;
+            let markupAmount = 0;
+
+            if (envConfig.PLATFORM_MARKUP.TYPE === 'PERCENTAGE') {
+                markupAmount = originalPrice * (envConfig.PLATFORM_MARKUP.VALUE / 100);
+            } else {
+                markupAmount = envConfig.PLATFORM_MARKUP.VALUE;
+            }
+
+            cheapest.fd.ADULT.fC.originalTF = originalPrice;
+            cheapest.fd.ADULT.fC.TF = originalPrice + markupAmount;
+
+            cheapest.fd.ADULT.fC.markup = markupAmount;
+            cheapest.fd.ADULT.fC.markupType = envConfig.PLATFORM_MARKUP.TYPE;
+            cheapest.fd.ADULT.fC.markupValue = envConfig.PLATFORM_MARKUP.VALUE;
+        }
+
+        return cheapest;
     }
 
     static extractFares(flights: any[]) {

@@ -31,4 +31,10 @@ router.post("/google", authController.googleAuth);
 
 router.post("/validate-token", authenticateJWT, authController.validateToken);
 
+/**
+ * Forgot Password / Password Reset routes
+ */
+router.post("/forgot-password/request-otp", authController.requestPasswordResetOTP);
+router.post("/forgot-password/reset", authController.resetPassword);
+
 export default router;
