@@ -139,12 +139,19 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                     const accTypeDesc = bh.accTypeDesc || s.accTypeDesc || "";
                     const accMultiDesc = bh.accMultiDesc || s.accMultiDesc || "";
                     const accomodationType = bh.accomodationType || s.accomodationType || "";
+                    // Always prefer DB images since TJ listing API rarely returns images
+                    const enrichedImages = (() => {
+                        // Use listing images if present; otherwise always fall back to DB
+                        if (bh.images && bh.images.length > 0) return bh.images;
+                        if (s.images && s.images.length > 0) return s.images as string[];
+                        return [];
+                    })();
                     return {
                         ...bh,
                         address: bh.address || s.address || "",
                         city: bh.city || s.cityName || "",
                         starRating: bh.starRating || s.starRating || 0,
-                        images: (bh.images?.length) ? bh.images : (s.images || []),
+                        images: enrichedImages,
                         latitude: bh.latitude || s.location?.coordinates?.[1],
                         longitude: bh.longitude || s.location?.coordinates?.[0],
                         accTypeDesc,
@@ -155,7 +162,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                 }
                 return bh;
             });
-        } catch (enrichErr) { }
+        } catch (enrichErr) { console.warn('[TripJack] DB enrichment warning:', enrichErr); }
 
         return {
             hotels: mapped,
@@ -180,8 +187,14 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         starRating: parseInt(h.rating) || 0,
         latitude: h.latitude,
         longitude: h.longitude,
-        images: Array.isArray(h.images) ? h.images : (h.img ? [h.img] : []),
+        // TJ listing rarely returns images — DB enrichment fills these in the enrichment step below
+        images: Array.isArray(h.images) && h.images.length > 0 ? h.images : (h.img ? [h.img] : []),
+        // TJ: totalPrice already includes all taxes + management fees. taxesIncluded = true.
+        // basePrice = the base net price (without taxes); taxAmount = taxes on top (0 at search level — detail has breakdown).
         price: opt?.pricing?.totalPrice ?? 0,
+        basePrice: opt?.pricing?.basePrice ?? opt?.pricing?.totalPrice ?? 0,
+        taxAmount: opt?.pricing?.taxes ?? 0,
+        taxesIncluded: false, // TJ: taxes are NOT baked into basePrice; totalPrice = basePrice + taxes + mf + mft
         currency: opt?.pricing?.currency ?? "INR",
         mealBasis: opt?.mealBasis,
         hotelSegment: h.accTypeDesc || h.accMultiDesc || 'Hotel',

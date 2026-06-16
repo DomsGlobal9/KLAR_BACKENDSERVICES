@@ -27,7 +27,10 @@ export interface UnifiedHotel {
   latitude: number;
   longitude: number;
   images: string[];
-  price: number;                // lowest available rate
+  price: number;                // Total stay price (base + taxes). Always total.
+  basePrice?: number;           // Base net price excluding taxes (room only cost)
+  taxAmount?: number;           // Taxes & fees excluded from base (add-on)
+  taxesIncluded?: boolean;      // true = price already includes all taxes; false = taxes added on top
   currency: string;
   mealBasis?: string;           // "Room Only", "Breakfast", etc.
   hotelSegment?: string;

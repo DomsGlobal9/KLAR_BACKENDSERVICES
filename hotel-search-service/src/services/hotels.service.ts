@@ -66,12 +66,19 @@ export class HotelsService {
         }
 
         // 3. Orchestration: High-Performance Concurrent Collection
-        // We wait for ALL providers, but if one hangs, the 50s cutoff ensures we return whatever we have.
+        // Wait for all providers, but cap at 8 seconds for partial-result return (MMT-style).
+        // If a provider hasn't responded in 8s we return what we have rather than blocking UI.
         const allTasks = providers.map(p => p.task);
+        const PARTIAL_RETURN_TIMEOUT_MS = 8000;
 
-        // Senior Dev: Removed safety cutoff as requested. 
-        // We will now wait for all providers to finish, regardless of time.
-        await Promise.all(allTasks);
+        await Promise.race([
+            Promise.allSettled(allTasks),
+            new Promise<void>(resolve => setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS))
+        ]);
+
+        // If any provider is still pending after timeout, we return whatever arrived.
+        // (The pending promises continue in background but we don't await them further.)
+
 
         // 4. Deduplication Logic (MMT-style efficient dedup)
         const totalReceivedCount = finalResults.length;
