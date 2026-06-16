@@ -43,18 +43,14 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     const correlationId = uuidv4();
     const page = req.pageNo || 1;
 
-    // REDUCED TARGET FOR SPEED: 50 hotels is more than enough for a single page view.
-    // Fetching 50 hotels takes ~3-5 seconds.
-    const targetCount = 50;
-
-    const CHUNK_SIZE = 10; // Safer for Sandbox
+    const targetCount = 30;
+    const CHUNK_SIZE = 10;
     const chunks: string[][] = [];
     for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
         chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
-
-    const batchSize = 5; // Fetch 5 chunks (50 IDs) per page
-    let currentIdx = (page - 1) * batchSize;
+    const batchSize = 3; // Fetch 3 chunks (30 IDs) per page
+    const currentIdx = (page - 1) * batchSize;
 
     try {
         let collectedHotels: any[] = [];

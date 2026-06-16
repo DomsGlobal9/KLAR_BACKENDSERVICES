@@ -17,11 +17,29 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
     if (!query || query.length < 2) return null;
     const normalizedQuery = query.toLowerCase().trim();
 
+    const capitalizeWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+    const tryFindCity = async (cityName: string) => {
+        const capitalized = capitalizeWord(cityName);
+        // 1. Try capitalized exact match (uses index, <1ms)
+        let found = await HotelModel.findOne({ cityName: capitalized }).select("location").lean();
+        if (!found) {
+            // 2. Try exact casing matches (uses index, <1ms)
+            found = await HotelModel.findOne({ 
+                cityName: { $in: [cityName.toLowerCase(), cityName.toUpperCase(), cityName] } 
+            }).select("location").lean();
+        }
+        if (!found) {
+            // 3. Fallback to case-insensitive regex (slow but robust)
+            found = await HotelModel.findOne({
+                cityName: { $regex: `^${cityName}$`, $options: "i" }
+            }).select("location").lean();
+        }
+        return found;
+    };
+
     // Strategy 1: Look for an exact city name match in our database (Fastest)
-    // We strictly use anchors ^...$ to avoid "Goa" matching "Goettingen"
-    const hotel = await HotelModel.findOne({
-        cityName: { $regex: `^${normalizedQuery}$`, $options: "i" }
-    }).select("location").lean();
+    const hotel = await tryFindCity(normalizedQuery);
 
     if (hotel?.location?.coordinates) {
         const [lng, lat] = hotel.location.coordinates;
@@ -33,9 +51,7 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
     const parts = normalizedQuery.split(/[\s,]+/);
     if (parts.length > 1) {
         const firstPart = parts[0];
-        const partialHotel = await HotelModel.findOne({
-            cityName: { $regex: `^${firstPart}$`, $options: "i" }
-        }).select("location").lean();
+        const partialHotel = await tryFindCity(firstPart);
 
         if (partialHotel?.location?.coordinates) {
             const [lng, lat] = partialHotel.location.coordinates;
@@ -195,7 +211,6 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
             }
         })
             .select("tjHotelId countryName")
-            .sort({ tjHotelId: 1 }) // STABLE SORT for pagination consistency
             .lean();
 
         // Sanity Check: If searching for India but resolved to Germany (or vice versa), filter out
