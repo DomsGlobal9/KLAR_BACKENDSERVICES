@@ -139,30 +139,89 @@ Reported Total to UI:      ${totalToUI}
     }
 
     async getHotelSuggestions(query: string) {
-        // Logic implemented in previous turns
         const { HotelModel } = require("../models/Hotel.model");
         const { RGDestinationModel } = require("../models/RGDestination.model");
 
-        // Execute both queries concurrently for maximum speed
-        const [rgDests, hotels] = await Promise.all([
-            // Use $text index for blazing fast destination searches
-            RGDestinationModel.find(
+        if (!query || query.trim().length < 2) {
+            return [];
+        }
+
+        const escapedQuery = query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+        const prefixRegex = new RegExp("^" + escapedQuery, "i");
+        const containsRegex = new RegExp(escapedQuery, "i");
+
+        // Execute queries concurrently for maximum speed
+        // 1. Fetch destination/city matches
+        let rgDests = await RGDestinationModel.find({ destName: prefixRegex }).limit(10).lean();
+        if (rgDests.length < 5) {
+            const extraDests = await RGDestinationModel.find({ 
+                destName: containsRegex,
+                _id: { $nin: rgDests.map((d: any) => d._id) }
+            }).limit(10 - rgDests.length).lean();
+            rgDests = [...rgDests, ...extraDests];
+        }
+
+        // If no results, fallback to text search index
+        if (rgDests.length === 0) {
+            rgDests = await RGDestinationModel.find(
                 { $text: { $search: query } },
                 { score: { $meta: "textScore" } }
             )
             .sort({ score: { $meta: "textScore" } })
             .limit(5)
-            .lean(),
-            
-            // Use $text index for blazing fast name/city searches
-            HotelModel.find(
+            .lean();
+        }
+
+        // 2. Fetch hotel matches
+        let hotels = await HotelModel.find({
+            $or: [
+                { name: prefixRegex },
+                { cityName: prefixRegex }
+            ]
+        }).limit(20).lean();
+
+        if (hotels.length < 10) {
+            const extraHotels = await HotelModel.find({
+                $or: [
+                    { name: containsRegex },
+                    { cityName: containsRegex }
+                ],
+                _id: { $nin: hotels.map((h: any) => h._id) }
+            }).limit(20 - hotels.length).lean();
+            hotels = [...hotels, ...extraHotels];
+        }
+
+        // Fallback to text search for hotels if nothing found via regex
+        if (hotels.length === 0) {
+            hotels = await HotelModel.find(
                 { $text: { $search: query } },
                 { score: { $meta: "textScore" } }
             )
             .sort({ score: { $meta: "textScore" } })
             .limit(15)
-            .lean()
-        ]);
+            .lean();
+        }
+
+        // Extract matching cities from matched hotels and suggest them if they are not already in rgDests
+        const hotelCities = new Set<string>();
+        for (const h of hotels) {
+            if (h.cityName) {
+                hotelCities.add(h.cityName);
+            }
+        }
+
+        const existingCityNames = new Set(rgDests.map((d: any) => d.destName ? d.destName.toLowerCase().trim() : (d.label ? d.label.toLowerCase().trim() : "")));
+        for (const cityName of hotelCities) {
+            const normalizedCity = cityName.toLowerCase().trim();
+            if (!existingCityNames.has(normalizedCity) && normalizedCity.includes(query.toLowerCase().trim())) {
+                const dbDest = await RGDestinationModel.findOne({ destName: new RegExp(`^${escapedQuery}$`, "i") }).lean();
+                rgDests.push({
+                    destCode: dbDest?.destCode || cityName,
+                    destName: cityName
+                });
+                existingCityNames.add(normalizedCity);
+            }
+        }
 
         const suggestions = [
             ...rgDests.map((d: any) => ({
