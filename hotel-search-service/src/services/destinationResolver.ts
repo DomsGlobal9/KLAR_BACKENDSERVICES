@@ -3,78 +3,100 @@
  */
 import { HotelModel, IHotelData } from "../models/Hotel.model";
 import { RGDestinationModel } from "../models/RGDestination.model";
+import { GeoCacheModel } from "../models/GeoCache.model";
 
 const GENERIC_WORDS = ['india', 'china', 'usa', 'united', 'states', 'kingdom', 'arab', 'emirates', 'san', 'city', 'by', 'the', 'house', 'hotel', 'resort'];
 
 /**
  * Resolve a city query to a RateGain destination code.
  */
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function getRadiusFromBoundingBox(lat: number, lng: number, bbox: string[]): number {
+    if (!bbox || bbox.length !== 4) return 20; // 20km fallback
+    const minLat = parseFloat(bbox[0]);
+    const maxLat = parseFloat(bbox[1]);
+    const minLng = parseFloat(bbox[2]);
+    const maxLng = parseFloat(bbox[3]);
+
+    const d1 = getDistanceKm(lat, lng, minLat, minLng);
+    const d2 = getDistanceKm(lat, lng, minLat, maxLng);
+    const d3 = getDistanceKm(lat, lng, maxLat, minLng);
+    const d4 = getDistanceKm(lat, lng, maxLat, maxLng);
+
+    const maxDist = Math.max(d1, d2, d3, d4);
+    return Math.min(Math.max(maxDist, 5), 100); // Limit to range [5km, 100km]
+}
+
+export async function seedDefaultGeo() {
+    try {
+        const count = await GeoCacheModel.countDocuments();
+        if (count === 0) {
+            console.log("[GEO] GeoCache is empty. Seeding default popular destinations...");
+            const defaults = [
+                { query: "paris", lat: 48.856614, lng: 2.3522219, radiusKm: 8, boundingBox: ["48.815573", "48.9021449", "2.224199", "2.4699208"] },
+                { query: "dubai", lat: 25.2048493, lng: 55.2707828, radiusKm: 80, boundingBox: ["24.78385", "25.35249", "54.91234", "55.61234"] },
+                { query: "goa", lat: 15.2993265, lng: 74.123996, radiusKm: 80, boundingBox: ["14.8993", "15.7993", "73.6239", "74.5239"] },
+                { query: "maldives", lat: 3.202778, lng: 73.22068, radiusKm: 150, boundingBox: ["-0.75", "7.15", "72.15", "74.15"] },
+                { query: "london", lat: 51.5072178, lng: -0.1275862, radiusKm: 15, boundingBox: ["51.2867602", "51.6918741", "-0.5103751", "0.3340155"] },
+                { query: "delhi", lat: 28.6139391, lng: 77.2090212, radiusKm: 30, boundingBox: ["28.40", "28.88", "76.83", "77.35"] },
+                { query: "mumbai", lat: 19.0759837, lng: 72.8776559, radiusKm: 30, boundingBox: ["18.89", "19.31", "72.77", "73.00"] },
+                { query: "singapore", lat: 1.352083, lng: 103.819836, radiusKm: 25, boundingBox: ["1.130", "1.470", "103.600", "104.050"] }
+            ];
+            await GeoCacheModel.insertMany(defaults);
+            console.log(`[GEO] Successfully seeded ${defaults.length} default destinations.`);
+        }
+    } catch (err: any) {
+        console.error("[GEO] Seeding error:", err.message);
+    }
+}
+
 /**
- * Attempt to find coordinates for a given city query using the existing hotel database.
- * This helps "geo-tag" a search even when the user just types a name.
+ * Attempt to find coordinates for a given city query using database cache or external geocoding.
  */
-export async function resolveCityToCoords(query: string): Promise<{ lat: number; lng: number } | null> {
+export async function resolveCityToCoords(query: string): Promise<{ lat: number; lng: number; radiusKm: number } | null> {
     if (!query || query.length < 2) return null;
     const normalizedQuery = query.toLowerCase().trim();
 
-    const capitalizeWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-
-    const tryFindCity = async (cityName: string) => {
-        const capitalized = capitalizeWord(cityName);
-        // 1. Try capitalized exact match (uses index, <1ms)
-        let found = await HotelModel.findOne({ cityName: capitalized }).select("location").lean();
-        if (!found) {
-            // 2. Try exact casing matches (uses index, <1ms)
-            found = await HotelModel.findOne({ 
-                cityName: { $in: [cityName.toLowerCase(), cityName.toUpperCase(), cityName] } 
-            }).select("location").lean();
-        }
-        if (!found) {
-            // 3. Fallback to case-insensitive regex (slow but robust)
-            found = await HotelModel.findOne({
-                cityName: { $regex: `^${cityName}$`, $options: "i" }
-            }).select("location").lean();
-        }
-        return found;
-    };
-
-    // Strategy 1: Look for an exact city name match in our database (Fastest)
-    const hotel = await tryFindCity(normalizedQuery);
-
-    if (hotel?.location?.coordinates) {
-        const [lng, lat] = hotel.location.coordinates;
-        console.log(`[GEO] Resolved city "${query}" to coordinates [${lat}, ${lng}] from DB (Exact Match)`);
-        return { lat, lng };
-    }
-
-    // Sub-strategy: If query is multi-word (e.g. "Goa, India"), try matching the first part
-    const parts = normalizedQuery.split(/[\s,]+/);
-    if (parts.length > 1) {
-        const firstPart = parts[0];
-        const partialHotel = await tryFindCity(firstPart);
-
-        if (partialHotel?.location?.coordinates) {
-            const [lng, lat] = partialHotel.location.coordinates;
-            console.log(`[GEO] Resolved part "${firstPart}" from "${query}" to [${lat}, ${lng}] from DB`);
-            return { lat, lng };
-        }
-    }
-
-    // Strategy 2: External geocoding via Nominatim (Reliable global fallback)
+    // 0. Check Database Cache
     try {
-        console.log(`[GEO] No exact DB match for "${query}". Fetching from Nominatim...`);
+        const cached = await GeoCacheModel.findOne({ query: normalizedQuery }).lean();
+        if (cached) {
+            console.log(`[GEO] Cache HIT for "${query}": [${cached.lat}, ${cached.lng}], radius: ${cached.radiusKm}km`);
+            return { lat: cached.lat, lng: cached.lng, radiusKm: cached.radiusKm };
+        }
+    } catch (err: any) {
+        console.error(`[GEO] Cache read error for "${query}":`, err.message);
+    }
+
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let radiusKm = 20;
+    let boundingBox: string[] = [];
+
+    // Strategy 1: Geocoding via Nominatim (to get coordinates + bounding box)
+    try {
+        console.log(`[GEO] Cache MISS for "${query}". Fetching from Nominatim...`);
         const axios = require('axios');
         
-        // Step 1: Try the exact query as provided
         let response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery)}&limit=1`, {
             headers: { 'User-Agent': 'Klar-Hotel-Search-Service/1.0' },
             timeout: 5000
         });
 
-        // Step 2: If no result, and it doesn't look like it has a country, try appending India
         if ((!response.data || response.data.length === 0) && !normalizedQuery.includes(",")) {
-             console.log(`[GEO] No results for "${normalizedQuery}", retrying with India suffix...`);
-             response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery + ", India")}&limit=1`, {
+            console.log(`[GEO] No results for "${normalizedQuery}", retrying with India suffix...`);
+            response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery + ", India")}&limit=1`, {
                 headers: { 'User-Agent': 'Klar-Hotel-Search-Service/1.0' },
                 timeout: 5000
             });
@@ -82,13 +104,75 @@ export async function resolveCityToCoords(query: string): Promise<{ lat: number;
 
         if (response.data && response.data.length > 0) {
             const result = response.data[0];
-            const lat = parseFloat(result.lat);
-            const lng = parseFloat(result.lon);
-            console.log(`[GEO] Nominatim resolved "${query}" to [${lat}, ${lng}] (${result.display_name})`);
-            return { lat, lng };
+            lat = parseFloat(result.lat);
+            lng = parseFloat(result.lon);
+            boundingBox = result.boundingbox || [];
+            radiusKm = getRadiusFromBoundingBox(lat, lng, boundingBox);
+            console.log(`[GEO] Nominatim resolved "${query}" to [${lat}, ${lng}] with dynamic radius: ${radiusKm.toFixed(2)}km`);
         }
     } catch (error: any) {
         console.error(`[GEO] Nominatim error for "${query}":`, error.message);
+    }
+
+    // Strategy 2: Fallback to exact city name match in our database (if Nominatim fails/misses)
+    if (lat === null || lng === null) {
+        try {
+            console.log(`[GEO] Nominatim fallback failed. Checking DB exact matches for "${query}"...`);
+            const capitalizeWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+            const tryFindCity = async (cityName: string) => {
+                const capitalized = capitalizeWord(cityName);
+                let found = await HotelModel.findOne({ cityName: capitalized }).select("location").lean();
+                if (!found) {
+                    found = await HotelModel.findOne({ 
+                        cityName: { $in: [cityName.toLowerCase(), cityName.toUpperCase(), cityName] } 
+                    }).select("location").lean();
+                }
+                if (!found) {
+                    found = await HotelModel.findOne({
+                        cityName: { $regex: `^${cityName}$`, $options: "i" }
+                    }).select("location").lean();
+                }
+                return found;
+            };
+
+            let hotel = await tryFindCity(normalizedQuery);
+            if (!hotel && normalizedQuery.split(/[\s,]+/).length > 1) {
+                const firstPart = normalizedQuery.split(/[\s,]+/)[0];
+                hotel = await tryFindCity(firstPart);
+            }
+
+            if (hotel?.location?.coordinates) {
+                const [dbLng, dbLat] = hotel.location.coordinates;
+                lat = dbLat;
+                lng = dbLng;
+                radiusKm = 20; // default fallback radius
+                boundingBox = [
+                    (lat - 0.2).toString(),
+                    (lat + 0.2).toString(),
+                    (lng - 0.2).toString(),
+                    (lng + 0.2).toString()
+                ];
+                console.log(`[GEO] Resolved "${query}" from DB to [${lat}, ${lng}] (Default radius: ${radiusKm}km)`);
+            }
+        } catch (dbErr: any) {
+            console.error(`[GEO] DB fallback search error:`, dbErr.message);
+        }
+    }
+
+    // 3. Save to database cache if resolved
+    if (lat !== null && lng !== null) {
+        try {
+            await GeoCacheModel.findOneAndUpdate(
+                { query: normalizedQuery },
+                { lat, lng, radiusKm, boundingBox },
+                { upsert: true, new: true }
+            );
+            console.log(`[GEO] Saved resolved geo for "${query}" to DB cache.`);
+            return { lat, lng, radiusKm };
+        } catch (saveErr: any) {
+            console.error(`[GEO] Failed to save cache entry for "${query}":`, saveErr.message);
+            return { lat, lng, radiusKm };
+        }
     }
 
     return null;
@@ -213,7 +297,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
 /**
  * Resolve a city query to an array of TripJack hotel IDs.
  */
-export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number; lng: number } | null): Promise<string[]> {
+export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number; lng: number; radiusKm?: number } | null): Promise<string[]> {
     const normalizedQuery = query.trim();
 
     // 0. Direct ID match (e.g. "TJ:1000123")
@@ -233,9 +317,10 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
 
     if (geo) {
         const { lat, lng } = geo;
-        console.log(`[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] for "${normalizedQuery}"`);
+        const radiusKm = geo.radiusKm || 20;
+        console.log(`[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] with radius ${radiusKm}km for "${normalizedQuery}"`);
 
-        // Find hotels within 20km radius
+        // Find hotels within dynamic radius
         let hotels = await HotelModel.find({
             location: {
                 $near: {
@@ -243,7 +328,7 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
                         type: "Point",
                         coordinates: [lng, lat]
                     },
-                    $maxDistance: 20000 // 20km
+                    $maxDistance: radiusKm * 1000 // dynamic radius in meters
                 }
             }
         })

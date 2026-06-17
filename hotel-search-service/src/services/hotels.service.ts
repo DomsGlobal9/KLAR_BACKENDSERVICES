@@ -26,6 +26,12 @@ export class HotelsService {
         // 1. Resolve Location (Once) - Skip if direct search
         const geoCenter = isDirectSearch ? null : await resolveCityToCoords(searchPayload.destination);
         searchPayload._geoCenter = geoCenter;
+        
+        if (geoCenter) {
+            console.log(`[GEO] Destination resolved for "${searchPayload.destination}": Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm.toFixed(2)}km`);
+        } else if (!isDirectSearch) {
+            console.log(`[GEO] No geo center resolved for "${searchPayload.destination}"`);
+        }
 
         const finalResults: UnifiedHotel[] = [];
         let rgTotal = 0;
@@ -68,7 +74,7 @@ export class HotelsService {
         // Wait for all providers, but cap at 8 seconds for partial-result return (MMT-style).
         // If a provider hasn't responded in 8s we return what we have rather than blocking UI.
         const allTasks = providers.map(p => p.task);
-        const PARTIAL_RETURN_TIMEOUT_MS = 12000;
+        const PARTIAL_RETURN_TIMEOUT_MS = 25000;
 
         await Promise.race([
             Promise.allSettled(allTasks),
@@ -111,11 +117,7 @@ Reported Total to UI:      ${totalToUI}
 
         let finalOutputHotels = deduplicatedResults;
         if (geoCenter) {
-            // Extract meaningful query words (ignoring countries or short generic words)
-            const queryWords = searchPayload.destination
-                .toLowerCase()
-                .split(/[\s,]+/)
-                .filter(word => word.length > 2 && !['india', 'france', 'spain', 'italy', 'china', 'japan', 'hotel', 'resort', 'united', 'states'].includes(word));
+            const allowedRadiusKm = geoCenter.radiusKm || 20;
 
             finalOutputHotels = deduplicatedResults.filter(hotel => {
                 const lat = Number(hotel.latitude);
@@ -123,20 +125,9 @@ Reported Total to UI:      ${totalToUI}
                 if (!lat || !lng) return true; // Keep if coordinates are missing/invalid to avoid false positives
 
                 const dist = getDistanceKm(geoCenter.lat, geoCenter.lng, lat, lng);
-
-                // 1. Close-in hotels (within 12km) are always kept (covers Paris proper & inner suburbs)
-                if (dist <= 12) return true;
-
-                // 2. For hotels further out (up to 80km), keep them ONLY if they explicitly belong to the target destination
-                const matchesQueryName = queryWords.some(word => 
-                    hotel.name.toLowerCase().includes(word) || 
-                    (hotel.city || '').toLowerCase().includes(word) || 
-                    (hotel.address || '').toLowerCase().includes(word)
-                );
-
-                return dist <= 80 && matchesQueryName;
+                return dist <= allowedRadiusKm;
             });
-            console.log(`[GEO] In-memory filter: Reduced unified results from ${deduplicatedResults.length} to ${finalOutputHotels.length} hotels (using dual-zone geofence around ${geoCenter.lat}, ${geoCenter.lng})`);
+            console.log(`[GEO] Dynamic geofence: Filtered hotels using ${allowedRadiusKm.toFixed(2)}km radius around [${geoCenter.lat}, ${geoCenter.lng}]. Kept ${finalOutputHotels.length}/${deduplicatedResults.length} hotels.`);
         }
 
         return {
