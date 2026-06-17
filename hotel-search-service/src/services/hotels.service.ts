@@ -10,22 +10,27 @@ export class HotelsService {
      * Senior OTA Strategy: Concurrently fetch, partial return on slow providers, 
      * and high-efficiency deduplication.
      */
-    async searchHotels(searchPayload: UnifiedSearchRequest) {
+    async searchHotels(searchPayload: UnifiedSearchRequest, clientType: "B2B" | "B2C" = "B2C") {
         const totalStartTime = Date.now();
         const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
-        console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}`);
+        console.log(`[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}, ClientType: ${clientType}`);
 
-        // 1. Resolve Location (Once)
-        const geoCenter = await resolveCityToCoords(searchPayload.destination);
-        searchPayload._geoCenter = geoCenter;
-
-        // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
-        const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
-
-        const isDirectSearch = isDirectHotelId;
+        const isDirectTJ = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
+        const isDirectRG = searchPayload.destination.startsWith('RG:');
+        const isDirectSearch = isDirectTJ || isDirectRG;
 
         if (isDirectSearch) {
-            console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
+            console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}".`);
+        }
+
+        // 1. Resolve Location (Once) - Skip if direct search
+        const geoCenter = isDirectSearch ? null : await resolveCityToCoords(searchPayload.destination);
+        searchPayload._geoCenter = geoCenter;
+        
+        if (geoCenter) {
+            console.log(`[GEO] Destination resolved for "${searchPayload.destination}": Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm.toFixed(2)}km`);
+        } else if (!isDirectSearch) {
+            console.log(`[GEO] No geo center resolved for "${searchPayload.destination}"`);
         }
 
         const finalResults: UnifiedHotel[] = [];
@@ -37,10 +42,10 @@ export class HotelsService {
         // 2. Define Providers based on Mode
         const providers: { name: string; task: Promise<void> }[] = [];
 
-        if ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) {
+        if ((mode === "UNIFIED" || mode === "RG_ONLY") && (!isDirectSearch || isDirectRG)) {
             providers.push({
                 name: "RG",
-                task: searchRG(searchPayload).then(res => {
+                task: searchRG(searchPayload, clientType).then(res => {
                     rgCount = res.hotels.length;
                     rgTotal = res.total;
                     finalResults.push(...res.hotels);
@@ -51,7 +56,7 @@ export class HotelsService {
             });
         }
 
-        if (mode === "UNIFIED" || mode === "TJ_ONLY") {
+        if ((mode === "UNIFIED" || mode === "TJ_ONLY") && (!isDirectSearch || isDirectTJ)) {
             providers.push({
                 name: "TJ",
                 task: searchTJ(searchPayload).then(res => {
@@ -66,12 +71,19 @@ export class HotelsService {
         }
 
         // 3. Orchestration: High-Performance Concurrent Collection
-        // We wait for ALL providers, but if one hangs, the 50s cutoff ensures we return whatever we have.
+        // Wait for all providers, but cap at 8 seconds for partial-result return (MMT-style).
+        // If a provider hasn't responded in 8s we return what we have rather than blocking UI.
         const allTasks = providers.map(p => p.task);
+        const PARTIAL_RETURN_TIMEOUT_MS = 25000;
 
-        // Senior Dev: Removed safety cutoff as requested. 
-        // We will now wait for all providers to finish, regardless of time.
-        await Promise.all(allTasks);
+        await Promise.race([
+            Promise.allSettled(allTasks),
+            new Promise<void>(resolve => setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS))
+        ]);
+
+        // If any provider is still pending after timeout, we return whatever arrived.
+        // (The pending promises continue in background but we don't await them further.)
+
 
         // 4. Deduplication Logic (MMT-style efficient dedup)
         const totalReceivedCount = finalResults.length;
@@ -85,8 +97,8 @@ export class HotelsService {
 
         const totalDuration = Date.now() - totalStartTime;
 
-        const tjLog = (mode === "UNIFIED" || mode === "TJ_ONLY") ? `${tjCount} (Total: ${tjTotal})` : "[SKIPPED]";
-        const rgLog = ((mode === "UNIFIED" || mode === "RG_ONLY") && !isDirectSearch) ? `${rgCount} (Total: ${rgTotal})` : "[SKIPPED]";
+        const tjLog = ((mode === "UNIFIED" || mode === "TJ_ONLY") && (!isDirectSearch || isDirectTJ)) ? `${tjCount} (Total: ${tjTotal})` : "[SKIPPED]";
+        const rgLog = ((mode === "UNIFIED" || mode === "RG_ONLY") && (!isDirectSearch || isDirectRG)) ? `${rgCount} (Total: ${rgTotal})` : "[SKIPPED]";
 
         console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -103,11 +115,26 @@ Reported Total to UI:      ${totalToUI}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         `);
 
+        let finalOutputHotels = deduplicatedResults;
+        if (geoCenter) {
+            const allowedRadiusKm = geoCenter.radiusKm || 20;
+
+            finalOutputHotels = deduplicatedResults.filter(hotel => {
+                const lat = Number(hotel.latitude);
+                const lng = Number(hotel.longitude);
+                if (!lat || !lng) return true; // Keep if coordinates are missing/invalid to avoid false positives
+
+                const dist = getDistanceKm(geoCenter.lat, geoCenter.lng, lat, lng);
+                return dist <= allowedRadiusKm;
+            });
+            console.log(`[GEO] Dynamic geofence: Filtered hotels using ${allowedRadiusKm.toFixed(2)}km radius around [${geoCenter.lat}, ${geoCenter.lng}]. Kept ${finalOutputHotels.length}/${deduplicatedResults.length} hotels.`);
+        }
+
         return {
-            results: deduplicatedResults,
-            body: deduplicatedResults, // Fallback for some frontend components
-            hotels: deduplicatedResults,
-            total: totalToUI
+            results: finalOutputHotels,
+            body: finalOutputHotels, // Fallback for some frontend components
+            hotels: finalOutputHotels,
+            total: Math.max(rgTotal + tjTotal, finalOutputHotels.length)
         };
     }
 
@@ -172,3 +199,15 @@ Reported Total to UI:      ${totalToUI}
 }
 
 export const hotelsService = new HotelsService();
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}

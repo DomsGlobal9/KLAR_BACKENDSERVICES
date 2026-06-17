@@ -20,9 +20,14 @@ class ProductsService {
         // 2. RG prefix is definitely not TripJack
         if (propertyId.startsWith("RG:")) return false;
 
-        // 3. UUID format is unique to TripJack (RateGain uses numeric IDs)
+        // 3. UUID format: RateGain uses UUIDs, TripJack uses numeric IDs
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        return uuidRegex.test(propertyId);
+        if (uuidRegex.test(propertyId)) return false;
+
+        // 4. Numeric format: TripJack uses numeric IDs
+        if (/^\d+$/.test(propertyId)) return true;
+
+        return false;
     }
 }
 

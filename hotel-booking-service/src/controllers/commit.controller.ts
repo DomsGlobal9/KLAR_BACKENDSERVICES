@@ -7,6 +7,7 @@ export const commitController = async (req: any, res: Response) => {
         const agentId = req.user?.userId || req.user?.id || req.user?._id || null;
         const agentName = req.user?.email || null; // Fallback to email if name isn't in token
         const token = req.headers.authorization?.split(" ")[1] || "";
+        const clientType = req.user?.clientType || "B2C";
 
         let finalPayload = req.body;
         
@@ -45,8 +46,8 @@ export const commitController = async (req: any, res: Response) => {
             console.log(`[FORENSIC] Compiled Unified Payload for property: ${finalPayload.propertyId}, Price: ${finalPayload.totalPrice}`);
         }
 
-        console.log(`[FORENSIC] Commit Booking: agentId=${agentId}, agentName=${agentName}`);
-        const data = await commitService.commit(finalPayload, agentId, agentName, token);
+        console.log(`[FORENSIC] Commit Booking: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`);
+        const data = await commitService.commit(finalPayload, agentId, agentName, token, clientType);
         res.json({
             status: true,
             statusCode: 200,

@@ -101,9 +101,9 @@ export class RateGainApiProvider {
                 TimeStamp: booking.TimeStamp || now,
                 EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
                 Session: booking.Session || "",
-                SellingRate: booking.SellingRate || booking.sellingRate || booking.BookingRate,
-                BookingRate: booking.BookingRate || booking.SellingRate || booking.sellingRate,
-                sellingRate: booking.sellingRate || booking.SellingRate || booking.BookingRate,
+                SellingRate: booking.SellingRate !== undefined ? booking.SellingRate : (booking.sellingRate !== undefined ? booking.sellingRate : booking.BookingRate),
+                BookingRate: booking.BookingRate !== undefined ? booking.BookingRate : (booking.SellingRate !== undefined ? booking.SellingRate : booking.sellingRate),
+                sellingRate: booking.sellingRate !== undefined ? booking.sellingRate : (booking.SellingRate !== undefined ? booking.SellingRate : booking.BookingRate),
                 RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
                     const mappedRs: any = {
                         RoomTypeCode: rs.RoomTypeCode || "Standard",
