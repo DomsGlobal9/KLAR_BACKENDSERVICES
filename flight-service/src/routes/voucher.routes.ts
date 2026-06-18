@@ -1,5 +1,5 @@
 import { Router } from "express";
-import VoucherController from "../../src/controllers/src/controllers/voucher.controller";
+import VoucherController from "../controllers/voucher.controller";
 
 const router = Router();
 
