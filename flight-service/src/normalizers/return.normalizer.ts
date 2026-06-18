@@ -92,7 +92,7 @@ export class ReturnNormalizer {
             };
         }
 
-        
+
         if (tripInfos?.COMBO) {
             const roundTrips = tripInfos.COMBO.map((combo: any) => {
                 const onwardSegments = combo.sI.filter((seg: any) => !seg.isRs);
@@ -110,7 +110,7 @@ export class ReturnNormalizer {
                     true
                 );
 
-                
+
                 const allFares = (combo.totalPriceList || []).map((fare: any) => ({
                     fareName: fare.fareIdentifier || "UNKNOWN",
                     totalPrice: fare.fd?.ADULT?.fC?.TF || 0,
@@ -172,6 +172,9 @@ export class ReturnNormalizer {
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
+        // Extract stops information
+        const stopsInfo = this.extractStops(segments);
+
         return {
             flightKey: BaseFlightNormalizer.getFlightKey(segments),
             isReturn,
@@ -200,6 +203,7 @@ export class ReturnNormalizer {
                 )
             ),
             stops: segments.length - 1,
+            stopDetails: stopsInfo, // Add stop details
             price: cheapest.fd.ADULT.fC.TF
         };
     }
@@ -220,6 +224,9 @@ export class ReturnNormalizer {
 
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
+
+        // Extract stops information
+        const stopsInfo = this.extractStops(segments);
 
         const allFares = (totalPriceList || []).map((fare: any) => ({
             fareName: fare.fareIdentifier || "UNKNOWN",
@@ -262,6 +269,7 @@ export class ReturnNormalizer {
                 )
             ),
             stops: segments.length - 1,
+            stopDetails: stopsInfo, // Add stop details
             cheapestFare: {
                 price: cheapest?.fd?.ADULT?.fC?.TF || 0,
                 cabinClass: cheapest?.fd?.ADULT?.cc || "UNKNOWN",
@@ -278,7 +286,7 @@ export class ReturnNormalizer {
             }
         };
 
-        
+
         if (cheapest?.fd?.ADULT?.fC?.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
             flightData.original_price = cheapest.fd.ADULT.fC.originalTF;
             flightData.markup = cheapest.fd.ADULT.fC.markup;
@@ -300,6 +308,9 @@ export class ReturnNormalizer {
 
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
+
+        // Extract stops information
+        const stopsInfo = this.extractStops(segments);
 
         return {
             flightKey: BaseFlightNormalizer.getFlightKey(segments),
@@ -328,7 +339,8 @@ export class ReturnNormalizer {
                     0
                 )
             ),
-            stops: segments.length - 1
+            stops: segments.length - 1,
+            stopDetails: stopsInfo // Add stop details
         };
     }
 
@@ -347,6 +359,9 @@ export class ReturnNormalizer {
 
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
+
+        // Extract stops information
+        const stopsInfo = this.extractStops(segments);
 
         return {
             flightKey: BaseFlightNormalizer.getFlightKey(segments),
@@ -378,7 +393,8 @@ export class ReturnNormalizer {
                     0
                 )
             ),
-            stops: segments.length - 1
+            stops: segments.length - 1,
+            stopDetails: stopsInfo // Add stop details
         };
     }
 
@@ -399,8 +415,120 @@ export class ReturnNormalizer {
             }))
             .sort((a, b) => b.flights - a.flights);
     }
-}
 
+    /**
+     * Extract stops information from flight segments
+     * @param segments - Array of flight segments
+     * @returns Stops information including city names and airport codes
+     */
+    static extractStops(segments: any[]): any {
+        // If no segments or only one segment (direct flight)
+        if (!segments || segments.length <= 1) {
+            return {
+                count: 0,
+                stopNames: [],
+                stopCodes: [],
+                stopCities: [],
+                displayString: "Non-stop"
+            };
+        }
+
+        const stops = [];
+        const stopCities = [];
+        const stopCodes = [];
+        const stopNames = [];
+        const stopoverDurations = [];
+
+        // Loop through segments to find stops
+        // For each segment except the last one, check if it's a stop
+        for (let i = 0; i < segments.length - 1; i++) {
+            const currentSegment = segments[i];
+            const nextSegment = segments[i + 1];
+
+            // The arrival airport of the current segment is where we stop
+            const stopAirport = currentSegment.aa || currentSegment.da;
+
+            // Get stop city information
+            const stopInfo = {
+                city: stopAirport?.city || 'Unknown City',
+                airportCode: stopAirport?.code || 'Unknown',
+                airportName: stopAirport?.name || '',
+                terminal: stopAirport?.terminal || '',
+                // Calculate stopover duration (time between arrival and next departure)
+                stopoverDuration: this.calculateStopoverDuration(
+                    currentSegment.at,
+                    nextSegment.dt
+                ),
+                // Arrival and departure times at the stop
+                arrivalTime: BaseFlightNormalizer.getTime(currentSegment.at),
+                departureTime: BaseFlightNormalizer.getTime(nextSegment.dt),
+                arrivalDate: BaseFlightNormalizer.getDateParts(currentSegment.at),
+                departureDate: BaseFlightNormalizer.getDateParts(nextSegment.dt)
+            };
+
+            stops.push(stopInfo);
+            stopCities.push(stopAirport?.city || 'Unknown City');
+            stopCodes.push(stopAirport?.code || 'Unknown');
+            stopNames.push(stopAirport?.name || 'Unknown Airport');
+
+            if (stopInfo.stopoverDuration && stopInfo.stopoverDuration !== '0h 0m') {
+                stopoverDurations.push(stopInfo.stopoverDuration);
+            }
+        }
+
+        // Build display string
+        let displayString = "Non-stop";
+        if (stops.length === 1) {
+            displayString = `1 stop (${stopCities[0]})`;
+        } else if (stops.length > 1) {
+            displayString = `${stops.length} stops (${stopCities.join(', ')})`;
+        }
+
+        return {
+            count: stops.length,
+            stopNames: stopNames,
+            stopCodes: stopCodes,
+            stopCities: stopCities,
+            stopoverDurations: stopoverDurations.length > 0 ? stopoverDurations : [],
+            details: stops,
+            displayString: displayString
+        };
+    }
+
+    /**
+     * Calculate the duration of a stopover
+     * @param arrivalTime - Arrival time string (ISO format)
+     * @param departureTime - Departure time string (ISO format)
+     * @returns Formatted stopover duration string
+     */
+    static calculateStopoverDuration(arrivalTime: string, departureTime: string): string {
+        if (!arrivalTime || !departureTime) {
+            return '0h 0m';
+        }
+
+        try {
+            const arrival = new Date(arrivalTime);
+            const departure = new Date(departureTime);
+            const diffMinutes = Math.floor((departure.getTime() - arrival.getTime()) / (1000 * 60));
+
+            if (diffMinutes < 0) {
+                // If negative, it means the stop crosses midnight or next day
+                // Add 24 hours (1440 minutes) to get the actual duration
+                const adjustedDiff = diffMinutes + 1440;
+                const hours = Math.floor(adjustedDiff / 60);
+                const minutes = adjustedDiff % 60;
+                return `${hours}h ${minutes}m`;
+            }
+
+            const hours = Math.floor(diffMinutes / 60);
+            const minutes = diffMinutes % 60;
+
+            return `${hours}h ${minutes}m`;
+        } catch (error) {
+            return '0h 0m';
+        }
+    }
+}
 
 
 

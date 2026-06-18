@@ -112,8 +112,6 @@ class BookingLocalController {
                 }
             );
 
-            console.log("****************** The deduct wallet balance: \n", response);
-
             return response.data;
 
 
@@ -371,6 +369,7 @@ class BookingLocalController {
                     });
                 }
             }
+            console.log("Wallet Checked properly. Now trying to book");
 
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
