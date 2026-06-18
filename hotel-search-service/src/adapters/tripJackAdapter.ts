@@ -129,12 +129,13 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
             const staticData = await HotelModel.find({ tjHotelId: { $in: tjIds } }).limit(100).lean();
             const staticMap = new Map(staticData.map(s => [s.tjHotelId, s]));
 
-            mapped = mapped.map(bh => {
+             mapped = mapped.map(bh => {
                 const s = staticMap.get(bh.hotelId.replace("TJ:", ""));
                 if (s) {
                     const accTypeDesc = bh.accTypeDesc || s.accTypeDesc || "";
                     const accMultiDesc = bh.accMultiDesc || s.accMultiDesc || "";
                     const accomodationType = bh.accomodationType || s.accomodationType || "";
+                    const rating = bh.starRating || s.starRating || 0;
                     // Always prefer DB images since TJ listing API rarely returns images
                     const enrichedImages = (() => {
                         // Use listing images if present; otherwise always fall back to DB
@@ -142,11 +143,15 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         if (s.images && s.images.length > 0) return s.images as string[];
                         return [];
                     })();
+                    const finalAmenities = (bh.amenities && bh.amenities.length > 0)
+                        ? bh.amenities
+                        : getTJFallbackAmenities(bh.name || s.name, rating);
+
                     return {
                         ...bh,
                         address: bh.address || s.address || "",
                         city: bh.city || s.cityName || "",
-                        starRating: bh.starRating || s.starRating || 0,
+                        starRating: rating,
                         images: enrichedImages,
                         latitude: bh.latitude || s.location?.coordinates?.[1],
                         longitude: bh.longitude || s.location?.coordinates?.[0],
@@ -154,6 +159,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         accMultiDesc,
                         accomodationType,
                         hotelSegment: accTypeDesc || accMultiDesc || bh.hotelSegment || 'Hotel',
+                        amenities: finalAmenities,
                     };
                 }
                 return bh;
@@ -170,9 +176,37 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
     }
 }
 
+function getTJFallbackAmenities(name: string, starRating: number): string[] {
+    const amenities = ["Free Wi-Fi", "Air Conditioning", "Room Service"];
+    if (starRating >= 5) {
+        amenities.push("Swimming Pool", "Fitness Center", "Spa", "Restaurant", "Bar");
+    } else if (starRating >= 4) {
+        amenities.push("Swimming Pool", "Fitness Center", "Restaurant");
+    } else if (starRating >= 3) {
+        amenities.push("Restaurant", "24-hour Front Desk");
+    } else {
+        amenities.push("24-hour Front Desk");
+    }
+
+    const lowerName = (name || "").toLowerCase();
+    if (lowerName.includes("resort") || lowerName.includes("spa") || lowerName.includes("beach")) {
+        if (!amenities.includes("Swimming Pool")) amenities.push("Swimming Pool");
+        if (!amenities.includes("Spa")) amenities.push("Spa");
+    }
+    if (lowerName.includes("parking") || lowerName.includes("airport")) {
+        amenities.push("Free Parking");
+    }
+    return [...new Set(amenities)];
+}
+
 function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     const opt = h.options?.[0];
     const hotelId = h.tjHotelId || h.hotelId || h.id;
+    const rating = parseInt(h.rating) || 0;
+    const finalAmenities = (h.amenities && h.amenities.length > 0)
+        ? h.amenities
+        : getTJFallbackAmenities(h.name, rating);
+
     return {
         hotelId: `TJ:${hotelId}`,
         source: "TJ",
@@ -180,7 +214,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         address: h.address,
         city: h.city,
         country: h.country,
-        starRating: parseInt(h.rating) || 0,
+        starRating: rating,
         latitude: h.latitude,
         longitude: h.longitude,
         // TJ listing rarely returns images — DB enrichment fills these in the enrichment step below
@@ -200,7 +234,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         isRefundable: opt?.cancellation?.isRefundable,
         onHoldAllowed: opt?.onHoldAllowed ?? opt?.cancellation?.onHoldAllowed ?? (opt?.cancellation?.isRefundable ?? false),
         holdConfirm: opt?.holdConfirm ?? opt?.cancellation?.holdConfirm ?? (opt?.cancellation?.isRefundable ?? false),
-        amenities: h.amenities || [],
+        amenities: finalAmenities,
         propertyCode: hotelId.toString(),
         brandCode: "",
         rawPayload: { ...h, _correlationId: correlationId },

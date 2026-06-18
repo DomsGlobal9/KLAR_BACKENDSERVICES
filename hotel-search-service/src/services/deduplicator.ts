@@ -64,21 +64,29 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): { items: UnifiedHotel
                 const existingPrice = existing.price || 0;
                 let winnerName = "";
 
-                // If same ID, we just want the cheaper one regardless of source.
-                // If different sources, we merge and add an altDeal.
+                // Merge amenities and images from both sources
+                const combinedAmenities = mergeAmenities(hotel.amenities || [], existing.amenities || []);
+                const combinedImages = (hotel.images && hotel.images.length > 0) 
+                    ? hotel.images 
+                    : (existing.images || []);
+
                 if (currentPrice > 0 && (currentPrice < existingPrice || existingPrice === 0)) {
                     winnerName = hotel.name;
                     const merged = { ...hotel };
                     if (hotel.source !== existing.source) {
                         merged.altDeal = { source: existing.source, price: existing.price };
-                    } else {
-                        // If same source, just take the cheaper one's details
                     }
+                    merged.amenities = combinedAmenities;
+                    merged.images = combinedImages;
                     collapsed[i] = merged as UnifiedHotel;
                 } else {
                     winnerName = existing.name;
                     if (hotel.source !== existing.source) {
                         existing.altDeal = { source: hotel.source, price: hotel.price };
+                    }
+                    existing.amenities = combinedAmenities;
+                    if (!existing.images || existing.images.length === 0) {
+                        existing.images = combinedImages;
                     }
                 }
 
@@ -133,4 +141,18 @@ function isNameSimilar(name1: string, name2: string): boolean {
     }
 
     return false;
+}
+
+function mergeAmenities(arr1: string[], arr2: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const item of [...(arr1 || []), ...(arr2 || [])]) {
+        if (!item) continue;
+        const normalized = item.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!seen.has(normalized)) {
+            seen.add(normalized);
+            result.push(item);
+        }
+    }
+    return result;
 }

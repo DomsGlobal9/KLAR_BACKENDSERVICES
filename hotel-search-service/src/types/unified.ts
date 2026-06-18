@@ -8,6 +8,7 @@ export interface UnifiedSearchRequest {
   countryCode?: string;         // default US
   pageNo?: number;              // 1-indexed pagination
   _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
+  providers?: string[];
 }
 
 export interface UnifiedRoom {
