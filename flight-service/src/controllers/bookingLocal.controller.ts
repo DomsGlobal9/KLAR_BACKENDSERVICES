@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import BookingService from "../services/bookingLocal.service";
 import { envConfig } from "../config/env.config";
 import axios from "axios";
+import TripjackBookingService from "../services/booking.service";
+import { BookingVoucherPdfService } from "../services/bookingVoucherPdf.service";
 
 class BookingLocalController {
 
