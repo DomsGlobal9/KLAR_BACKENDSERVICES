@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import BookingService from "../services/bookingLocal.service";
 import { envConfig } from "../config/env.config";
 import axios from "axios";
+import TripjackBookingService from "../services/booking.service";
+import { BookingVoucherPdfService } from "../services/bookingVoucherPdf.service";
 
 class BookingLocalController {
 
@@ -109,8 +111,6 @@ class BookingLocalController {
                     }
                 }
             );
-
-            console.log("****************** The deduct wallet balance: \n", response);
 
             return response.data;
 
@@ -369,6 +369,7 @@ class BookingLocalController {
                     });
                 }
             }
+            console.log("Wallet Checked properly. Now trying to book");
 
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
