@@ -132,9 +132,6 @@ Reported Total to UI:      ${totalToUI}
             const allowedRadiusKm = geoCenter.radiusKm || 20;
 
             finalOutputHotels = deduplicatedResults.filter(hotel => {
-                // Do not filter out RateGain hotels
-                if (hotel.source === "RG") return true;
-
                 const lat = Number(hotel.latitude);
                 const lng = Number(hotel.longitude);
                 if (!lat || !lng) return true; // Keep if coordinates are missing/invalid to avoid false positives
