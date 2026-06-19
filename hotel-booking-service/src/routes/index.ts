@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { precheckController } from "../controllers/precheck.controller";
 import { commitController } from "../controllers/commit.controller";
-import { cancelController } from "../controllers/cancel.controller";
+import { cancelController, getCancelChargesController } from "../controllers/cancel.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
+import { getPricingSummaryController } from "../controllers/pricing.controller";
 import { getBookings, getBookingDetails } from "../controllers/bookings.controller";
 import { confirmController } from "../controllers/confirm.controller";
+import { bookingTemplateController } from "../controllers/booking-template.controller";
 
 import { authenticateJWT } from "../middlewares/auth.middleware";
 
@@ -50,6 +52,8 @@ router.post("/precheck", authenticateJWT, precheckController);
 router.post("/commit", authenticateJWT, commitController);
 router.post("/confirm", authenticateJWT, confirmController);
 router.post("/cancel", authenticateJWT, cancelController);
+router.get("/cancel/charges", authenticateJWT, getCancelChargesController);
+router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);
@@ -59,5 +63,23 @@ router.get("/special-requests", specialRequestsController);
 
 // New booking management routes
 router.get("/bookings/:id", authenticateJWT, getBookingDetails);
+
+
+/**
+ * Client Confirmation Template Endpoint
+ * GET -> /api/templates/hotel/confirmation/client/6a15467827cdbbb8d1982f82
+ */
+router.get(
+    "/templates/hotel/confirmation/client/:id", authenticateJWT, bookingTemplateController.renderClientConfirmation
+);
+
+/**
+ * Agent Confirmation Template Endpoint
+ * GET -> /api/templates/hotel/confirmation/agent/6a15467827cdbbb8d1982f82
+ */
+router.get(
+    "/templates/hotel/confirmation/agent/:id", authenticateJWT, bookingTemplateController.renderAgentConfirmation
+);
+
 
 export default router;

@@ -1,3 +1,4 @@
+// Config reloader trigger - env changes
 import dns from "node:dns/promises";
 dns.setServers(["1.1.1.1", "1.0.0.1", "0.0.0.0"]);
 
@@ -6,6 +7,9 @@ dotenv.config({ path: [".env.local", ".env"] });
 
 import mongoose from "mongoose";
 import app from "./app";
+import { bookingsService } from "./services/bookings.service";
+import { BookingModel, BookingStatus, BookingProvider } from "./models/Booking.model";
+import { initializeCronJobs } from "./cron";
 
 const PORT = process.env.PORT || 5013;
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -16,6 +20,7 @@ async function startServer() {
         try {
             await mongoose.connect(MONGODB_URI);
             console.log("✅ MongoDB Connected!");
+            initializeCronJobs();
         } catch (err: any) {
             console.error("❌ MongoDB connection failed:", err.message);
             // Optionally exit if DB is required: process.exit(1);
@@ -32,5 +37,7 @@ async function startServer() {
         console.log(`   GET  /api/booking/special-requests`);
     });
 }
+
+
 
 startServer();

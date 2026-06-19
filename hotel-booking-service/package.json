@@ -37,12 +37,16 @@
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.23.0",
+    "node-cron": "^4.2.1",
+    "puppeteer": "^25.1.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.5",
+    "@types/node-cron": "^3.0.11",
+    "@types/puppeteer": "^5.4.7",
     "@types/uuid": "^10.0.0",
     "mongodb-memory-server": "^11.0.1",
     "nodemon": "^3.1.11",

@@ -21,15 +21,11 @@ class BookingService {
         html: string
     ) {
         try {
-
-            console.log("BOOKING SERVICE:\n", { to, subject, html });
             await axios.post(`${envConfig.EMAIL_SERVICE}/send`, {
                 to,
                 subject,
                 html
             });
-
-            console.log("Email sent successfully");
         } catch (error: any) {
             console.error(
                 "Email send failed:",
@@ -185,9 +181,9 @@ class BookingService {
     }) {
         const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
 
-        // First, update the SSR data using the specific repository method
         if (travellers?.length) {
-            for (const traveller of travellers) {
+            for (let i = 0; i < travellers.length; i++) {
+                const traveller = travellers[i];
                 await this.bookingRepo.updateTravellerSSR(
                     bookingId,
                     traveller.travellerId,
@@ -200,7 +196,6 @@ class BookingService {
             }
         }
 
-        // Then update prices separately
         const priceUpdateQuery: any = {};
         if (tripjackPrice !== undefined) priceUpdateQuery.tripjackPrice = tripjackPrice;
         if (markupPrice !== undefined) priceUpdateQuery.markupPrice = markupPrice;
@@ -211,16 +206,16 @@ class BookingService {
             await this.bookingRepo.updatePrices(bookingId, priceUpdateQuery);
         }
 
-        // Get the updated booking
-        const updatedBooking = await this.bookingRepo.getBookingById(bookingId);
-
-        if (!updatedBooking) {
-            throw new Error("Failed to get updated booking");
+        let updatedBooking;
+        try {
+            updatedBooking = await this.bookingRepo.getBookingById(bookingId);
+            if (!updatedBooking) {
+                throw new Error("Failed to get updated booking");
+            }
+        } catch (error: any) {
+            throw error;
         }
 
-        console.log("FINAL UPDATED BOOKING TRAVELLERS:", JSON.stringify(updatedBooking.travellers, null, 2));
-
-        // Prepare payload for Tripjack
         const tripjackPayload: FrontendBookingPayload = {
             bookingId: updatedBooking.bookingId,
             email: updatedBooking.email,
@@ -239,42 +234,135 @@ class BookingService {
 
         const mapped = mapToTripjackBooking(tripjackPayload);
 
-        console.log("MAPPED PAYLOAD:", JSON.stringify(mapped, null, 2));
-
         const response = await TripjackBookingService.book(mapped);
 
-        if (response.data.status.success === true) {
-            const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
+        if (response?.data?.status?.success === true) {
+            try {
+                const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
 
-            await this.bookingRepo.updateBookingStatus(
-                bookingId,
-                tripjackBookingStatus?.order?.status
-            );
-
-            const to =
-                tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
-                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
-                updatedBooking?.email || "";
-
-            if (!to) {
-                console.warn("No email found for booking:", updatedBooking.bookingId);
-                return response.data;
-            } else {
-                const html = flightConfirmationTemplate(tripjackBookingStatus);
-
-                await this.sendEmail(
-                    to,
-                    `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
-                    html
+                await this.bookingRepo.updateBookingStatus(
+                    bookingId,
+                    tripjackBookingStatus?.order?.status
                 );
-            }
 
-            return response.data;
+                const to = tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
+                    tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+                    updatedBooking?.email || "";
+
+                if (to) {
+                    const html = flightConfirmationTemplate(tripjackBookingStatus);
+                    await this.sendEmail(
+                        to,
+                        `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
+                        html
+                    );
+                }
+
+                return response.data;
+            } catch (error: any) {
+                return response.data;
+            }
         } else {
-            console.error("Tripjack booking failed:", response.data);
             return null;
         }
     }
+
+    // async updateAndTriggerBooking(data: {
+    //     bookingId: string;
+    //     travellers?: any[];
+    //     tripjackPrice?: number;
+    //     markupPrice?: number;
+    //     totalPrice?: number;
+    //     isHold: boolean;
+    // }) {
+    //     const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
+
+    //     if (travellers?.length) {
+    //         for (const traveller of travellers) {
+    //             await this.bookingRepo.updateTravellerSSR(
+    //                 bookingId,
+    //                 traveller.travellerId,
+    //                 {
+    //                     ssrSeatInfos: traveller.ssrSeatInfos || [],
+    //                     ssrMealInfos: traveller.ssrMealInfos || [],
+    //                     ssrBaggageInfos: traveller.ssrBaggageInfos || []
+    //                 }
+    //             );
+    //         }
+    //     }
+
+    //     // Then update prices separately
+    //     const priceUpdateQuery: any = {};
+    //     if (tripjackPrice !== undefined) priceUpdateQuery.tripjackPrice = tripjackPrice;
+    //     if (markupPrice !== undefined) priceUpdateQuery.markupPrice = markupPrice;
+    //     if (totalPrice !== undefined) priceUpdateQuery.totalPrice = totalPrice;
+    //     if (isHold !== undefined) priceUpdateQuery.isHold = isHold;
+
+    //     if (Object.keys(priceUpdateQuery).length > 0) {
+    //         await this.bookingRepo.updatePrices(bookingId, priceUpdateQuery);
+    //     }
+
+    //     // Get the updated booking
+    //     const updatedBooking = await this.bookingRepo.getBookingById(bookingId);
+
+    //     if (!updatedBooking) {
+    //         throw new Error("Failed to get updated booking");
+    //     }
+
+
+    //     // Prepare payload for Tripjack
+    //     const tripjackPayload: FrontendBookingPayload = {
+    //         bookingId: updatedBooking.bookingId,
+    //         email: updatedBooking.email,
+    //         phone: updatedBooking.phone,
+    //         travellers: updatedBooking.travellers,
+    //         amount: updatedBooking.tripjackPrice || 0,
+    //         isHold: updatedBooking.isHold,
+    //         emergencyContact: updatedBooking.emergencyContact
+    //     };
+
+    //     if (updatedBooking.gstInfo?.gstNumber) {
+    //         tripjackPayload.gstInfo = updatedBooking.gstInfo;
+    //     }
+
+    //     validateBookingPayload(tripjackPayload);
+
+    //     const mapped = mapToTripjackBooking(tripjackPayload);
+
+    //     const response = await TripjackBookingService.book(mapped);
+
+    //     if (response.data.status.success === true) {
+    //         const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
+
+    //         await this.bookingRepo.updateBookingStatus(
+    //             bookingId,
+    //             tripjackBookingStatus?.order?.status
+    //         );
+
+    //         const to =
+    //             tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
+    //             tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+    //             updatedBooking?.email || "";
+
+    //         if (!to) {
+    //             console.warn("No email found for booking:", updatedBooking.bookingId);
+    //             return response.data;
+    //         } else {
+    //             const html = flightConfirmationTemplate(tripjackBookingStatus);
+
+    //             await this.sendEmail(
+    //                 to,
+    //                 `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
+    //                 html
+    //             );
+    //         }
+
+    //         return response.data;
+    //     } else {
+    //         console.error("Tripjack booking failed:", response.data);
+    //         return null;
+    //     }
+    // }
 
     async getBookingsByUserId(userId: string) {
         if (!userId) {
@@ -286,7 +374,7 @@ class BookingService {
 
     async getBookingDetails(bookingId: string, userId: string) {
         if (!bookingId) {
-            throw new Error("bookingId is required"); 
+            throw new Error("bookingId is required");
         }
 
         const booking = await this.bookingRepo.getBookingByIdAndUser(

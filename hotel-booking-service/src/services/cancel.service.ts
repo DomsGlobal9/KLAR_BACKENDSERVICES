@@ -1,6 +1,61 @@
 import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
-import { BookingModel, BookingStatus, BookingProvider } from "../models/Booking.model";
+import { BookingStatus, BookingProvider } from "../models/Booking.model";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
+
+async function pollTripJackCancellationStatus(bookingId: string, query: any, cancelChargesInfo: any): Promise<void> {
+    const POLL_INTERVAL_MS = 5000;
+    const POLL_TIMEOUT_MS = 180000; // 3 minutes
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+    const poll = async (): Promise<void> => {
+        if (Date.now() >= deadline) {
+            console.log(`[TripJack Cancel Poll] Deadline reached for booking: ${bookingId}`);
+            return;
+        }
+        try {
+            const details = await tripJackProvider.getBookingDetails(bookingId);
+            const finalStatus = details?.order?.status || "PENDING";
+            const apiSuccess = details?.status?.success === true;
+            const isTerminal = finalStatus === "CANCELLED" || finalStatus === "FAILED" || finalStatus === "ABORTED";
+
+            console.log(`[TripJack Cancel Poll] Status check for ${bookingId}: status=${finalStatus}, isTerminal=${isTerminal}`);
+
+            if (apiSuccess && isTerminal) {
+                const dbStatus = finalStatus === "CANCELLED" ? BookingStatus.CANCELLED : BookingStatus.FAILED;
+                if (Object.keys(query).length > 0) {
+                    await hotelBookingRepository.findOneAndUpdate(query, {
+                        status: dbStatus,
+                        tripJackResponse: details,
+                        cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
+                        cancelChargesInfo: cancelChargesInfo,
+                        cancellationDetails: cancelChargesInfo?.cancellation
+                    });
+                }
+                console.log(`✅ [TripJack Cancel Poll] Booking status updated in DB to ${dbStatus}: ${bookingId}`);
+                return;
+            }
+
+            // Map CANCELLATION_PENDING (or other active states) to PENDING in the DB
+            if (finalStatus === "CANCELLATION_PENDING") {
+                if (Object.keys(query).length > 0) {
+                    await hotelBookingRepository.findOneAndUpdate(query, {
+                        status: BookingStatus.PENDING,
+                        tripJackResponse: details
+                    });
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            return poll();
+        } catch (err: any) {
+            console.warn(`[TripJack Cancel Poll] Error checking status for ${bookingId}:`, err.message);
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            return poll();
+        }
+    };
+    poll().catch(e => console.error("[TripJack Cancel Poll] Polling error:", e.message));
+}
 
 class CancelService {
     async cancel(payload: any) {
@@ -10,60 +65,79 @@ class CancelService {
 
         console.log(`🚫 Cancel service called with:`, JSON.stringify(payload, null, 2));
 
+        let cancelChargesInfo: any = null;
+        try {
+            cancelChargesInfo = await this.getCancelCharges(payload);
+        } catch (e: any) {
+            console.warn(`[Cancel Service] Could not pre-calculate cancel charges: ${e.message}`);
+        }
+
         // ─── Step 0: Check if this is a TripJack booking ───
         try {
+            const initialTargetId = confirmationNumber || reservationId || bookingId;
             const query: any = {};
-            if (confirmationNumber) query.confirmationNumber = confirmationNumber;
-            else if (reservationId) query.reservationId = reservationId;
-            else if (bookingId) query.confirmationNumber = bookingId;
+            if (initialTargetId) {
+                const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(initialTargetId));
+                if (isObjectId) {
+                    query._id = initialTargetId;
+                } else {
+                    query.$or = [
+                        { confirmationNumber: initialTargetId },
+                        { reservationId: initialTargetId }
+                    ];
+                }
+            }
 
             const isTripJack = payload.type === "HOTEL" || 
                                confirmationNumber?.startsWith("TG") || 
                                confirmationNumber?.startsWith("TJ");
 
             let isDbTripJack = false;
+            let actualTargetId = confirmationNumber || bookingId;
+
             if (Object.keys(query).length > 0) {
-                const booking = await BookingModel.findOne(query).lean();
+                const booking = await hotelBookingRepository.findOne(query, true);
                 if (booking && booking.provider === BookingProvider.TRIPJACK) {
                     isDbTripJack = true;
+                    if (booking.confirmationNumber) actualTargetId = booking.confirmationNumber;
                 }
             }
 
             if (isTripJack || isDbTripJack) {
-                const targetId = confirmationNumber || bookingId;
-                console.log(`[TripJack] Cancelling TripJack booking: ${targetId}`);
-                const tjResponse = await tripJackProvider.cancel(targetId);
+                console.log(`[TripJack] Cancelling TripJack booking: ${actualTargetId}`);
+                const tjResponse = await tripJackProvider.cancel(actualTargetId);
+                const targetId = actualTargetId;
 
-                // Check actual status from TripJack side to confirm cancellation
-                let finalStatus = "PENDING";
-                let details = null;
-                try {
-                    details = await tripJackProvider.getBookingDetails(targetId);
-                    finalStatus = details?.order?.status || "PENDING";
-                    console.log(`[TripJack] Live status post-cancel check: ${finalStatus}`);
-                } catch (statusErr: any) {
-                    console.warn("[TripJack] Could not immediately verify cancelled status:", statusErr.message);
-                }
-
-                // If cancel API returns success true, TripJack acknowledges the cancellation immediately
                 const isSuccessAck = tjResponse?.body?.status?.success === true || tjResponse?.status?.success === true || tjResponse?.status === true;
-                const isFullyCancelled = isSuccessAck || finalStatus.toUpperCase() === "CANCELLED";
-                const dbStatusToSet = isFullyCancelled ? BookingStatus.CANCELLED : BookingStatus.PENDING;
 
-                if (Object.keys(query).length > 0) {
-                    await BookingModel.findOneAndUpdate(query, { 
-                        status: dbStatusToSet,
-                        tripJackResponse: details || tjResponse?.body
-                    });
-                    console.log(`✅ [TripJack] Booking status updated in DB to ${dbStatusToSet}: ${targetId}`);
+                if (isSuccessAck) {
+                    // Update database immediately to CANCELLED upon success acknowledgment
+                    if (Object.keys(query).length > 0) {
+                        await hotelBookingRepository.findOneAndUpdate(query, { 
+                            status: BookingStatus.CANCELLED,
+                            tripJackResponse: tjResponse?.body,
+                            cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
+                            cancelChargesInfo: cancelChargesInfo,
+                            cancellationDetails: cancelChargesInfo?.cancellation
+                        });
+                        console.log(`✅ [TripJack] Booking status updated in DB to CANCELLED (Ack): ${targetId}`);
+                    }
+                    
+                    // Trigger asynchronous background polling to verify terminal status (e.g. CANCELLATION_PENDING check)
+                    pollTripJackCancellationStatus(targetId, query, cancelChargesInfo);
                 }
 
                 return {
-                    status: true,
+                    status: isSuccessAck,
                     statusCode: 200,
-                    description: isFullyCancelled ? "TripJack Cancel Success" : "Cancellation initiated. Pending confirmation from TripJack supplier.",
-                    isFullyCancelled,
-                    tjStatus: finalStatus,
+                    description: isSuccessAck ? "TripJack Cancel Success" : "Cancellation failed",
+                    isFullyCancelled: isSuccessAck,
+                    tjStatus: isSuccessAck ? "CANCELLED" : "FAILED",
+                    totalAmount: cancelChargesInfo?.totalAmount,
+                    applicableCharge: cancelChargesInfo?.applicableCharge,
+                    refundAmount: cancelChargesInfo?.refundAmount,
+                    cancellation: cancelChargesInfo?.cancellation,
+                    deadlineDateTime: cancelChargesInfo?.deadlineDateTime,
                     body: tjResponse?.body || tjResponse
                 };
             }
@@ -77,13 +151,23 @@ class CancelService {
         let dbLookupSucceeded = false;
 
         try {
+            const targetId = confirmationNumber || reservationId || bookingId;
             const query: any = {};
-            if (confirmationNumber) query.confirmationNumber = confirmationNumber;
-            else if (reservationId) query.reservationId = reservationId;
+            if (targetId) {
+                const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(targetId));
+                if (isObjectId) {
+                    query._id = targetId;
+                } else {
+                    query.$or = [
+                        { confirmationNumber: targetId },
+                        { reservationId: targetId }
+                    ];
+                }
+            }
 
             if (Object.keys(query).length > 0) {
                 console.log(`🔍 Looking up booking in DB with query:`, JSON.stringify(query));
-                const booking = await BookingModel.findOne(query).lean();
+                const booking = await hotelBookingRepository.findOne(query, true);
 
                 if (booking) {
                     console.log(`📦 Found booking in DB: ${booking.confirmationNumber}`);
@@ -167,14 +251,24 @@ class CancelService {
         // ─── Step 3: Update local DB status if cancellation succeeded ───
         try {
             if (rateGainResponse && (rateGainResponse.status === true || rateGainResponse.status === 'success')) {
-                if (confirmationNumber || reservationId) {
-                    const query: any = {};
-                    if (confirmationNumber) query.confirmationNumber = confirmationNumber;
-                    if (reservationId) query.reservationId = reservationId;
+                const targetId = confirmationNumber || reservationId || bookingId;
+                if (targetId) {
+                    const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(targetId));
+                    const query: any = isObjectId ? { _id: targetId } : {
+                        $or: [
+                            { confirmationNumber: targetId },
+                            { reservationId: targetId }
+                        ]
+                    };
 
-                    const updated = await BookingModel.findOneAndUpdate(
+                    const updated = await hotelBookingRepository.findOneAndUpdate(
                         query,
-                        { status: BookingStatus.CANCELLED },
+                        { 
+                            status: BookingStatus.CANCELLED,
+                            cancelCharge: cancelChargesInfo?.applicableCharge !== undefined ? cancelChargesInfo.applicableCharge : undefined,
+                            cancelChargesInfo: cancelChargesInfo,
+                            cancellationDetails: cancelChargesInfo?.cancellation 
+                        },
                         { new: true }
                     );
 
@@ -187,7 +281,188 @@ class CancelService {
             console.error('⚠️ local DB update failed (RateGain cancel was successful):', dbError.message);
         }
 
+        if (rateGainResponse && typeof rateGainResponse === 'object') {
+            rateGainResponse.totalAmount = cancelChargesInfo?.totalAmount;
+            rateGainResponse.applicableCharge = cancelChargesInfo?.applicableCharge;
+            rateGainResponse.refundAmount = cancelChargesInfo?.refundAmount;
+            rateGainResponse.cancellation = cancelChargesInfo?.cancellation;
+            rateGainResponse.deadlineDateTime = cancelChargesInfo?.deadlineDateTime;
+        }
+
         return rateGainResponse;
+    }
+
+    async getCancelCharges(payload: any) {
+        const confirmationNumber = payload.ConfirmationNumber || payload.bookingId;
+        const reservationId = payload.ReservationId || payload.bookingId;
+        const bookingId = payload.bookingId;
+
+        const targetId = confirmationNumber || reservationId || bookingId;
+        if (!targetId) {
+            throw new Error("Missing booking identifier (bookingId or confirmationNumber)");
+        }
+
+        const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(targetId));
+        const query: any = isObjectId ? { _id: targetId } : {
+            $or: [
+                { confirmationNumber: targetId },
+                { reservationId: targetId }
+            ]
+        };
+
+        const booking = await hotelBookingRepository.findOne(query, true);
+        if (!booking) {
+            throw new Error("Booking not found");
+        }
+
+        // Logic for TripJack
+        const isTripJack = booking.provider === BookingProvider.TRIPJACK || payload.type === "HOTEL" || confirmationNumber?.startsWith("TJ") || confirmationNumber?.startsWith("TG");
+        
+        if (isTripJack) {
+            // Try fetching latest details from TripJack to get the most accurate policy
+            let tjDetails = null;
+            try {
+                const tjTargetId = booking.confirmationNumber || confirmationNumber || bookingId;
+                tjDetails = await tripJackProvider.getBookingDetails(tjTargetId);
+            } catch (err) {
+                console.warn("[Cancel Service] Could not fetch latest booking details from TJ for cancel charges.", err);
+            }
+
+            const tjResp: any = tjDetails || booking.tripJackResponse || {};
+            const policyData = tjResp?.order?.cancellationPolicy 
+                || tjResp?.itemInfos?.[0]?.cancellationPolicy 
+                || tjResp?.cancellationPolicy
+                || tjResp?.itemInfos?.HOTEL?.ops?.[0]?.cnp
+                || tjResp?.order?.itemInfos?.HOTEL?.ops?.[0]?.cnp
+                || tjResp?.itemInfos?.HOTEL?.hInfo?.ops?.[0]?.cnp
+                || tjResp?.order?.itemInfos?.HOTEL?.hInfo?.ops?.[0]?.cnp
+                || tjResp?.order?.itemInfos?.[0]?.item?.cnp
+                || tjResp?.itemInfos?.[0]?.item?.cnp;
+
+            if (!policyData) {
+                return {
+                    status: true,
+                    statusCode: 200,
+                    description: "Cancellation policy not found. Cannot calculate exact charges.",
+                    applicableCharge: null,
+                    policy: null
+                };
+            }
+
+            const now = new Date();
+            let applicableCharge = 0;
+            let chargeCurrency = "INR";
+            
+            if (policyData.pd && Array.isArray(policyData.pd) && policyData.pd.length > 0) {
+                // TripJack v3 cnp.pd format
+                const policies = [...policyData.pd].sort((a, b) => new Date(a.fdt).getTime() - new Date(b.fdt).getTime());
+                
+                let foundCharge = false;
+                for (const p of policies) {
+                    if (now >= new Date(p.fdt) && now <= new Date(p.tdt)) {
+                        applicableCharge = p.am;
+                        foundCharge = true;
+                        break;
+                    }
+                }
+                
+                if (!foundCharge) {
+                    // If current time is past all ranges, default to the maximum penalty (usually the last entry)
+                    applicableCharge = policies[policies.length - 1].am || 0;
+                }
+            } else if (policyData.cancelPolicyInfos && Array.isArray(policyData.cancelPolicyInfos) && policyData.cancelPolicyInfos.length > 0) {
+                // Sort by time ascending
+                const policies = [...policyData.cancelPolicyInfos].sort((a, b) => new Date(a.cancelTime).getTime() - new Date(b.cancelTime).getTime());
+                
+                let foundCharge = false;
+                for (const p of policies) {
+                    if (now < new Date(p.cancelTime)) {
+                        applicableCharge = p.amount;
+                        if (p.currency) chargeCurrency = p.currency;
+                        foundCharge = true;
+                        break;
+                    }
+                }
+                
+                // If now is past all cancelTime boundaries
+                if (!foundCharge) {
+                    applicableCharge = policyData.noShowPolicy?.amount || policies[policies.length - 1].amount || 0;
+                }
+            } else if (policyData.policies && Array.isArray(policyData.policies)) {
+                // Alternative TJ policy format
+                const policies = [...policyData.policies].sort((a, b) => new Date(a.fromDate).getTime() - new Date(b.fromDate).getTime());
+                let foundCharge = false;
+                for (const p of policies) {
+                    if (now < new Date(p.fromDate)) {
+                        applicableCharge = p.cancellationCharge || p.amount;
+                        if (p.currency) chargeCurrency = p.currency;
+                        foundCharge = true;
+                        break;
+                    }
+                }
+                if (!foundCharge) {
+                    applicableCharge = policies[policies.length - 1].cancellationCharge || policies[policies.length - 1].amount || 0;
+                }
+            } else if (policyData.amount !== undefined) {
+                // Flat charge
+                applicableCharge = policyData.amount;
+            }
+
+            const totalAmount = booking.totalAmount || 0;
+            const refundAmount = Math.max(0, totalAmount - applicableCharge);
+
+            let unifiedPenalties: any[] = [];
+            if (policyData.pd && Array.isArray(policyData.pd)) {
+                unifiedPenalties = policyData.pd.map((p: any) => ({
+                    from: p.fdt,
+                    to: p.tdt,
+                    amount: p.am
+                }));
+            } else if (policyData.cancelPolicyInfos && Array.isArray(policyData.cancelPolicyInfos)) {
+                unifiedPenalties = policyData.cancelPolicyInfos.map((p: any, index: number, arr: any[]) => ({
+                    from: p.cancelTime,
+                    to: arr[index + 1] ? arr[index + 1].cancelTime : (booking.checkIn ? new Date(booking.checkIn).toISOString() : null),
+                    amount: p.amount
+                }));
+            } else if (policyData.policies && Array.isArray(policyData.policies)) {
+                unifiedPenalties = policyData.policies.map((p: any, index: number, arr: any[]) => ({
+                    from: p.fromDate,
+                    to: p.toDate || (arr[index + 1] ? arr[index + 1].fromDate : (booking.checkIn ? new Date(booking.checkIn).toISOString() : null)),
+                    amount: p.cancellationCharge || p.amount
+                }));
+            }
+
+            const isRefundable = policyData.ifra !== undefined ? policyData.ifra : (policyData.inra === false ? true : true);
+            const deadlineDateTime = tjResp?.order?.itemInfos?.[0]?.item?.ddt 
+                                  || tjResp?.itemInfos?.[0]?.item?.ddt 
+                                  || tjResp?.order?.lastCancellationDate 
+                                  || policyData.deadline 
+                                  || null;
+
+            return {
+                status: true,
+                statusCode: 200,
+                description: "Calculated cancellation charges from booking policy",
+                totalAmount,
+                applicableCharge,
+                refundAmount,
+                currency: chargeCurrency,
+                cancellation: {
+                    isRefundable,
+                    penalties: unifiedPenalties
+                },
+                deadlineDateTime,
+                policy: policyData,
+                calculationTime: now.toISOString()
+            };
+        }
+
+        // RateGain Logic (not supported yet)
+        return {
+            status: false,
+            statusCode: 400,
+            description: "Previewing cancellation charges for RateGain is currently unsupported.",
+        };
     }
 }
 

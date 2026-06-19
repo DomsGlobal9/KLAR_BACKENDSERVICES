@@ -110,6 +110,74 @@ class FareService {
         throw new Error("Invalid flight data structure");
     }
 
+    // async getMultiCityFares(
+    //     sessionId: string,
+    //     legIndex: number,
+    //     flightKey: string
+    // ) {
+    //     const cachedData = await RedisCacheService.get(sessionId);
+
+    //     if (!cachedData) {
+    //         throw new Error("Session expired or invalid sessionId");
+    //     }
+
+    //     const tripInfos = cachedData?.raw;
+
+    //     const isInternational = cachedData?.isInternational;
+
+    //     if (!tripInfos) {
+    //         throw new Error("Invalid session data");
+    //     }
+
+    //     if (isInternational) {
+    //         const combos = tripInfos.COMBO;
+
+    //         if (!combos || !combos.length) {
+    //             throw new Error("No flights available");
+    //         }
+
+    //         const selectedCombo = combos.find((combo: any) => {
+    //             const segments = combo.sI || [];
+    //             const flightKeyToMatch = segments.map((seg: any) => seg.id).join("-");
+    //             return flightKeyToMatch === flightKey;
+    //         });
+
+    //         if (!selectedCombo) {
+    //             throw new Error("Flight not found");
+    //         }
+
+    //         const fares = BaseFlightNormalizer.extractFaresForCombo(selectedCombo);
+
+    //         if (!fares || fares.length === 0) {
+    //             throw new Error("Fare extraction failed");
+    //         }
+
+    //         return TripjackFieldMapper.map(fares[0]);
+    //     }
+
+    //     const legFlights = tripInfos[String(legIndex)];
+
+    //     if (!legFlights || !legFlights.length) {
+    //         throw new Error("Leg not found");
+    //     }
+
+    //     const selectedFlight = legFlights.find((flight: any) =>
+    //         flight.sI?.map((seg: any) => seg.id).join("-") === flightKey
+    //     );
+
+    //     if (!selectedFlight) {
+    //         throw new Error("Flight not found for given leg");
+    //     }
+
+    //     const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
+
+    //     if (!fares || fares.length === 0) {
+    //         throw new Error("Fare extraction failed");
+    //     }
+
+    //     return TripjackFieldMapper.map(fares[0]);
+    // }
+
     async getMultiCityFares(
         sessionId: string,
         legIndex: number,
@@ -122,7 +190,6 @@ class FareService {
         }
 
         const tripInfos = cachedData?.raw;
-        
         const isInternational = cachedData?.isInternational;
 
         if (!tripInfos) {
@@ -136,25 +203,37 @@ class FareService {
                 throw new Error("No flights available");
             }
 
-            const selectedCombo = combos.find((combo: any) => {
-                const segments = combo.sI || [];
-                const flightKeyToMatch = segments.map((seg: any) => seg.id).join("-");
-                return flightKeyToMatch === flightKey;
-            });
+            let selectedLeg = null;
+            let selectedCombo = null;
 
-            if (!selectedCombo) {
-                throw new Error("Flight not found");
+            for (const combo of combos) {
+                const legs = this.extractLegsFromCombo(combo);
+                const leg = legs.find(leg =>
+                    leg.legIndex === legIndex && leg.flightKey === flightKey
+                );
+
+                if (leg) {
+                    selectedLeg = leg;
+                    selectedCombo = combo;
+                    break;
+                }
             }
 
-            const fares = BaseFlightNormalizer.extractFaresForCombo(selectedCombo);
+            if (!selectedLeg || !selectedCombo) {
+                throw new Error(`Flight not found for leg ${legIndex}`);
+            }
 
-            if (!fares || fares.length === 0) {
+            // Extract fares for the specific leg
+            const fares = this.extractFaresForLeg(selectedCombo, legIndex);
+
+            if (!fares) {
                 throw new Error("Fare extraction failed");
             }
 
-            return TripjackFieldMapper.map(fares[0]);
+            return TripjackFieldMapper.map(fares);
         }
 
+        // Domestic structure (your existing code)
         const legFlights = tripInfos[String(legIndex)];
 
         if (!legFlights || !legFlights.length) {
@@ -176,6 +255,58 @@ class FareService {
         }
 
         return TripjackFieldMapper.map(fares[0]);
+    }
+
+    private extractLegsFromCombo(combo: any) {
+        const segments = combo.sI || [];
+        const legs = [];
+        let currentLeg = 0;
+        let currentLegSegments = [];
+
+        for (let i = 0; i < segments.length; i++) {
+            currentLegSegments.push(segments[i]);
+
+            if (segments[i].isRs === true || i === segments.length - 1) {
+                const flightKey = currentLegSegments.map((seg: any) => seg.id).join("-");
+                legs.push({
+                    legIndex: currentLeg,
+                    flightKey: flightKey,
+                    segments: [...currentLegSegments]
+                });
+
+                currentLeg++;
+                currentLegSegments = [];
+            }
+        }
+
+        return legs;
+    }
+
+
+    private extractFaresForLeg(combo: any, legIndex: number) {
+        const segments = combo.sI || [];
+        let currentLeg = 0;
+        let currentLegSegments = [];
+
+        for (let i = 0; i < segments.length; i++) {
+            currentLegSegments.push(segments[i]);
+
+            if (segments[i].isRs === true || i === segments.length - 1) {
+                if (currentLeg === legIndex) {
+                    const flightObj = {
+                        sI: currentLegSegments,
+                        totalPriceList: combo.totalPriceList
+                    };
+                    const fares = BaseFlightNormalizer.extractFares([flightObj]);
+                    return fares[0];
+                }
+
+                currentLeg++;
+                currentLegSegments = [];
+            }
+        }
+
+        return null;
     }
 
     async getFareRule(flowType: string, id: string) {

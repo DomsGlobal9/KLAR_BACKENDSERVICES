@@ -45,46 +45,51 @@ export class TripJackApiProvider {
      * FIX #4 (partial): hid is sent here so the frontend can forward it to Review.
      */
     async getProducts(payload: any) {
-        const rawId = (payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
+        const rawId = (payload.hid || payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
         const correlationId = payload.correlationId || uuidv4();
 
         if (!rawId) {
-            console.error("[TripJack] GetProducts Error: No propertyId provided in payload:", JSON.stringify(payload));
+            console.error("[TripJack] GetProducts Error: No propertyId or hid provided in payload:", JSON.stringify(payload));
             throw {
                 status: 400,
-                message: "propertyId is required for TripJack detail/pricing request",
-                data: { ErrorCode: 1012, description: "propertyId is required." }
+                message: "propertyId or hid is required for TripJack detail/pricing request",
+                data: { ErrorCode: 1012, description: "propertyId/hid is required." }
             };
         }
 
         const hidValue = rawId;
+        const numericHid = /^\d+$/.test(hidValue) ? Number(hidValue) : hidValue;
         const tjPayload: any = {
             correlationId,
-            hid: hidValue,
-            hotelId: hidValue,
+            hid: numericHid,
             checkIn: payload.checkin || payload.checkIn,
             checkOut: payload.checkout || payload.checkOut,
-            rooms: (payload.Rooms || payload.rooms || []).map((r: any) => ({
-                adults: r.Adults || r.adults || 2,
-                children: (r.Children || r.children) ? Number(r.Children || r.children) : undefined,
-                childAge: (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []).length
-                    ? (r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age))
-                    : undefined,
-            })),
+            rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
+                const childrenCount = (r.Children !== undefined ? r.Children : r.children) ?? 0;
+                const childAgeArr = (r.childAge || r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []);
+                return {
+                    adults: Number(r.Adults || r.adults || 2),
+                    children: Number(childrenCount),
+                    childAge: childAgeArr.length > 0 ? childAgeArr : undefined,
+                };
+            }),
             currency: payload.Currency || payload.currency || "INR",
             nationality: await toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
         };
 
 
+        let localHotel: any = null;
+        let staticData: any = null;
+        let staticDetailPromise: Promise<void> | null = null;
+
         try {
             console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
 
             // Check local DB first for instant static metadata fallback
-            const localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
+            localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
 
             // Start static detail fetch in the background without blocking the pricing API response
-            let staticData: any = null;
-            const staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue, hotelId: hidValue })
+            staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue })
                 .then(res => { staticData = res.data; })
                 .catch(err => { console.warn(`[TripJack] Static detail background fetch warning:`, err.message); });
 
@@ -93,11 +98,12 @@ export class TripJackApiProvider {
             const pricingRes = await tripJackClient.post("/hms/v3/hotel/pricing", tjPayload);
             console.log(`[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`);
 
-            // If local cache is missing and staticData hasn't resolved yet, wait a brief grace period (max 500ms)
-            if (!staticData && !localHotel) {
+            // Always wait for staticData to resolve (max 5000ms grace period) 
+            // because localHotel does NOT contain room-level images.
+            if (!staticData) {
                 await Promise.race([
                     staticDetailPromise,
-                    new Promise(resolve => setTimeout(resolve, 500))
+                    new Promise(resolve => setTimeout(resolve, 5000))
                 ]);
             }
 
@@ -113,12 +119,8 @@ export class TripJackApiProvider {
                 ? Object.values(staticData.amenities).map((a: any) => a.name)
                 : (pricingData.amenities || []);
 
-            const hotelImages: string[] = staticData?.images
-                ? staticData.images.map((img: any) => {
-                    const links = img.links || {};
-                    const firstLink = Object.values(links)[0] as any;
-                    return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
-                }).filter(Boolean)
+            const hotelImages: any[] = staticData?.images
+                ? staticData.images
                 : (Array.isArray(pricingData.images) && pricingData.images.length ? pricingData.images : (pricingData.img ? [pricingData.img] : (localHotel?.images || [])));
 
             const description = staticData?.descriptions?.default || staticData?.desc || pricingData.desc || "";
@@ -137,31 +139,61 @@ export class TripJackApiProvider {
 
                 // Try to find room-specific images in staticData
                 const roomId = opt.roomInfo?.[0]?.id;
-                const roomStatic = staticData?.rooms?.[roomId];
+                const roomNameStr = (opt.roomInfo?.[0]?.name || opt.name || opt.roomName || "").toLowerCase().trim();
+                let roomStatic: any = null;
+                if (staticData?.rooms) {
+                    const staticRoomsArray = Object.values(staticData.rooms);
+                    
+                    // Try exact match first
+                    roomStatic = staticRoomsArray.find((r: any) => String(r?.id) === String(roomId));
+                    
+                    // If not found OR if found but has no images, steal images from a duplicate room!
+                    if (!roomStatic || !roomStatic.images || roomStatic.images.length === 0) {
+                        if (roomNameStr) {
+                            const matchingRooms = staticRoomsArray.filter((r: any) => {
+                                const staticName = (r?.name || "").toLowerCase().trim();
+                                return staticName && (staticName === roomNameStr || staticName.includes(roomNameStr) || roomNameStr.includes(staticName));
+                            });
+
+                            const roomWithImages = matchingRooms.find((r: any) => (r as any).images && Array.isArray((r as any).images) && (r as any).images.length > 0) as any;
+                            
+                            if (roomWithImages) {
+                                // If we already had an exact match but it lacked images, just append the images
+                                if (roomStatic) {
+                                    roomStatic.images = roomWithImages.images;
+                                } else {
+                                    roomStatic = roomWithImages;
+                                }
+                            } else if (!roomStatic && matchingRooms.length > 0) {
+                                roomStatic = matchingRooms[0] as any;
+                            }
+                        }
+                    }
+                }
                 let roomImages = []; // Strictly no fallback to hotelImages
 
                 if (roomStatic?.images && Array.isArray(roomStatic.images) && roomStatic.images.length > 0) {
-                    roomImages = roomStatic.images.map((img: any) => {
-                        const links = img.links || {};
-                        const firstLink = Object.values(links)[0] as any;
-                        return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
-                    }).filter(Boolean);
+                    roomImages = roomStatic.images;
                 } else if (opt.roomInfo?.[0]?.images && Array.isArray(opt.roomInfo[0].images) && opt.roomInfo[0].images.length > 0) {
                     roomImages = opt.roomInfo[0].images;
                 }
 
+                const optionIdStr = opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
                 return {
-                    id: opt.optionId || `${payload.propertyId}-${idx}`,
-                    optionId: opt.optionId,
-                    rateKey: opt.optionId,
-                    RoomSelectionKey: opt.optionId,
+                    id: optionIdStr,
+                    optionId: optionIdStr,
+                    rateKey: optionIdStr,
+                    RoomSelectionKey: optionIdStr,
                     reviewHash,
                     correlationId,
                     hid: rawId,
 
                     name: (opt.roomInfo?.[0]?.name) || opt.roomName || `Option ${idx + 1}`,
                     optionType: opt.optionType,
-                    roomInfo: opt.roomInfo || [],
+                    roomInfo: (opt.roomInfo || []).map((ri: any) => ({
+                        ...ri,
+                        mealBasis: ri.mealBasis || opt.mealBasis || opt.boardName,
+                    })),
                     inclusions: opt.inclusions || [],
                     mealBasis: opt.mealBasis || opt.boardName,
                     bookingNotes: opt.bookingNotes || null,
@@ -178,6 +210,7 @@ export class TripJackApiProvider {
                     commercialType: opt.commercial?.type,
                     commission: opt.commercial?.commission,
 
+                    compliance: opt.compliance,
                     panRequired: opt.compliance?.panRequired ?? false,
                     passportRequired: opt.compliance?.passportRequired ?? false,
                     gstType: opt.compliance?.gstType,
@@ -188,8 +221,9 @@ export class TripJackApiProvider {
                     cancellationPolicies: opt.cancellation?.penalties || [],
 
                     amenities: optionAmenities,
-                    hotelFacility: optionAmenities.map(name => ({ facilityName: name })),
+                    hotelFacility: optionAmenities.map((name: string) => ({ facilityName: name })),
                     images: roomImages,
+                    bed_config: roomStatic?.bed_config || opt.roomInfo?.[0]?.bed_config || null,
                     checkInTime,
                     checkOutTime,
                     rawOption: opt,
@@ -199,7 +233,10 @@ export class TripJackApiProvider {
             // Restructure into "products" to match frontend/RateGain grouping
             const productsMap: Record<string, any> = {};
             options.forEach((opt: any) => {
-                const roomName = opt.name || "Default Room";
+                let roomName = opt.name || "Default Room";
+                if (opt.optionType === 'CRSM' || opt.optionType === 'CRCM') {
+                    roomName = "Mixed Rooms / Mixed Meals";
+                }
                 if (!productsMap[roomName]) {
                     productsMap[roomName] = {
                         name: roomName,
@@ -230,6 +267,10 @@ export class TripJackApiProvider {
                     checkOutTime,
                     reviewHash,
                     correlationId,
+                    policies: staticData?.policies || staticData?.hotelInfo?.policies || pricingData?.policies || [],
+                    fees: staticData?.fees || staticData?.hotelInfo?.fees || pricingData?.fees || [],
+                    checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || pricingData?.checkInInstructions || "",
+                    specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || pricingData?.specialInstructions || "",
                     location: {
                         lat: staticData?.locale?.coordinates?.lat || pricingData.coordinates?.lat || pricingData.latitude,
                         lng: staticData?.locale?.coordinates?.long || pricingData.coordinates?.long || pricingData.longitude,
@@ -240,6 +281,66 @@ export class TripJackApiProvider {
             };
         } catch (error: any) {
             console.error("[TripJack] GetProducts (Pricing) Error:", error.response?.status, error.response?.data || error.message);
+            
+            // Handle Sold-Out/Unavailable hotels gracefully
+            // TripJack returns 400 with options: [] when a hotel has no availability for the given dates
+            if (error.response?.status === 400 && error.response?.data?.options?.length === 0) {
+                console.log(`[TripJack] Hotel ${rawId} is completely sold out or unavailable for these dates. Returning empty products array with static info.`);
+                
+                try {
+                    // Try to wait for static detail to complete so we have the name and images
+                    if (staticDetailPromise && !staticData) {
+                        await Promise.race([
+                            staticDetailPromise,
+                            new Promise(resolve => setTimeout(resolve, 3000))
+                        ]);
+                    }
+                } catch (e) {
+                    console.warn("[TripJack] Failed to await static data in error block:", e);
+                }
+
+                const hotelName: string = staticData?.name || localHotel?.name || "Sold Out Hotel";
+                const hotelImages: string[] = staticData?.images
+                    ? staticData.images.map((img: any) => {
+                        const links = img.links || {};
+                        const firstLink = Object.values(links)[0] as any;
+                        return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
+                    }).filter(Boolean)
+                    : (localHotel?.images || []);
+
+                return {
+                    status: true,
+                    statusCode: 200,
+                    description: "No availability for these dates",
+                    body: {
+                        hotelId: payload.propertyId,
+                        hid: rawId,
+                        name: hotelName,
+                        address: staticData?.locale?.address?.fulladdr || localHotel?.address || "",
+                        city: staticData?.locale?.address?.city || localHotel?.cityName || "",
+                        starRating: staticData?.star_rating ? parseInt(staticData.star_rating) : (localHotel?.starRating || 0),
+                        description: staticData?.descriptions?.default || staticData?.desc || "This property currently has no rooms available for your selected dates. Please try different dates.",
+                        images: hotelImages,
+                        amenities: staticData?.amenities ? Object.values(staticData.amenities).map((a: any) => a.name) : [],
+                        hotelFacility: staticData?.amenities ? Object.values(staticData.amenities).map((a: any) => ({ facilityName: a.name })) : [],
+                        checkInTime: staticData?.hotelInfo?.checkInTime || "",
+                        checkOutTime: staticData?.hotelInfo?.checkOutTime || "",
+                        reviewHash: "",
+                        correlationId: error.response.data.correlationId || correlationId,
+                        policies: staticData?.policies || staticData?.hotelInfo?.policies || [],
+                        fees: staticData?.fees || staticData?.hotelInfo?.fees || [],
+                        checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || "",
+                        specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || "",
+                        location: { 
+                            lat: staticData?.locale?.coordinates?.lat || localHotel?.location?.coordinates?.[1] || 0, 
+                            lng: staticData?.locale?.coordinates?.long || localHotel?.location?.coordinates?.[0] || 0 
+                        },
+                        products: [],
+                        options: [],
+                    },
+                };
+            }
+
             throw error;
         }
     }

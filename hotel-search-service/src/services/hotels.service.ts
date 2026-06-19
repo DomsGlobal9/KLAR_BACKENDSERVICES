@@ -22,18 +22,7 @@ export class HotelsService {
         // Optimization: If user selected a specific hotel from suggestions (has TJ: prefix or is numeric ID)
         const isDirectHotelId = searchPayload.destination.startsWith('TJ:') || /^\d{8,15}$/.test(searchPayload.destination.trim());
 
-        // Secondary Check: If it matches a specific hotel name in our DB
-        let isDirectHotelName = false;
-        if (!isDirectHotelId) {
-            const { HotelModel } = require("../models/Hotel.model");
-            const nameToSearch = searchPayload.destination.split(',')[0].trim();
-            if (nameToSearch.length > 5) {
-                const directMatch = await HotelModel.findOne({ name: { $regex: new RegExp(`^${nameToSearch}$`, "i") } }).select("_id").lean();
-                if (directMatch) isDirectHotelName = true;
-            }
-        }
-
-        const isDirectSearch = isDirectHotelId || isDirectHotelName;
+        const isDirectSearch = isDirectHotelId;
 
         if (isDirectSearch) {
             console.log(`[DEBUG] Direct hotel search detected for "${searchPayload.destination}". Skipping RateGain.`);
@@ -127,16 +116,26 @@ Reported Total to UI:      ${totalToUI}
         const { HotelModel } = require("../models/Hotel.model");
         const { RGDestinationModel } = require("../models/RGDestination.model");
 
-        const rgDests = await RGDestinationModel.find({
-            destName: { $regex: new RegExp(query, "i") }
-        }).limit(5).lean();
-
-        const hotels = await HotelModel.find({
-            $or: [
-                { name: { $regex: new RegExp(query, "i") } },
-                { cityName: { $regex: new RegExp(query, "i") } }
-            ]
-        }).limit(10).lean();
+        // Execute both queries concurrently for maximum speed
+        const [rgDests, hotels] = await Promise.all([
+            // Use $text index for blazing fast destination searches
+            RGDestinationModel.find(
+                { $text: { $search: query } },
+                { score: { $meta: "textScore" } }
+            )
+            .sort({ score: { $meta: "textScore" } })
+            .limit(5)
+            .lean(),
+            
+            // Use $text index for blazing fast name/city searches
+            HotelModel.find(
+                { $text: { $search: query } },
+                { score: { $meta: "textScore" } }
+            )
+            .sort({ score: { $meta: "textScore" } })
+            .limit(15)
+            .lean()
+        ]);
 
         const suggestions = [
             ...rgDests.map((d: any) => ({

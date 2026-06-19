@@ -35,7 +35,7 @@ export interface AuthResponse {
         id: string;
         email: string;
         token?: string;
-        roles: string[];
+        roles: string;
         clientType: ClientType;
         status: UserStatus;
         verificationStatus: VerificationStatus;
@@ -50,7 +50,7 @@ export interface SignupResponse {
     status: UserStatus;
 }
 
-class PasswordUtil {
+export class PasswordUtil {
     private static instance: PasswordUtil;
 
     private constructor() { }
@@ -107,7 +107,7 @@ export class AuthService {
         });
 
         if (existingUser) {
-            throw new ConflictError('User already exists');
+            throw new ConflictError("User already exists");
         }
 
         /**
@@ -116,17 +116,19 @@ export class AuthService {
         const passwordHash = await this.passwordUtil.hashPassword(password);
 
         /**
-         * Create user
+         * Create ACTIVE user directly
          */
         const user = new UserModel({
             clientType: ClientType.B2B,
             email: businessEmail.toLowerCase(),
             mobile: businessMobile,
             passwordHash,
+            roles: Roles.B2B_ADMIN,
 
-            roles: [Roles.B2B_ADMIN],
-            status: UserStatus.VERIFICATION_PENDING,
-
+            /**
+             * ACTIVE by default
+             */
+            status: UserStatus.ACTIVE,
             businessProfile: {
                 businessName,
                 businessType,
@@ -140,12 +142,16 @@ export class AuthService {
                 country: data.country,
             },
 
+            /**
+             * VERIFIED by default
+             */
             verification: {
-                status: VerificationStatus.PENDING,
+                status: VerificationStatus.APPROVED,
+                verifiedAt: new Date(),
             },
 
             wallet: {
-                status: WalletStatus.INACTIVE || "inactive",
+                status: WalletStatus.ACTIVE,
             },
         });
 
@@ -154,12 +160,14 @@ export class AuthService {
          */
         await user.save();
 
-        // Now create wallet separately
+        /**
+         * Create wallet
+         */
         const wallet = new Wallet({
-            userId: user._id, // Now we have the user ID
+            userId: user._id,
             balance: 0,
             currency: "INR",
-            status: "ACTIVE", // Use uppercase as per your enum
+            status: WalletStatus.ACTIVE,
             emailAlerts: true,
             smsAlerts: false,
         });
@@ -180,6 +188,7 @@ export class AuthService {
         const user = await UserModel.findOne({
             email: email.toLowerCase(),
             clientType,
+            status: UserStatus.ACTIVE,
         });
 
         if (!user) {
@@ -189,7 +198,7 @@ export class AuthService {
         /**
          * Validate password
          */
-        const isMatch = await this.passwordUtil.comparePassword(password, user.passwordHash);
+        const isMatch = await this.passwordUtil.comparePassword(password, user.passwordHash as string);
         if (!isMatch) {
             throw new UnauthorizedError('Invalid credentials');
         }
@@ -239,7 +248,6 @@ export class AuthService {
         };
     }
 
-    // Optional: Add refresh token functionality
     public async refreshToken(refreshToken: string): Promise<AuthResponse> {
         if (!refreshToken) {
             throw new UnauthorizedError('Refresh token is required');
@@ -293,6 +301,7 @@ export class AuthService {
             clientType: user.clientType,
             status: user.status,
             verificationStatus: user.verification?.status,
+            createdBy: user.createdBy || '',
         };
     }
 
@@ -337,3 +346,4 @@ export class AuthService {
         };
     }
 }
+

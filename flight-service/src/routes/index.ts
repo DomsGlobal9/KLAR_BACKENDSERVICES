@@ -9,7 +9,10 @@ import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
 import flightDocumentRoute from "./flight-client-template.route";
-import flightBookingAgencyTemplateRoute from "./flight-agency-template.routes"
+import flightBookingAgencyTemplateRoute from "./flight-agency-template.routes";
+import voucherRoutes from "./voucher.routes";
+
+
 const router = Router();
 
 router.use("/fare", fareRoutes);
@@ -23,4 +26,7 @@ router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
 router.use("/client-booking-document", flightDocumentRoute);
 router.use("/agency", flightBookingAgencyTemplateRoute);
+router.use("/voucher", voucherRoutes);
+
+
 export default router;  

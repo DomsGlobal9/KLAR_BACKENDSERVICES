@@ -5,10 +5,13 @@ import { corsMiddleware } from "./config";
 import routes from "./routes";
 
 import { initializeCrons } from "./cron";
+import { globalRateLimiter } from "./middlewares/rateLimiter";
 
 const app = express();
 
 export const setupApp = () => {
+
+  app.use(globalRateLimiter);
 
   app.use(express.json());
 

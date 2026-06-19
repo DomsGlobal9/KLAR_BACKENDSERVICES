@@ -40,7 +40,7 @@ export const corsOptions: CorsOptions = {
 
     methods: envConfig.CORS.CORS_METHODS.split(',').map(m => m.trim()),
     allowedHeaders: envConfig.CORS.CORS_ALLOWED_HEADERS.split(',').map(h => h.trim()),
-    credentials: envConfig.CORS.CORS_CREDENTIALS === 'true',
+    credentials: String(envConfig.CORS.CORS_CREDENTIALS).trim() === 'true',
     maxAge: Number(envConfig.CORS.CORS_MAX_AGE),
     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
 };

@@ -8,10 +8,15 @@ export const WalletSchema = new Schema(
             required: true,
             unique: true,
         },
+
         balance: {
             type: Number,
-            default: 0,
         },
+
+        limit: {
+            type: Number,
+        },
+
         lowBalanceAlert: {
             type: Number,
         },
@@ -25,10 +30,12 @@ export const WalletSchema = new Schema(
             type: Boolean,
             default: false,
         },
+
         currency: {
             type: String,
             default: "INR",
         },
+
         status: {
             type: String,
             enum: ["ACTIVE", "BLOCKED"],
