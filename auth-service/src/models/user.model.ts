@@ -95,7 +95,6 @@ const UserSchema = new Schema<IUser>(
             lowercase: true,
             trim: true,
             unique: true,
-            unique: true,
         },
 
         mobile: {
