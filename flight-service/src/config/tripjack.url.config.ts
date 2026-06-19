@@ -18,6 +18,7 @@ export interface TripjackUrls {
         SUBMIT_AMENDMENT: string;
         AMENDMENT_DETAILS: string;
         USER_DETAIL: string;
+        SSR: string;
     };
     PROD: {
         BASE_URL: string;
@@ -34,6 +35,7 @@ export interface TripjackUrls {
         SUBMIT_AMENDMENT: string;
         AMENDMENT_DETAILS: string;
         USER_DETAIL: string;
+        SSR: string;
     };
 }
 
@@ -53,6 +55,7 @@ export const TRIPJACK_URLS: TripjackUrls = {
         SUBMIT_AMENDMENT: "/oms/v1/air/amendment/submit-amendment",
         AMENDMENT_DETAILS: "/oms/v1/air/amendment/amendment-details",
         USER_DETAIL: "/ums/v1/user-detail",
+        SSR: "/fms/v1/ssr",
     },
     PROD: {
         BASE_URL: envConfig.TRIPJACK_PROD.BASE_URL,
@@ -69,5 +72,6 @@ export const TRIPJACK_URLS: TripjackUrls = {
         SUBMIT_AMENDMENT: "/oms/v1/air/amendment/submit-amendment",
         AMENDMENT_DETAILS: "/oms/v1/air/amendment/amendment-details",
         USER_DETAIL: "/ums/v1/user-detail",
+        SSR: "/fms/v1/ssr",
     },
 };

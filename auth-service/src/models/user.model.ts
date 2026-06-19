@@ -233,14 +233,6 @@ UserSchema.index(
     { unique: true }
 );
 
-UserSchema.index(
-    { googleId: 1 },
-    {
-        unique: true,
-        sparse: true,
-    }
-);
-
 
 
 /* =========================

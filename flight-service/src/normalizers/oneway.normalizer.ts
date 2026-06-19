@@ -75,7 +75,8 @@ export class OneWayNormalizer {
             const stopInfo = this.getStopDetails(segments);
 
             const flightData: any = {
-                flightKey: BaseFlightNormalizer.getFlightKey(segments),
+                flightKey: cheapest.id, // Use TripJack's price ID so reviewFare works
+                routeKey: BaseFlightNormalizer.getFlightKey(segments),
 
                 airline: airlineName,
                 airlineCode: airlineCode,

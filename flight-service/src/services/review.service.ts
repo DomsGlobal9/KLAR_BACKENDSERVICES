@@ -16,7 +16,7 @@ class ReviewService {
         try {
             const response = await axios.post(
                 url,
-                { priceIds },
+                { priceIds, returnSSR: true },
                 {
                     headers: {
                         "Content-Type": "application/json",
