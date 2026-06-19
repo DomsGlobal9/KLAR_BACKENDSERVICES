@@ -184,6 +184,21 @@ Reported Total to UI:      ${totalToUI}
                 .lean();
         }
 
+        // Sort destinations by relevance:
+        // 1. Exact match first (destName exactly equals query)
+        // 2. Starts-with match (shorter names first — "Hyderabad India" before "Hyde Park NY")
+        // 3. Contains match last
+        const qLower = query.toLowerCase().trim();
+        rgDests.sort((a: any, b: any) => {
+            const aName = (a.destName || "").toLowerCase().trim();
+            const bName = (b.destName || "").toLowerCase().trim();
+            const aExact = aName === qLower ? 0 : aName.startsWith(qLower) ? 1 : 2;
+            const bExact = bName === qLower ? 0 : bName.startsWith(qLower) ? 1 : 2;
+            if (aExact !== bExact) return aExact - bExact;
+            // Among same tier: prefer shorter names (more specific match)
+            return aName.length - bName.length;
+        });
+
         // 2. Fetch hotel matches
         let hotels = await HotelModel.find({
             $or: [

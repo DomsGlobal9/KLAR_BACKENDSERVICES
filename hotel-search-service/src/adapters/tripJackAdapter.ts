@@ -105,21 +105,38 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
         let mapped: UnifiedHotel[] = finalHotels.map((h: any) => mapTJHotel(h, correlationId));
 
-        // Geographic Sanity Check: Ensure results match the intended region
-        const isIndiaTarget = req.destination.toLowerCase().includes("india") || req.destination.toLowerCase().includes("goa") || (req.countryCode === "IN");
-        if (isIndiaTarget) {
-            const initialCount = mapped.length;
-            mapped = mapped.filter(h => {
-                const addr = (h.address || "").toLowerCase();
-                const country = (h.country || "").toLowerCase();
-                // Filter out German hotels if we are targeting India
-                if (addr.includes("germany") || country.includes("germany") || country.includes("deutschland")) {
+        // Geographic Sanity Check: filter out hotels whose country doesn't match
+        // the resolved geo center's country (catches cross-border results).
+        if (req._geoCenter) {
+            const targetCountry = (req.countryCode || "IN").toUpperCase();
+            // Only apply country filter for well-known single-country searches
+            const COUNTRY_NAMES: Record<string, string[]> = {
+                IN: ["india", "indian"],
+                AE: ["united arab emirates", "uae", "dubai", "emirates"],
+                GB: ["united kingdom", "uk", "england", "britain"],
+                US: ["united states", "usa", "america"],
+                SG: ["singapore"],
+                MY: ["malaysia"],
+                TH: ["thailand"],
+                FR: ["france", "french"],
+                DE: ["germany", "german", "deutschland"],
+            };
+            const allowedTerms = COUNTRY_NAMES[targetCountry];
+            if (allowedTerms) {
+                const initialCount = mapped.length;
+                mapped = mapped.filter(h => {
+                    const country = (h.country || "").toLowerCase();
+                    const addr = (h.address || "").toLowerCase();
+                    // Keep if country field is empty (will be enriched later)
+                    if (!country) return true;
+                    // Keep if country matches target
+                    if (allowedTerms.some(t => country.includes(t))) return true;
+                    // Reject if clearly a different country
                     return false;
+                });
+                if (mapped.length < initialCount) {
+                    console.log(`[TripJack] Filtered out ${initialCount - mapped.length} cross-country hotels for target country: ${targetCountry}`);
                 }
-                return true;
-            });
-            if (mapped.length < initialCount) {
-                console.log(`[TripJack] Filtered out ${initialCount - mapped.length} cross-region hotels (Germany -> India).`);
             }
         }
 

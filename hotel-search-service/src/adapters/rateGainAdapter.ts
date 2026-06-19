@@ -28,7 +28,7 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
     payload.Geofilter = {
       latitude: geo.lat.toFixed(6),
       longitude: geo.lng.toFixed(6),
-      radius: geo.radiusKm ? Math.round(geo.radiusKm) : 50
+      radius: geo.radiusKm ? Math.round(geo.radiusKm) : 25  // 25km default — tighter than 50km to avoid neighboring cities
     };
   } else if (req.destination) {
     if (!destCode) {
@@ -103,7 +103,7 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
     }
 
     return {
-      hotels: allHotels.sort((a, b) => a.hotelId.localeCompare(b.hotelId)),
+      hotels: allHotels, // preserve RateGain's relevance/distance order
       total: Math.max(allHotels.length, maxTotal)
     };
   } catch (error: any) {

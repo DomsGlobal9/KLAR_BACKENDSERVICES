@@ -35,7 +35,9 @@ function getRadiusFromBoundingBox(lat: number, lng: number, bbox: string[]): num
     const d4 = getDistanceKm(lat, lng, maxLat, maxLng);
 
     const maxDist = Math.max(d1, d2, d3, d4);
-    return Math.min(Math.max(maxDist, 5), 100); // Limit to range [5km, 100km]
+    // Tighter cap: city metros ~25km, large states/regions ~80km.
+    // Avoids pulling in hotels from neighboring cities/states.
+    return Math.min(Math.max(maxDist, 5), 80);
 }
 
 export async function seedDefaultGeo() {
@@ -344,8 +346,17 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
             );
         }
 
-        const uniqueHids = [...new Set(hotels.map((h) => h.tjHotelId))];
-        return uniqueHids.sort(); // STABLE SORT: Ensure chunks are identical across requests
+        // Preserve MongoDB $near distance order (closest hotels first).
+        // De-duplicate while keeping insertion order (closest first).
+        const seen = new Set<string>();
+        const uniqueHids: string[] = [];
+        for (const h of hotels) {
+            if (h.tjHotelId && !seen.has(h.tjHotelId)) {
+                seen.add(h.tjHotelId);
+                uniqueHids.push(h.tjHotelId);
+            }
+        }
+        return uniqueHids;
     }
 
     // 2. City/Hotel Name Search (Fallback if no Geo available)
@@ -378,10 +389,17 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
         );
     }
 
-    const uniqueHids = [...new Set(hotels.map((h: any) => h.tjHotelId).filter(Boolean))];
+    // Preserve insertion order (text search relevance score order).
+    const seen2 = new Set<string>();
+    const uniqueHids: string[] = [];
+    for (const h of hotels) {
+        if (h.tjHotelId && !seen2.has(h.tjHotelId)) {
+            seen2.add(h.tjHotelId);
+            uniqueHids.push(h.tjHotelId);
+        }
+    }
     console.log(`[DEBUG] resolveForTJ: Resolved "${normalizedQuery}" to ${uniqueHids.length} hotels`);
-
-    return uniqueHids.sort(); // STABLE SORT: Essential for chunk-based pagination
+    return uniqueHids;
 }
 
 
