@@ -15,4 +15,3 @@ router.get("/transactions", authMiddleware, WalletController.getTransactions);
 router.patch("/settings", authMiddleware, WalletController.updateSettings);
 
 export default router;
-

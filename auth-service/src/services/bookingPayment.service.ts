@@ -2,12 +2,15 @@ import { Types } from "mongoose";
 import { BookingPaymentRepository } from "../repositories/bookingPayment.repository";
 import { BadRequestError, NotFoundError } from "../errors/AppError";
 import { UserModel } from "../models/user.model";
+import { insufficientBalanceEmailTemplate, paymentSuccessEmailTemplate } from "../templates/walletNotification.templates";
+import { EmailService } from "./email.service";
 
 export class BookingPaymentService {
 
-    // ************************************
-    // Private Functions Begins Here
-    // ************************************
+
+    /**
+     * Private methods starts here
+     */
 
     private static async handleRMBalanceCheck(
         userId: Types.ObjectId,
@@ -15,8 +18,6 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleRMBalanceCheck] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
-
         const parentAdminId = user.createdBy;
         if (!parentAdminId) {
             throw new BadRequestError("RM is not associated with any B2B_ADMIN");
@@ -44,7 +45,16 @@ export class BookingPaymentService {
         const hasSufficientBalance = parentWallet.balance >= totalPrice;
         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - parentWallet.balance;
 
-        console.log("[handleRMBalanceCheck] Result - hasSufficientBalance:", hasSufficientBalance, "currentBalance:", parentWallet.balance);
+        if (!hasSufficientBalance) {
+            await this.sendInsufficientBalanceEmail(
+                "RM",
+                userId,
+                bookingId,
+                totalPrice,
+                parentWallet.balance,
+                shortfallAmount
+            );
+        }
 
         return {
             hasSufficientBalance,
@@ -62,13 +72,11 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleB2BAdminBalanceCheck] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
 
         const wallet = await BookingPaymentRepository.getWallet(userId);
         if (!wallet) throw new NotFoundError("Wallet not found");
 
         const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
-        console.log("[handleB2BAdminBalanceCheck] isSubCompany:", isSubCompany);
 
         if (isSubCompany) {
             return await this.handleSubCompanyBalanceCheck(userId, user, wallet, bookingId, totalPrice);
@@ -84,8 +92,6 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleSubCompanyBalanceCheck] Start - userId:", userId, "subCompanyBalance:", subCompanyWallet.balance, "totalPrice:", totalPrice);
-
         const parentAdminId = user.createdBy;
         const parentAdmin = await UserModel.findById(parentAdminId);
 
@@ -111,27 +117,59 @@ export class BookingPaymentService {
         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
         const isAlreadyPaid = !!existingPayment;
 
-        // Check if sub-company has sufficient balance on its own
         const hasSubCompanySufficientBalance = subCompanyWallet.balance >= totalPrice;
-        console.log("[handleSubCompanyBalanceCheck] hasSubCompanySufficientBalance:", hasSubCompanySufficientBalance);
 
+        // If sub-company has sufficient balance (positive and enough)
         if (hasSubCompanySufficientBalance) {
-            console.log("[handleSubCompanyBalanceCheck] Sub-company has sufficient balance alone");
+            const effectiveLimit = -(subCompanyWallet.limit);
+            const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+            const wouldExceedLimit = newBalanceAfterDeduction < effectiveLimit;
+
             return {
-                hasSufficientBalance: true,
+                hasSufficientBalance: !wouldExceedLimit,
                 currentBalance: subCompanyWallet.balance,
                 requiredAmount: totalPrice,
-                shortfallAmount: 0,
+                shortfallAmount: wouldExceedLimit ? (effectiveLimit - newBalanceAfterDeduction) : 0,
                 bookingId,
                 isAlreadyPaid,
+                limitInfo: wouldExceedLimit ? {
+                    limit: effectiveLimit,
+                    wouldResultIn: newBalanceAfterDeduction,
+                    message: `Payment would exceed wallet limit of ${effectiveLimit}`
+                } : undefined
             };
         }
 
-        // Sub-company has 0 or negative balance, check parent wallet only
+        // If sub-company has insufficient balance (including 0 or negative)
+        // FIRST check if payment would exceed the limit
+        const effectiveLimit = -(subCompanyWallet.limit);
+        const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+        const wouldExceedLimit = newBalanceAfterDeduction < effectiveLimit;
+
+        // If payment would exceed the limit, throw error immediately
+        if (wouldExceedLimit) {
+            throw new Error('Wallet limit exceed. Contact with parent company.')
+            // throw new BadRequestError(
+            //     `Payment would exceed wallet limit. Current balance: ${subCompanyWallet.balance}, ` +
+            //     `Limit: ${effectiveLimit}, Attempted deduction: ${totalPrice}, ` +
+            //     `Would result in: ${newBalanceAfterDeduction}`
+            // );
+        }
+
+        // Only after confirming limit is not exceeded, check parent wallet
         const hasParentSufficientBalance = parentWallet.balance >= totalPrice;
         const shortfallAmount = hasParentSufficientBalance ? 0 : totalPrice - parentWallet.balance;
 
-        console.log("[handleSubCompanyBalanceCheck] hasParentSufficientBalance:", hasParentSufficientBalance);
+        if (!hasParentSufficientBalance) {
+            await this.sendInsufficientBalanceEmail(
+                "B2B_ADMIN",
+                userId,
+                bookingId,
+                totalPrice,
+                subCompanyWallet.balance,
+                shortfallAmount
+            );
+        }
 
         return {
             hasSufficientBalance: hasParentSufficientBalance,
@@ -155,8 +193,6 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleParentAdminBalanceCheck] Start - userId:", userId, "balance:", wallet.balance, "totalPrice:", totalPrice);
-
         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
         const isAlreadyPaid = !!existingPayment;
 
@@ -167,7 +203,16 @@ export class BookingPaymentService {
         const hasSufficientBalance = wallet.balance >= totalPrice;
         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - wallet.balance;
 
-        console.log("[handleParentAdminBalanceCheck] hasSufficientBalance:", hasSufficientBalance);
+        if (!hasSufficientBalance) {
+            await this.sendInsufficientBalanceEmail(
+                "B2B_ADMIN",
+                userId,
+                bookingId,
+                totalPrice,
+                wallet.balance,
+                shortfallAmount
+            );
+        }
 
         return {
             hasSufficientBalance,
@@ -185,8 +230,6 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleRMPayment] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
-
         const parentAdminId = user.createdBy;
         if (!parentAdminId) {
             throw new BadRequestError("RM is not associated with any B2B_ADMIN");
@@ -236,7 +279,17 @@ export class BookingPaymentService {
             status: "SUCCESS",
         });
 
-        console.log("[handleRMPayment] Payment successful - newBalance:", updatedParentWallet.balance);
+
+        const newBalance = updatedParentWallet.balance ?? parentWallet.balance - totalPrice;
+
+        await this.sendPaymentSuccessEmail(
+            "RM",
+            userId,
+            bookingId,
+            totalPrice,
+            newBalance,
+            "PARENT_WALLET"
+        );
 
         return {
             transaction: transaction,
@@ -251,13 +304,11 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleB2BAdminPayment] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
 
         const wallet = await BookingPaymentRepository.getWallet(userId);
         if (!wallet) throw new NotFoundError("Wallet not found");
 
         const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
-        console.log("[handleB2BAdminPayment] isSubCompany:", isSubCompany);
 
         if (isSubCompany) {
             return await this.handleSubCompanyPayment(userId, user, wallet, bookingId, totalPrice);
@@ -273,8 +324,6 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleSubCompanyPayment] Start - userId:", userId, "subCompanyBalance:", subCompanyWallet.balance, "totalPrice:", totalPrice);
-
         const parentAdminId = user.createdBy;
         const parentAdmin = await UserModel.findById(parentAdminId);
 
@@ -297,12 +346,36 @@ export class BookingPaymentService {
             throw new BadRequestError("Parent wallet balance is not available");
         }
 
-        // Check if sub-company has sufficient balance
+
         const hasSufficientBalance = subCompanyWallet.balance >= totalPrice;
-        console.log("[handleSubCompanyPayment] hasSufficientBalance:", hasSufficientBalance);
+
+        if (!hasSufficientBalance) {
+            const effectiveLimit = -(subCompanyWallet.limit);
+            const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+            const wouldExceedLimit = newBalanceAfterDeduction < effectiveLimit;
+
+            if (wouldExceedLimit) {
+                throw new BadRequestError(
+                    `Payment would exceed wallet limit. Current balance: ${subCompanyWallet.balance}, ` +
+                    `Limit: ${effectiveLimit}, Attempted deduction: ${totalPrice}, ` +
+                    `Would result in: ${newBalanceAfterDeduction}`
+                );
+            }
+        }
 
         if (hasSufficientBalance) {
-            console.log("[handleSubCompanyPayment] Sub-company has sufficient balance, deducting only from sub-company");
+
+            const effectiveLimit = -(subCompanyWallet.limit);
+            const newBalanceAfterDeduction = subCompanyWallet.balance - totalPrice;
+
+            if (newBalanceAfterDeduction < effectiveLimit) {
+                const shortfall = effectiveLimit - newBalanceAfterDeduction;
+                throw new BadRequestError(
+                    `Payment would exceed wallet limit. Current balance: ${subCompanyWallet.balance}, ` +
+                    `Limit: ${effectiveLimit}, Attempted deduction: ${totalPrice}, ` +
+                    `Would result in: ${newBalanceAfterDeduction} (Shortfall from limit: ${shortfall})`
+                );
+            }
 
             const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
                 subCompanyWallet._id,
@@ -326,6 +399,17 @@ export class BookingPaymentService {
                 status: "SUCCESS",
             });
 
+            const newBalance = updatedSubCompanyWallet.balance ?? subCompanyWallet.balance - totalPrice;
+
+            await this.sendPaymentSuccessEmail(
+                "B2B_ADMIN",
+                userId,
+                bookingId,
+                totalPrice,
+                newBalance,
+                "SUB_COMPANY_WALLET"
+            );
+
             return {
                 transaction: transaction,
                 wallet: updatedSubCompanyWallet,
@@ -333,18 +417,13 @@ export class BookingPaymentService {
             };
         }
 
-        // Sub-company has 0 or negative balance - deduct from parent only
-        console.log("[handleSubCompanyPayment] Sub-company has 0 or negative balance, deducting from parent only");
-        console.log("[handleSubCompanyPayment] Parent wallet balance:", parentWallet.balance);
 
-        // Check if parent has enough balance
         if (parentWallet.balance < totalPrice) {
             throw new BadRequestError(
                 `Insufficient balance in parent wallet. Available: ${parentWallet.balance}, Required: ${totalPrice}`
             );
         }
 
-        // Deduct FULL amount from parent wallet
         const updatedParentWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
             parentWallet._id,
             totalPrice
@@ -367,32 +446,28 @@ export class BookingPaymentService {
             status: "SUCCESS",
         });
 
-        // Deduct same amount from sub-company (making it more negative)
+
         const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
             subCompanyWallet._id,
             totalPrice
         );
 
         if (!updatedSubCompanyWallet) {
-            // Rollback parent transaction
+
             await BookingPaymentRepository.addBalance(parentWallet._id, totalPrice);
             throw new BadRequestError("Failed to deduct from sub-company wallet");
         }
 
-        const subCompanyTransaction = await BookingPaymentRepository.createTransaction({
-            walletId: subCompanyWallet._id,
-            userId: userId,
-            type: "DEBIT",
-            direction: "DEBIT",
-            amount: totalPrice,
-            paymentMethod: "WALLET",
-            referenceType: "BOOKING",
-            referenceId: bookingId,
-            description: `Booking payment for ${bookingId} (sub-company debt to parent)`,
-            status: "SUCCESS",
-        });
+        const newParentBalance = updatedParentWallet.balance ?? parentWallet.balance - totalPrice;
 
-        console.log("[handleSubCompanyPayment] Payment successful - Parent newBalance:", updatedParentWallet.balance, "SubCompany newBalance:", updatedSubCompanyWallet.balance);
+        await this.sendPaymentSuccessEmail(
+            "B2B_ADMIN",
+            userId,
+            bookingId,
+            totalPrice,
+            newParentBalance,
+            "PARENT_WALLET"
+        );
 
         return {
             transaction: parentTransaction,
@@ -415,11 +490,8 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[handleParentAdminPayment] Start - userId:", userId, "balance:", wallet.balance, "totalPrice:", totalPrice);
-
         const existing = await BookingPaymentRepository.checkExistingPayment(bookingId);
         if (existing) {
-            console.log("[handleParentAdminPayment] Duplicate payment detected");
             return {
                 transaction: existing,
                 wallet: wallet,
@@ -451,7 +523,16 @@ export class BookingPaymentService {
             status: "SUCCESS",
         });
 
-        console.log("[handleParentAdminPayment] Payment successful - newBalance:", updatedWallet.balance);
+        const newBalance = updatedWallet.balance ?? wallet.balance - totalPrice;
+
+        await this.sendPaymentSuccessEmail(
+            "B2B_ADMIN",
+            userId,
+            bookingId,
+            totalPrice,
+            newBalance,
+            "PARENT_WALLET"
+        );
 
         return {
             transaction: transaction,
@@ -460,37 +541,252 @@ export class BookingPaymentService {
         };
     }
 
-    // ************************************
-    // Private Functions end Here
-    // ************************************
+    private static async sendInsufficientBalanceEmail(
+        userRole: string,
+        userId: Types.ObjectId,
+        bookingId: string,
+        requiredAmount: number,
+        currentBalance: number,
+        shortfallAmount: number
+    ) {
+        try {
+            const user = await UserModel.findById(userId).populate('createdBy');
+            if (!user) return;
+
+            if (userRole === "B2B_ADMIN") {
+                const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
+
+                if (isSubCompany) {
+                    const subCompanyEmail = user.email;
+                    const parentAdmin = await UserModel.findById(user.createdBy);
+
+                    if (subCompanyEmail) {
+                        const subCompanyHtml = insufficientBalanceEmailTemplate("SUB_COMPANY", {
+                            bookingId,
+                            requiredAmount,
+                            currentBalance,
+                            shortfallAmount,
+                            companyName: user.businessProfile?.companyName,
+                            parentCompanyName: parentAdmin?.businessProfile?.companyName
+                        });
+                        await EmailService.sendEmail({
+                            to: subCompanyEmail,
+                            subject: "Insufficient Wallet Balance Alert",
+                            html: subCompanyHtml
+                        });
+                    }
+
+                    if (parentAdmin?.email) {
+                        const parentHtml = insufficientBalanceEmailTemplate("PARENT_ADMIN", {
+                            bookingId,
+                            requiredAmount,
+                            currentBalance,
+                            shortfallAmount,
+                            companyName: parentAdmin.businessProfile?.companyName
+                        });
+                        await EmailService.sendEmail({
+                            to: parentAdmin.email,
+                            subject: "Insufficient Wallet Balance Alert - Sub-Company Payment",
+                            html: parentHtml
+                        });
+                    }
+                } else {
+                    const parentHtml = insufficientBalanceEmailTemplate("PARENT_ADMIN", {
+                        bookingId,
+                        requiredAmount,
+                        currentBalance,
+                        shortfallAmount,
+                        companyName: user.businessProfile?.companyName
+                    });
+                    await EmailService.sendEmail({
+                        to: user.email,
+                        subject: "Insufficient Wallet Balance Alert",
+                        html: parentHtml
+                    });
+                }
+            }
+            else if (userRole === "RM") {
+                const parentAdmin = await UserModel.findById(user.createdBy);
+                if (parentAdmin?.email) {
+                    const rmHtml = insufficientBalanceEmailTemplate("RM", {
+                        bookingId,
+                        requiredAmount,
+                        currentBalance,
+                        shortfallAmount,
+                        companyName: parentAdmin.businessProfile?.companyName
+                    });
+                    await EmailService.sendEmail({
+                        to: parentAdmin.email,
+                        subject: "Insufficient Wallet Balance Alert - RM Payment",
+                        html: rmHtml
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Failed to send insufficient balance email:", error);
+        }
+    }
+
+    private static async sendPaymentSuccessEmail(
+        userRole: string,
+        userId: Types.ObjectId,
+        bookingId: string,
+        amount: number,
+        newBalance: number,
+        paymentSource: string
+    ) {
+        console.log("[sendPaymentSuccessEmail] Called with:", {
+            userRole,
+            userId: userId.toString(),
+            bookingId,
+            amount,
+            amountType: typeof amount,
+            newBalance,
+            newBalanceType: typeof newBalance,
+            paymentSource
+        });
+
+        try {
+            // Ensure amount and newBalance are numbers
+            const numericAmount = typeof amount === 'number' ? amount : Number(amount);
+            const numericNewBalance = typeof newBalance === 'number' ? newBalance : Number(newBalance);
+
+            console.log("[sendPaymentSuccessEmail] Converted values:", {
+                numericAmount,
+                numericNewBalance
+            });
+
+            const user = await UserModel.findById(userId).populate('createdBy');
+            console.log("[sendPaymentSuccessEmail] User found:", user ? user.email : "No user");
+
+            if (!user) {
+                console.log("[sendPaymentSuccessEmail] No user found, returning");
+                return;
+            }
+
+            if (userRole === "B2B_ADMIN") {
+                const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
+                console.log("[sendPaymentSuccessEmail] Is sub-company:", isSubCompany);
+
+                if (isSubCompany) {
+                    const subCompanyEmail = user.email;
+                    const parentAdmin = await UserModel.findById(user.createdBy);
+
+                    console.log("[sendPaymentSuccessEmail] Sub-company email:", subCompanyEmail);
+                    console.log("[sendPaymentSuccessEmail] Parent admin found:", parentAdmin ? parentAdmin.email : "No parent");
+
+                    let parentWalletBalance = numericNewBalance;
+                    if (parentAdmin) {
+                        const parentWallet = await BookingPaymentRepository.getWallet(parentAdmin._id as Types.ObjectId);
+                        parentWalletBalance = parentWallet?.balance ?? numericNewBalance;
+                        console.log("[sendPaymentSuccessEmail] Parent wallet balance:", parentWalletBalance);
+                    }
+
+                    if (subCompanyEmail) {
+                        console.log("[sendPaymentSuccessEmail] Sending email to sub-company:", subCompanyEmail);
+                        const subCompanyHtml = paymentSuccessEmailTemplate("SUB_COMPANY", {
+                            bookingId,
+                            amount: numericAmount,
+                            newBalance: numericNewBalance,
+                            companyName: user.businessProfile?.companyName,
+                            parentCompanyName: parentAdmin?.businessProfile?.companyName,
+                            paymentSource
+                        });
+                        await EmailService.sendEmail({
+                            to: subCompanyEmail,
+                            subject: "Booking Payment Processed Successfully",
+                            html: subCompanyHtml
+                        });
+                        console.log("[sendPaymentSuccessEmail] Email sent to sub-company successfully");
+                    }
+
+                    if (parentAdmin?.email) {
+                        console.log("[sendPaymentSuccessEmail] Sending email to parent:", parentAdmin.email);
+                        const parentHtml = paymentSuccessEmailTemplate("PARENT_ADMIN", {
+                            bookingId,
+                            amount: numericAmount,
+                            newBalance: paymentSource === "SUB_COMPANY_WALLET" ? parentWalletBalance : numericNewBalance,
+                            companyName: parentAdmin.businessProfile?.companyName,
+                            paymentSource
+                        });
+                        await EmailService.sendEmail({
+                            to: parentAdmin.email,
+                            subject: "Booking Payment Processed - Sub-Company Transaction",
+                            html: parentHtml
+                        });
+                        console.log("[sendPaymentSuccessEmail] Email sent to parent successfully");
+                    }
+                } else {
+                    console.log("[sendPaymentSuccessEmail] Sending email to parent admin only:", user.email);
+                    const parentHtml = paymentSuccessEmailTemplate("PARENT_ADMIN", {
+                        bookingId,
+                        amount: numericAmount,
+                        newBalance: numericNewBalance,
+                        companyName: user.businessProfile?.companyName,
+                        paymentSource
+                    });
+                    await EmailService.sendEmail({
+                        to: user.email,
+                        subject: "Booking Payment Processed - Wallet Debited",
+                        html: parentHtml
+                    });
+                    console.log("[sendPaymentSuccessEmail] Email sent to parent admin successfully");
+                }
+            }
+            else if (userRole === "RM") {
+                console.log("[sendPaymentSuccessEmail] Processing RM role");
+                const parentAdmin = await UserModel.findById(user.createdBy);
+                console.log("[sendPaymentSuccessEmail] Parent admin for RM:", parentAdmin?.email);
+
+                if (parentAdmin?.email) {
+                    const rmHtml = paymentSuccessEmailTemplate("RM", {
+                        bookingId,
+                        amount: numericAmount,
+                        newBalance: numericNewBalance,
+                        companyName: parentAdmin.businessProfile?.companyName,
+                        paymentSource
+                    });
+                    await EmailService.sendEmail({
+                        to: parentAdmin.email,
+                        subject: "Booking Payment Processed by RM",
+                        html: rmHtml
+                    });
+                    console.log("[sendPaymentSuccessEmail] Email sent to RM's parent successfully");
+                } else {
+                    console.log("[sendPaymentSuccessEmail] No parent admin email found for RM");
+                }
+            }
+        } catch (error) {
+            console.error("Failed to send payment success email:", error);
+        }
+    }
+
+    /**
+     * Private methods ends here
+     */
+
 
     static async checkWalletBalance(
         userId: Types.ObjectId,
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[checkWalletBalance] Start - userId:", userId, "bookingId:", bookingId, "totalPrice:", totalPrice);
 
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
         const userRole = user.roles;
-        console.log("[checkWalletBalance] userRole:", userRole);
 
         if (userRole === "RM") {
             return await this.handleRMBalanceCheck(userId, user, bookingId, totalPrice);
         }
 
-        if (userRole === "B2B_ADMIN") {
+        if (userRole === "B2B_ADMIN" || userRole === 'USER') {
             return await this.handleB2BAdminBalanceCheck(userId, user, bookingId, totalPrice);
         }
 
-        // Fallback for other roles
-        console.log("[checkWalletBalance] Fallback for other roles");
         const wallet = await BookingPaymentRepository.getWallet(userId);
-        if (!wallet) {
-            throw new NotFoundError("Wallet not found");
-        }
+        if (!wallet) throw new NotFoundError("Wallet not found");
 
         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
         const isAlreadyPaid = !!existingPayment;
@@ -502,8 +798,6 @@ export class BookingPaymentService {
         const balance = wallet.balance;
         const hasSufficientBalance = balance >= totalPrice;
         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - balance;
-
-        console.log("[checkWalletBalance] Result - hasSufficientBalance:", hasSufficientBalance, "currentBalance:", balance);
 
         return {
             hasSufficientBalance,
@@ -521,405 +815,25 @@ export class BookingPaymentService {
         bookingId: string,
         totalPrice: number
     ) {
-        console.log("[payForBooking] Start - userId:", userId, "userRole:", userRole, "bookingId:", bookingId, "totalPrice:", totalPrice);
+
+        console.log("The PAYLOAD WE GOT: \n", {userId, userRole, bookingId, totalPrice});
 
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
         if (userRole === "RM") {
-            return await this.handleRMPayment(userId, user, bookingId, totalPrice);
+            const result = await this.handleRMPayment(userId, user, bookingId, totalPrice);
+            console.log("@@@@@@@@@@@@ The result we got role RM", result);
+            return result;
         }
 
-        if (userRole === "B2B_ADMIN") {
-            return await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
+        if (userRole === "B2B_ADMIN" || userRole === "USER") {
+            const result = await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
+            console.log("@@@@@@@@@@@@ The result we got role B2B_ADMIN", result);
+            return result;
         }
 
         throw new BadRequestError(`Unsupported role: ${userRole}`);
     }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import { Types } from "mongoose";
-// import { BookingPaymentRepository } from "../repositories/bookingPayment.repository";
-// import { BadRequestError, NotFoundError } from "../errors/AppError";
-// import { UserModel } from "../models/user.model";
-
-// export class BookingPaymentService {
-
-//     // ************************************
-//     // Private Functions Begins Here
-//     // ************************************
-
-//     private static async handleRMPayment(
-//         userId: Types.ObjectId,
-//         user: any,
-//         bookingId: string,
-//         totalPrice: number
-//     ) {
-//         const parentAdminId = user.createdBy;
-//         if (!parentAdminId) {
-//             throw new BadRequestError("RM is not associated with any B2B_ADMIN");
-//         }
-
-//         const parentAdmin = await UserModel.findById(parentAdminId);
-//         if (!parentAdmin) {
-//             throw new NotFoundError("Parent B2B_ADMIN not found");
-//         }
-
-//         const parentWallet = await BookingPaymentRepository.getWallet(parentAdminId);
-//         if (!parentWallet) throw new NotFoundError("Parent wallet not found");
-
-//         if (parentWallet.status !== "ACTIVE") {
-//             throw new BadRequestError("Parent wallet is not active");
-//         }
-
-//         if (parentWallet.balance == null) {
-//             throw new BadRequestError("Parent wallet balance is not available");
-//         }
-
-//         if (parentWallet.balance < totalPrice) {
-//             throw new BadRequestError(
-//                 `Insufficient balance in parent admin wallet. Available: ${parentWallet.balance}`
-//             );
-//         }
-
-//         const updatedParentWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
-//             parentWallet._id,
-//             totalPrice
-//         );
-
-//         if (!updatedParentWallet) {
-//             throw new BadRequestError("Failed to deduct from parent wallet");
-//         }
-
-//         const transaction = await BookingPaymentRepository.createTransaction({
-//             walletId: parentWallet._id,
-//             userId: parentAdminId,
-//             type: "DEBIT",
-//             direction: "DEBIT",
-//             amount: totalPrice,
-//             paymentMethod: "WALLET",
-//             referenceType: "BOOKING",
-//             referenceId: bookingId,
-//             description: `Booking payment for ${bookingId} (paid by RM: ${userId})`,
-//             status: "SUCCESS",
-//         });
-
-//         return {
-//             transaction: transaction,
-//             wallet: updatedParentWallet,
-//             isDuplicate: false,
-//         };
-//     }
-
-//     private static async handleB2BAdminPayment(
-//         userId: Types.ObjectId,
-//         user: any,
-//         bookingId: string,
-//         totalPrice: number
-//     ) {
-//         const wallet = await BookingPaymentRepository.getWallet(userId);
-
-//         if (!wallet) throw new NotFoundError("Wallet not found");
-
-//         const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
-
-//         if (isSubCompany) {
-//             return await this.handleSubCompanyPayment(userId, user, wallet, bookingId, totalPrice);
-//         } else {
-//             return await this.handleParentAdminPayment(userId, wallet, bookingId, totalPrice);
-//         }
-//     }
-
-//     private static async handleSubCompanyPayment(
-//         userId: Types.ObjectId,
-//         user: any,
-//         subCompanyWallet: any,
-//         bookingId: string,
-//         totalPrice: number
-//     ) {
-//         const parentAdminId = user.createdBy;
-//         const parentAdmin = await UserModel.findById(parentAdminId);
-
-//         if (!parentAdmin) {
-//             throw new NotFoundError("Parent B2B_ADMIN not found");
-//         }
-
-//         const parentWallet = await BookingPaymentRepository.getWallet(parentAdminId as Types.ObjectId);
-//         if (!parentWallet) throw new NotFoundError("Parent wallet not found");
-
-//         if (parentWallet.status !== "ACTIVE") {
-//             throw new BadRequestError("Parent wallet is not active");
-//         }
-
-//         if (subCompanyWallet.balance == null) {
-//             throw new BadRequestError("Sub-company wallet balance is not available");
-//         }
-
-//         if (parentWallet.balance == null) {
-//             throw new BadRequestError("Parent wallet balance is not available");
-//         }
-
-//         // Check if sub-company has sufficient balance
-//         const hasSufficientBalance = subCompanyWallet.balance >= totalPrice;
-
-//         if (hasSufficientBalance) {
-//             // Simple deduction from sub-company only
-//             const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
-//                 subCompanyWallet._id,
-//                 totalPrice
-//             );
-
-//             if (!updatedSubCompanyWallet) {
-//                 throw new BadRequestError("Failed to deduct from sub-company wallet");
-//             }
-
-//             const transaction = await BookingPaymentRepository.createTransaction({
-//                 walletId: subCompanyWallet._id,
-//                 userId: userId,
-//                 type: "DEBIT",
-//                 direction: "DEBIT",
-//                 amount: totalPrice,
-//                 paymentMethod: "WALLET",
-//                 referenceType: "BOOKING",
-//                 referenceId: bookingId,
-//                 description: `Booking payment for ${bookingId}`,
-//                 status: "SUCCESS",
-//             });
-
-//             return {
-//                 transaction: transaction,
-//                 wallet: updatedSubCompanyWallet,
-//                 isDuplicate: false,
-//             };
-//         }
-
-//         // Insufficient balance - need parent intervention with negative balance for sub-company
-//         const subCompanyBalance = subCompanyWallet.balance;
-//         const remainingAmount = totalPrice - subCompanyBalance;
-
-//         // Check if parent has enough balance for the remaining amount
-//         if (parentWallet.balance < remainingAmount) {
-//             throw new BadRequestError(
-//                 `Insufficient combined balance. Sub-company has: ${subCompanyBalance}, ` +
-//                 `Parent has: ${parentWallet.balance}. Need: ${totalPrice}`
-//             );
-//         }
-
-//         // Step 1: Deduct FULL amount from parent wallet
-//         const updatedParentWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
-//             parentWallet._id,
-//             totalPrice
-//         );
-
-//         if (!updatedParentWallet) {
-//             throw new BadRequestError("Failed to deduct from parent wallet");
-//         }
-
-//         const parentTransaction = await BookingPaymentRepository.createTransaction({
-//             walletId: parentWallet._id,
-//             userId: parentAdminId,
-//             type: "DEBIT",
-//             direction: "DEBIT",
-//             amount: totalPrice,
-//             paymentMethod: "WALLET",
-//             referenceType: "BOOKING",
-//             referenceId: bookingId,
-//             description: `Booking payment for ${bookingId} (parent covering full amount)`,
-//             status: "SUCCESS",
-//         });
-
-//         // Step 2: Deduct sub-company's ENTIRE balance (will go to negative if not enough)
-//         const updatedSubCompanyWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
-//             subCompanyWallet._id,
-//             subCompanyBalance
-//         );
-
-//         if (!updatedSubCompanyWallet) {
-//             // Rollback parent transaction
-//             await BookingPaymentRepository.addBalance(parentWallet._id, totalPrice);
-//             throw new BadRequestError("Failed to deduct from sub-company wallet");
-//         }
-
-//         const subCompanyTransaction = await BookingPaymentRepository.createTransaction({
-//             walletId: subCompanyWallet._id,
-//             userId: userId,
-//             type: "DEBIT",
-//             direction: "DEBIT",
-//             amount: subCompanyBalance,
-//             paymentMethod: "WALLET",
-//             referenceType: "BOOKING",
-//             referenceId: bookingId,
-//             description: `Booking payment for ${bookingId} (sub-company entire balance deducted)`,
-//             status: "SUCCESS",
-//         });
-
-//         // Step 3: Calculate negative balance for sub-company
-//         const negativeBalance = subCompanyBalance - totalPrice;
-
-//         // Step 4: Reimburse parent with sub-company's deducted amount
-//         const reimbursedParentWallet = await BookingPaymentRepository.addBalance(
-//             parentWallet._id,
-//             subCompanyBalance
-//         );
-
-//         if (!reimbursedParentWallet) {
-//             throw new BadRequestError("Failed to reimburse parent wallet");
-//         }
-
-//         const reimbursementTransaction = await BookingPaymentRepository.createTransaction({
-//             walletId: parentWallet._id,
-//             userId: parentAdminId,
-//             type: "CREDIT",
-//             direction: "CREDIT",
-//             amount: subCompanyBalance,
-//             paymentMethod: "WALLET",
-//             referenceType: "REIMBURSEMENT",
-//             referenceId: bookingId,
-//             description: `Reimbursement from sub-company ${userId} for booking ${bookingId}`,
-//             status: "SUCCESS",
-//         });
-
-//         // Step 5: Set negative balance on sub-company wallet
-//         const finalSubCompanyWallet = await BookingPaymentRepository.setBalance(
-//             subCompanyWallet._id,
-//             negativeBalance
-//         );
-
-//         return {
-//             transaction: parentTransaction,
-//             wallet: reimbursedParentWallet,
-//             isDuplicate: false,
-//             hierarchicalDetails: {
-//                 subCompanyPreviousBalance: subCompanyWallet.balance,
-//                 subCompanyDeducted: subCompanyBalance,
-//                 subCompanyNegativeBalance: negativeBalance,
-//                 subCompanyCurrentBalance: negativeBalance,
-//                 parentPreviousBalance: parentWallet.balance,
-//                 parentDeducted: totalPrice,
-//                 parentReimbursed: subCompanyBalance,
-//                 parentNetDeducted: totalPrice - subCompanyBalance,
-//                 parentCurrentBalance: reimbursedParentWallet.balance,
-//             },
-//         };
-//     }
-
-//     private static async handleParentAdminPayment(
-//         userId: Types.ObjectId,
-//         wallet: any,
-//         bookingId: string,
-//         totalPrice: number
-//     ) {
-//         const existing = await BookingPaymentRepository.checkExistingPayment(bookingId);
-//         if (existing) {
-//             return {
-//                 transaction: existing,
-//                 wallet: wallet,
-//                 isDuplicate: true,
-//             };
-//         }
-
-//         const updatedWallet = await BookingPaymentRepository.deductBalanceAllowNegative(
-//             wallet._id,
-//             totalPrice
-//         );
-
-//         if (!updatedWallet) {
-//             throw new BadRequestError(
-//                 `Insufficient balance. Available: ${wallet.balance}`
-//             );
-//         }
-
-//         const transaction = await BookingPaymentRepository.createTransaction({
-//             walletId: wallet._id,
-//             userId,
-//             type: "DEBIT",
-//             direction: "DEBIT",
-//             amount: totalPrice,
-//             paymentMethod: "WALLET",
-//             referenceType: "BOOKING",
-//             referenceId: bookingId,
-//             description: `Booking payment for ${bookingId}`,
-//             status: "SUCCESS",
-//         });
-
-//         return {
-//             transaction: transaction,
-//             wallet: updatedWallet,
-//             isDuplicate: false,
-//         };
-//     }
-
-//     // ************************************
-//     // Private Functions end Here
-//     // ************************************
-
-//     static async checkWalletBalance(
-//         userId: Types.ObjectId,
-//         bookingId: string,
-//         totalPrice: number
-//     ) {
-//         const wallet = await BookingPaymentRepository.getWallet(userId);
-//         if (!wallet) {
-//             throw new NotFoundError("Wallet not found");
-//         }
-
-//         const existingPayment = await BookingPaymentRepository.checkExistingPayment(bookingId);
-//         const isAlreadyPaid = !!existingPayment;
-
-//         if (wallet.balance == null) {
-//             throw new BadRequestError("Wallet balance is not available");
-//         }
-
-//         const balance = wallet.balance;
-//         const hasSufficientBalance = balance >= totalPrice;
-//         const shortfallAmount = hasSufficientBalance ? 0 : totalPrice - balance;
-
-//         return {
-//             hasSufficientBalance,
-//             currentBalance: balance,
-//             requiredAmount: totalPrice,
-//             shortfallAmount,
-//             bookingId,
-//             isAlreadyPaid,
-//         };
-//     }
-
-//     static async payForBooking(
-//         userId: Types.ObjectId,
-//         userRole: string,
-//         bookingId: string,
-//         totalPrice: number
-//     ) {
-//         const user = await UserModel.findById(userId);
-//         if (!user) throw new NotFoundError("User not found");
-
-//         if (userRole === "RM") {
-//             return await this.handleRMPayment(userId, user, bookingId, totalPrice);
-//         }
-
-//         if (userRole === "B2B_ADMIN") {
-//             return await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
-//         }
-
-//         throw new BadRequestError(`Unsupported role: ${userRole}`);
-//     }
-// }

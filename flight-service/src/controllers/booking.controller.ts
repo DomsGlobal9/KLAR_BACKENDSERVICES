@@ -4,6 +4,18 @@ import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 
 class BookingController {
+    emailVoucher(arg0: string, emailVoucher: any) {
+        throw new Error("Method not implemented.");
+    }
+    getVoucherBase64(arg0: string, getVoucherBase64: any) {
+        throw new Error("Method not implemented.");
+    }
+    previewVoucher(arg0: string, previewVoucher: any) {
+        throw new Error("Method not implemented.");
+    }
+    generateVoucher(arg0: string, generateVoucher: any) {
+        throw new Error("Method not implemented.");
+    }
     getConfirmationPdf(arg0: string, getConfirmationPdf: any) {
         throw new Error("Method not implemented.");
     }

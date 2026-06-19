@@ -5,6 +5,7 @@ import { Types } from "mongoose";
 
 export class BookingPaymentRepository {
     static async getWallet(userId: Types.ObjectId) {
+        console.log("@@@@@@@@@@@@@@@@ USER ID we got: ", userId)
         return Wallet.findOne({ userId });
     }
 

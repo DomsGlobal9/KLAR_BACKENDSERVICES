@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import BookingService from "../services/bookingLocal.service";
 import { envConfig } from "../config/env.config";
 import axios from "axios";
+import TripjackBookingService from "../services/booking.service";
+import { BookingVoucherPdfService } from "../services/bookingVoucherPdf.service";
 
 class BookingLocalController {
 
@@ -62,7 +64,7 @@ class BookingLocalController {
                     id: userId,
                     email: response.data.data.email,
                     roles: response.data.data.roles || ["user"],
-                    clientType: response.data.data.clientType || "B2C",
+                    clientType: response.data.data.clientType || "b2c",
                 };
             }
 
@@ -91,7 +93,7 @@ class BookingLocalController {
         }
     };
 
-    private deductWalletBalance = async (bookingId: string, totalPrice: string): Promise<any> => {
+    private deductWalletBalance = async (bookingId: string, totalPrice: string, userId?: string): Promise<any> => {
         try {
 
             const token = this.currentToken;
@@ -102,7 +104,7 @@ class BookingLocalController {
 
             const response = await axios.post(
                 `${this.authServiceUrl}/book/pay`,
-                { bookingId, totalPrice },
+                { bookingId, totalPrice, userId },
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -111,6 +113,8 @@ class BookingLocalController {
             );
 
             return response.data;
+
+
 
         } catch (error: any) {
             throw new Error(
@@ -123,6 +127,8 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
+            console.log("WALLET BALANCE CHECK - BOOK Local Service running");
+
             const token = this.currentToken;
 
             if (!token) {
@@ -173,6 +179,8 @@ class BookingLocalController {
             const response = await axios.get(
                 `${this.paymentServiceUrl}/razorpay/razorpay-order/${orderId}`
             );
+
+            console.log("#################\n", response);
 
             if (!response?.data?.success === true) {
                 return {
@@ -285,7 +293,6 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
             const {
                 bookingId,
                 travellers,
@@ -321,10 +328,10 @@ class BookingLocalController {
                 });
             }
 
-            if (userData.clientType === 'B2C') {
+            if (userData.clientType === 'b2c') {
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
 
-                if (paymentStatus.status != "SUCCESS") {
+                if (paymentStatus.status != "paid") {
                     return res.status(400).json({
                         success: false,
                         message: "Payment not completed for this booking",
@@ -332,10 +339,13 @@ class BookingLocalController {
                 }
             }
 
-            if (userData.clientType === 'B2B') {
+            if (userData.clientType === 'b2b') {
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
-                if (!balanceCheck.success || !balanceCheck.hasSufficientBalance) {
+                if (
+                    balanceCheck.success != true ||
+                    balanceCheck.data.hasSufficientBalance != true
+                ) {
                     return res.status(400).json({
                         success: false,
                         message: balanceCheck.message,
@@ -359,6 +369,7 @@ class BookingLocalController {
                     });
                 }
             }
+            console.log("Wallet Checked properly. Now trying to book");
 
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
@@ -376,8 +387,19 @@ class BookingLocalController {
                 });
             }
 
-            if (userData.clientType === 'B2B') {
-                await this.deductWalletBalance(bookingId, totalPrice);
+            if (userData.clientType === 'b2c') {
+                await this.deductWalletBalance(
+                    bookingId,
+                    totalPrice,
+                    '6a1ed2fb290ce7d307b05784'
+                );
+            }
+
+            if (userData.clientType === 'b2b') {
+                await this.deductWalletBalance(
+                    bookingId,
+                    totalPrice
+                );
             }
 
             return res.status(200).json({
@@ -387,7 +409,6 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
-            console.log("$$$$$$$$$$$$$$$$$ Entering into catch in UPDATE-AND-BOOK");
             return res.status(400).json({
                 success: false,
                 message: error.message
