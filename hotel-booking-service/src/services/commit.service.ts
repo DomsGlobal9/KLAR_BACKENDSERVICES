@@ -71,7 +71,7 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
 // ─── Commit Service ─────────────────────────────────────────────────────────
 
 class CommitService {
-    async commit(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
+    async commit(payload: any, agentId?: string | null, agentName?: string | null, token?: string, clientType: string = "B2C") {
         const propertyId = (payload.propertyId || payload.PropertyId || payload.BookReservation?.propertyID || "").toString();
         const tjBookingId = (payload.bookingId || payload.ConfirmationNumber || "").toString();
 
@@ -82,21 +82,17 @@ class CommitService {
                            (!payload.BookReservation && payload.bookingId);
 
         if (isTripJack) {
-            return this.#commitTripJack(payload, agentId, agentName, token);
+            return this.#commitTripJack(payload, agentId, agentName, token, clientType);
         }
-        return this.#commitRateGain(payload, agentId, agentName, token);
+        return this.#commitRateGain(payload, agentId, agentName, token, clientType);
     }
 
-    async #commitTripJack(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
+    async #commitTripJack(payload: any, agentId?: string | null, agentName?: string | null, token?: string, clientType: string = "B2C") {
         if (!token) throw new Error("Authentication token is required for booking.");
 
-        console.log(`[TripJack] Starting Secure OTA Flow for Agent: ${agentId}`);
+        console.log(`[TripJack] Starting Secure OTA Flow for Agent: ${agentId}, ClientType: ${clientType}`);
 
         // PHASE 1: Verify Price with Provider (Source of Truth)
-        // Note: TripJack Review API should have been called by Frontend, but we re-verify or use the session.
-        // Actually, we need to call precheck if bookingId is missing, or trust the precheckResponse if provided securely.
-        // For real OTA security, we fetch the latest price.
-        
         let bookingId = payload.bookingId;
         if (!bookingId) throw new Error("Booking ID is required from frontend.");
 
@@ -105,18 +101,27 @@ class CommitService {
         
         console.log(`✅ [TripJack] Trusted Frontend Net Price: ₹${netPrice}`);
 
-        // PHASE 2: Calculate Final Price with Admin Markups + Agent Additional Markup + Secret Coupon
-        const markupRules = await WalletUtil.getMarkupRules(token);
-        const { total: finalPrice, markup } = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup, payload.couponCode);
-        console.log(`✅ [Klar] Final Calculated Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`);
+        // PHASE 2: Calculate Final Price & Markup
+        let finalPrice = payload.totalPrice || netPrice;
+        let markup = 0;
+
+        if (clientType === "B2B") {
+            const markupRules = await WalletUtil.getMarkupRules(token);
+            const pricing = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup, payload.couponCode);
+            finalPrice = pricing.total;
+            markup = pricing.markup;
+            console.log(`✅ [Klar] Final Calculated B2B Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`);
+        } else {
+            console.log(`✅ [Klar] B2C Booking Price: ₹${finalPrice}`);
+        }
 
         // Determine Intent: Instant Confirmation vs Hold Booking
         const isHoldIntent = payload.isHold === true || payload.holdBooking === true;
 
-        // PHASE 3: Wallet Deduction (Atomic) - Only deduct immediately for Instant Confirmations
+        // PHASE 3: Wallet Deduction (Atomic) - Only deduct immediately for B2B Instant Confirmations
         const demandBookingId = `TJ-BOOK-${Date.now()}`;
         let paymentProcessed = true;
-        if (!isHoldIntent) {
+        if (!isHoldIntent && clientType === "B2B") {
             paymentProcessed = await WalletUtil.deductBalance(
                 token, 
                 finalPrice, 
@@ -125,7 +130,7 @@ class CommitService {
             );
             if (!paymentProcessed) throw new Error("Wallet deduction failed. Please check your balance.");
         } else {
-            console.log(`⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`);
+            console.log(`⏸️ [TripJack] B2C booking or Hold Booking Requested — Deferring immediate internal wallet deduction.`);
         }
 
         // PHASE 4: Provider Booking (Send ONLY Net Price)
@@ -145,7 +150,7 @@ class CommitService {
             if (!tjResponse.status) {
                 console.error(`❌ [TripJack] Booking failed: ${tjResponse.description}`);
                 // AUTO-REFUND only if money was actually deducted
-                if (!isHoldIntent) {
+                if (!isHoldIntent && clientType === "B2B") {
                     await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: TripJack booking failed");
                 }
                 throw new Error(tjResponse.description || "Provider rejected the booking request.");
@@ -193,50 +198,67 @@ class CommitService {
 
         } catch (bookingErr: any) {
             console.error(`❌ [TripJack] Critical Booking Error:`, bookingErr.message);
-            if (!isHoldIntent) {
+            if (!isHoldIntent && clientType === "B2B") {
                 await WalletUtil.refundBalance(token, finalPrice, demandBookingId, "Auto-refund: System error during booking");
             }
             throw bookingErr;
         }
     }
 
-    async #commitRateGain(payload: any, agentId?: string | null, agentName?: string | null, token?: string) {
+    async #commitRateGain(payload: any, agentId?: string | null, agentName?: string | null, token?: string, clientType: string = "B2C") {
         if (!token) throw new Error("Authentication token is required for booking.");
 
-        console.log(`[RateGain] Starting Secure OTA Flow for Agent: ${agentId}`);
+        console.log(`[RateGain] Starting Secure OTA Flow for Agent: ${agentId}, ClientType: ${clientType}`);
 
         // PHASE 1: Verify Price with Provider
         let netPrice = Number(payload.totalPrice || payload.amount || 0);
         if (isNaN(netPrice) || netPrice <= 0) throw new Error("Invalid price returned from RateGain.");
         console.log(`✅ [RateGain] Trusted Frontend Net Price: ₹${netPrice}`);
 
-        // PHASE 2: Markup & Total + Secret Coupon
-        const markupRules = await WalletUtil.getMarkupRules(token);
-        let { total: finalPrice, markup } = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
-        finalPrice = Math.round(finalPrice * 100) / 100; // Round to 2 decimal places
-
-        // PHASE 3: Wallet Deduction
+        // PHASE 2: Markup & Total
+        let finalPrice = netPrice;
+        let markup = 0;
         const demandId = `RG-BOOK-${Date.now()}`;
-        const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || 'RateGain Hotel'}`);
-        if (!paymentProcessed) throw new Error("Wallet deduction failed.");
+
+        if (clientType === "B2B") {
+            const markupRules = await WalletUtil.getMarkupRules(token);
+            let pricing = PricingUtil.calculatePriceWithMarkup(netPrice, markupRules, payload.additionalMarkup || payload.BookReservation?.additionalMarkup, payload.couponCode || payload.BookReservation?.couponCode);
+            finalPrice = Math.round(pricing.total * 100) / 100; // Round to 2 decimal places
+            markup = pricing.markup;
+
+            // PHASE 3: Wallet Deduction (B2B only)
+            const paymentProcessed = await WalletUtil.deductBalance(token, finalPrice, demandId, `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || 'RateGain Hotel'}`);
+            if (!paymentProcessed) throw new Error("Wallet deduction failed.");
+        } else {
+            // For B2C: sellingRate is the consumer price (MSP)
+            const requestedSellingRate = Number(payload.sellingRate || payload.BookReservation?.sellingRate || payload.BookReservation?.SellingRate || netPrice);
+            finalPrice = requestedSellingRate;
+            markup = finalPrice - netPrice;
+            console.log(`⏸️ [RateGain] B2C booking — Skipping wallet operations. SellingRate is ₹${finalPrice}`);
+        }
 
         // PHASE 4: Provider Booking
         try {
-            // Update payload with verified net price
-            // The unified payload has the RateGain payload inside bookingPayload
+            // Update payload with verified net price and selling price
             const rgPayload = { ...(payload.bookingPayload || payload) };
+            const b2cSellingRate = Number(payload.sellingRate || payload.BookReservation?.sellingRate || payload.BookReservation?.SellingRate || netPrice);
+
             if (rgPayload.BookReservation) {
-                rgPayload.BookReservation.sellingRate = netPrice;
                 rgPayload.BookReservation.BookingRate = netPrice;
+                rgPayload.BookReservation.sellingRate = clientType === "B2C" ? b2cSellingRate : netPrice;
+                rgPayload.BookReservation.SellingRate = clientType === "B2C" ? b2cSellingRate : netPrice;
             } else {
-                rgPayload.sellingRate = netPrice;
                 rgPayload.BookingRate = netPrice;
+                rgPayload.sellingRate = clientType === "B2C" ? b2cSellingRate : netPrice;
+                rgPayload.SellingRate = clientType === "B2C" ? b2cSellingRate : netPrice;
             }
 
             const rgResponse = await rateGainProvider.commit(rgPayload);
 
             if (!rgResponse.status || rgResponse.status === "false") {
-                await WalletUtil.refundBalance(token, finalPrice, demandId, "Auto-refund: RateGain booking failed");
+                if (clientType === "B2B") {
+                    await WalletUtil.refundBalance(token, finalPrice, demandId, "Auto-refund: RateGain booking failed");
+                }
                 throw new Error(rgResponse.message || "RateGain rejected the booking.");
             }
 
@@ -278,7 +300,9 @@ class CommitService {
 
             return rgResponse;
         } catch (err: any) {
-            await WalletUtil.refundBalance(token, finalPrice, demandId, "Auto-refund: RateGain system error");
+            if (clientType === "B2B") {
+                await WalletUtil.refundBalance(token, finalPrice, demandId, "Auto-refund: RateGain system error");
+            }
             throw err;
         }
     }

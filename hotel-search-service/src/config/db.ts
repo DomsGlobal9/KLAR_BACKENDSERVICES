@@ -9,6 +9,7 @@ export async function connectDB(): Promise<void> {
 
     console.log("⏳ Connecting to MongoDB...");
     try {
+        mongoose.set("autoIndex", false);
         await mongoose.connect(env.mongoUri);
         console.log("✅ MongoDB connected successfully");
     } catch (error: any) {

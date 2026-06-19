@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { hotelsService } from "../services/hotels.service";
+import { getClientType } from "../utils/auth";
 
 export const searchHotels = async (
     req: Request,
@@ -7,7 +8,8 @@ export const searchHotels = async (
     next: NextFunction
 ) => {
     try {
-        const data = await hotelsService.searchHotels(req.body);
+        const clientType = getClientType(req);
+        const data = await hotelsService.searchHotels(req.body, clientType);
         res.status(200).json(data);
     } catch (error: any) {
         res.status(error.response?.status || 500).json({
