@@ -42,22 +42,51 @@ function getRadiusFromBoundingBox(lat: number, lng: number, bbox: string[]): num
 
 export async function seedDefaultGeo() {
     try {
-        const count = await GeoCacheModel.countDocuments();
-        if (count === 0) {
-            console.log("[GEO] GeoCache is empty. Seeding default popular destinations...");
-            const defaults = [
+        const defaults = [
+                // International
                 { query: "paris", lat: 48.856614, lng: 2.3522219, radiusKm: 8, boundingBox: ["48.815573", "48.9021449", "2.224199", "2.4699208"] },
                 { query: "dubai", lat: 25.2048493, lng: 55.2707828, radiusKm: 80, boundingBox: ["24.78385", "25.35249", "54.91234", "55.61234"] },
-                { query: "goa", lat: 15.2993265, lng: 74.123996, radiusKm: 80, boundingBox: ["14.8993", "15.7993", "73.6239", "74.5239"] },
                 { query: "maldives", lat: 3.202778, lng: 73.22068, radiusKm: 150, boundingBox: ["-0.75", "7.15", "72.15", "74.15"] },
                 { query: "london", lat: 51.5072178, lng: -0.1275862, radiusKm: 15, boundingBox: ["51.2867602", "51.6918741", "-0.5103751", "0.3340155"] },
+                { query: "singapore", lat: 1.352083, lng: 103.819836, radiusKm: 25, boundingBox: ["1.130", "1.470", "103.600", "104.050"] },
+                { query: "bangkok", lat: 13.7563309, lng: 100.5017651, radiusKm: 30, boundingBox: ["13.49", "13.95", "100.33", "100.93"] },
+                { query: "bali", lat: -8.4095178, lng: 115.188919, radiusKm: 50, boundingBox: ["-8.85", "-8.10", "114.43", "115.71"] },
+                { query: "new york", lat: 40.7127753, lng: -74.0059731, radiusKm: 20, boundingBox: ["40.47", "40.92", "-74.26", "-73.70"] },
+                // India — pre-seeded so Nominatim is never called for these
+                { query: "goa", lat: 15.2993265, lng: 74.123996, radiusKm: 80, boundingBox: ["14.8993", "15.7993", "73.6239", "74.5239"] },
                 { query: "delhi", lat: 28.6139391, lng: 77.2090212, radiusKm: 30, boundingBox: ["28.40", "28.88", "76.83", "77.35"] },
+                { query: "new delhi", lat: 28.6139391, lng: 77.2090212, radiusKm: 30, boundingBox: ["28.40", "28.88", "76.83", "77.35"] },
                 { query: "mumbai", lat: 19.0759837, lng: 72.8776559, radiusKm: 30, boundingBox: ["18.89", "19.31", "72.77", "73.00"] },
-                { query: "singapore", lat: 1.352083, lng: 103.819836, radiusKm: 25, boundingBox: ["1.130", "1.470", "103.600", "104.050"] }
-            ];
-            await GeoCacheModel.insertMany(defaults);
-            console.log(`[GEO] Successfully seeded ${defaults.length} default destinations.`);
-        }
+                { query: "hyderabad", lat: 17.385044, lng: 78.486671, radiusKm: 25, boundingBox: ["17.20", "17.56", "78.27", "78.69"] },
+                { query: "bangalore", lat: 12.9715987, lng: 77.5945627, radiusKm: 25, boundingBox: ["12.83", "13.14", "77.38", "77.79"] },
+                { query: "bengaluru", lat: 12.9715987, lng: 77.5945627, radiusKm: 25, boundingBox: ["12.83", "13.14", "77.38", "77.79"] },
+                { query: "chennai", lat: 13.0826802, lng: 80.2707184, radiusKm: 25, boundingBox: ["12.90", "13.24", "80.08", "80.46"] },
+                { query: "kolkata", lat: 22.572646, lng: 88.363895, radiusKm: 20, boundingBox: ["22.45", "22.65", "88.26", "88.49"] },
+                { query: "pune", lat: 18.521428, lng: 73.8544541, radiusKm: 20, boundingBox: ["18.42", "18.63", "73.74", "73.98"] },
+                { query: "ahmedabad", lat: 23.0216238, lng: 72.5797068, radiusKm: 20, boundingBox: ["22.92", "23.10", "72.47", "72.69"] },
+                { query: "jaipur", lat: 26.9124336, lng: 75.7872709, radiusKm: 20, boundingBox: ["26.81", "27.04", "75.67", "75.91"] },
+                { query: "agra", lat: 27.1752554, lng: 78.0098161, radiusKm: 15, boundingBox: ["27.10", "27.25", "77.90", "78.14"] },
+                { query: "varanasi", lat: 25.3176452, lng: 82.9739144, radiusKm: 15, boundingBox: ["25.25", "25.40", "82.88", "83.09"] },
+                { query: "kochi", lat: 9.9312328, lng: 76.2673041, radiusKm: 20, boundingBox: ["9.85", "10.02", "76.17", "76.40"] },
+                { query: "cochin", lat: 9.9312328, lng: 76.2673041, radiusKm: 20, boundingBox: ["9.85", "10.02", "76.17", "76.40"] },
+                { query: "udaipur", lat: 24.5854364, lng: 73.7124900, radiusKm: 15, boundingBox: ["24.52", "24.64", "73.63", "73.82"] },
+                { query: "manali", lat: 32.2396000, lng: 77.1887000, radiusKm: 20, boundingBox: ["32.15", "32.35", "77.08", "77.33"] },
+                { query: "shimla", lat: 31.1048000, lng: 77.1734000, radiusKm: 15, boundingBox: ["31.03", "31.18", "77.07", "77.27"] },
+                { query: "ooty", lat: 11.4102000, lng: 76.6950000, radiusKm: 15, boundingBox: ["11.34", "11.47", "76.62", "76.80"] },
+                { query: "coorg", lat: 12.4213000, lng: 75.7382000, radiusKm: 25, boundingBox: ["12.27", "12.56", "75.56", "75.96"] },
+                { query: "rishikesh", lat: 30.0869000, lng: 78.2676000, radiusKm: 15, boundingBox: ["30.03", "30.15", "78.19", "78.38"] },
+        ];
+
+        // Upsert all defaults — runs every startup so new entries are always seeded
+        const ops = defaults.map(d => ({
+            updateOne: {
+                filter: { query: d.query },
+                update: { $setOnInsert: d }, // only insert if not exists; don't overwrite manual updates
+                upsert: true
+            }
+        }));
+        await GeoCacheModel.bulkWrite(ops, { ordered: false });
+        console.log(`[GEO] Seeded/verified ${defaults.length} default geo entries.`);
     } catch (err: any) {
         console.error("[GEO] Seeding error:", err.message);
     }
@@ -218,55 +247,49 @@ export async function resolveForRG(query: string): Promise<string | null> {
     }
 
     const words = normalizedQuery.split(/\s+/);
+    const escapedQuery = normalizedQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 
-    // 1. Try exact or regex match (handles "dubai" -> "dubai united arab emirates")
-    const exactMatches = await RGDestinationModel.find({
-        $or: [
-            { destName: { $regex: `^${normalizedQuery}$`, $options: "i" } },
-            { destName: { $regex: `^${normalizedQuery}`, $options: "i" } }
-        ]
-    }).lean();
+    // Run exact match and text search IN PARALLEL instead of sequentially
+    const [exactMatches, textResults] = await Promise.all([
+        RGDestinationModel.find({
+            $or: [
+                { destName: { $regex: `^${escapedQuery}$`, $options: "i" } },
+                { destName: { $regex: `^${escapedQuery}`, $options: "i" } }
+            ]
+        }).lean(),
+        RGDestinationModel.find(
+            { $text: { $search: normalizedQuery } },
+            { score: { $meta: "textScore" } }
+        ).limit(5).lean()
+    ]);
+
     let dest = selectBestRGDestination(exactMatches);
 
     // 2. Fuzzy Text Search Fallback
-    if (!dest) {
-        // IMPROVEMENT: Use phrase match or limit text search to prevent broad matches
-        const results = await RGDestinationModel.find(
-            { $text: { $search: normalizedQuery } },
-            { score: { $meta: "textScore" } }
-        ).limit(5).lean();
+    if (!dest && textResults.length > 0) {
+        const sortedResults = textResults.sort((a: any, b: any) => {
+            const scoreDiff = (b.score || 0) - (a.score || 0);
+            if (Math.abs(scoreDiff) > 0.1) return scoreDiff;
+            const prioA = rateGainCodePriority(a.destCode);
+            const prioB = rateGainCodePriority(b.destCode);
+            return prioB - prioA;
+        });
 
-        if (results.length > 0) {
-            // Sort by textScore first, then GIATA code priority
-            const sortedResults = results.sort((a: any, b: any) => {
-                const scoreDiff = (b.score || 0) - (a.score || 0);
-                if (Math.abs(scoreDiff) > 0.1) return scoreDiff; // Prefer significantly higher text score
-                
-                const prioA = rateGainCodePriority(a.destCode);
-                const prioB = rateGainCodePriority(b.destCode);
-                return prioB - prioA;
-            });
-
-            const firstResult = sortedResults[0]!;
-            const resNameLower = firstResult.destName.toLowerCase();
-            const queryWords = normalizedQuery.split(/\s+/);
-
-            // IMPROVEMENT: Filter out generic words to find "meaningful" words
-            const meaningfulWords = queryWords.filter(w => !GENERIC_WORDS.includes(w));
-            
-            if (meaningfulWords.length > 0) {
-                // If we have meaningful words (like "francisco" in "San Francisco"), they MUST be in the result
-                if (!resNameLower.includes(meaningfulWords[0]!)) {
-                    console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}" (missing meaningful word "${meaningfulWords[0]}")`);
-                } else {
-                    dest = firstResult;
-                }
-            } else if (queryWords.length > 1 && !resNameLower.includes(queryWords[0]!)) {
-                // Fallback for when all words are technically "generic" but we want a match
-                console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}" (missing first word "${queryWords[0]}")`);
-            } else {
+        const firstResult = sortedResults[0]!;
+        const resNameLower = firstResult.destName.toLowerCase();
+        const queryWords = normalizedQuery.split(/\s+/);
+        const meaningfulWords = queryWords.filter(w => !GENERIC_WORDS.includes(w));
+        
+        if (meaningfulWords.length > 0) {
+            if (resNameLower.includes(meaningfulWords[0]!)) {
                 dest = firstResult;
+            } else {
+                console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}"`);
             }
+        } else if (queryWords.length > 1 && !resNameLower.includes(queryWords[0]!)) {
+            console.log(`[DEBUG] resolveForRG: Rejected text match "${firstResult.destName}" for query "${query}"`);
+        } else {
+            dest = firstResult;
         }
     }
 
@@ -274,16 +297,13 @@ export async function resolveForRG(query: string): Promise<string | null> {
     if (!dest && normalizedQuery.includes(",")) {
         const parts = normalizedQuery.split(",");
         const cityPart = parts[parts.length - 1].trim();
-        if (cityPart.length > 2) {
-            console.log(`[DEBUG] resolveForRG: Query has comma, falling back to city part: "${cityPart}"`);
-            // Recursion safety: only recurse if we haven't already tried this part
-            if (cityPart !== normalizedQuery) {
-                return resolveForRG(cityPart);
-            }
+        if (cityPart.length > 2 && cityPart !== normalizedQuery) {
+            console.log(`[DEBUG] resolveForRG: Comma fallback to city part: "${cityPart}"`);
+            return resolveForRG(cityPart);
         }
     }
 
-    // 3. First Word Fallback - Only as a last resort and if it's not a generic word
+    // 3. First Word Fallback
     if (!dest && words.length > 0 && !GENERIC_WORDS.includes(words[0]!)) {
         const fallbackMatches = await RGDestinationModel.find({
             destName: { $regex: `^${words[0]}`, $options: "i" }
@@ -292,7 +312,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
     }
 
     const result = dest?.destCode || null;
-    console.log(`[DEBUG] resolveForRG: Resolved "${query}" (normalized: "${normalizedQuery}") to ${result} (Name: ${dest?.destName})`);
+    console.log(`[DEBUG] resolveForRG: Resolved "${query}" to ${result} (Name: ${dest?.destName})`);
     return result;
 }
 
@@ -315,7 +335,11 @@ export async function resolveForTJ(query: string, preResolvedGeo?: { lat: number
 
     const isIndianQuery = normalizedQuery.toLowerCase().includes("india") || normalizedQuery.toLowerCase().includes("goa");
 
-    const geo = preResolvedGeo !== undefined ? preResolvedGeo : await resolveCityToCoords(normalizedQuery);
+    // If preResolvedGeo is explicitly null (geo resolution failed), fall through to name search.
+    // Only use preResolvedGeo if it's a valid object with coordinates.
+    const geo = (preResolvedGeo && preResolvedGeo.lat && preResolvedGeo.lng)
+        ? preResolvedGeo
+        : (preResolvedGeo === undefined ? await resolveCityToCoords(normalizedQuery) : null);
 
     if (geo) {
         const { lat, lng } = geo;

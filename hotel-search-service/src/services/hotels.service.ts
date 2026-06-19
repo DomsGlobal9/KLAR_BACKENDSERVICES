@@ -238,10 +238,27 @@ Reported Total to UI:      ${totalToUI}
         }
 
         const existingCityNames = new Set(rgDests.map((d: any) => d.destName ? d.destName.toLowerCase().trim() : (d.label ? d.label.toLowerCase().trim() : "")));
+        
+        // Collect all new city names first, then do ONE batch lookup instead of N queries
+        const newCities: string[] = [];
         for (const cityName of hotelCities) {
             const normalizedCity = cityName.toLowerCase().trim();
             if (!existingCityNames.has(normalizedCity) && normalizedCity.includes(query.toLowerCase().trim())) {
-                const dbDest = await RGDestinationModel.findOne({ destName: new RegExp(`^${escapedQuery}$`, "i") }).lean();
+                newCities.push(cityName);
+            }
+        }
+        
+        if (newCities.length > 0) {
+            // Batch lookup: one query for all new cities instead of N sequential queries
+            const escapedCities = newCities.map(c => c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&"));
+            const batchDests = await RGDestinationModel.find({
+                destName: { $in: newCities.map(c => new RegExp(`^${c}$`, "i")) }
+            }).lean();
+            const batchDestMap = new Map(batchDests.map((d: any) => [d.destName.toLowerCase().trim(), d]));
+            
+            for (const cityName of newCities) {
+                const normalizedCity = cityName.toLowerCase().trim();
+                const dbDest = batchDestMap.get(normalizedCity);
                 rgDests.push({
                     destCode: dbDest?.destCode || cityName,
                     destName: cityName

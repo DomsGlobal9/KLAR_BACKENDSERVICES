@@ -39,17 +39,16 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
     const hids = await resolveForTJ(req.destination, req._geoCenter);
     if (!hids.length) return { hotels: [], total: 0 };
-
     const correlationId = uuidv4();
     const page = req.pageNo || 1;
 
     const targetCount = 30;
-    const CHUNK_SIZE = 20;
+    const CHUNK_SIZE = 25; // Increased from 20 — fewer API calls, same total hotels
     const chunks: string[][] = [];
     for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
         chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
-    const batchSize = 2; // Fetch 2 chunks (40 IDs) per page
+    const batchSize = 2;
     const currentIdx = (page - 1) * batchSize;
 
     try {
@@ -58,6 +57,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         const endId = Math.min(startId + (batchSize * CHUNK_SIZE), hids.length);
         console.log(`[TripJack] Pagination: Page ${page} processing HIDs index ${startId} to ${endId}`);
 
+        // Run nationality lookup in parallel with the chunk fetching setup
         const nationalityId = await toTjNationality(req.countryCode ?? "IN");
         const fetchStartTime = Date.now();
 
@@ -86,7 +86,10 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                 tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 15000 })
                     .then(res => res.data?.hotels || [])
                     .catch(err => {
-                        console.error(`[TripJack] Chunk Fetch Error:`, err.message);
+                        const status = err.response?.status;
+                        console.error(`[TripJack] Chunk Fetch Error (status ${status}):`, err.message);
+                        // Trip circuit breaker on repeated server errors (5xx)
+                        if (status >= 500) tripTJCircuit();
                         return [];
                     })
             );
@@ -189,6 +192,8 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         };
     } catch (error: any) {
         console.error("[TripJack Adapter] Search Error:", error.message);
+        // Trip circuit breaker if it's a 5xx from TJ
+        if (error.response?.status >= 500) tripTJCircuit();
         throw error;
     }
 }

@@ -96,8 +96,6 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
         } else {
             console.warn(`[RateGain] Non-Success:`, JSON.stringify({ status: res.status, code: res.statusCode, header: res.header, desc: res.description }, null, 2));
         }
-            
-        await new Promise(r => setTimeout(r, 100));
     } catch (err: any) {
         console.error(`[RateGain] API Error:`, err.message);
     }
