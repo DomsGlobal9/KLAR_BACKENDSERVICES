@@ -7,7 +7,8 @@ export interface UnifiedSearchRequest {
   currency?: string;            // default USD
   countryCode?: string;         // default US
   pageNo?: number;              // 1-indexed pagination
-  _geoCenter?: { lat: number; lng: number } | null; // internal: pre-resolved coords
+  _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
+  providers?: string[];
 }
 
 export interface UnifiedRoom {
@@ -27,7 +28,10 @@ export interface UnifiedHotel {
   latitude: number;
   longitude: number;
   images: string[];
-  price: number;                // lowest available rate
+  price: number;                // Total stay price (base + taxes). Always total.
+  basePrice?: number;           // Base net price excluding taxes (room only cost)
+  taxAmount?: number;           // Taxes & fees excluded from base (add-on)
+  taxesIncluded?: boolean;      // true = price already includes all taxes; false = taxes added on top
   currency: string;
   mealBasis?: string;           // "Room Only", "Breakfast", etc.
   hotelSegment?: string;
@@ -40,6 +44,10 @@ export interface UnifiedHotel {
   amenities: string[];
   propertyCode?: string;
   brandCode?: string;
+  isMandatory?: boolean;
+  commissionAmt?: number;
+  commissionPct?: number;
+  sellingRate?: number;
   rawPayload: unknown;          // keep original for detail/book calls
   altDeal?: {                   // cross-provider comparison
     source: "RG" | "TJ";

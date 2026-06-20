@@ -34,7 +34,18 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5009"],
+    origin: (origin, callback) => {
+      if (!origin || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:') || origin === 'http://localhost' || origin === 'http://127.0.0.1') {
+        callback(null, true);
+      } else {
+        const allowed = ["http://localhost:5173", "http://localhost:5009"];
+        if (allowed.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
     credentials: true,
   })
 );
