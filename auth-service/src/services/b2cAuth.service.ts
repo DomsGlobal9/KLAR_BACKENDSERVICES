@@ -877,15 +877,14 @@ export class B2CAuthService {
 
     async resetPassword(
         email: string,
-        otp: string,
         newPassword: string
     ): Promise<void> {
-        // Verify OTP
-        await OTPService.verifyOTP(
-            email.toLowerCase(),
-            otp,
-            OTPType.PASSWORD_RESET
-        );
+        // // Verify OTP
+        // await OTPService.verifyOTP(
+        //     email.toLowerCase(),
+        //     otp,
+        //     OTPType.PASSWORD_RESET
+        // );
 
         // Get user
         const user = await this.userRepository.findByEmail(email);

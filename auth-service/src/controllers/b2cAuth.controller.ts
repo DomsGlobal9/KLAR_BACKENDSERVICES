@@ -428,13 +428,13 @@ requestPasswordResetOTP = async (req: Request, res: Response, next: NextFunction
  */
 resetPassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { email, otp, newPassword } = req.body;
+        const { email, newPassword } = req.body;
 
         // Validation
-        if (!email || !otp || !newPassword) {
+        if (!email || !newPassword) {
             return res.status(400).json({
                 success: false,
-                message: "Email, OTP, and new password are required",
+                message: "Email, and new password are required",
             });
         }
 
@@ -455,7 +455,7 @@ resetPassword = async (req: Request, res: Response, next: NextFunction) => {
             });
         }
 
-        await this.authService.resetPassword(email, otp, newPassword);
+        await this.authService.resetPassword(email, newPassword);
 
         res.status(200).json({
             success: true,
