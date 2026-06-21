@@ -249,12 +249,12 @@ Reported Total to UI:      ${totalToUI}
         }
         
         if (newCities.length > 0) {
-            // Batch lookup: one query for all new cities instead of N sequential queries
+            
             const escapedCities = newCities.map(c => c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&"));
             const batchDests = await RGDestinationModel.find({
                 destName: { $in: newCities.map(c => new RegExp(`^${c}$`, "i")) }
             }).lean();
-            const batchDestMap = new Map(batchDests.map((d: any) => [d.destName.toLowerCase().trim(), d]));
+            const batchDestMap = new Map<string, any>(batchDests.map((d: any) => [d.destName.toLowerCase().trim(), d]));
             
             for (const cityName of newCities) {
                 const normalizedCity = cityName.toLowerCase().trim();
