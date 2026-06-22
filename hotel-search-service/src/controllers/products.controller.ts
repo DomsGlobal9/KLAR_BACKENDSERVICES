@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { productsService } from "../services/products.service";
-import { getClientType } from "../utils/auth";
+import { getClientType, extractToken } from "../utils/auth";
 
 export const getProducts = async (
     req: Request,
@@ -9,9 +9,11 @@ export const getProducts = async (
 ) => {
     try {
         const clientType = getClientType(req);
+        const token = extractToken(req);
         const payload = {
             propertyId: req.params.propertyId,
             clientType,
+            token,
             ...req.body
         };
 
