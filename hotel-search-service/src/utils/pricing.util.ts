@@ -99,7 +99,7 @@ export function calculateEnrichedPricing(
   const supplierTotalPrice = totalPrice;
   const finalTotalPrice = totalPrice + markupAmount;
   const safeNights = nights >= 1 ? nights : 1;
-  const perNightPrice = finalTotalPrice / safeNights;
+  const perNightPrice = basePrice / safeNights;
 
   // --- taxesIncluded ---
   const taxesIncluded =
