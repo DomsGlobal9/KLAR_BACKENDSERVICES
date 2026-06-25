@@ -20,26 +20,27 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
     echoToken: `echo-${Date.now()}`
   };
 
-  if (isDirectRG) {
-    payload.propertyId = req.destination.replace("RG:", "");
-  } else if (!destCode && req.destination) {
-    destCode = await resolveForRG(req.destination);
-    console.log(`[RateGain] Resolved destination "${req.destination}" to code: ${destCode}`);
-  }
-
   const geo = req._geoCenter;
 
-  if (payload.propertyId) {
-    // Search is for a direct property, no destCode or Geofilter needed
-  } else if (destCode) {
-    payload.destinationCode = destCode;
+  if (isDirectRG) {
+    payload.propertyId = req.destination.replace("RG:", "");
   } else if (geo) {
     payload.Geofilter = {
       latitude: geo.lat.toFixed(6),
       longitude: geo.lng.toFixed(6),
-      radius: 50
+      radius: geo.radiusKm ? Math.round(geo.radiusKm) : 25  // 25km default — tighter than 50km to avoid neighboring cities
     };
-  } else {
+  } else if (req.destination) {
+    if (!destCode) {
+      destCode = await resolveForRG(req.destination);
+      console.log(`[RateGain] Resolved destination "${req.destination}" to code: ${destCode}`);
+    }
+    if (destCode) {
+      payload.destinationCode = destCode;
+    }
+  }
+
+  if (!payload.propertyId && !payload.Geofilter && !payload.destinationCode) {
     return { hotels: [], total: 0 };
   }
 
@@ -48,7 +49,6 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
     const pageNo = req.pageNo || 1;
     const batchSize = 1; 
     const apiPageStart = ((pageNo - 1) * batchSize) + 1;
-    const apiPages = Array.from({ length: batchSize }, (_, i) => apiPageStart + i);
 
     console.log(`[RateGain] Requesting pages [${apiPageStart}] for search Page ${pageNo}`);
 
@@ -56,33 +56,31 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
     let maxTotal = 0;
 
     try {
-        // Step 1: Attempt search with payload as constructed
+        // Step 1: Attempt search with payload as constructed (Geofilter first if geo available)
         let searchPayload = { ...payload, pageNo: apiPageStart };
-        console.log(`[RateGain] Requesting Page ${apiPageStart} with ${destCode ? 'destCode: ' + destCode : 'Geofilter'}`);
+        console.log(`[RateGain] Requesting Page ${apiPageStart} with ${payload.Geofilter ? 'Geofilter' : ('destCode: ' + payload.destinationCode)}`);
         
         let res = await rateGainProvider.getBestProperties(searchPayload);
         let isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
         let total = parseInt(res.totalRecord || res.header?.totalRecord) || 0;
 
-        // Step 2: Fallback to Geofilter if no results and geo available
-        if (isSuccess && total === 0 && geo) {
-            console.log(`[RateGain] Zero results for destCode ${destCode}. Falling back to Geofilter.`);
-            
-            // SENIOR DEV: Explicitly remove destinationCode so the API prioritizes coordinates
-            const { destinationCode, ...cleanPayload } = payload;
-            
-            searchPayload = { 
-                ...cleanPayload, 
-                Geofilter: {
-                    latitude: geo.lat.toFixed(6),
-                    longitude: geo.lng.toFixed(6),
-                    radius: 50 // Integer as per 1.5.3 spec
-                },
-                pageNo: apiPageStart
-            };
-            res = await rateGainProvider.getBestProperties(searchPayload);
-            isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
-            total = parseInt(res.totalRecord || res.header?.totalRecord) || 0;
+        // Step 2: Fallback to destinationCode if Geofilter was used and returned 0
+        if (isSuccess && total === 0 && payload.Geofilter && req.destination) {
+            console.log(`[RateGain] Zero results for Geofilter. Retrying with resolved destination code fallback...`);
+            if (!destCode) {
+                destCode = await resolveForRG(req.destination);
+            }
+            if (destCode) {
+                const { Geofilter, ...cleanPayload } = payload;
+                searchPayload = { 
+                    ...cleanPayload, 
+                    destinationCode: destCode,
+                    pageNo: apiPageStart
+                };
+                res = await rateGainProvider.getBestProperties(searchPayload);
+                isSuccess = res.status === true || res.status === "Success" || res.header?.status === "Success" || res.statusCode === 200;
+                total = parseInt(res.totalRecord || res.header?.totalRecord) || 0;
+            }
         }
 
         if (isSuccess) {
@@ -98,14 +96,12 @@ export async function searchRG(req: UnifiedSearchRequest, clientType: "B2B" | "B
         } else {
             console.warn(`[RateGain] Non-Success:`, JSON.stringify({ status: res.status, code: res.statusCode, header: res.header, desc: res.description }, null, 2));
         }
-            
-        await new Promise(r => setTimeout(r, 100));
     } catch (err: any) {
         console.error(`[RateGain] API Error:`, err.message);
     }
 
     return {
-      hotels: allHotels.sort((a, b) => a.hotelId.localeCompare(b.hotelId)),
+      hotels: allHotels, // preserve RateGain's relevance/distance order
       total: Math.max(allHotels.length, maxTotal)
     };
   } catch (error: any) {

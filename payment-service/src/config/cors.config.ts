@@ -7,6 +7,11 @@ export const corsOptions: CorsOptions = {
             return callback(null, true);
         }
 
+        // Allow localhost and 127.0.0.1 on any port for local development/testing
+        if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:') || origin === 'http://localhost' || origin === 'http://127.0.0.1') {
+            return callback(null, true);
+        }
+
         if (config.CORS_ORIGIN.includes('*')) {
             return callback(null, true);
         }

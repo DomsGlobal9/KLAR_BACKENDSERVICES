@@ -11,6 +11,11 @@ export const corsOptions: CorsOptions = {
             return callback(null, true);
         }
 
+        // Allow localhost and 127.0.0.1 on any port for local development/testing
+        if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:') || origin === 'http://localhost' || origin === 'http://127.0.0.1') {
+            return callback(null, true);
+        }
+
         /**
          * Allow wild card entry
          */
@@ -40,7 +45,7 @@ export const corsOptions: CorsOptions = {
 
     methods: envConfig.CORS.CORS_METHODS.split(',').map(m => m.trim()),
     allowedHeaders: envConfig.CORS.CORS_ALLOWED_HEADERS.split(',').map(h => h.trim()),
-    credentials: String(envConfig.CORS.CORS_CREDENTIALS).trim() === 'true',
+    credentials: true,
     maxAge: Number(envConfig.CORS.CORS_MAX_AGE),
     exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Per-Page'],
 };

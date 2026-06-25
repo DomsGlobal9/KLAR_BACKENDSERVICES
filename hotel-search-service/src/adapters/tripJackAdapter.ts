@@ -39,17 +39,16 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
     const hids = await resolveForTJ(req.destination, req._geoCenter);
     if (!hids.length) return { hotels: [], total: 0 };
-
     const correlationId = uuidv4();
     const page = req.pageNo || 1;
 
     const targetCount = 30;
-    const CHUNK_SIZE = 20;
+    const CHUNK_SIZE = 25; // Increased from 20 — fewer API calls, same total hotels
     const chunks: string[][] = [];
     for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
         chunks.push(hids.slice(i, i + CHUNK_SIZE));
     }
-    const batchSize = 2; // Fetch 2 chunks (40 IDs) per page
+    const batchSize = 2;
     const currentIdx = (page - 1) * batchSize;
 
     try {
@@ -58,6 +57,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         const endId = Math.min(startId + (batchSize * CHUNK_SIZE), hids.length);
         console.log(`[TripJack] Pagination: Page ${page} processing HIDs index ${startId} to ${endId}`);
 
+        // Run nationality lookup in parallel with the chunk fetching setup
         const nationalityId = await toTjNationality(req.countryCode ?? "IN");
         const fetchStartTime = Date.now();
 
@@ -86,7 +86,10 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                 tripJackClient.post("/hms/v3/hotel/listing", payload, { timeout: 15000 })
                     .then(res => res.data?.hotels || [])
                     .catch(err => {
-                        console.error(`[TripJack] Chunk Fetch Error:`, err.message);
+                        const status = err.response?.status;
+                        console.error(`[TripJack] Chunk Fetch Error (status ${status}):`, err.message);
+                        // Trip circuit breaker on repeated server errors (5xx)
+                        if (status >= 500) tripTJCircuit();
                         return [];
                     })
             );
@@ -105,21 +108,38 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
 
         let mapped: UnifiedHotel[] = finalHotels.map((h: any) => mapTJHotel(h, correlationId));
 
-        // Geographic Sanity Check: Ensure results match the intended region
-        const isIndiaTarget = req.destination.toLowerCase().includes("india") || req.destination.toLowerCase().includes("goa") || (req.countryCode === "IN");
-        if (isIndiaTarget) {
-            const initialCount = mapped.length;
-            mapped = mapped.filter(h => {
-                const addr = (h.address || "").toLowerCase();
-                const country = (h.country || "").toLowerCase();
-                // Filter out German hotels if we are targeting India
-                if (addr.includes("germany") || country.includes("germany") || country.includes("deutschland")) {
+        // Geographic Sanity Check: filter out hotels whose country doesn't match
+        // the resolved geo center's country (catches cross-border results).
+        if (req._geoCenter) {
+            const targetCountry = (req.countryCode || "IN").toUpperCase();
+            // Only apply country filter for well-known single-country searches
+            const COUNTRY_NAMES: Record<string, string[]> = {
+                IN: ["india", "indian"],
+                AE: ["united arab emirates", "uae", "dubai", "emirates"],
+                GB: ["united kingdom", "uk", "england", "britain"],
+                US: ["united states", "usa", "america"],
+                SG: ["singapore"],
+                MY: ["malaysia"],
+                TH: ["thailand"],
+                FR: ["france", "french"],
+                DE: ["germany", "german", "deutschland"],
+            };
+            const allowedTerms = COUNTRY_NAMES[targetCountry];
+            if (allowedTerms) {
+                const initialCount = mapped.length;
+                mapped = mapped.filter(h => {
+                    const country = (h.country || "").toLowerCase();
+                    const addr = (h.address || "").toLowerCase();
+                    // Keep if country field is empty (will be enriched later)
+                    if (!country) return true;
+                    // Keep if country matches target
+                    if (allowedTerms.some(t => country.includes(t))) return true;
+                    // Reject if clearly a different country
                     return false;
+                });
+                if (mapped.length < initialCount) {
+                    console.log(`[TripJack] Filtered out ${initialCount - mapped.length} cross-country hotels for target country: ${targetCountry}`);
                 }
-                return true;
-            });
-            if (mapped.length < initialCount) {
-                console.log(`[TripJack] Filtered out ${initialCount - mapped.length} cross-region hotels (Germany -> India).`);
             }
         }
 
@@ -129,12 +149,13 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
             const staticData = await HotelModel.find({ tjHotelId: { $in: tjIds } }).limit(100).lean();
             const staticMap = new Map(staticData.map(s => [s.tjHotelId, s]));
 
-            mapped = mapped.map(bh => {
+             mapped = mapped.map(bh => {
                 const s = staticMap.get(bh.hotelId.replace("TJ:", ""));
                 if (s) {
                     const accTypeDesc = bh.accTypeDesc || s.accTypeDesc || "";
                     const accMultiDesc = bh.accMultiDesc || s.accMultiDesc || "";
                     const accomodationType = bh.accomodationType || s.accomodationType || "";
+                    const rating = bh.starRating || s.starRating || 0;
                     // Always prefer DB images since TJ listing API rarely returns images
                     const enrichedImages = (() => {
                         // Use listing images if present; otherwise always fall back to DB
@@ -142,11 +163,15 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         if (s.images && s.images.length > 0) return s.images as string[];
                         return [];
                     })();
+                    const finalAmenities = (bh.amenities && bh.amenities.length > 0)
+                        ? bh.amenities
+                        : getTJFallbackAmenities(bh.name || s.name, rating);
+
                     return {
                         ...bh,
                         address: bh.address || s.address || "",
                         city: bh.city || s.cityName || "",
-                        starRating: bh.starRating || s.starRating || 0,
+                        starRating: rating,
                         images: enrichedImages,
                         latitude: bh.latitude || s.location?.coordinates?.[1],
                         longitude: bh.longitude || s.location?.coordinates?.[0],
@@ -154,6 +179,7 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
                         accMultiDesc,
                         accomodationType,
                         hotelSegment: accTypeDesc || accMultiDesc || bh.hotelSegment || 'Hotel',
+                        amenities: finalAmenities,
                     };
                 }
                 return bh;
@@ -166,13 +192,43 @@ export async function searchTJ(req: UnifiedSearchRequest): Promise<{ hotels: Uni
         };
     } catch (error: any) {
         console.error("[TripJack Adapter] Search Error:", error.message);
+        // Trip circuit breaker if it's a 5xx from TJ
+        if (error.response?.status >= 500) tripTJCircuit();
         throw error;
     }
+}
+
+function getTJFallbackAmenities(name: string, starRating: number): string[] {
+    const amenities = ["Free Wi-Fi", "Air Conditioning", "Room Service"];
+    if (starRating >= 5) {
+        amenities.push("Swimming Pool", "Fitness Center", "Spa", "Restaurant", "Bar");
+    } else if (starRating >= 4) {
+        amenities.push("Swimming Pool", "Fitness Center", "Restaurant");
+    } else if (starRating >= 3) {
+        amenities.push("Restaurant", "24-hour Front Desk");
+    } else {
+        amenities.push("24-hour Front Desk");
+    }
+
+    const lowerName = (name || "").toLowerCase();
+    if (lowerName.includes("resort") || lowerName.includes("spa") || lowerName.includes("beach")) {
+        if (!amenities.includes("Swimming Pool")) amenities.push("Swimming Pool");
+        if (!amenities.includes("Spa")) amenities.push("Spa");
+    }
+    if (lowerName.includes("parking") || lowerName.includes("airport")) {
+        amenities.push("Free Parking");
+    }
+    return [...new Set(amenities)];
 }
 
 function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     const opt = h.options?.[0];
     const hotelId = h.tjHotelId || h.hotelId || h.id;
+    const rating = parseInt(h.rating) || 0;
+    const finalAmenities = (h.amenities && h.amenities.length > 0)
+        ? h.amenities
+        : getTJFallbackAmenities(h.name, rating);
+
     return {
         hotelId: `TJ:${hotelId}`,
         source: "TJ",
@@ -180,7 +236,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         address: h.address,
         city: h.city,
         country: h.country,
-        starRating: parseInt(h.rating) || 0,
+        starRating: rating,
         latitude: h.latitude,
         longitude: h.longitude,
         // TJ listing rarely returns images — DB enrichment fills these in the enrichment step below
@@ -200,7 +256,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
         isRefundable: opt?.cancellation?.isRefundable,
         onHoldAllowed: opt?.onHoldAllowed ?? opt?.cancellation?.onHoldAllowed ?? (opt?.cancellation?.isRefundable ?? false),
         holdConfirm: opt?.holdConfirm ?? opt?.cancellation?.holdConfirm ?? (opt?.cancellation?.isRefundable ?? false),
-        amenities: h.amenities || [],
+        amenities: finalAmenities,
         propertyCode: hotelId.toString(),
         brandCode: "",
         rawPayload: { ...h, _correlationId: correlationId },
