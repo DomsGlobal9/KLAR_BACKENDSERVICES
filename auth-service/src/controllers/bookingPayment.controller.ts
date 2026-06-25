@@ -8,6 +8,7 @@ export class BookingPaymentController {
 
     static async checkBalance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
+            console.log("***************** BALANCE check API call");
             if (!req.user) {
                 return res.status(401).json({
                     success: false,
@@ -16,35 +17,26 @@ export class BookingPaymentController {
             }
 
             const { bookingId } = req.params;
-            const { totalPrice } = req.query;
+            const { totalPrice, userId } = req.query;
 
             if (!bookingId) {
                 throw new BadRequestError("Booking ID is required");
             }
 
-            if (!totalPrice || Number(totalPrice) <= 0) {
+            if (Number(totalPrice) <= 0) {
                 throw new BadRequestError("Invalid amount");
             }
 
-            console.log("=== CONTROLLER: Before calling service ===");
-            console.log("UserId:", req.user.userId);
-            console.log("BookingId:", bookingId);
-            console.log("TotalPrice:", totalPrice);
+            const targetUserId = userId
+                ? new Types.ObjectId(userId as string)
+                : new Types.ObjectId(req.user.userId);
 
             const result = await BookingPaymentService.checkWalletBalance(
-                new Types.ObjectId(req.user.userId),
+                targetUserId,
                 bookingId as string,
                 Number(totalPrice)
             );
 
-            console.log("=== CONTROLLER: After service call ===");
-            console.log("Full result object:", JSON.stringify(result, null, 2));
-            console.log("result.hasSufficientBalance:", result.hasSufficientBalance);
-            console.log("result.currentBalance:", result.currentBalance);
-            console.log("Type of result:", typeof result);
-            console.log("Is result an object?", result && typeof result === 'object');
-
-            // Check if result is empty
             if (result && Object.keys(result).length === 0) {
                 console.error("ERROR: Result is an empty object!");
                 throw new Error("Service returned empty result");
@@ -56,7 +48,8 @@ export class BookingPaymentController {
                     success: false,
                     message: result.isAlreadyPaid
                         ? "Booking already paid"
-                        : "Insufficient wallet balance",
+                        // : "Insufficient wallet balance",
+                        : "Server error. Try again after sometime",
                     data: {
                         hasSufficientBalance: result.hasSufficientBalance,
                         currentBalance: result.currentBalance,
@@ -68,7 +61,6 @@ export class BookingPaymentController {
                 });
             }
 
-            console.log("Sufficient balance - sending success response");
             return res.status(200).json({
                 success: true,
                 message: "Sufficient balance available for booking payment",
@@ -88,7 +80,6 @@ export class BookingPaymentController {
             console.error("Error message:", err.message);
             console.error("Stack trace:", err.stack);
 
-            // Make sure we're not sending the wrong response
             if (err.statusCode === 400 || err instanceof BadRequestError) {
                 return res.status(400).json({
                     success: false,
@@ -113,7 +104,7 @@ export class BookingPaymentController {
 
             const userRole = req.user.roles;
 
-            const { bookingId, totalPrice } = req.body;
+            const { bookingId, totalPrice, userId } = req.body;
 
             if (!bookingId) {
                 throw new BadRequestError("Booking ID is required");
@@ -123,8 +114,12 @@ export class BookingPaymentController {
                 throw new BadRequestError("Invalid amount");
             }
 
+             const targetUserId = userId
+                ? new Types.ObjectId(userId as string)
+                : new Types.ObjectId(req.user.userId);
+
             const result = await BookingPaymentService.payForBooking(
-                new Types.ObjectId(req.user.userId),
+                targetUserId,
                 userRole,
                 bookingId,
                 totalPrice

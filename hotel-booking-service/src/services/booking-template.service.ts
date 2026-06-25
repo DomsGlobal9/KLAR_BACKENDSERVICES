@@ -18,7 +18,7 @@ export class BookingTemplateService {
         if (currentStatus === 'canceled') {
             currentStatus = 'cancelled';
         } else if (currentStatus === 'held') {
-            currentStatus = 'onhold'; 
+            currentStatus = 'onhold';
         }
 
         const fileName = `hotel-${currentStatus}-${target}.template.html`;
@@ -51,9 +51,9 @@ export class BookingTemplateService {
                         const fullName = `${pax.ti || ''} ${pax.fN || ''} ${pax.lN || ''}`.trim().toUpperCase();
                         const paxType = String(pax.pt || 'ADULT').toUpperCase();
                         const docInfo = pax.pNum ? `Passport: ${pax.pNum}` : 'N/A';
-                        
+
                         passengerRows += `
-                            <tr>
+                            <td>
                                 <td>Room ${rIndex + 1} - Guest ${pIndex + 1}</td>
                                 <td><strong>${fullName}</strong></td>
                                 <td style="text-align: center;">${paxType}</td>
@@ -63,7 +63,7 @@ export class BookingTemplateService {
                     });
                 }
             });
-        } 
+        }
         // Route 2: Fallback iteration path for customized cancellation flat database entries
         else if (booking.rooms?.[0]?.guests || booking.rooms?.[0]?.price) {
             const totalGuestsCount = booking.rooms[0].guests || 1;
@@ -105,7 +105,7 @@ export class BookingTemplateService {
 
         // --- FIXED: ADAPTIVE EXTRACTION LOOKUPS FOR BILLING CONTACT INFO ---
         const clientEmail = booking.guestEmail || booking.tripJackRequest?.deliveryInfo?.emails?.[0] || 'N/A';
-        
+
         let clientPhone = 'N/A';
         if (booking.guestMobile) {
             clientPhone = booking.guestMobile.trim().startsWith('+91') ? booking.guestMobile : `+91 ${booking.guestMobile}`;
@@ -116,7 +116,7 @@ export class BookingTemplateService {
 
         const roomName = booking.roomType || booking.rooms?.[0]?.roomType || booking.roomName || 'Deluxe Room';
         const roomsCount = booking.rooms?.length || booking.tripJackRequest?.roomInfo?.length || 1;
-        
+
         // Dynamically extract meal plan strings from all response fields
         let mealPlan = 'Room Only';
         if (booking.rooms?.[0]?.boardType && booking.rooms[0].boardType.trim() !== "") {
@@ -178,14 +178,14 @@ export class BookingTemplateService {
             .replace(/{{checkOut}}/g, formatDate(booking.checkOut))
             .replace(/{{roomName}}/g, roomName)
             .replace(/{{roomsCount}}/g, roomsCount.toString())
-            .replace(/{{mealPlan}}/g, mealPlan) 
+            .replace(/{{mealPlan}}/g, mealPlan)
             .replace(/{{currencyCode}}/g, booking.currencyCode || 'INR')
-            
+
             // Format numbers to 3 decimal places matching specifications
             .replace(/{{totalAmount}}/g, Number(booking.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
             .replace(/{{cancellationPenalty}}/g, Number(cancellationPenaltyVal).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
             .replace(/{{refundAmount}}/g, Number(refundAmountVal).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
-            
+
             // Agent internal operational profiles rules mapping keys
             .replace(/{{agentId}}/g, booking.agentId || 'N/A')
             .replace(/{{provider}}/g, String(booking.provider || 'tripjack').toUpperCase())
@@ -209,13 +209,19 @@ export class BookingTemplateService {
 
         try {
             const page = await browser.newPage();
-            await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-            const pdfBuffer = await page.pdf({
+            // FIX 1: Use 'networkidle2' instead of 'networkidle0' (or use type assertion)
+            await page.setContent(htmlContent, { waitUntil: 'networkidle2' as any });
+            // Alternative: await page.setContent(htmlContent, { waitUntil: 'networkidle2' });
+
+            const pdfUint8Array = await page.pdf({
                 format: 'A4',
-                printBackground: true, 
+                printBackground: true,
                 margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' }
             });
+
+            // FIX 2: Convert Uint8Array to Buffer
+            const pdfBuffer = Buffer.from(pdfUint8Array);
 
             return pdfBuffer;
         } finally {

@@ -9,7 +9,7 @@ export class BookingTemplateController {
     public renderClientConfirmation = async (req: Request, res: Response): Promise<void> => {
         try {
             const { id } = req.params;
-            const booking = await bookingsService.getBookingById(id);
+            const booking = await bookingsService.getBookingById(id as string);
             console.log("13 booking-template.controller.ts - renderClientConfirmation - booking:", JSON.stringify(booking));
 
             if (!booking) {
@@ -49,7 +49,7 @@ export class BookingTemplateController {
     public renderAgentConfirmation = async (req: Request, res: Response): Promise<void> => {
         try {
             const { id } = req.params;
-            const booking = await bookingsService.getBookingById(id);
+            const booking = await bookingsService.getBookingById(id as string);
 
             if (!booking) {
                 res.status(404).json({

@@ -7,6 +7,7 @@ import RedisCacheService from "../cache/redisCache.service";
 import { Filter, FilterStats } from "../types/filter.types";
 import { FlightFilter } from "../utils/sorter/filter.utils";
 import { FlightSegment } from "../types/returnFilter.types";
+import MarkupInterceptor from "../services/markup.interceptor";
 import { OneWayNormalizer } from "../normalizers/oneway.normalizer";
 import { ReturnNormalizer } from "../normalizers/return.normalizer";
 import { OnewayFlightSorter } from "../utils/sorter/onewaySort.utils";
@@ -14,7 +15,9 @@ import { ReturnFlightSorter } from "../utils/sorter/returnSort.utils";
 import { MulticityFlightSorter } from "../utils/sorter/multiSort.utils";
 import { MultiCityFlightFilter } from "../utils/sorter/multiFilter.utils";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
-import MarkupInterceptor from "../services/markup.interceptor";
+import { OnewayFlightListPdfService } from "./onewayFlightListPdf.service";
+import { ReturnFlightListPdfService } from "./returnFlightListPdf.service";
+import { MultiCityFlightListPdfService } from "./multicityFlightListPdf.service";
 
 class SearchService {
 
@@ -22,7 +25,8 @@ class SearchService {
         payload: any,
         sortOption?: SortOption,
         filters?: Filter[],
-        includeStats: boolean = false
+        includeStats: boolean = false,
+        printData: boolean | string = false
     ) {
         const sessionId = uuidv4();
 
@@ -31,7 +35,6 @@ class SearchService {
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
         try {
-            // Step 1: Call Tripjack API
             const rawResponse = await axios.post(
                 url,
                 { searchQuery: payload },
@@ -43,15 +46,69 @@ class SearchService {
                 }
             );
 
-            // Step 2: Apply markup to the response
             const markedUpResponse = MarkupInterceptor.applyMarkupToFlightSearch(rawResponse.data);
 
-            // Step 3: Pass the marked-up response to normalizer
-            let normalized = OneWayNormalizer.transform({ data: markedUpResponse });
+            if (printData == "true" || printData == true) {
+
+                let normalized = OneWayNormalizer.transformWithAllFares({
+                    data: markedUpResponse
+                });
+
+                const originalCount = normalized.length;
+
+
+                if (filters && filters.length > 0) {
+                    const validation = FlightFilter.validateFilters(filters);
+                    if (validation.isValid) {
+                        normalized = FlightFilter.applyFilters(normalized, filters);
+                    } else {
+                        console.warn("Invalid filters:", validation.errors);
+                    }
+                }
+
+
+                if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
+                    normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
+                }
+
+
+                let stats: FilterStats | undefined;
+                if (includeStats) {
+                    stats = FlightFilter.getFilterStats(normalized);
+                    stats.totalFlights = originalCount;
+                    stats.filteredFlights = normalized.length;
+                }
+
+
+                const flightData = {
+                    flights: normalized,
+                    searchParams: payload,
+                    filtersApplied: filters,
+                    sortApplied: sortOption,
+                    totalFlights: normalized.length,
+                    generatedAt: new Date().toISOString()
+                };
+
+                // if (stats) {
+                //     flightData.stats = stats;
+                // }
+
+
+                const pdfBuffer = await OnewayFlightListPdfService.generateFlightDetailsPDF(flightData);
+
+                return {
+                    pdfBuffer,
+                    isPdf: true
+                };
+            }
+
+            const normalizedResult = OneWayNormalizer.transform({ data: markedUpResponse });
+
+            let normalized = normalizedResult.flights;
+            const airlineStats = normalizedResult.airlineStats;
 
             const originalCount = normalized.length;
 
-            // Step 4: Apply filters (if any)
             if (filters && filters.length > 0) {
                 const validation = FlightFilter.validateFilters(filters);
                 if (validation.isValid) {
@@ -61,12 +118,10 @@ class SearchService {
                 }
             }
 
-            // Step 5: Apply sorting (if any)
             if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
                 normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
             }
 
-            // Step 6: Calculate stats (if needed)
             let stats: FilterStats | undefined;
             if (includeStats) {
                 stats = FlightFilter.getFilterStats(normalized);
@@ -74,15 +129,14 @@ class SearchService {
                 stats.filteredFlights = normalized.length;
             }
 
-            // Step 7: Save to cache
             await RedisCacheService.set(sessionId, {
                 raw: markedUpResponse?.searchResult?.tripInfos,
             }, 1800);
 
-            // Step 8: Return response
             const response: any = {
                 sessionId,
-                flights: normalized
+                flights: normalized,
+                airlineStats
             };
 
             if (stats) {
@@ -108,7 +162,8 @@ class SearchService {
         sortTarget: 'onward' | 'return' | 'both' = 'both',
         filters?: Filter[],
         filterTarget: 'onward' | 'return' | 'both' = 'both',
-        includeStats: boolean = false
+        includeStats: boolean = false,
+        printData: boolean | string = false,
     ) {
         const sessionId = uuidv4();
 
@@ -128,7 +183,204 @@ class SearchService {
                 }
             );
 
-            let normalized = ReturnNormalizer.transform(rawResponse);
+            if (printData == "true" || printData == true) {
+
+                const normalizedWithAllFares = ReturnNormalizer.transformWithAllFares(rawResponse);
+
+                let result: any;
+
+
+                if (normalizedWithAllFares.type === 'domestic') {
+                    let onward = normalizedWithAllFares.onward || [];
+                    let returnFlights = normalizedWithAllFares.return || [];
+
+                    const originalOnwardCount = onward.length;
+                    const originalReturnCount = returnFlights.length;
+
+
+                    if (filters && filters.length > 0) {
+                        const validation = FlightFilter.validateFilters(filters);
+                        if (validation.isValid) {
+                            if (filterTarget === 'onward' || filterTarget === 'both') {
+                                onward = FlightFilter.applyFilters(onward, filters);
+                            }
+                            if (filterTarget === 'return' || filterTarget === 'both') {
+                                returnFlights = FlightFilter.applyFilters(returnFlights, filters);
+                            }
+                        } else {
+                            console.warn('Invalid filters:', validation.errors);
+                        }
+                    }
+
+
+                    if (sortOption && ReturnFlightSorter.isValidSortField(sortOption.field)) {
+                        if (sortTarget === 'onward' || sortTarget === 'both') {
+                            onward = ReturnFlightSorter.sortFlights(onward, sortOption);
+                        }
+                        if (sortTarget === 'return' || sortTarget === 'both') {
+                            returnFlights = ReturnFlightSorter.sortFlights(returnFlights, sortOption);
+                        }
+                    }
+
+                    result = {
+                        onward,
+                        return: returnFlights,
+                        type: 'domestic'
+                    };
+
+
+                    if (includeStats) {
+                        result.stats = {
+                            onward: FlightFilter.getFilterStats(onward),
+                            return: FlightFilter.getFilterStats(returnFlights)
+                        };
+                        result.stats.onward.totalFlights = originalOnwardCount;
+                        result.stats.return.totalFlights = originalReturnCount;
+                    }
+                }
+
+
+                else if (normalizedWithAllFares.type === 'international') {
+                    let roundTrips = normalizedWithAllFares.roundTrips || [];
+                    const originalCount = roundTrips.length;
+
+
+                    if (filters && filters.length > 0) {
+                        const validation = FlightFilter.validateFilters(filters);
+                        if (validation.isValid) {
+                            roundTrips = roundTrips.filter((rt: any) => {
+                                let onwardMatch = true;
+                                let returnMatch = true;
+
+                                if (filterTarget === 'onward' || filterTarget === 'both') {
+                                    onwardMatch = FlightFilter.applyFilters([rt.onward], filters).length > 0;
+                                }
+                                if (filterTarget === 'return' || filterTarget === 'both') {
+                                    returnMatch = FlightFilter.applyFilters([rt.return], filters).length > 0;
+                                }
+
+                                return onwardMatch && returnMatch;
+                            });
+                        } else {
+                            console.warn('Invalid filters:', validation.errors);
+                        }
+                    }
+
+
+                    if (sortOption && ReturnFlightSorter.isValidSortField(sortOption.field)) {
+                        if (sortTarget === 'onward' || sortTarget === 'both') {
+                            roundTrips.sort((a: any, b: any) => {
+                                let comparison = 0;
+                                const field = sortOption.field;
+                                const order = sortOption.order;
+
+                                if (field === 'price') {
+                                    comparison = a.totalPrice - b.totalPrice;
+                                } else if (field === 'departureTime') {
+                                    const timeA = a.onward.from.time;
+                                    const timeB = b.onward.from.time;
+                                    comparison = timeA.localeCompare(timeB);
+                                } else if (field === 'arrivalTime') {
+                                    const timeA = a.onward.to.time;
+                                    const timeB = b.onward.to.time;
+                                    comparison = timeA.localeCompare(timeB);
+                                } else if (field === 'duration') {
+                                    const durA = parseInt(a.onward.duration);
+                                    const durB = parseInt(b.onward.duration);
+                                    comparison = durA - durB;
+                                } else if (field === 'stops') {
+                                    comparison = a.onward.stops - b.onward.stops;
+                                }
+
+                                return order === 'asc' ? comparison : -comparison;
+                            });
+                        }
+
+                        if (sortTarget === 'return' || sortTarget === 'both') {
+                            roundTrips.sort((a: any, b: any) => {
+                                let comparison = 0;
+                                const field = sortOption.field;
+                                const order = sortOption.order;
+
+                                if (field === 'price') {
+                                    comparison = a.totalPrice - b.totalPrice;
+                                } else if (field === 'departureTime') {
+                                    const timeA = a.return.from.time;
+                                    const timeB = b.return.from.time;
+                                    comparison = timeA.localeCompare(timeB);
+                                } else if (field === 'arrivalTime') {
+                                    const timeA = a.return.to.time;
+                                    const timeB = b.return.to.time;
+                                    comparison = timeA.localeCompare(timeB);
+                                } else if (field === 'duration') {
+                                    const durA = parseInt(a.return.duration);
+                                    const durB = parseInt(b.return.duration);
+                                    comparison = durA - durB;
+                                } else if (field === 'stops') {
+                                    comparison = a.return.stops - b.return.stops;
+                                }
+
+                                return order === 'asc' ? comparison : -comparison;
+                            });
+                        }
+                    }
+
+                    result = {
+                        roundTrips,
+                        type: 'international'
+                    };
+
+
+                    if (includeStats) {
+                        const onwardFlights = roundTrips.map((rt: any) => rt.onward);
+                        const returnFlights = roundTrips.map((rt: any) => rt.return);
+                        result.stats = {
+                            onward: FlightFilter.getFilterStats(onwardFlights),
+                            return: FlightFilter.getFilterStats(returnFlights)
+                        };
+                        result.stats.onward.totalFlights = originalCount;
+                        result.stats.return.totalFlights = originalCount;
+                    }
+                }
+
+                const pdfData = {
+                    ...result,
+                    searchParams: {
+                        origin: payload.origin,
+                        destination: payload.destination,
+                        departureDate: payload.departureDate,
+                        returnDate: payload.returnDate,
+                        passengerCount: payload.passengerCount
+                    },
+                    filtersApplied: filters,
+                    sortApplied: sortOption,
+                    generatedAt: new Date().toISOString()
+                };
+
+                const pdfBuffer = await ReturnFlightListPdfService.generateReturnFlightDetailsPDF(pdfData);
+
+                return {
+                    pdfBuffer,
+                    isPdf: true
+                };
+            }
+
+            const normalizedResult = ReturnNormalizer.transform(rawResponse);
+
+            const airlineStats = normalizedResult.airlineStats;
+
+            let normalized: any;
+
+            if ('roundTrips' in normalizedResult) {
+                normalized = {
+                    roundTrips: normalizedResult.roundTrips
+                };
+            } else {
+                normalized = {
+                    onward: normalizedResult.onward,
+                    return: normalizedResult.return
+                };
+            }
 
             const isDomestic = 'onward' in normalized && 'return' in normalized;
             const isInternational = 'roundTrips' in normalized;
@@ -269,7 +521,8 @@ class SearchService {
 
             const response: any = {
                 sessionId,
-                flights: normalized
+                flights: normalized,
+                airlineStats
             };
 
             if (stats) {
@@ -297,6 +550,7 @@ class SearchService {
         applyToLegs?: number[] | 'all',
         includeStats: boolean = false,
         includeFareRules: boolean = false,
+        printData: boolean | string = false,
     ) {
         const sessionId = uuidv4();
 
@@ -316,7 +570,148 @@ class SearchService {
                 }
             );
 
-            let normalized = MultiCityNormalizer.normalize(rawResponse.data);
+            if (printData == "true" || printData == true) {
+                
+                const normalizedWithAllFares = MultiCityNormalizer.transformWithAllFares(rawResponse.data);
+
+                let result: any;
+
+                
+                if (normalizedWithAllFares.type === 'domestic') {
+                    let legs = normalizedWithAllFares.flights || [];
+
+                    
+                    const originalCounts = legs.map((leg: any) => ({
+                        legIndex: leg.legIndex,
+                        count: leg.flights.length
+                    }));
+
+                    
+                    if (filters && filters.length > 0) {
+                        const validation = MultiCityFlightFilter.validateFilters(filters);
+                        if (validation.isValid) {
+                            legs = MultiCityFlightFilter.applyFiltersToMultiCityFlights(
+                                legs,
+                                filters,
+                                applyToLegs || 'all'
+                            );
+                        } else {
+                            console.warn('Invalid filters:', validation.errors);
+                        }
+                    }
+
+                    
+                    if (sortOption && MulticityFlightSorter.isValidSortField(sortOption.field)) {
+                        if (legIndex !== undefined && MulticityFlightSorter.isValidLegIndex(legIndex, legs.length)) {
+                            legs = MulticityFlightSorter.sortSpecificLeg(legs, sortOption, legIndex);
+                        } else if (legIndex === undefined) {
+                            legs = MulticityFlightSorter.sortMultiCityFlights(legs, sortOption);
+                        }
+                    }
+
+                    result = {
+                        legs,
+                        type: 'domestic'
+                    };
+
+                    
+                    if (includeStats) {
+                        result.stats = MultiCityFlightFilter.getMultiCityFilterStats(legs);
+                        originalCounts.forEach((original: { legIndex: number; count: number }) => {
+                            if (result.stats[original.legIndex]) {
+                                result.stats[original.legIndex].totalFlights = original.count;
+                                result.stats[original.legIndex].filteredFlights = legs[original.legIndex]?.flights.length || 0;
+                            }
+                        });
+                    }
+                }
+
+                
+                else if (normalizedWithAllFares.type === 'international') {
+                    let itineraries = normalizedWithAllFares.flights || [];
+                    const originalCount = itineraries.length;
+
+                    
+                    if (filters && filters.length > 0) {
+                        const validation = MultiCityFlightFilter.validateFilters(filters);
+                        if (validation.isValid) {
+                            const legsToFilter = applyToLegs === 'all'
+                                ? (itineraries[0]?.legs?.map((_: any, idx: number) => idx) || [])
+                                : applyToLegs || [];
+
+                            itineraries = itineraries.filter((itinerary: any) => {
+                                let allLegsMatch = true;
+                                for (const legIdx of legsToFilter) {
+                                    if (legIdx < itinerary.legs.length) {
+                                        const legMatch = MultiCityFlightFilter.applyFilters([itinerary.legs[legIdx]], filters).length > 0;
+                                        if (!legMatch) {
+                                            allLegsMatch = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                return allLegsMatch;
+                            });
+                        } else {
+                            console.warn('Invalid filters:', validation.errors);
+                        }
+                    }
+
+                    
+                    if (sortOption && MulticityFlightSorter.isValidSortField(sortOption.field)) {
+                        if (sortOption.field === 'price') {
+                            itineraries.sort((a: any, b: any) => {
+                                const comparison = a.totalPrice - b.totalPrice;
+                                return sortOption.order === 'asc' ? comparison : -comparison;
+                            });
+                        }
+                    }
+
+                    result = {
+                        itineraries,
+                        type: 'international'
+                    };
+
+                    
+                    if (includeStats) {
+                        result.stats = {
+                            totalItineraries: itineraries.length,
+                            originalCount: originalCount,
+                            priceRange: {
+                                min: itineraries.length > 0 ? Math.min(...itineraries.map((i: any) => i.totalPrice)) : 0,
+                                max: itineraries.length > 0 ? Math.max(...itineraries.map((i: any) => i.totalPrice)) : 0
+                            }
+                        };
+                    }
+                }
+
+                
+                const pdfData = {
+                    ...result,
+                    searchParams: {
+                        flights: payload.flights,
+                        passengerCount: payload.passengerCount
+                    },
+                    filtersApplied: filters,
+                    sortApplied: sortOption,
+                    generatedAt: new Date().toISOString()
+                };
+
+                
+                const pdfBuffer = await MultiCityFlightListPdfService.generateMultiCityFlightDetailsPDF(pdfData);
+
+                return {
+                    pdfBuffer,
+                    isPdf: true
+                };
+            }
+
+            const normalizedResult =
+                MultiCityNormalizer.normalize(rawResponse.data);
+
+            let normalized = normalizedResult.flights;
+
+            const airlineStats = normalizedResult.airlineStats;
 
             const isDomestic = normalized.length > 0 && 'flights' in normalized[0];
             const isInternational = normalized.length > 0 && 'legs' in normalized[0];
@@ -568,7 +963,8 @@ class SearchService {
 
             const response: any = {
                 sessionId,
-                flights: normalized
+                flights: normalized,
+                airlineStats
             };
 
             if (stats) {

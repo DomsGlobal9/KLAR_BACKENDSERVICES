@@ -484,27 +484,15 @@ export class B2CAuthService {
             if (!user) {
 
                 user =
-                    await this.userRepository
-                        .createUser({
+                    await this.userRepository.createUser({
 
-                            fullName:
-                                name ||
-                                "Google User",
-
+                            fullName: name ||"Google User",
                             email,
-
-                            mobileNumber:
-                                `TEMP_${Date.now()}`,
-
-                            loginType:
-                                LoginType.GOOGLE,
-
+                            mobileNumber: `TEMP_${Date.now()}`,
+                            loginType: LoginType.GOOGLE,
                             role: Roles.USER,
-
                             googleId,
-
-                            googlePhoto:
-                                picture || "",
+                            googlePhoto: picture || "",
                         });
             }
 
@@ -889,15 +877,14 @@ export class B2CAuthService {
 
     async resetPassword(
         email: string,
-        otp: string,
         newPassword: string
     ): Promise<void> {
-        // Verify OTP
-        await OTPService.verifyOTP(
-            email.toLowerCase(),
-            otp,
-            OTPType.PASSWORD_RESET
-        );
+        // // Verify OTP
+        // await OTPService.verifyOTP(
+        //     email.toLowerCase(),
+        //     otp,
+        //     OTPType.PASSWORD_RESET
+        // );
 
         // Get user
         const user = await this.userRepository.findByEmail(email);

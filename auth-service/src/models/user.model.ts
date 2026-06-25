@@ -48,6 +48,7 @@ export interface IUser extends Document {
     businessProfile?: any;
     verification?: any;
     wallet?: any;
+    limit?: Number;
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
     resetPasswordToken?: string;
@@ -151,6 +152,12 @@ const UserSchema = new Schema<IUser>(
             default: UserStatus.ACTIVE,
         },
 
+        /* =========================
+           LIMIT
+        ========================= */        
+        limit: {
+            type: Number
+        },
 
         /* =========================
            ADMIN / MODERATION
