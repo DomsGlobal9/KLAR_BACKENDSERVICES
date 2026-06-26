@@ -185,6 +185,12 @@ class CommitService {
                 agentId: agentId || undefined,
                 agentName: agentName || undefined,
                 rooms,
+                hotelName: payload.hotelName,
+                hotelImage: payload.hotelImage,
+                hotelAddress: payload.hotelAddress,
+                city: payload.city,
+                starRating: payload.starRating,
+                propertyCode: payload.propertyId || "TJ-PROP",
                 tripJackRequest: tjPayload, // Cache the compiled outbound request payload
             });
 

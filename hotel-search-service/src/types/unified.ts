@@ -54,4 +54,31 @@ export interface UnifiedHotel {
     price: number;
     currency?: string;
   };
+  paymentType?: string;
+  packaging?: boolean;
+  boardCode?: string;
+  boardName?: string;
+  taxes?: {
+    taxes: {
+      included: boolean;
+      amount: string | number;
+      currency: string;
+      clientAmount?: string | number;
+      clientCurrency?: string;
+    }[];
+    allIncluded: boolean;
+  };
+  pricing?: {
+    totalPrice: number;
+    taxes: number | null;
+    mf: number;
+    mft: number;
+    currency: string;
+    basePrice: number | null;
+    markupAmount: number;
+    perNightPrice: number | null;
+    supplierTotalPrice: number;
+    finalTotalPrice: number;
+    taxesIncluded: boolean;
+  };
 }
