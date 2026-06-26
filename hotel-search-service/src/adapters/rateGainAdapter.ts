@@ -205,14 +205,26 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   }
 
   // Taxes: RG separates taxes in taxAmount/taxes/totalTax fields
-  const rgTaxAmount =
-    h.taxAmount ||
-    h.taxes ||
-    h.totalTax ||
-    h.taxesAndFees ||
-    (h.roomRates?.[0]?.taxAmount) ||
-    0;
-  const taxAmt = Number(rgTaxAmount) || 0;
+  // Sometimes it's a nested object: { taxes: [{ amount: '75', clientAmount: '1830' }] }
+  let extractedTaxAmt = 0;
+  
+  const extractTaxFromObj = (taxObj: any) => {
+    if (!taxObj) return 0;
+    if (typeof taxObj === 'number') return taxObj;
+    if (typeof taxObj === 'string') return Number(taxObj) || 0;
+    if (Array.isArray(taxObj.taxes)) {
+      return taxObj.taxes.reduce((sum: number, t: any) => sum + (Number(t.clientAmount || t.amount) || 0), 0);
+    }
+    return 0;
+  };
+
+  extractedTaxAmt = 
+    extractTaxFromObj(h.taxes) ||
+    extractTaxFromObj(h.options?.[0]?.taxes) ||
+    extractTaxFromObj(h.roomRates?.[0]?.taxes) ||
+    Number(h.taxAmount || h.totalTax || h.taxesAndFees || h.roomRates?.[0]?.taxAmount) || 0;
+
+  const taxAmt = extractedTaxAmt;
   // If taxAmount exists and is > 0, taxes are excluded from base price (need to be added)
   const taxesIncluded = taxAmt === 0; // RG usually excludes taxes; taxesIncluded=false unless no tax field
 
@@ -244,6 +256,35 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
     commissionAmt,
     commissionPct,
     sellingRate: sellingRate || undefined,
+    paymentType: h.paymentType || "AT_WEB",
+    packaging: h.packaging ?? false,
+    boardCode: h.boardCode || "CO",
+    boardName: h.boardName || h.boardType || h.mealPlan || h.mealBasis || (h.roomRates?.[0]?.boardName) || (h.options?.[0]?.boardName) || "LUNCH INCLUDED",
+    taxes: {
+      taxes: taxAmt > 0 ? [
+        {
+          included: false,
+          amount: taxAmt.toFixed(2),
+          currency: h.currency || "INR",
+          clientAmount: taxAmt.toFixed(2),
+          clientCurrency: h.currency || "INR"
+        }
+      ] : [],
+      allIncluded: taxesIncluded
+    },
+    pricing: {
+      totalPrice: totalPrice,
+      taxes: taxAmt,
+      mf: 0,
+      mft: 0,
+      currency: h.currency || "INR",
+      basePrice: totalPrice - taxAmt,
+      markupAmount: 0,
+      perNightPrice: isPerNight ? totalPrice : null,
+      supplierTotalPrice: totalPrice,
+      finalTotalPrice: totalPrice,
+      taxesIncluded: taxesIncluded
+    },
     rawPayload: h
   };
 }

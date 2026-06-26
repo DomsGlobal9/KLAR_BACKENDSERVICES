@@ -58,6 +58,68 @@ async function pollTripJackCancellationStatus(bookingId: string, query: any, can
 }
 
 class CancelService {
+    private isCancellationAllowed(booking: any): boolean {
+        if (!booking || !booking.checkIn) return true;
+
+        const now = new Date();
+        const checkInDate = new Date(booking.checkIn);
+        let inTime = '';
+
+        try {
+            const bAny = booking as any;
+            let tjInfo = bAny.tripJackResponse?.itemInfos?.HOTEL ||
+              bAny.tripJackResponse?.body?.itemInfos?.HOTEL ||
+              bAny.tripJackRequest?.itemInfos?.HOTEL;
+            
+            if (!tjInfo && typeof bAny.tripJackResponse === 'string') {
+              try { const p = JSON.parse(bAny.tripJackResponse); tjInfo = p?.itemInfos?.HOTEL || p?.body?.itemInfos?.HOTEL; } catch (e) { }
+            }
+
+            let rgIn = bAny.rateGainResponse?.body?.checkInTime;
+            if (!rgIn && typeof bAny.rateGainResponse === 'string') {
+              try { const p = JSON.parse(bAny.rateGainResponse); rgIn = p?.body?.checkInTime || p?.checkInTime; } catch (e) { }
+            }
+
+            if (tjInfo?.hInfo) {
+              if (tjInfo.hInfo.pt) {
+                let pt = tjInfo.hInfo.pt;
+                inTime = pt.includes('|') ? pt.split('|')[0] : pt;
+              } else if (tjInfo.hInfo.checkInTime) {
+                const tjIn = tjInfo.hInfo.checkInTime;
+                inTime = typeof tjIn === 'object' && tjIn !== null ? (tjIn.beginTime || tjIn.time || '') : (tjIn || '');
+              }
+            } else if (rgIn) {
+              inTime = typeof rgIn === 'object' && rgIn !== null ? (rgIn.beginTime || rgIn.time || '') : (rgIn || '');
+            } else if (bAny.checkInTime) {
+              const dbIn = bAny.checkInTime;
+              inTime = typeof dbIn === 'object' && dbIn !== null ? dbIn.beginTime : (dbIn || inTime);
+            }
+        } catch (e) { }
+
+        let hours = 0;
+        let minutes = 0;
+        if (inTime && typeof inTime === 'string') {
+            const clean = inTime.trim().toLowerCase();
+            const match = clean.match(/(\d{1,2}):(\d{2})/);
+            if (match) {
+                hours = parseInt(match[1], 10);
+                minutes = parseInt(match[2], 10);
+                if (clean.includes('pm') && hours < 12) hours += 12;
+                if (clean.includes('am') && hours === 12) hours = 0;
+            }
+        }
+
+        checkInDate.setHours(hours, minutes, 0, 0);
+        
+        if (now >= checkInDate) {
+            console.log(`[Cancel Validation] Cancellation rejected. Current time ${now.toISOString()} is past check-in time ${checkInDate.toISOString()}`);
+            return false;
+        }
+        
+        return true;
+    }
+
+
     async cancel(payload: any) {
         const confirmationNumber = payload.ConfirmationNumber || payload.bookingId;
         const reservationId = payload.ReservationId || payload.bookingId;
@@ -72,22 +134,41 @@ class CancelService {
             console.warn(`[Cancel Service] Could not pre-calculate cancel charges: ${e.message}`);
         }
 
-        // ─── Step 0: Check if this is a TripJack booking ───
-        try {
-            const initialTargetId = confirmationNumber || reservationId || bookingId;
-            const query: any = {};
-            if (initialTargetId) {
-                const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(initialTargetId));
-                if (isObjectId) {
-                    query._id = initialTargetId;
-                } else {
-                    query.$or = [
-                        { confirmationNumber: initialTargetId },
-                        { reservationId: initialTargetId }
-                    ];
-                }
+        // ─── Step 0: Initial Validation & DB Lookup ───
+        const initialTargetId = confirmationNumber || reservationId || bookingId;
+        const query: any = {};
+        if (initialTargetId) {
+            const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(initialTargetId));
+            if (isObjectId) {
+                query._id = initialTargetId;
+            } else {
+                query.$or = [
+                    { confirmationNumber: initialTargetId },
+                    { reservationId: initialTargetId }
+                ];
             }
+        }
 
+        let booking = null;
+        if (Object.keys(query).length > 0) {
+            booking = await hotelBookingRepository.findOne(query, true);
+        }
+
+        if (booking && !this.isCancellationAllowed(booking)) {
+            return {
+                status: false,
+                statusCode: 400,
+                description: "Cancellation is not permitted after the hotel's check-in time has passed.",
+                isFullyCancelled: false,
+                body: {
+                    status: "FAILED",
+                    message: "Cancellation blocked due to check-in time passing."
+                }
+            };
+        }
+
+        // ─── Step 1: Check if this is a TripJack booking ───
+        try {
             const isTripJack = payload.type === "HOTEL" || 
                                confirmationNumber?.startsWith("TG") || 
                                confirmationNumber?.startsWith("TJ");
@@ -95,12 +176,9 @@ class CancelService {
             let isDbTripJack = false;
             let actualTargetId = confirmationNumber || bookingId;
 
-            if (Object.keys(query).length > 0) {
-                const booking = await hotelBookingRepository.findOne(query, true);
-                if (booking && booking.provider === BookingProvider.TRIPJACK) {
-                    isDbTripJack = true;
-                    if (booking.confirmationNumber) actualTargetId = booking.confirmationNumber;
-                }
+            if (booking && booking.provider === BookingProvider.TRIPJACK) {
+                isDbTripJack = true;
+                if (booking.confirmationNumber) actualTargetId = booking.confirmationNumber;
             }
 
             if (isTripJack || isDbTripJack) {
@@ -146,29 +224,12 @@ class CancelService {
             throw tjCancelErr;
         }
 
-        // ─── Step 1: Look up booking from DB to get the full original request data ───
+        // ─── Step 2: Look up booking from DB to get the full original request data ───
         let enrichedPayload = { ...payload };
         let dbLookupSucceeded = false;
 
         try {
-            const targetId = confirmationNumber || reservationId || bookingId;
-            const query: any = {};
-            if (targetId) {
-                const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(targetId));
-                if (isObjectId) {
-                    query._id = targetId;
-                } else {
-                    query.$or = [
-                        { confirmationNumber: targetId },
-                        { reservationId: targetId }
-                    ];
-                }
-            }
-
             if (Object.keys(query).length > 0) {
-                console.log(`🔍 Looking up booking in DB with query:`, JSON.stringify(query));
-                const booking = await hotelBookingRepository.findOne(query, true);
-
                 if (booking) {
                     console.log(`📦 Found booking in DB: ${booking.confirmationNumber}`);
                     console.log(`📦 rateGainRequest exists: ${!!booking.rateGainRequest}`);

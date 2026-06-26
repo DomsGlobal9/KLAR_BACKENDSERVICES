@@ -166,7 +166,7 @@ export class RateGainApiProvider {
             DemandCancelId: booking.DemandCancelId || `demand-cancel-${Date.now()}`,
             TimeStamp: booking.TimeStamp || new Date().toISOString(),
             EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-            BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+            BrandCode: (booking.BrandCode && booking.BrandCode !== "N/A") ? booking.BrandCode : "TkEvQQ==",
             PropertyCode: booking.PropertyCode || rawPropertyId || "N/A",
             PropertyId: rawPropertyId
         };
