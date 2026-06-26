@@ -258,7 +258,7 @@ Reported Total to UI:      ${totalToUI}
             
             for (const cityName of newCities) {
                 const normalizedCity = cityName.toLowerCase().trim();
-                const dbDest = batchDestMap.get(normalizedCity);
+                const dbDest = batchDestMap.get(normalizedCity) as any;
                 rgDests.push({
                     destCode: dbDest?.destCode || cityName,
                     destName: cityName
