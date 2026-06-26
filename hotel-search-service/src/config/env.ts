@@ -15,7 +15,9 @@ export const env = {
         baseUrl: process.env.TRIPJACK_BASE_URL || "https://apitest-hms.tripjack.com",
         apiKey: process.env.TRIPJACK_API_KEY!,
         agencyId: process.env.TRIPJACK_AGENCY_ID!,
-    }
+    },
+
+    authServiceUrl: process.env.AUTH_SERVICE_URL || "http://localhost:5010",
 };
 if (!env.rateGain.baseUrl) {
     console.error("❌ RATEGAIN_BASE_URL is not set. Service will not work.");
