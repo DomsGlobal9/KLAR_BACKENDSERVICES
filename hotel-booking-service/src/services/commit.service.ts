@@ -74,6 +74,14 @@ async function pollTripJackBookingStatus(tjBookingId: string, dbBookingId: strin
 
 // ─── Commit Service ─────────────────────────────────────────────────────────
 
+function extractHotelImage(imagePayload: any): string | undefined {
+    if (!imagePayload) return undefined;
+    if (typeof imagePayload === 'string') return imagePayload;
+    if (imagePayload.links?.original?.href) return imagePayload.links.original.href;
+    if (imagePayload.url) return imagePayload.url;
+    return undefined;
+}
+
 class CommitService {
     async commit(payload: any, agentId?: string | null, agentName?: string | null, token?: string, clientType: string = "B2C", requestId: string = "") {
         const propertyId = (payload.propertyId || payload.PropertyId || payload.BookReservation?.propertyID || "").toString();
@@ -105,14 +113,14 @@ class CommitService {
         let bookingId = payload.bookingId;
         if (!bookingId) throw new Error("Booking ID is required from frontend.");
 
-        let netPrice = payload.paymentInfos?.[0]?.amount || payload.totalPrice || payload.amount || 0;
+        let netPrice = payload.netPrice || payload.paymentInfos?.[0]?.amount || payload.amount || payload.totalPrice || 0;
         if (netPrice <= 0) throw new Error("Invalid price returned from provider or payload.");
         
         console.log(`✅ [TripJack] Trusted Frontend Net Price: ₹${netPrice}`);
 
         let paymentProcessed = false;
         const demandBookingId = `TJ-BOOK-${Date.now()}`;
-        let finalPrice = payload.totalPrice || netPrice;
+        let finalPrice = payload.sellingRate || payload.totalPrice || netPrice;
         let markup = 0;
         const isHoldIntent = payload.isHold === true || payload.holdBooking === true;
 
@@ -157,7 +165,10 @@ class CommitService {
                 markup = pricing.markup;
                 console.log(`✅ [Klar] Final Calculated B2B Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`);
             } else {
-                console.log(`✅ [Klar] B2C Booking Price: ₹${finalPrice}`);
+                if (finalPrice > netPrice) {
+                    markup = finalPrice - netPrice;
+                }
+                console.log(`✅ [Klar] B2C Booking Price: ₹${finalPrice}, Markup: ₹${markup}`);
             }
 
             // PHASE 3: Wallet Deduction (Atomic)
@@ -219,7 +230,7 @@ class CommitService {
                 agentName: agentName || undefined,
                 rooms,
                 hotelName: payload.hotelName,
-                hotelImage: payload.hotelImage,
+                hotelImage: extractHotelImage(payload.hotelImage),
                 hotelAddress: payload.hotelAddress,
                 city: payload.city,
                 starRating: payload.starRating,
@@ -360,7 +371,7 @@ class CommitService {
                 agentName: agentName || undefined,
                 rooms: rgRooms.length > 0 ? rgRooms : undefined,
                 hotelName: payload.hotelName,
-                hotelImage: payload.hotelImage,
+                hotelImage: extractHotelImage(payload.hotelImage),
                 hotelAddress: payload.hotelAddress,
                 city: payload.city,
                 starRating: payload.starRating,
