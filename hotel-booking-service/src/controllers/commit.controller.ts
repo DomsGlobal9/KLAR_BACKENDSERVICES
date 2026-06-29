@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
 import { commitService } from "../services/commit.service";
 import { compileTravellerPayload } from "../utils/bookingTransformer";
+import { StructuredError } from "../services/ValidationEngine";
 
 export const commitController = async (req: any, res: Response) => {
+    const requestId = uuidv4();
     try {
         const agentId = req.user?.userId || req.user?.id || req.user?._id || null;
         const agentName = req.user?.email || null; // Fallback to email if name isn't in token
@@ -46,8 +49,8 @@ export const commitController = async (req: any, res: Response) => {
             console.log(`[FORENSIC] Compiled Unified Payload for property: ${finalPayload.propertyId}, Price: ${finalPayload.totalPrice}`);
         }
 
-        console.log(`[FORENSIC] Commit Booking: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`);
-        const data = await commitService.commit(finalPayload, agentId, agentName, token, clientType);
+        console.log(`[FORENSIC] Commit Booking [${requestId}]: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`);
+        const data = await commitService.commit(finalPayload, agentId, agentName, token, clientType, requestId);
         res.json({
             status: true,
             statusCode: 200,
@@ -55,8 +58,21 @@ export const commitController = async (req: any, res: Response) => {
             body: data
         });
     } catch (error: any) {
-        console.error("Commit Controller Error:", error.response?.data || error.message);
+        console.error(`Commit Controller Error [${requestId}]:`, error.response?.data || error.message);
         
+        if (error instanceof StructuredError) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: error.code,
+                    message: error.message,
+                    details: error.details
+                },
+                requestId,
+                timestamp: new Date().toISOString()
+            });
+        }
+
         const errorData = error.response?.data || error.data;
         const errorMessage = errorData?.errors?.[0]?.message || 
                              errorData?.error?.message || 
@@ -65,10 +81,14 @@ export const commitController = async (req: any, res: Response) => {
                              "Failed to commit booking";
 
         res.status(error.response?.status || error.status || 500).json({
-            status: false,
-            statusCode: error.response?.status || error.status || 500,
-            description: errorMessage,
-            body: errorData || null
+            success: false,
+            error: {
+                code: "INTERNAL_ERROR",
+                message: errorMessage,
+                details: errorData || null
+            },
+            requestId,
+            timestamp: new Date().toISOString()
         });
     }
 };

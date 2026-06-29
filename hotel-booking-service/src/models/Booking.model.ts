@@ -5,7 +5,12 @@ export enum BookingStatus {
     CANCELLED = 'CANCELLED',
     PENDING = 'PENDING',
     FAILED = 'FAILED',
-    HELD = 'HELD'
+    HELD = 'HELD',
+    // Granular OTA States
+    PRECHECK_VALIDATED = 'PRECHECK_VALIDATED',
+    PAYMENT_RESERVED = 'PAYMENT_RESERVED',
+    SUPPLIER_PENDING = 'SUPPLIER_PENDING',
+    MANUAL_REVIEW = 'MANUAL_REVIEW'
 }
 
 export enum BookingProvider {
@@ -52,6 +57,9 @@ export interface IBooking extends Document {
     city?: string;
     starRating?: number;
     roomType?: string;
+    hotelPhone?: string;
+    rateComments?: string;
+    paymentType?: string;
 
     // ─── Guest & Agent ─────────────────────────────
     guestName?: string;
@@ -136,6 +144,9 @@ const bookingSchema = new Schema<IBooking>(
         city: { type: String },
         starRating: { type: Number },
         roomType: { type: String },
+        hotelPhone: { type: String },
+        rateComments: { type: String },
+        paymentType: { type: String },
 
         // Guest & Agent
         guestName: { type: String },
