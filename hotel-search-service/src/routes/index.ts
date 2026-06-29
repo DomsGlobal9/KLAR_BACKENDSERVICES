@@ -1,6 +1,12 @@
 import { Router } from "express";
-import { getDestinations, getPopularDestinations } from "../controllers/destinations.controller";
-import { searchHotels, getHotelSuggestions } from "../controllers/hotels.controller";
+import {
+  getDestinations,
+  getPopularDestinations,
+} from "../controllers/destinations.controller";
+import {
+  searchHotels,
+  getHotelSuggestions,
+} from "../controllers/hotels.controller";
 import { getProducts } from "../controllers/products.controller";
 import { HotelModel } from "../models/Hotel.model";
 import { RGDestinationModel } from "../models/RGDestination.model";
@@ -15,18 +21,24 @@ const router = Router();
 router.use("/geo", geoRouter);
 
 router.post("/sync/destinations", async (req, res) => {
-    const force = req.query.force === "true";
-    res.json({ status: "started", message: `RateGain destination sync triggered (force: ${force})` });
-    syncRGDestinations(force).catch((err) =>
-        console.error("[Sync] Manual RG sync failed:", err.message)
-    );
+  const force = req.query.force === "true";
+  res.json({
+    status: "started",
+    message: `RateGain destination sync triggered (force: ${force})`,
+  });
+  syncRGDestinations(force).catch((err) =>
+    console.error("[Sync] Manual RG sync failed:", err.message),
+  );
 });
 
 router.post("/sync/hotels", async (_req, res) => {
-    res.json({ status: "started", message: "TripJack hotel sync triggered in background" });
-    syncTJHotels().catch((err) =>
-        console.error("[Sync] Manual TJ sync failed:", err.message)
-    );
+  res.json({
+    status: "started",
+    message: "TripJack hotel sync triggered in background",
+  });
+  syncTJHotels().catch((err) =>
+    console.error("[Sync] Manual TJ sync failed:", err.message),
+  );
 });
 
 // ─── Core Routes ─────────────────────────────────────────────────────────────
@@ -35,10 +47,10 @@ router.post("/sync/hotels", async (_req, res) => {
 // router.get("/", getDestinations);
 
 router.get("/health", (_req, res) => {
-    res.json({
-        status: "UP",
-        service: "hotel-search-service",
-    });
+  res.json({
+    status: "UP",
+    service: "hotel-search-service",
+  });
 });
 
 router.get("/destinations", getDestinations);

@@ -2,351 +2,563 @@ import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 import { NationalityModel } from "../models/Nationality.model";
 import { HotelModel } from "../models/Hotel.model";
-import { calculateEnrichedPricing, calculateNightsFromDates } from "../utils/pricing.util";
+import {
+  calculateEnrichedPricing,
+  calculateNightsFromDates,
+} from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
 
 // Fallback map if DB is empty
 const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
-    IN: "106", US: "232", GB: "235", AE: "231", SG: "200",
-    MY: "131", AU: "14", CA: "40", DE: "83", FR: "76",
-    JP: "112", CN: "45", NZ: "157", ZA: "204",
+  IN: "106",
+  US: "232",
+  GB: "235",
+  AE: "231",
+  SG: "200",
+  MY: "131",
+  AU: "14",
+  CA: "40",
+  DE: "83",
+  FR: "76",
+  JP: "112",
+  CN: "45",
+  NZ: "157",
+  ZA: "204",
 };
 
 async function toTjNationality(iso: string): Promise<string> {
-    try {
-        if (!iso) return "106";
-        const code = iso.toUpperCase();
-        const found = await NationalityModel.findOne({ code }).select("countryId").lean();
-        if (found) return found.countryId;
-    } catch (err) {
-        console.warn("[TripJack] Nationality DB lookup failed, using fallback.");
-    }
-    return ISO_TO_TJ_COUNTRY_ID[iso?.toUpperCase()] ?? "106";
+  try {
+    if (!iso) return "106";
+    const code = iso.toUpperCase();
+    const found = await NationalityModel.findOne({ code })
+      .select("countryId")
+      .lean();
+    if (found) return found.countryId;
+  } catch (err) {
+    console.warn("[TripJack] Nationality DB lookup failed, using fallback.");
+  }
+  return ISO_TO_TJ_COUNTRY_ID[iso?.toUpperCase()] ?? "106";
 }
 
-
 export class TripJackApiProvider {
-    async getNationalities() {
-        try {
-            const res = await tripJackClient.get("/hms/v3/nationality-info");
-            return res.data;
-        } catch (error: any) {
-            console.error("[TripJack] GetNationalities Error:", error.response?.status, error.message);
-            throw error;
-        }
+  async getNationalities() {
+    try {
+      const res = await tripJackClient.get("/hms/v3/nationality-info");
+      return res.data;
+    } catch (error: any) {
+      console.error(
+        "[TripJack] GetNationalities Error:",
+        error.response?.status,
+        error.message,
+      );
+      throw error;
+    }
+  }
+
+  async getProducts(payload: any) {
+    const rawId = (
+      payload.hid ||
+      payload.propertyId ||
+      payload.PropertyId ||
+      ""
+    )
+      .toString()
+      .replace("TJ:", "")
+      .replace("RG:", "")
+      .trim();
+    const correlationId = payload.correlationId || uuidv4();
+
+    if (!rawId) {
+      console.error(
+        "[TripJack] GetProducts Error: No propertyId or hid provided in payload:",
+        JSON.stringify(payload),
+      );
+      throw {
+        status: 400,
+        message:
+          "propertyId or hid is required for TripJack detail/pricing request",
+        data: { ErrorCode: 1012, description: "propertyId/hid is required." },
+      };
     }
 
-    async getProducts(payload: any) {
-        const rawId = (payload.hid || payload.propertyId || payload.PropertyId || "").toString().replace("TJ:", "").replace("RG:", "").trim();
-        const correlationId = payload.correlationId || uuidv4();
+    const hidValue = rawId;
+    const numericHid = /^\d+$/.test(hidValue) ? Number(hidValue) : hidValue;
 
-        if (!rawId) {
-            console.error("[TripJack] GetProducts Error: No propertyId or hid provided in payload:", JSON.stringify(payload));
-            throw {
-                status: 400,
-                message: "propertyId or hid is required for TripJack detail/pricing request",
-                data: { ErrorCode: 1012, description: "propertyId/hid is required." }
-            };
-        }
+    // ── Fetch markup rules & night count ONCE per request ─────────────────
+    const token = payload.token || null;
+    const markupRules = await getMarkupRules(token);
+    const nights = calculateNightsFromDates(
+      payload.checkIn || payload.checkin,
+      payload.checkOut || payload.checkout,
+    );
 
-        const hidValue = rawId;
-        const numericHid = /^\d+$/.test(hidValue) ? Number(hidValue) : hidValue;
-
-        // ── Fetch markup rules & night count ONCE per request ─────────────────
-        const token = payload.token || null;
-        const markupRules = await getMarkupRules(token);
-        const nights = calculateNightsFromDates(
-            payload.checkIn || payload.checkin,
-            payload.checkOut || payload.checkout
-        );
-
-        const tjPayload: any = {
-            correlationId,
-            hid: numericHid,
-            checkIn: payload.checkin || payload.checkIn,
-            checkOut: payload.checkout || payload.checkOut,
-            rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
-                const childrenCount = (r.Children !== undefined ? r.Children : r.children) ?? 0;
-                const childAgeArr = (r.childAge || r.childrenAges || r.childAges || r.paxes?.map((p: any) => p.age) || []);
-                return {
-                    adults: Number(r.Adults || r.adults || 2),
-                    children: Number(childrenCount),
-                    childAge: childAgeArr.length > 0 ? childAgeArr : undefined,
-                };
-            }),
-            currency: payload.Currency || payload.currency || "INR",
-            nationality: await toTjNationality(payload.CountryCode || payload.countryCode || "IN"),
+    const tjPayload: any = {
+      correlationId,
+      hid: numericHid,
+      checkIn: payload.checkin || payload.checkIn,
+      checkOut: payload.checkout || payload.checkOut,
+      rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
+        const childrenCount =
+          (r.Children !== undefined ? r.Children : r.children) ?? 0;
+        const childAgeArr =
+          r.childAge ||
+          r.childrenAges ||
+          r.childAges ||
+          r.paxes?.map((p: any) => p.age) ||
+          [];
+        return {
+          adults: Number(r.Adults || r.adults || 2),
+          children: Number(childrenCount),
+          childAge: childAgeArr.length > 0 ? childAgeArr : undefined,
         };
+      }),
+      currency: payload.Currency || payload.currency || "INR",
+      nationality: await toTjNationality(
+        payload.CountryCode || payload.countryCode || "IN",
+      ),
+    };
 
-        let localHotel: any = null;
-        let staticData: any = null;
-        let staticDetailPromise: Promise<void> | null = null;
+    let localHotel: any = null;
+    let staticData: any = null;
+    let staticDetailPromise: Promise<void> | null = null;
 
-        try {
-            console.log(`[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`, JSON.stringify(tjPayload, null, 2));
+    try {
+      console.log(
+        `[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`,
+        JSON.stringify(tjPayload, null, 2),
+      );
 
-            localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
+      localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
 
-            staticDetailPromise = tripJackClient.post("/hms/v3/hotel/static-detail", { hid: hidValue })
-                .then(res => { staticData = res.data; })
-                .catch(err => { console.warn(`[TripJack] Static detail background fetch warning:`, err.message); });
+      staticDetailPromise = tripJackClient
+        .post("/hms/v3/hotel/static-detail", { hid: hidValue })
+        .then((res) => {
+          staticData = res.data;
+        })
+        .catch((err) => {
+          console.warn(
+            `[TripJack] Static detail background fetch warning:`,
+            err.message,
+          );
+        });
 
-            const pricingStartTime = Date.now();
-            const pricingRes = await tripJackClient.post("/hms/v3/hotel/pricing", tjPayload);
-            console.log(`[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`);
+      const pricingStartTime = Date.now();
+      const pricingRes = await tripJackClient.post(
+        "/hms/v3/hotel/pricing",
+        tjPayload,
+      );
+      console.log(
+        `[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`,
+      );
 
-            if (!staticData) {
-                await Promise.race([
-                    staticDetailPromise,
-                    new Promise(resolve => setTimeout(resolve, 5000))
-                ]);
+      if (!staticData) {
+        await Promise.race([
+          staticDetailPromise,
+          new Promise((resolve) => setTimeout(resolve, 5000)),
+        ]);
+      }
+
+      const pricingData = pricingRes.data;
+
+      console.log(
+        `[DEBUG] TripJack Pricing Data for ${rawId}:`,
+        JSON.stringify(pricingData, null, 1),
+      );
+      if (staticData)
+        console.log(
+          `[DEBUG] TripJack Static Data for ${rawId}:`,
+          JSON.stringify(staticData, null, 1),
+        );
+      const reviewHash: string = pricingData.reviewHash || "";
+
+      const hotelName: string =
+        pricingData.hotelName || staticData?.name || localHotel?.name || "";
+      const hotelAmenities: string[] = staticData?.amenities
+        ? Object.values(staticData.amenities).map((a: any) => a.name)
+        : pricingData.amenities || [];
+
+      const hotelImages: any[] = staticData?.images
+        ? staticData.images
+        : Array.isArray(pricingData.images) && pricingData.images.length
+          ? pricingData.images
+          : pricingData.img
+            ? [pricingData.img]
+            : localHotel?.images || [];
+
+      const description =
+        staticData?.descriptions?.default ||
+        staticData?.desc ||
+        pricingData.desc ||
+        "";
+      const address =
+        staticData?.locale?.address?.fulladdr ||
+        pricingData.address ||
+        localHotel?.address ||
+        "";
+      const city =
+        staticData?.locale?.address?.city ||
+        pricingData.city ||
+        localHotel?.cityName ||
+        "";
+      const starRating = staticData?.star_rating
+        ? parseInt(staticData.star_rating)
+        : pricingData.star_rating
+          ? parseInt(pricingData.star_rating)
+          : localHotel?.starRating;
+      const checkInTime =
+        staticData?.hotelInfo?.checkInTime ||
+        staticData?.hotelInfo?.checkIn ||
+        staticData?.checkInTime ||
+        pricingData?.checkInTime ||
+        "";
+      const checkOutTime =
+        staticData?.hotelInfo?.checkOutTime ||
+        staticData?.hotelInfo?.checkOut ||
+        staticData?.checkOutTime ||
+        pricingData?.checkOutTime ||
+        "";
+
+      const hotelFacility = hotelAmenities.map((name) => ({
+        facilityName: name,
+      }));
+
+      const options = (pricingData.options || []).map(
+        (opt: any, idx: number) => {
+          const optionAmenities: string[] = [
+            ...new Set([...hotelAmenities, ...(opt.amenities || [])]),
+          ];
+
+          // Room image resolution
+          const roomId = opt.roomInfo?.[0]?.id;
+          const roomNameStr = (
+            opt.roomInfo?.[0]?.name ||
+            opt.name ||
+            opt.roomName ||
+            ""
+          )
+            .toLowerCase()
+            .trim();
+          let roomStatic: any = null;
+          if (staticData?.rooms) {
+            const staticRoomsArray = Object.values(staticData.rooms);
+            roomStatic = staticRoomsArray.find(
+              (r: any) => String(r?.id) === String(roomId),
+            );
+            if (
+              !roomStatic ||
+              !roomStatic.images ||
+              roomStatic.images.length === 0
+            ) {
+              if (roomNameStr) {
+                const matchingRooms = staticRoomsArray.filter((r: any) => {
+                  const staticName = (r?.name || "").toLowerCase().trim();
+                  return (
+                    staticName &&
+                    (staticName === roomNameStr ||
+                      staticName.includes(roomNameStr) ||
+                      roomNameStr.includes(staticName))
+                  );
+                });
+                const roomWithImages = matchingRooms.find(
+                  (r: any) =>
+                    (r as any).images &&
+                    Array.isArray((r as any).images) &&
+                    (r as any).images.length > 0,
+                ) as any;
+                if (roomWithImages) {
+                  if (roomStatic) {
+                    roomStatic.images = roomWithImages.images;
+                  } else {
+                    roomStatic = roomWithImages;
+                  }
+                } else if (!roomStatic && matchingRooms.length > 0) {
+                  roomStatic = matchingRooms[0] as any;
+                }
+              }
             }
+          }
+          let roomImages: any[] = [];
+          if (
+            roomStatic?.images &&
+            Array.isArray(roomStatic.images) &&
+            roomStatic.images.length > 0
+          ) {
+            roomImages = roomStatic.images;
+          } else if (
+            opt.roomInfo?.[0]?.images &&
+            Array.isArray(opt.roomInfo[0].images) &&
+            opt.roomInfo[0].images.length > 0
+          ) {
+            roomImages = opt.roomInfo[0].images;
+          }
 
-            const pricingData = pricingRes.data;
+          // ── Backend pricing enrichment (markup + per-night) ────────────
+          const rawTotalPrice = Number(opt.pricing?.totalPrice ?? 0);
+          const rawBasePrice = Number(opt.pricing?.basePrice ?? rawTotalPrice);
+          const rawTaxes = Number(opt.pricing?.taxes ?? 0);
+          const rawMf = Number(opt.pricing?.mf ?? 0);
+          const rawMft = Number(opt.pricing?.mft ?? 0);
+          const rawCurrency = opt.pricing?.currency ?? "INR";
 
-            console.log(`[DEBUG] TripJack Pricing Data for ${rawId}:`, JSON.stringify(pricingData, null, 1));
-            if (staticData) console.log(`[DEBUG] TripJack Static Data for ${rawId}:`, JSON.stringify(staticData, null, 1));
-            const reviewHash: string = pricingData.reviewHash || "";
+          const enriched = calculateEnrichedPricing(
+            {
+              basePrice: rawBasePrice,
+              totalPrice: rawTotalPrice,
+              taxes: rawTaxes,
+              mf: rawMf,
+              mft: rawMft,
+              currency: rawCurrency,
+            },
+            markupRules,
+            nights,
+          );
 
-            const hotelName: string = pricingData.hotelName || staticData?.name || localHotel?.name || "";
-            const hotelAmenities: string[] = staticData?.amenities
-                ? Object.values(staticData.amenities).map((a: any) => a.name)
-                : (pricingData.amenities || []);
+          const optionIdStr =
+            opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
+          return {
+            id: optionIdStr,
+            optionId: optionIdStr,
+            rateKey: optionIdStr,
+            RoomSelectionKey: optionIdStr,
+            reviewHash,
+            correlationId,
+            hid: rawId,
 
-            const hotelImages: any[] = staticData?.images
-                ? staticData.images
-                : (Array.isArray(pricingData.images) && pricingData.images.length ? pricingData.images : (pricingData.img ? [pricingData.img] : (localHotel?.images || [])));
+            name:
+              opt.roomInfo?.[0]?.name || opt.roomName || `Option ${idx + 1}`,
+            optionType: opt.optionType,
+            roomInfo: (opt.roomInfo || []).map((ri: any) => ({
+              ...ri,
+              mealBasis: ri.mealBasis || opt.mealBasis || opt.boardName,
+            })),
+            inclusions: opt.inclusions || [],
+            mealBasis: opt.mealBasis || opt.boardName,
+            bookingNotes: opt.bookingNotes || null,
 
-            const description = staticData?.descriptions?.default || staticData?.desc || pricingData.desc || "";
-            const address = staticData?.locale?.address?.fulladdr || pricingData.address || localHotel?.address || "";
-            const city = staticData?.locale?.address?.city || pricingData.city || localHotel?.cityName || "";
-            const starRating = staticData?.star_rating ? parseInt(staticData.star_rating) : (pricingData.star_rating ? parseInt(pricingData.star_rating) : localHotel?.starRating);
-            const checkInTime = staticData?.hotelInfo?.checkInTime || staticData?.hotelInfo?.checkIn || staticData?.checkInTime || pricingData?.checkInTime || "";
-            const checkOutTime = staticData?.hotelInfo?.checkOutTime || staticData?.hotelInfo?.checkOut || staticData?.checkOutTime || pricingData?.checkOutTime || "";
+            // Backward-compat top-level price fields — now reflect enriched values
+            price: enriched.finalTotalPrice,
+            netPrice: enriched.basePrice,
+            taxes: rawTaxes,
+            managementFee: rawMf,
+            managementFeeTax: rawMft,
 
-            const hotelFacility = hotelAmenities.map(name => ({ facilityName: name }));
+            // Enriched pricing block — frontend reads ONLY these for display
+            pricing: {
+              ...opt.pricing,
+              ...enriched,
+            },
+            strikethrough: opt.pricing?.strikethrough,
+            currency: rawCurrency,
 
-            const options = (pricingData.options || []).map((opt: any, idx: number) => {
-                const optionAmenities: string[] = [
-                    ...new Set([...hotelAmenities, ...(opt.amenities || [])]),
-                ];
+            commercialType: opt.commercial?.type,
+            commission: opt.commercial?.commission,
 
-                // Room image resolution
-                const roomId = opt.roomInfo?.[0]?.id;
-                const roomNameStr = (opt.roomInfo?.[0]?.name || opt.name || opt.roomName || "").toLowerCase().trim();
-                let roomStatic: any = null;
-                if (staticData?.rooms) {
-                    const staticRoomsArray = Object.values(staticData.rooms);
-                    roomStatic = staticRoomsArray.find((r: any) => String(r?.id) === String(roomId));
-                    if (!roomStatic || !roomStatic.images || roomStatic.images.length === 0) {
-                        if (roomNameStr) {
-                            const matchingRooms = staticRoomsArray.filter((r: any) => {
-                                const staticName = (r?.name || "").toLowerCase().trim();
-                                return staticName && (staticName === roomNameStr || staticName.includes(roomNameStr) || roomNameStr.includes(staticName));
-                            });
-                            const roomWithImages = matchingRooms.find((r: any) => (r as any).images && Array.isArray((r as any).images) && (r as any).images.length > 0) as any;
-                            if (roomWithImages) {
-                                if (roomStatic) {
-                                    roomStatic.images = roomWithImages.images;
-                                } else {
-                                    roomStatic = roomWithImages;
-                                }
-                            } else if (!roomStatic && matchingRooms.length > 0) {
-                                roomStatic = matchingRooms[0] as any;
-                            }
-                        }
-                    }
-                }
-                let roomImages: any[] = [];
-                if (roomStatic?.images && Array.isArray(roomStatic.images) && roomStatic.images.length > 0) {
-                    roomImages = roomStatic.images;
-                } else if (opt.roomInfo?.[0]?.images && Array.isArray(opt.roomInfo[0].images) && opt.roomInfo[0].images.length > 0) {
-                    roomImages = opt.roomInfo[0].images;
-                }
+            compliance: opt.compliance,
+            panRequired: opt.compliance?.panRequired ?? false,
+            passportRequired: opt.compliance?.passportRequired ?? false,
+            gstType: opt.compliance?.gstType,
 
-                // ── Backend pricing enrichment (markup + per-night) ────────────
-                const rawTotalPrice = Number(opt.pricing?.totalPrice ?? 0);
-                const rawBasePrice  = Number(opt.pricing?.basePrice  ?? rawTotalPrice);
-                const rawTaxes      = Number(opt.pricing?.taxes ?? 0);
-                const rawMf         = Number(opt.pricing?.mf  ?? 0);
-                const rawMft        = Number(opt.pricing?.mft ?? 0);
-                const rawCurrency   = opt.pricing?.currency ?? "INR";
+            onHoldAllowed:
+              opt.onHoldAllowed ??
+              opt.cancellation?.onHoldAllowed ??
+              opt.cancellation?.isRefundable ??
+              false,
+            holdConfirm:
+              opt.holdConfirm ??
+              opt.cancellation?.holdConfirm ??
+              opt.cancellation?.isRefundable ??
+              false,
+            isRefundable: opt.cancellation?.isRefundable,
+            cancellationPolicies: opt.cancellation?.penalties || [],
 
-                const enriched = calculateEnrichedPricing(
-                    {
-                        basePrice:  rawBasePrice,
-                        totalPrice: rawTotalPrice,
-                        taxes:      rawTaxes,
-                        mf:         rawMf,
-                        mft:        rawMft,
-                        currency:   rawCurrency,
-                    },
-                    markupRules,
-                    nights
-                );
+            amenities: optionAmenities,
+            hotelFacility: optionAmenities.map((name: string) => ({
+              facilityName: name,
+            })),
+            images: roomImages,
+            bed_config:
+              roomStatic?.bed_config || opt.roomInfo?.[0]?.bed_config || null,
+            checkInTime,
+            checkOutTime,
+            rawOption: opt,
+          };
+        },
+      );
 
-                const optionIdStr = opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
-                return {
-                    id: optionIdStr,
-                    optionId: optionIdStr,
-                    rateKey: optionIdStr,
-                    RoomSelectionKey: optionIdStr,
-                    reviewHash,
-                    correlationId,
-                    hid: rawId,
-
-                    name: (opt.roomInfo?.[0]?.name) || opt.roomName || `Option ${idx + 1}`,
-                    optionType: opt.optionType,
-                    roomInfo: (opt.roomInfo || []).map((ri: any) => ({
-                        ...ri,
-                        mealBasis: ri.mealBasis || opt.mealBasis || opt.boardName,
-                    })),
-                    inclusions: opt.inclusions || [],
-                    mealBasis: opt.mealBasis || opt.boardName,
-                    bookingNotes: opt.bookingNotes || null,
-
-                    // Backward-compat top-level price fields — now reflect enriched values
-                    price: enriched.finalTotalPrice,
-                    netPrice: enriched.basePrice,
-                    taxes: rawTaxes,
-                    managementFee: rawMf,
-                    managementFeeTax: rawMft,
-
-                    // Enriched pricing block — frontend reads ONLY these for display
-                    pricing: {
-                        ...opt.pricing,
-                        ...enriched,
-                    },
-                    strikethrough: opt.pricing?.strikethrough,
-                    currency: rawCurrency,
-
-                    commercialType: opt.commercial?.type,
-                    commission: opt.commercial?.commission,
-
-                    compliance: opt.compliance,
-                    panRequired: opt.compliance?.panRequired ?? false,
-                    passportRequired: opt.compliance?.passportRequired ?? false,
-                    gstType: opt.compliance?.gstType,
-
-                    onHoldAllowed: opt.onHoldAllowed ?? opt.cancellation?.onHoldAllowed ?? (opt.cancellation?.isRefundable ?? false),
-                    holdConfirm: opt.holdConfirm ?? opt.cancellation?.holdConfirm ?? (opt.cancellation?.isRefundable ?? false),
-                    isRefundable: opt.cancellation?.isRefundable,
-                    cancellationPolicies: opt.cancellation?.penalties || [],
-
-                    amenities: optionAmenities,
-                    hotelFacility: optionAmenities.map((name: string) => ({ facilityName: name })),
-                    images: roomImages,
-                    bed_config: roomStatic?.bed_config || opt.roomInfo?.[0]?.bed_config || null,
-                    checkInTime,
-                    checkOutTime,
-                    rawOption: opt,
-                };
-            });
-
-            const productsMap: Record<string, any> = {};
-            options.forEach((opt: any) => {
-                let roomName = opt.name || "Default Room";
-                if (opt.optionType === 'CRSM' || opt.optionType === 'CRCM') {
-                    roomName = "Mixed Rooms / Mixed Meals";
-                }
-                if (!productsMap[roomName]) {
-                    productsMap[roomName] = {
-                        name: roomName,
-                        roomCode: opt.roomInfo?.[0]?.id || roomName,
-                        images: opt.images?.length > 0 ? opt.images : [],
-                        rates: []
-                    };
-                }
-                productsMap[roomName].rates.push(opt);
-            });
-
-            return {
-                status: true,
-                statusCode: 200,
-                description: "Success",
-                body: {
-                    hotelId: payload.propertyId,
-                    hid: rawId,
-                    name: hotelName,
-                    address,
-                    city,
-                    starRating,
-                    description,
-                    images: hotelImages,
-                    amenities: hotelAmenities,
-                    hotelFacility,
-                    checkInTime,
-                    checkOutTime,
-                    reviewHash,
-                    correlationId,
-                    policies: staticData?.policies || staticData?.hotelInfo?.policies || pricingData?.policies || [],
-                    fees: staticData?.fees || staticData?.hotelInfo?.fees || pricingData?.fees || [],
-                    checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || pricingData?.checkInInstructions || "",
-                    specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || pricingData?.specialInstructions || "",
-                    location: {
-                        lat: staticData?.locale?.coordinates?.lat || pricingData.coordinates?.lat || pricingData.latitude,
-                        lng: staticData?.locale?.coordinates?.long || pricingData.coordinates?.long || pricingData.longitude,
-                    },
-                    products: Object.values(productsMap),
-                    options: options,
-                },
-            };
-        } catch (error: any) {
-            console.error("[TripJack] GetProducts (Pricing) Error:", error.response?.status, error.response?.data || error.message);
-
-            if (error.response?.status === 400 && error.response?.data?.options?.length === 0) {
-                console.log(`[TripJack] Hotel ${rawId} is sold out for these dates.`);
-                try {
-                    if (staticDetailPromise && !staticData) {
-                        await Promise.race([staticDetailPromise, new Promise(resolve => setTimeout(resolve, 3000))]);
-                    }
-                } catch (e) {
-                    console.warn("[TripJack] Failed to await static data in error block:", e);
-                }
-
-                const hotelName: string = staticData?.name || localHotel?.name || "Sold Out Hotel";
-                const hotelImages: string[] = staticData?.images
-                    ? staticData.images.map((img: any) => {
-                        const links = img.links || {};
-                        const firstLink = Object.values(links)[0] as any;
-                        return links["1000px"]?.href || links["default"]?.href || firstLink?.href;
-                    }).filter(Boolean)
-                    : (localHotel?.images || []);
-
-                return {
-                    status: true,
-                    statusCode: 200,
-                    description: "No availability for these dates",
-                    body: {
-                        hotelId: payload.propertyId,
-                        hid: rawId,
-                        name: hotelName,
-                        address: staticData?.locale?.address?.fulladdr || localHotel?.address || "",
-                        city: staticData?.locale?.address?.city || localHotel?.cityName || "",
-                        starRating: staticData?.star_rating ? parseInt(staticData.star_rating) : (localHotel?.starRating || 0),
-                        description: staticData?.descriptions?.default || staticData?.desc || "No rooms available for your dates.",
-                        images: hotelImages,
-                        amenities: staticData?.amenities ? Object.values(staticData.amenities).map((a: any) => a.name) : [],
-                        hotelFacility: staticData?.amenities ? Object.values(staticData.amenities).map((a: any) => ({ facilityName: a.name })) : [],
-                        checkInTime: staticData?.hotelInfo?.checkInTime || "",
-                        checkOutTime: staticData?.hotelInfo?.checkOutTime || "",
-                        reviewHash: "",
-                        correlationId: error.response.data.correlationId || correlationId,
-                        policies: staticData?.policies || staticData?.hotelInfo?.policies || [],
-                        fees: staticData?.fees || staticData?.hotelInfo?.fees || [],
-                        checkInInstructions: staticData?.checkInInstructions || staticData?.hotelInfo?.checkInInstructions || "",
-                        specialInstructions: staticData?.specialInstructions || staticData?.hotelInfo?.specialInstructions || "",
-                        location: {
-                            lat: staticData?.locale?.coordinates?.lat || localHotel?.location?.coordinates?.[1] || 0,
-                            lng: staticData?.locale?.coordinates?.long || localHotel?.location?.coordinates?.[0] || 0
-                        },
-                        products: [],
-                        options: [],
-                    },
-                };
-            }
-
-            throw error;
+      const productsMap: Record<string, any> = {};
+      options.forEach((opt: any) => {
+        let roomName = opt.name || "Default Room";
+        if (opt.optionType === "CRSM" || opt.optionType === "CRCM") {
+          roomName = "Mixed Rooms / Mixed Meals";
         }
+        if (!productsMap[roomName]) {
+          productsMap[roomName] = {
+            name: roomName,
+            roomCode: opt.roomInfo?.[0]?.id || roomName,
+            images: opt.images?.length > 0 ? opt.images : [],
+            rates: [],
+          };
+        }
+        productsMap[roomName].rates.push(opt);
+      });
+
+      return {
+        status: true,
+        statusCode: 200,
+        description: "Success",
+        body: {
+          hotelId: payload.propertyId,
+          hid: rawId,
+          name: hotelName,
+          address,
+          city,
+          starRating,
+          description,
+          images: hotelImages,
+          amenities: hotelAmenities,
+          hotelFacility,
+          checkInTime,
+          checkOutTime,
+          reviewHash,
+          correlationId,
+          policies:
+            staticData?.policies ||
+            staticData?.hotelInfo?.policies ||
+            pricingData?.policies ||
+            [],
+          fees:
+            staticData?.fees ||
+            staticData?.hotelInfo?.fees ||
+            pricingData?.fees ||
+            [],
+          checkInInstructions:
+            staticData?.checkInInstructions ||
+            staticData?.hotelInfo?.checkInInstructions ||
+            pricingData?.checkInInstructions ||
+            "",
+          specialInstructions:
+            staticData?.specialInstructions ||
+            staticData?.hotelInfo?.specialInstructions ||
+            pricingData?.specialInstructions ||
+            "",
+          location: {
+            lat:
+              staticData?.locale?.coordinates?.lat ||
+              pricingData.coordinates?.lat ||
+              pricingData.latitude,
+            lng:
+              staticData?.locale?.coordinates?.long ||
+              pricingData.coordinates?.long ||
+              pricingData.longitude,
+          },
+          products: Object.values(productsMap),
+          options: options,
+        },
+      };
+    } catch (error: any) {
+      console.error(
+        "[TripJack] GetProducts (Pricing) Error:",
+        error.response?.status,
+        error.response?.data || error.message,
+      );
+
+      if (
+        error.response?.status === 400 &&
+        error.response?.data?.options?.length === 0
+      ) {
+        console.log(`[TripJack] Hotel ${rawId} is sold out for these dates.`);
+        try {
+          if (staticDetailPromise && !staticData) {
+            await Promise.race([
+              staticDetailPromise,
+              new Promise((resolve) => setTimeout(resolve, 3000)),
+            ]);
+          }
+        } catch (e) {
+          console.warn(
+            "[TripJack] Failed to await static data in error block:",
+            e,
+          );
+        }
+
+        const hotelName: string =
+          staticData?.name || localHotel?.name || "Sold Out Hotel";
+        const hotelImages: string[] = staticData?.images
+          ? staticData.images
+              .map((img: any) => {
+                const links = img.links || {};
+                const firstLink = Object.values(links)[0] as any;
+                return (
+                  links["1000px"]?.href ||
+                  links["default"]?.href ||
+                  firstLink?.href
+                );
+              })
+              .filter(Boolean)
+          : localHotel?.images || [];
+
+        return {
+          status: true,
+          statusCode: 200,
+          description: "No availability for these dates",
+          body: {
+            hotelId: payload.propertyId,
+            hid: rawId,
+            name: hotelName,
+            address:
+              staticData?.locale?.address?.fulladdr ||
+              localHotel?.address ||
+              "",
+            city:
+              staticData?.locale?.address?.city || localHotel?.cityName || "",
+            starRating: staticData?.star_rating
+              ? parseInt(staticData.star_rating)
+              : localHotel?.starRating || 0,
+            description:
+              staticData?.descriptions?.default ||
+              staticData?.desc ||
+              "No rooms available for your dates.",
+            images: hotelImages,
+            amenities: staticData?.amenities
+              ? Object.values(staticData.amenities).map((a: any) => a.name)
+              : [],
+            hotelFacility: staticData?.amenities
+              ? Object.values(staticData.amenities).map((a: any) => ({
+                  facilityName: a.name,
+                }))
+              : [],
+            checkInTime: staticData?.hotelInfo?.checkInTime || "",
+            checkOutTime: staticData?.hotelInfo?.checkOutTime || "",
+            reviewHash: "",
+            correlationId: error.response.data.correlationId || correlationId,
+            policies:
+              staticData?.policies || staticData?.hotelInfo?.policies || [],
+            fees: staticData?.fees || staticData?.hotelInfo?.fees || [],
+            checkInInstructions:
+              staticData?.checkInInstructions ||
+              staticData?.hotelInfo?.checkInInstructions ||
+              "",
+            specialInstructions:
+              staticData?.specialInstructions ||
+              staticData?.hotelInfo?.specialInstructions ||
+              "",
+            location: {
+              lat:
+                staticData?.locale?.coordinates?.lat ||
+                localHotel?.location?.coordinates?.[1] ||
+                0,
+              lng:
+                staticData?.locale?.coordinates?.long ||
+                localHotel?.location?.coordinates?.[0] ||
+                0,
+            },
+            products: [],
+            options: [],
+          },
+        };
+      }
+
+      throw error;
     }
+  }
 }
