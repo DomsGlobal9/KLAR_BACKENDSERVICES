@@ -3,8 +3,8 @@ import { deleteExpiredPendingBookingsJob } from "./jobs/deleteExpiredPendingBook
 import { ReconciliationWorker } from "../workers/ReconciliationWorker";
 
 export const initializeCronJobs = () => {
-    checkBookingStatusJob();
-    deleteExpiredPendingBookingsJob();
-    ReconciliationWorker.start();
-    console.log("Hotel Booking Service Cron Jobs Initialized");
+  checkBookingStatusJob();
+  deleteExpiredPendingBookingsJob();
+  ReconciliationWorker.start();
+  console.log("Hotel Booking Service Cron Jobs Initialized");
 };
