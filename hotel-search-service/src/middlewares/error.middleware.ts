@@ -4,7 +4,7 @@ export const errorHandler = (
   err: any,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ) => {
   console.error(" Error:", err);
 
@@ -14,6 +14,6 @@ export const errorHandler = (
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal Server Error",
-    ...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {})
+    ...(process.env.NODE_ENV !== "production" ? { stack: err.stack } : {}),
   });
 };

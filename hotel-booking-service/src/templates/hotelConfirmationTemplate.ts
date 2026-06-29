@@ -1,7 +1,7 @@
 import { IBooking } from "../models/Booking.model";
 
 export const generateHotelVoucherHTML = (booking: IBooking): string => {
-    return `
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -38,17 +38,21 @@ export const generateHotelVoucherHTML = (booking: IBooking): string => {
                 
                 <div class="section">
                     <div class="section-title">Hotel Details</div>
-                    <div class="hotel-name">${booking.hotelName || 'N/A'}</div>
-                    <div style="font-size: 13px; color: #666; margin-bottom: 15px;">${booking.hotelAddress || 'N/A'}, ${booking.city || ''}</div>
-                    ${booking.rooms.map((room, index) => `
-                        <div class="row"><span class="label">Room ${index + 1}</span><span class="value">${room.roomType || booking.roomType || 'Standard Room'} (${room.guests} Guests)</span></div>
-                    `).join('')}
+                    <div class="hotel-name">${booking.hotelName || "N/A"}</div>
+                    <div style="font-size: 13px; color: #666; margin-bottom: 15px;">${booking.hotelAddress || "N/A"}, ${booking.city || ""}</div>
+                    ${booking.rooms
+                      .map(
+                        (room, index) => `
+                        <div class="row"><span class="label">Room ${index + 1}</span><span class="value">${room.roomType || booking.roomType || "Standard Room"} (${room.guests} Guests)</span></div>
+                    `,
+                      )
+                      .join("")}
                 </div>
 
                 <div class="section">
                     <div class="section-title">Guest Details</div>
-                    <div class="row"><span class="label">Guest Name</span><span class="value">${booking.guestName || 'N/A'}</span></div>
-                    <div class="row"><span class="label">Contact</span><span class="value">${booking.guestEmail || 'N/A'} | ${booking.guestMobile || 'N/A'}</span></div>
+                    <div class="row"><span class="label">Guest Name</span><span class="value">${booking.guestName || "N/A"}</span></div>
+                    <div class="row"><span class="label">Contact</span><span class="value">${booking.guestEmail || "N/A"} | ${booking.guestMobile || "N/A"}</span></div>
                 </div>
 
                 <div class="section" style="background: #f8f9fa; padding: 15px; border-radius: 6px;">

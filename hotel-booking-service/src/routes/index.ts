@@ -1,11 +1,17 @@
 import { Router } from "express";
 import { precheckController } from "../controllers/precheck.controller";
 import { commitController } from "../controllers/commit.controller";
-import { cancelController, getCancelChargesController } from "../controllers/cancel.controller";
+import {
+  cancelController,
+  getCancelChargesController,
+} from "../controllers/cancel.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
 import { getPricingSummaryController } from "../controllers/pricing.controller";
-import { getBookings, getBookingDetails } from "../controllers/bookings.controller";
+import {
+  getBookings,
+  getBookingDetails,
+} from "../controllers/bookings.controller";
 import { confirmController } from "../controllers/confirm.controller";
 import { bookingTemplateController } from "../controllers/booking-template.controller";
 
@@ -14,38 +20,42 @@ import { authenticateJWT } from "../middlewares/auth.middleware";
 const router = Router();
 
 router.get("/", (_req, res) => {
-    res.json({
-        service: "hotel-booking-service",
-        endpoints: {
-            health: "GET /health",
-            bookings: "GET /bookings",
-            precheck: "POST /precheck",
-            commit: "POST /commit",
-            cancel: "POST /cancel",
-            confirm: "POST /confirm",
-            specialRequests: "GET /special-requests",
+  res.json({
+    service: "hotel-booking-service",
+    endpoints: {
+      health: "GET /health",
+      bookings: "GET /bookings",
+      precheck: "POST /precheck",
+      commit: "POST /commit",
+      cancel: "POST /cancel",
+      confirm: "POST /confirm",
+      specialRequests: "GET /special-requests",
 
-
-            bookingDetails: "GET /bookings/:id"
-        }
-    });
+      bookingDetails: "GET /bookings/:id",
+    },
+  });
 });
 
 import mongoose from "mongoose";
 
 router.get("/health", (_req, res) => {
-    const dbStatus = mongoose.connection.readyState === 1 ? "CONNECTED" : "DISCONNECTED";
-    res.json({
-        status: "UP",
-        service: "hotel-booking-service",
-        database: dbStatus
-    });
+  const dbStatus =
+    mongoose.connection.readyState === 1 ? "CONNECTED" : "DISCONNECTED";
+  res.json({
+    status: "UP",
+    service: "hotel-booking-service",
+    database: dbStatus,
+  });
 });
 
 // List bookings from DB
 router.get("/bookings", authenticateJWT, listController);
 
-import { getModificationPolicy, getModificationPricing, commitModification } from "../controllers/amend.controller";
+import {
+  getModificationPolicy,
+  getModificationPricing,
+  commitModification,
+} from "../controllers/amend.controller";
 
 // RateGain booking flow — now protected
 router.post("/precheck", authenticateJWT, precheckController);
@@ -54,7 +64,6 @@ router.post("/confirm", authenticateJWT, confirmController);
 router.post("/cancel", authenticateJWT, cancelController);
 router.get("/cancel/charges", authenticateJWT, getCancelChargesController);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
-
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);
 router.post("/amend/price", authenticateJWT, getModificationPricing);
@@ -69,7 +78,9 @@ router.get("/bookings/:id", authenticateJWT, getBookingDetails);
  * GET -> /api/templates/hotel/confirmation/client/6a15467827cdbbb8d1982f82
  */
 router.get(
-    "/templates/hotel/confirmation/client/:id", authenticateJWT, bookingTemplateController.renderClientConfirmation
+  "/templates/hotel/confirmation/client/:id",
+  authenticateJWT,
+  bookingTemplateController.renderClientConfirmation,
 );
 
 /**
@@ -77,8 +88,9 @@ router.get(
  * GET -> /api/templates/hotel/confirmation/agent/6a15467827cdbbb8d1982f82
  */
 router.get(
-    "/templates/hotel/confirmation/agent/:id", authenticateJWT, bookingTemplateController.renderAgentConfirmation
+  "/templates/hotel/confirmation/agent/:id",
+  authenticateJWT,
+  bookingTemplateController.renderAgentConfirmation,
 );
-
 
 export default router;

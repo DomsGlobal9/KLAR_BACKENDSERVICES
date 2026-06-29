@@ -2,33 +2,38 @@ import { rateGainProvider } from "../providers/rategain.provider";
 import { tripJackProvider } from "../providers/tripjack.provider";
 
 class ProductsService {
-    async getProducts(payload: any) {
-        const propertyId = (payload.propertyId || payload.PropertyId || "").toString();
-        
-        if (this.isTripJack(propertyId)) {
-            return tripJackProvider.getProducts(payload);
-        }
+  async getProducts(payload: any) {
+    const propertyId = (
+      payload.propertyId ||
+      payload.PropertyId ||
+      ""
+    ).toString();
 
-        // Default to RateGain
-        return rateGainProvider.getAllProducts(payload);
+    if (this.isTripJack(propertyId)) {
+      return tripJackProvider.getProducts(payload);
     }
 
-    private isTripJack(propertyId: string): boolean {
-        // 1. Explicit TJ prefix
-        if (propertyId.startsWith("TJ:")) return true;
-        
-        // 2. RG prefix is definitely not TripJack
-        if (propertyId.startsWith("RG:")) return false;
+    // Default to RateGain
+    return rateGainProvider.getAllProducts(payload);
+  }
 
-        // 3. UUID format: RateGain uses UUIDs, TripJack uses numeric IDs
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (uuidRegex.test(propertyId)) return false;
+  private isTripJack(propertyId: string): boolean {
+    // 1. Explicit TJ prefix
+    if (propertyId.startsWith("TJ:")) return true;
 
-        // 4. Numeric format: TripJack uses numeric IDs
-        if (/^\d+$/.test(propertyId)) return true;
+    // 2. RG prefix is definitely not TripJack
+    if (propertyId.startsWith("RG:")) return false;
 
-        return false;
-    }
+    // 3. UUID format: RateGain uses UUIDs, TripJack uses numeric IDs
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(propertyId)) return false;
+
+    // 4. Numeric format: TripJack uses numeric IDs
+    if (/^\d+$/.test(propertyId)) return true;
+
+    return false;
+  }
 }
 
 export const productsService = new ProductsService();
