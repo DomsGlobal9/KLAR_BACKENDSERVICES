@@ -1,5 +1,5 @@
 import { rateGainClient } from "../clients/rategain.client";
-import { calculateEnrichedPricing, calculateNightsFromDates } from "../utils/pricing.util";
+import { calculateEnrichedPricing, calculateNightsFromDates, convertToINR, detectSupplierCurrency } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
 
 export class RateGainApiProvider {
@@ -111,10 +111,24 @@ export class RateGainApiProvider {
             const enrichRate = (rate: any) => {
                 try {
                     // RateGain getproducts returns RoomRate as the primary price field
-                    const totalPrice = Number(rate.RoomRate || rate.totalAmount || rate.sellingRate || rate.totalRate || rate.price || rate.net || rate.rate || rate.totalPrice || rate.netPrice || 0);
-                    const taxAmount  = Number(rate.taxAmount || rate.taxes || rate.totalTax || rate.tax || 0);
+                    const rawTotalPrice = Number(rate.RoomRate || rate.totalAmount || rate.sellingRate || rate.totalRate || rate.price || rate.net || rate.rate || rate.totalPrice || rate.netPrice || 0);
+
+                    // Extract tax amount properly — rate.taxes is an object, not a number
+                    let rawTaxAmount = 0;
+                    if (rate.taxes?.taxes && Array.isArray(rate.taxes.taxes)) {
+                        rawTaxAmount = rate.taxes.taxes.reduce(
+                            (sum: number, t: any) => sum + (Number(t.clientAmount || t.amount) || 0), 0
+                        );
+                    } else {
+                        rawTaxAmount = Number(rate.taxAmount || rate.totalTax || rate.tax || 0);
+                    }
+
+                    // Detect actual supplier currency (USD, EUR, etc.) and convert to INR
+                    const supplierCurrency = detectSupplierCurrency(rate);
+                    const totalPrice = convertToINR(rawTotalPrice, supplierCurrency);
+                    const taxAmount  = convertToINR(rawTaxAmount, supplierCurrency);
                     const basePrice  = totalPrice - taxAmount;
-                    const currency   = rate.currency || payload.Currency || payload.currency || "INR";
+                    const currency   = "INR"; // Always return INR to the client
 
                     const enriched = calculateEnrichedPricing(
                         { basePrice, totalPrice, taxes: taxAmount, mf: 0, mft: 0, currency },
