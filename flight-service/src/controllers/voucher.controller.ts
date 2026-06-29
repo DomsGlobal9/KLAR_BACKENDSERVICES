@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import axios from "axios";
-import { envConfig } from "../../../config";
-import { BookingVoucherPdfService } from "../../../services/bookingVoucherPdf.service";
-import BookingService from "../../../services/bookingLocal.service";
-import TripjackBookingService from "../../../services/booking.service";
+import { envConfig } from "../config";
+import { BookingVoucherPdfService } from "../services/bookingVoucherPdf.service";
+import BookingService from "../services/bookingLocal.service";
+import TripjackBookingService from "../services/booking.service";
 
 class VoucherController {
     private authServiceUrl: string;

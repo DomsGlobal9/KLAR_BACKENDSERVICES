@@ -69,10 +69,6 @@ export class ReturnNormalizer {
         };
     }
 
-    /**
-     * Transform with all fares (for PDF generation)
-     * This method includes all fare options for each flight
-     */
     static transformWithAllFares(tripJackResponse: any) {
         const tripInfos = tripJackResponse?.data?.searchResult?.tripInfos;
 
@@ -92,7 +88,6 @@ export class ReturnNormalizer {
             };
         }
 
-
         if (tripInfos?.COMBO) {
             const roundTrips = tripInfos.COMBO.map((combo: any) => {
                 const onwardSegments = combo.sI.filter((seg: any) => !seg.isRs);
@@ -109,7 +104,6 @@ export class ReturnNormalizer {
                     combo.totalPriceList,
                     true
                 );
-
 
                 const allFares = (combo.totalPriceList || []).map((fare: any) => ({
                     fareName: fare.fareIdentifier || "UNKNOWN",
@@ -172,10 +166,9 @@ export class ReturnNormalizer {
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
-        // Extract stops information
         const stopsInfo = this.extractStops(segments);
 
-        return {
+        const flightData: any = {
             flightKey: BaseFlightNormalizer.getFlightKey(segments),
             isReturn,
             airline: first.fD.aI.name,
@@ -203,14 +196,18 @@ export class ReturnNormalizer {
                 )
             ),
             stops: segments.length - 1,
-            stopDetails: stopsInfo, // Add stop details
+            stopDetails: stopsInfo,
             price: cheapest.fd.ADULT.fC.TF
         };
+
+        if (cheapest?.fd?.ADULT?.fC?.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
+            flightData.original_price = cheapest.fd.ADULT.fC.originalTF;
+            flightData.markup = cheapest.fd.ADULT.fC.markup;
+        }
+
+        return flightData;
     }
 
-    /**
-     * Map flight with all fares (for PDF generation)
-     */
     private static mapFlightWithAllFares(
         segments: any[],
         totalPriceList: any[],
@@ -225,7 +222,6 @@ export class ReturnNormalizer {
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
-        // Extract stops information
         const stopsInfo = this.extractStops(segments);
 
         const allFares = (totalPriceList || []).map((fare: any) => ({
@@ -269,7 +265,7 @@ export class ReturnNormalizer {
                 )
             ),
             stops: segments.length - 1,
-            stopDetails: stopsInfo, // Add stop details
+            stopDetails: stopsInfo,
             cheapestFare: {
                 price: cheapest?.fd?.ADULT?.fC?.TF || 0,
                 cabinClass: cheapest?.fd?.ADULT?.cc || "UNKNOWN",
@@ -285,7 +281,6 @@ export class ReturnNormalizer {
                 }
             }
         };
-
 
         if (cheapest?.fd?.ADULT?.fC?.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
             flightData.original_price = cheapest.fd.ADULT.fC.originalTF;
@@ -309,10 +304,9 @@ export class ReturnNormalizer {
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
-        // Extract stops information
         const stopsInfo = this.extractStops(segments);
 
-        return {
+        const flightData: any = {
             flightKey: BaseFlightNormalizer.getFlightKey(segments),
             isReturn,
             airline: first.fD.aI.name,
@@ -340,13 +334,17 @@ export class ReturnNormalizer {
                 )
             ),
             stops: segments.length - 1,
-            stopDetails: stopsInfo // Add stop details
+            stopDetails: stopsInfo
         };
+
+        if (cheapest?.fd?.ADULT?.fC?.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
+            flightData.original_price = cheapest.fd.ADULT.fC.originalTF;
+            flightData.markup = cheapest.fd.ADULT.fC.markup;
+        }
+
+        return flightData;
     }
 
-    /**
-     * Map flight for combo with all fares (for PDF generation)
-     */
     private static mapFlightWithAllFaresForCombo(
         segments: any[],
         totalPriceList: any[],
@@ -356,14 +354,14 @@ export class ReturnNormalizer {
 
         const first = segments[0];
         const last = segments[segments.length - 1];
+        const cheapest = BaseFlightNormalizer.getCheapestFare(totalPriceList);
 
         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
         const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
-        // Extract stops information
         const stopsInfo = this.extractStops(segments);
 
-        return {
+        const flightData: any = {
             flightKey: BaseFlightNormalizer.getFlightKey(segments),
             isReturn,
             airline: first.fD.aI.name,
@@ -394,35 +392,42 @@ export class ReturnNormalizer {
                 )
             ),
             stops: segments.length - 1,
-            stopDetails: stopsInfo // Add stop details
+            stopDetails: stopsInfo
         };
+
+        if (cheapest?.fd?.ADULT?.fC?.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
+            flightData.original_price = cheapest.fd.ADULT.fC.originalTF;
+            flightData.markup = cheapest.fd.ADULT.fC.markup;
+        }
+
+        return flightData;
     }
 
     private static buildAirlineStats(flights: any[]) {
-        const airlineMap: Record<string, number> = {};
+        const airlineMap: Record<string, { count: number; code: string }> = {};
 
         flights.forEach((flight: any) => {
             if (!flight?.airline) return;
 
-            airlineMap[flight.airline] =
-                (airlineMap[flight.airline] || 0) + 1;
+            if (!airlineMap[flight.airline]) {
+                airlineMap[flight.airline] = {
+                    count: 0,
+                    code: flight.airlineCode || ''
+                };
+            }
+            airlineMap[flight.airline].count += 1;
         });
 
         return Object.entries(airlineMap)
-            .map(([airline, flights]) => ({
+            .map(([airline, data]) => ({
                 airline,
-                flights
+                airlineCode: data.code,
+                flights: data.count
             }))
             .sort((a, b) => b.flights - a.flights);
     }
 
-    /**
-     * Extract stops information from flight segments
-     * @param segments - Array of flight segments
-     * @returns Stops information including city names and airport codes
-     */
     static extractStops(segments: any[]): any {
-        // If no segments or only one segment (direct flight)
         if (!segments || segments.length <= 1) {
             return {
                 count: 0,
@@ -439,27 +444,21 @@ export class ReturnNormalizer {
         const stopNames = [];
         const stopoverDurations = [];
 
-        // Loop through segments to find stops
-        // For each segment except the last one, check if it's a stop
         for (let i = 0; i < segments.length - 1; i++) {
             const currentSegment = segments[i];
             const nextSegment = segments[i + 1];
 
-            // The arrival airport of the current segment is where we stop
             const stopAirport = currentSegment.aa || currentSegment.da;
 
-            // Get stop city information
             const stopInfo = {
                 city: stopAirport?.city || 'Unknown City',
                 airportCode: stopAirport?.code || 'Unknown',
                 airportName: stopAirport?.name || '',
                 terminal: stopAirport?.terminal || '',
-                // Calculate stopover duration (time between arrival and next departure)
                 stopoverDuration: this.calculateStopoverDuration(
                     currentSegment.at,
                     nextSegment.dt
                 ),
-                // Arrival and departure times at the stop
                 arrivalTime: BaseFlightNormalizer.getTime(currentSegment.at),
                 departureTime: BaseFlightNormalizer.getTime(nextSegment.dt),
                 arrivalDate: BaseFlightNormalizer.getDateParts(currentSegment.at),
@@ -476,7 +475,6 @@ export class ReturnNormalizer {
             }
         }
 
-        // Build display string
         let displayString = "Non-stop";
         if (stops.length === 1) {
             displayString = `1 stop (${stopCities[0]})`;
@@ -495,12 +493,6 @@ export class ReturnNormalizer {
         };
     }
 
-    /**
-     * Calculate the duration of a stopover
-     * @param arrivalTime - Arrival time string (ISO format)
-     * @param departureTime - Departure time string (ISO format)
-     * @returns Formatted stopover duration string
-     */
     static calculateStopoverDuration(arrivalTime: string, departureTime: string): string {
         if (!arrivalTime || !departureTime) {
             return '0h 0m';
@@ -512,8 +504,6 @@ export class ReturnNormalizer {
             const diffMinutes = Math.floor((departure.getTime() - arrival.getTime()) / (1000 * 60));
 
             if (diffMinutes < 0) {
-                // If negative, it means the stop crosses midnight or next day
-                // Add 24 hours (1440 minutes) to get the actual duration
                 const adjustedDiff = diffMinutes + 1440;
                 const hours = Math.floor(adjustedDiff / 60);
                 const minutes = adjustedDiff % 60;
@@ -529,193 +519,3 @@ export class ReturnNormalizer {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-// import { BaseFlightNormalizer } from "./baseFlight.normalizer";
-
-// export class ReturnNormalizer {
-
-//     static transform(tripJackResponse: any) {
-//         const tripInfos = tripJackResponse?.data?.searchResult?.tripInfos;
-
-//         if (tripInfos?.ONWARD && tripInfos?.RETURN) {
-
-//             const onward = tripInfos.ONWARD.map((f: any) =>
-//                 this.mapFlight(f.sI, f.totalPriceList, false)
-//             );
-
-//             const returnFlights = tripInfos.RETURN.map((f: any) =>
-//                 this.mapFlight(f.sI, f.totalPriceList, true)
-//             );
-
-//             return {
-//                 onward,
-//                 return: returnFlights,
-//                 airlineStats: this.buildAirlineStats([
-//                     ...onward,
-//                     ...returnFlights
-//                 ])
-//             };
-//         }
-
-//         if (tripInfos?.COMBO) {
-//             const roundTrips = tripInfos.COMBO.map((combo: any) => {
-//                 const onwardSegments = combo.sI.filter((seg: any) => !seg.isRs);
-//                 const returnSegments = combo.sI.filter((seg: any) => seg.isRs);
-
-//                 const onwardFlight = this.mapFlightForCombo(
-//                     onwardSegments,
-//                     combo.totalPriceList,
-//                     false
-//                 );
-
-//                 const returnFlight = this.mapFlightForCombo(
-//                     returnSegments,
-//                     combo.totalPriceList,
-//                     true
-//                 );
-
-//                 const cheapestFare = BaseFlightNormalizer.getCheapestFare(combo.totalPriceList);
-//                 const totalPrice = cheapestFare?.fd?.ADULT?.fC?.TF || 0;
-
-//                 return {
-//                     onward: onwardFlight,
-//                     return: returnFlight,
-//                     totalPrice
-//                 };
-//             });
-
-//             const allFlights = roundTrips.flatMap((rt: any) => [
-//                 rt.onward,
-//                 rt.return
-//             ]).filter(Boolean);
-
-//             return {
-//                 roundTrips,
-//                 airlineStats: this.buildAirlineStats(allFlights)
-//             };
-//         }
-
-//         return {
-//             onward: [],
-//             return: []
-//         };
-//     }
-
-//     private static mapFlight(
-//         segments: any[],
-//         totalPriceList: any[],
-//         isReturn = false
-//     ) {
-//         if (!segments || segments.length === 0) return null;
-
-//         const first = segments[0];
-//         const last = segments[segments.length - 1];
-//         const cheapest = BaseFlightNormalizer.getCheapestFare(totalPriceList);
-
-//         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
-//         const toDate = BaseFlightNormalizer.getDateParts(last.at);
-
-//         return {
-//             flightKey: BaseFlightNormalizer.getFlightKey(segments),
-//             isReturn,
-//             airline: first.fD.aI.name,
-//             airlineCode: first.fD.aI.code,
-//             flightNumber: `${first.fD.aI.code}-${first.fD.fN}`,
-//             cabinClass: cheapest.fd.ADULT.cc,
-//             from: {
-//                 city: first.da.city,
-//                 airportCode: first.da.code,
-//                 time: BaseFlightNormalizer.getTime(first.dt),
-//                 date: fromDate.date,
-//                 day: fromDate.day
-//             },
-//             to: {
-//                 city: last.aa.city,
-//                 airportCode: last.aa.code,
-//                 time: BaseFlightNormalizer.getTime(last.at),
-//                 date: toDate.date,
-//                 day: toDate.day
-//             },
-//             duration: BaseFlightNormalizer.formatDuration(
-//                 segments.reduce(
-//                     (sum: number, seg: any) => sum + (seg.duration || 0),
-//                     0
-//                 )
-//             ),
-//             stops: segments.length - 1,
-//             price: cheapest.fd.ADULT.fC.TF
-//         };
-//     }
-
-//     private static mapFlightForCombo(
-//         segments: any[],
-//         totalPriceList: any[],
-//         isReturn = false
-//     ) {
-//         if (!segments || segments.length === 0) return null;
-
-//         const first = segments[0];
-//         const last = segments[segments.length - 1];
-//         const cheapest = BaseFlightNormalizer.getCheapestFare(totalPriceList);
-
-//         const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
-//         const toDate = BaseFlightNormalizer.getDateParts(last.at);
-
-//         return {
-//             flightKey: BaseFlightNormalizer.getFlightKey(segments),
-//             isReturn,
-//             airline: first.fD.aI.name,
-//             airlineCode: first.fD.aI.code,
-//             flightNumber: `${first.fD.aI.code}-${first.fD.fN}`,
-//             cabinClass: cheapest.fd.ADULT.cc,
-//             from: {
-//                 city: first.da.city,
-//                 airportCode: first.da.code,
-//                 time: BaseFlightNormalizer.getTime(first.dt),
-//                 date: fromDate.date,
-//                 day: fromDate.day
-//             },
-//             to: {
-//                 city: last.aa.city,
-//                 airportCode: last.aa.code,
-//                 time: BaseFlightNormalizer.getTime(last.at),
-//                 date: toDate.date,
-//                 day: toDate.day
-//             },
-//             duration: BaseFlightNormalizer.formatDuration(
-//                 segments.reduce(
-//                     (sum: number, seg: any) => sum + (seg.duration || 0),
-//                     0
-//                 )
-//             ),
-//             stops: segments.length - 1
-//         };
-//     }
-
-//     private static buildAirlineStats(flights: any[]) {
-//         const airlineMap: Record<string, number> = {};
-
-//         flights.forEach((flight: any) => {
-//             if (!flight?.airline) return;
-
-//             airlineMap[flight.airline] =
-//                 (airlineMap[flight.airline] || 0) + 1;
-//         });
-
-//         return Object.entries(airlineMap)
-//             .map(([airline, flights]) => ({
-//                 airline,
-//                 flights
-//             }))
-//             .sort((a, b) => b.flights - a.flights);
-//     }
-// }

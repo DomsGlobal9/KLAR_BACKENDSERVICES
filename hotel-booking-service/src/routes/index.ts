@@ -64,7 +64,6 @@ router.get("/special-requests", specialRequestsController);
 // New booking management routes
 router.get("/bookings/:id", authenticateJWT, getBookingDetails);
 
-
 /**
  * Client Confirmation Template Endpoint
  * GET -> /api/templates/hotel/confirmation/client/6a15467827cdbbb8d1982f82

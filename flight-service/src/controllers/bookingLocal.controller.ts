@@ -20,17 +20,116 @@ class BookingLocalController {
     // ************************  Private Functions  ****************************
     // *************************************************************************
 
+    // private extractToken = (req: Request): string | null => {
+    //     const authHeader = req.headers.authorization;
+
+    //     if (authHeader?.startsWith("Bearer ")) {
+    //         const token = authHeader.split(" ")[1];
+    //         this.currentToken = token;
+    //         return token;
+    //     }
+
+    //     if (req.cookies?.token) {
+    //         const token = req.cookies.token;
+    //         this.currentToken = token;
+    //         return token;
+    //     }
+
+    //     return null;
+    // };
+
+    // private validateToken = async (token: string): Promise<any> => {
+    //     try {
+    //         const response = await axios.post(
+    //             `${this.authServiceUrl}/auth/validate-token`,
+    //             {},
+    //             {
+    //                 headers: {
+    //                     Authorization: `Bearer ${token}`,
+    //                 },
+    //             }
+    //         );
+
+    //         if (response.data.success) {
+    //             const userId = response.data.data.userId ||
+    //                 response.data.data.id ||
+    //                 response.data.data._id;
+
+    //             if (!userId) {
+    //                 console.error("❌ No user ID found in auth response:", response.data.data);
+    //                 throw new Error("No user ID in token validation response");
+    //             }
+
+    //             return {
+    //                 id: userId,
+    //                 email: response.data.data.email,
+    //                 roles: response.data.data.roles || ["user"],
+    //                 clientType: response.data.data.clientType || "b2c",
+    //             };
+    //         }
+
+    //         console.log("❌ TOKEN INVALID - success: false");
+    //         throw new Error("Token validation failed");
+    //     } catch (error: any) {
+    //         console.log("\n🔴 VALIDATION ERROR 🔴");
+    //         console.log("Error message:", error.message);
+
+    //         if (error.response) {
+    //             console.log("Error Status:", error.response.status);
+    //             console.log("Error Data:", JSON.stringify(error.response.data, null, 2));
+    //             console.log("Error Headers:", error.response.headers);
+    //         } else if (error.request) {
+    //             console.log("No response received from Auth Service");
+    //             console.log("Request:", error.request);
+    //         } else {
+    //             console.log("Error setting up request:", error.message);
+    //         }
+
+    //         throw new Error(
+    //             error.response?.data?.message ||
+    //             error.message ||
+    //             "Token validation failed"
+    //         );
+    //     }
+    // };
+
     private extractToken = (req: Request): string | null => {
         const authHeader = req.headers.authorization;
 
         if (authHeader?.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
+            let token = authHeader.split(" ")[1];
+
+            // Check if token is a JSON string (stored as object with value/expiry)
+            if (token && token.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(token);
+                    // Extract the actual token from the JSON object
+                    token = parsed.value || parsed.token || token;
+                    console.log('✅ Extracted token from JSON object');
+                } catch (e) {
+                    // If parsing fails, keep as is
+                    console.log('⚠️ Token parsing failed, using raw token');
+                }
+            }
+
             this.currentToken = token;
             return token;
         }
 
         if (req.cookies?.token) {
-            const token = req.cookies.token;
+            let token = req.cookies.token;
+
+            // Check if token is a JSON string
+            if (token && token.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(token);
+                    token = parsed.value || parsed.token || token;
+                    console.log('✅ Extracted token from cookie JSON object');
+                } catch (e) {
+                    // If parsing fails, keep as is
+                }
+            }
+
             this.currentToken = token;
             return token;
         }
@@ -40,12 +139,24 @@ class BookingLocalController {
 
     private validateToken = async (token: string): Promise<any> => {
         try {
+            // Clean the token if it's still a JSON string
+            let cleanToken = token;
+            if (cleanToken && cleanToken.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(cleanToken);
+                    cleanToken = parsed.value || parsed.token || cleanToken;
+                    console.log('✅ Cleaned token from JSON object before validation');
+                } catch (e) {
+                    console.log('⚠️ Token parsing failed, using raw token');
+                }
+            }
+
             const response = await axios.post(
                 `${this.authServiceUrl}/auth/validate-token`,
                 {},
                 {
                     headers: {
-                        Authorization: `Bearer ${token}`,
+                        Authorization: `Bearer ${cleanToken}`,
                     },
                 }
             );
@@ -92,6 +203,7 @@ class BookingLocalController {
             );
         }
     };
+
 
     private deductWalletBalance = async (bookingId: string, totalPrice: string, userId?: string): Promise<any> => {
         try {

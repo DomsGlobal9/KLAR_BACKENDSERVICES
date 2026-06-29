@@ -33,6 +33,11 @@ export interface RateGainRoomSelection {
     SpecialRequest?: string;
     Guest: RateGainGuest[];
     Children: RateGainChild[];
+    IsMandatory?: boolean;
+    sellingRate?: number;
+    SellingRate?: number;
+    CommissionAmt?: number;
+    CommissionPct?: number;
 }
 
 export interface RateGainCreditCard {
@@ -58,11 +63,15 @@ export interface RateGainBookReservation {
     EchoToken: string;
     BookingRate: number;
     sellingRate?: number;
+    SellingRate?: number;
     Session: string;
     CountryCode?: string;
     Currency?: string;
     CreditCard?: RateGainCreditCard;
     RoomSelection: RateGainRoomSelection[];
+    IsMandatory?: boolean;
+    CommissionAmt?: number;
+    CommissionPct?: number;
 }
 
 export interface PreCheckRequest {

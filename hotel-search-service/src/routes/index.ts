@@ -8,7 +8,11 @@ import { resolveForTJ, resolveForRG } from "../services/destinationResolver";
 import { syncTJHotels } from "../sync/tjHotelSync";
 import { syncRGDestinations } from "../sync/rgDestinationSync";
 
+import geoRouter from "./geo.routes";
+
 const router = Router();
+
+router.use("/geo", geoRouter);
 
 router.post("/sync/destinations", async (req, res) => {
     const force = req.query.force === "true";

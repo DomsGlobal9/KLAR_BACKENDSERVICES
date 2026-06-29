@@ -5,9 +5,34 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
+// Allowed origins: loaded from env so no code change needed on deployment.
+// In .env: ALLOWED_ORIGINS=https://b2b.yourdomain.com,https://b2c.yourdomain.com
+const envOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean)
+    : [];
+
+const DEFAULT_DEV_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:3000",
+];
+
+const ALLOWED_ORIGINS = [...new Set([...envOrigins, ...DEFAULT_DEV_ORIGINS])];
+
 app.use(cors({
-    origin: true,
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true); // server-to-server / Postman
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        // In non-production: allow any localhost port
+        if (process.env.NODE_ENV !== "production" && /^http:\/\/localhost:\d+$/.test(origin)) {
+            return callback(null, true);
+        }
+        callback(new Error(`CORS blocked: ${origin}`));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-client-type"],
 }));
 app.use(express.json());
 

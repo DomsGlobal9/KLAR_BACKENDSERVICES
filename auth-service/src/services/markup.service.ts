@@ -15,9 +15,15 @@ export class MarkupService {
 
         if (!serviceType) return markup;
 
-        const service = markup.services.find(
-            s => s.serviceType === serviceType
-        );
+        const target = serviceType.toUpperCase();
+        const service = markup.services.find(s => {
+            const current = (s.serviceType || '').toUpperCase();
+            return current === target || 
+                   (target === 'HOTELS' && current === 'HOTEL') || 
+                   (target === 'HOTEL' && current === 'HOTELS') ||
+                   (target === 'FLIGHTS' && current === 'FLIGHT') ||
+                   (target === 'FLIGHT' && current === 'FLIGHTS');
+        });
 
         if (!service) return {};
 
