@@ -21,7 +21,9 @@ export const commitController = async (req: any, res: Response) => {
                 ...compiledProviderPayload,
                 bookingId: req.body.providerContext.bookingId || compiledProviderPayload.bookingId || req.body.bookingFormData.precheckBookingId,
                 propertyId: req.body.providerContext.hotelId || req.body.bookingFormData.hotelId,
-                totalPrice: Number(req.body.bookingFormData.totalNet || req.body.bookingFormData.totalPrice || req.body.bookingFormData.precheckResponse?.body?.option?.pricing?.totalPrice || req.body.bookingFormData.precheckResponse?.body?.hInfo?.ops?.[0]?.tp || 0),
+                netPrice: Number(req.body.bookingFormData.totalNet || req.body.bookingFormData.precheckResponse?.body?.hInfo?.ops?.[0]?.tp || req.body.bookingFormData.totalPrice || 0),
+                sellingRate: Number(req.body.bookingFormData.totalPrice || 0),
+                totalPrice: Number(req.body.bookingFormData.totalPrice || req.body.bookingFormData.totalNet || 0),
                 
                 // TripJack dynamic check parameters
                 optionId: req.body.bookingPayload?.optionId || req.body.bookingFormData.optionId || req.body.bookingFormData.precheckResponse?.body?.option?.optionId || req.body.bookingFormData.precheckResponse?.body?.option?.id || req.body.bookingFormData.precheckResponse?.body?.hInfo?.ops?.[0]?.id,
