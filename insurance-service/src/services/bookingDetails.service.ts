@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { tripJackInsuranceProvider } from "../providers/tripjack.insurance.provider";
 import { InsuranceBookingModel } from "../models/InsuranceBooking.model";
 
@@ -27,14 +28,21 @@ class BookingDetailsService {
         };
     }
 
-    /**
-     * Get from local MongoDB by internal _id.
-     */
     async getFromDb(id: string) {
-        const booking = await InsuranceBookingModel.findById(id).lean();
-        if (!booking) {
-            throw { status: 404, message: `Insurance booking ${id} not found.` };
+        let booking;
+
+        // Check if the parameter matches a standard 24-character Mongoose ObjectId structure
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            booking = await InsuranceBookingModel.findById(id).lean();
+        } else {
+            // Fallback: Query using your custom indexed property string key instead
+            booking = await InsuranceBookingModel.findOne({ bookingId: id }).lean();
         }
+
+        if (!booking) {
+            throw { status: 404, message: `Insurance booking reference "${id}" not located in database.` };
+        }
+        
         return { status: true, statusCode: 200, body: booking };
     }
 }
