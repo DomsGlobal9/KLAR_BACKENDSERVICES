@@ -510,18 +510,17 @@ class CommitService {
           netPrice,
       );
 
+      const roundedNetPrice = Number(netPrice.toFixed(2));
+      const roundedSellingRate = clientType === "B2C" ? Number(b2cSellingRate.toFixed(2)) : roundedNetPrice;
+
       if (rgPayload.BookReservation) {
-        rgPayload.BookReservation.BookingRate = netPrice;
-        rgPayload.BookReservation.sellingRate =
-          clientType === "B2C" ? b2cSellingRate : netPrice;
-        rgPayload.BookReservation.SellingRate =
-          clientType === "B2C" ? b2cSellingRate : netPrice;
+        rgPayload.BookReservation.BookingRate = roundedNetPrice;
+        rgPayload.BookReservation.sellingRate = roundedSellingRate;
+        rgPayload.BookReservation.SellingRate = roundedSellingRate;
       } else {
-        rgPayload.BookingRate = netPrice;
-        rgPayload.sellingRate =
-          clientType === "B2C" ? b2cSellingRate : netPrice;
-        rgPayload.SellingRate =
-          clientType === "B2C" ? b2cSellingRate : netPrice;
+        rgPayload.BookingRate = roundedNetPrice;
+        rgPayload.sellingRate = roundedSellingRate;
+        rgPayload.SellingRate = roundedSellingRate;
       }
 
       const rgResponse = await rateGainProvider.commit(rgPayload);

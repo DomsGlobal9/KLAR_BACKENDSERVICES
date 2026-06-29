@@ -60,12 +60,12 @@ export async function searchTJ(
   const page = req.pageNo || 1;
 
   const targetCount = 30;
-  const CHUNK_SIZE = 25; // Increased from 20 — fewer API calls, same total hotels
+  const CHUNK_SIZE = 100; // Increased to 100 to find hotels faster per page
   const chunks: string[][] = [];
   for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
     chunks.push(hids.slice(i, i + CHUNK_SIZE));
   }
-  const batchSize = 2;
+  const batchSize = 1; // Sequential to prevent TripJack 403 Rate Limit / WAF rules
   const currentIdx = (page - 1) * batchSize;
 
   try {

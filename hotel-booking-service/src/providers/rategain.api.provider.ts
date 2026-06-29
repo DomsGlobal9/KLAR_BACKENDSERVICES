@@ -20,8 +20,8 @@ export class RateGainApiProvider {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        GuaranteeMethod: booking.GuaranteeMethod || "CreditCard",
-        GuaranteeType: booking.GuaranteeType || "Guarantee",
+        GuaranteeMethod: booking.GuaranteeMethod || "Agency",
+        GuaranteeType: booking.GuaranteeType || "Deposit",
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
@@ -40,7 +40,7 @@ export class RateGainApiProvider {
             NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
             NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
             RoomSelectionKey: rs.RoomSelectionKey || "",
-            RoomRate: rs.RoomRate || 0,
+            RoomRate: Number(Number(rs.RoomRate || 0).toFixed(2)),
             BoardName: rs.BoardName || "ROOM ONLY",
             Guest: (rs.Guest || []).map((g: any) => ({
               FirstName: g.FirstName || "Guest",
@@ -112,8 +112,8 @@ export class RateGainApiProvider {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        GuaranteeMethod: booking.GuaranteeMethod || "CreditCard",
-        GuaranteeType: booking.GuaranteeType || "Guarantee",
+        GuaranteeMethod: booking.GuaranteeMethod || "Agency",
+        GuaranteeType: booking.GuaranteeType || "Deposit",
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
@@ -153,7 +153,7 @@ export class RateGainApiProvider {
             NumberOfAdults: rs.NumberOfAdults || rs.numberOfAdults || 2,
             NumberOfChild: rs.NumberOfChild || rs.numberOfChild || 0,
             RoomSelectionKey: rs.RoomSelectionKey || "",
-            RoomRate: rs.RoomRate || 0,
+            RoomRate: Number(Number(rs.RoomRate || 0).toFixed(2)),
             BoardName: rs.BoardName || "ROOM ONLY",
             Guest: (rs.Guest || []).map((g: any) => ({
               FirstName: g.FirstName || "Guest",
