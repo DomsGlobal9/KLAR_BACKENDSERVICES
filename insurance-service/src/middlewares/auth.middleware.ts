@@ -2,9 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
-export interface AuthenticatedRequest extends Request {
-    user?: any;
-}
 
 export const authenticateJWT = (
     req: AuthenticatedRequest,
@@ -29,6 +26,18 @@ export const authenticateJWT = (
                 code: "TOKEN_MISSING",
             });
         }
+
+        // ===== BACKEND TTL OBJECT UNWRAPPER SAFEGUARD =====
+        if (token.trim().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(token);
+                token = parsed.value || parsed.token || token;
+            } catch (e) {
+                console.error("Failed parsing stringified token wrapper payload:", e);
+            }
+        }
+
+        console.log("Cleaned token parsing trace:", token.substring(0, 25) + "...");
 
         const decoded = jwt.verify(token, env.jwtSecret);
         req.user = decoded;
