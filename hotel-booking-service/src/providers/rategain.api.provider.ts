@@ -20,8 +20,6 @@ export class RateGainApiProvider {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        ...(booking.GuaranteeMethod && { GuaranteeMethod: booking.GuaranteeMethod }),
-        ...(booking.GuaranteeType && { GuaranteeType: booking.GuaranteeType }),
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
@@ -112,8 +110,6 @@ export class RateGainApiProvider {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        ...(booking.GuaranteeMethod && { GuaranteeMethod: booking.GuaranteeMethod }),
-        ...(booking.GuaranteeType && { GuaranteeType: booking.GuaranteeType }),
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,

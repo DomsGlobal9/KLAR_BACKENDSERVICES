@@ -299,9 +299,17 @@ class CommitService {
         await BookingEventLogger.log(bookingId, requestId, "WALLET_DEBITED", {
           amount: finalPrice,
         });
+      } else if (!isHoldIntent && clientType === "B2C") {
+        if (!payload.razorpayPaymentId && !payload.razorpayOrderId) {
+          throw new StructuredError(
+            "PAYMENT_REQUIRED",
+            "Razorpay payment details are required for B2C bookings.",
+          );
+        }
+        console.log(`✅ [TripJack] B2C Razorpay Payment verified: ${payload.razorpayPaymentId || payload.razorpayOrderId}`);
       } else {
         console.log(
-          `⏸️ [TripJack] B2C booking or Hold Booking Requested — Deferring immediate internal wallet deduction.`,
+          `⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`,
         );
       }
 
@@ -499,6 +507,13 @@ class CommitService {
         console.log(
           `⏸️ [RateGain] B2C booking — Skipping wallet operations. SellingRate is ₹${finalPrice}`,
         );
+        if (!payload.razorpayPaymentId && !payload.razorpayOrderId) {
+          throw new StructuredError(
+            "PAYMENT_REQUIRED",
+            "Razorpay payment details are required for B2C bookings.",
+          );
+        }
+        console.log(`✅ [RateGain] B2C Razorpay Payment verified: ${payload.razorpayPaymentId || payload.razorpayOrderId}`);
       }
 
       // PHASE 4: Provider Booking
@@ -517,24 +532,14 @@ class CommitService {
         rgPayload.BookReservation.BookingRate = roundedNetPrice;
         rgPayload.BookReservation.sellingRate = roundedSellingRate;
         rgPayload.BookReservation.SellingRate = roundedSellingRate;
-        if (clientType === "B2C") {
-          rgPayload.BookReservation.GuaranteeMethod = "CreditCard";
-          rgPayload.BookReservation.GuaranteeType = "Guarantee";
-        } else {
-          delete rgPayload.BookReservation.GuaranteeMethod;
-          delete rgPayload.BookReservation.GuaranteeType;
-        }
+        delete rgPayload.BookReservation.GuaranteeMethod;
+        delete rgPayload.BookReservation.GuaranteeType;
       } else {
         rgPayload.BookingRate = roundedNetPrice;
         rgPayload.sellingRate = roundedSellingRate;
         rgPayload.SellingRate = roundedSellingRate;
-        if (clientType === "B2C") {
-          rgPayload.GuaranteeMethod = "CreditCard";
-          rgPayload.GuaranteeType = "Guarantee";
-        } else {
-          delete rgPayload.GuaranteeMethod;
-          delete rgPayload.GuaranteeType;
-        }
+        delete rgPayload.GuaranteeMethod;
+        delete rgPayload.GuaranteeType;
       }
 
       const rgResponse = await rateGainProvider.commit(rgPayload);
