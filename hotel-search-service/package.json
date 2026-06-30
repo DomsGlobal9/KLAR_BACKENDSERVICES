@@ -9,6 +9,7 @@
     "test:dev": "ts-node-dev --respawn --transpile-only src/test-server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "format": "prettier --write .",
     "clean": "rm -rf dist node_modules",
     "deepclean": "rm -rf dist node_modules package-lock.json",
     "db:seed": "ts-node scripts/seed.ts",
@@ -49,6 +50,7 @@
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
+    "prettier": "^3.9.1",
     "ts-node": "^10.9.2"
   }
 }

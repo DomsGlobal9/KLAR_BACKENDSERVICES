@@ -1,4 +1,4 @@
-import * as dotenv from 'dotenv';
+import * as dotenv from "dotenv";
 dotenv.config({ path: [".env.local", ".env"], override: true });
 
 console.log("TRIPJACK_API_KEY:", process.env.TRIPJACK_API_KEY);

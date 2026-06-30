@@ -10,63 +10,62 @@ let isRunning = false;
  * Initialize Booking Status Cron
  */
 export const checkBookingStatusJob = () => {
-    cron.schedule(
-        CRON_TIME.EVERY_2_MINUTES,
-        executeBookingStatusCron
-    );
+  cron.schedule(CRON_TIME.EVERY_2_MINUTES, executeBookingStatusCron);
 };
 
 /**
  * Main Cron Executor
  */
 const executeBookingStatusCron = async () => {
+  /**
+   * Prevent overlapping execution
+   */
+  if (isRunning) {
+    return;
+  }
+
+  isRunning = true;
+
+  try {
     /**
-     * Prevent overlapping execution
+     * Get all pending and held bookings
      */
-    if (isRunning) {
-        return;
+    const bookings = await hotelBookingRepository.find(
+      {
+        status: { $in: [BookingStatus.PENDING, BookingStatus.HELD] },
+        provider: BookingProvider.TRIPJACK,
+      },
+      null,
+      undefined,
+      undefined,
+      true,
+    );
+
+    /**
+     * No bookings found
+     */
+    if (!bookings.length) {
+      return;
     }
 
-    isRunning = true;
-
-    try {
-        /**
-         * Get all pending and held bookings
-         */
-        const bookings = await hotelBookingRepository.find({
-            status: { $in: [BookingStatus.PENDING, BookingStatus.HELD] },
-            provider: BookingProvider.TRIPJACK
-        }, null, undefined, undefined, true);
-
-        /**
-         * No bookings found
-         */
-        if (!bookings.length) {
-            return;
-        }
-
-        /**
-         * Process all bookings
-         */
-        await processBookings(bookings);
-
-    } catch (error: any) {
-        console.error(
-            "Booking status cron failed >>>",
-            error.message
-        );
-    } finally {
-        isRunning = false;
-    }
+    /**
+     * Process all bookings
+     */
+    await processBookings(bookings);
+  } catch (error: any) {
+    console.error("Booking status cron failed >>>", error.message);
+  } finally {
+    isRunning = false;
+  }
 };
 
 /**
  * Process All Bookings
  */
 const processBookings = async (bookings: any[]) => {
-    for (const booking of bookings) {
-        await processSingleBooking(booking);
-    }
+  for (const booking of bookings) {
+    await processSingleBooking(booking);
+  }
 };
 
 /**
@@ -74,17 +73,20 @@ const processBookings = async (bookings: any[]) => {
  * We use the existing getBookingById method which already auto-syncs status
  */
 const processSingleBooking = async (booking: any) => {
-    try {
-        const idToSync = booking.confirmationNumber || booking.reservationId || booking._id.toString();
-        
-        // This existing method will fetch the booking and auto-sync it from TripJack
-        await bookingsService.getBookingById(idToSync);
-        
-        console.log(`Successfully checked booking status for: ${idToSync}`);
-    } catch (error: any) {
-        console.error(
-            `Booking status check failed for ID: ${booking._id}`,
-            error.message
-        );
-    }
+  try {
+    const idToSync =
+      booking.confirmationNumber ||
+      booking.reservationId ||
+      booking._id.toString();
+
+    // This existing method will fetch the booking and auto-sync it from TripJack
+    await bookingsService.getBookingById(idToSync);
+
+    console.log(`Successfully checked booking status for: ${idToSync}`);
+  } catch (error: any) {
+    console.error(
+      `Booking status check failed for ID: ${booking._id}`,
+      error.message,
+    );
+  }
 };

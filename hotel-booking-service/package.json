@@ -9,6 +9,7 @@
     "test:dev": "ts-node-dev --respawn --transpile-only src/test-server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "format": "prettier --write .",
     "clean": "rm -rf dist node_modules",
     "deepclean": "rm -rf dist node_modules package-lock.json",
     "db:seed": "ts-node scripts/seed.ts",
@@ -35,9 +36,10 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^7.1.5",
+    "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.23.0",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.5.0",
     "puppeteer": "^25.1.0",
     "uuid": "^13.0.0"
   },
@@ -50,6 +52,7 @@
     "@types/uuid": "^10.0.0",
     "mongodb-memory-server": "^11.0.1",
     "nodemon": "^3.1.11",
+    "prettier": "^3.9.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
