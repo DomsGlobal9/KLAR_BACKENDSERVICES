@@ -3,11 +3,48 @@ import { envConfig } from "../config/env.config";
 
 export class OneWayNormalizer {
 
+    private static getStopDetails(segments: any[]): { 
+        count: number; 
+        stopNames: string[]; 
+        stopCodes: string[];
+        stopCities: string[];
+        displayString: string;
+    } {
+        if (segments.length <= 1) {
+            return {
+                count: 0,
+                stopNames: [],
+                stopCodes: [],
+                stopCities: [],
+                displayString: 'Non-stop'
+            };
+        }
+
+        const stops = segments.slice(0, -1);
+        
+        const stopNames = stops.map(seg => seg.aa?.name || seg.da?.name || "Unknown");
+        const stopCodes = stops.map(seg => seg.aa?.code || seg.da?.code || "Unknown");
+        const stopCities = stops.map(seg => seg.aa?.city || seg.da?.city || "Unknown");
+
+        const count = segments.length - 1;
+        const displayString = count > 0 
+            ? `${count} stop${count > 1 ? 's' : ''} (${stopCities.join(' → ')})`
+            : 'Non-stop';
+
+        return {
+            count,
+            stopNames,
+            stopCodes,
+            stopCities,
+            displayString
+        };
+    }
+
     static transform(tripJackResponse: any) {
 
         const flights = tripJackResponse?.data?.searchResult?.tripInfos?.ONWARD || [];
 
-        const airlineMap: Record<string, number> = {};
+        const airlineMap: Record<string, { name: string; code: string; count: number }> = {};
 
         const normalizedFlights = flights.map((flight: any) => {
 
@@ -17,9 +54,16 @@ export class OneWayNormalizer {
             const last = segments[segments.length - 1];
 
             const airlineName = first.fD.aI.name;
+            const airlineCode = first.fD.aI.code;
 
-            // Count airlines
-            airlineMap[airlineName] = (airlineMap[airlineName] || 0) + 1;
+            if (!airlineMap[airlineName]) {
+                airlineMap[airlineName] = { 
+                    name: airlineName, 
+                    code: airlineCode, 
+                    count: 0 
+                };
+            }
+            airlineMap[airlineName].count += 1;
 
             const cheapest = BaseFlightNormalizer.getCheapestFare(
                 flight.totalPriceList
@@ -28,11 +72,13 @@ export class OneWayNormalizer {
             const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
             const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
+            const stopInfo = this.getStopDetails(segments);
+
             const flightData: any = {
                 flightKey: BaseFlightNormalizer.getFlightKey(segments),
 
                 airline: airlineName,
-                airlineCode: first.fD.aI.code,
+                airlineCode: airlineCode,
                 flightNumber: `${first.fD.aI.code}-${first.fD.fN}`,
                 cabinClass: cheapest.fd.ADULT.cc,
 
@@ -56,7 +102,14 @@ export class OneWayNormalizer {
                     segments.reduce((sum: number, seg: any) => sum + (seg.duration || 0), 0)
                 ),
 
-                stops: segments.length - 1,
+                stops: stopInfo.count,
+                stopDetails: {
+                    count: stopInfo.count,
+                    stopNames: stopInfo.stopNames,
+                    stopCodes: stopInfo.stopCodes,
+                    stopCities: stopInfo.stopCities,
+                    displayString: stopInfo.displayString
+                },
 
                 price: cheapest.fd.ADULT.fC.TF,
             };
@@ -69,9 +122,10 @@ export class OneWayNormalizer {
             return flightData;
         });
 
-        const airlineStats = Object.entries(airlineMap)
-            .map(([airline, count]) => ({
-                airline,
+        const airlineStats = Object.values(airlineMap)
+            .map(({ name, code, count }) => ({
+                airline: name,
+                airlineCode: code,
                 flights: count
             }))
             .sort((a, b) => b.flights - a.flights);
@@ -94,6 +148,7 @@ export class OneWayNormalizer {
             const fromDate = BaseFlightNormalizer.getDateParts(first.dt);
             const toDate = BaseFlightNormalizer.getDateParts(last.at);
 
+            const stopInfo = this.getStopDetails(segments);
 
             const allFares = (flight.totalPriceList || []).map((fare: any) => ({
                 fareName: fare.fareIdentifier || "UNKNOWN",
@@ -136,7 +191,15 @@ export class OneWayNormalizer {
                 duration: BaseFlightNormalizer.formatDuration(
                     segments.reduce((sum: number, seg: any) => sum + (seg.duration || 0), 0)
                 ),
-                stops: segments.length - 1,
+                
+                stops: stopInfo.count,
+                stopDetails: {
+                    count: stopInfo.count,
+                    stopNames: stopInfo.stopNames,
+                    stopCodes: stopInfo.stopCodes,
+                    stopCities: stopInfo.stopCities,
+                    displayString: stopInfo.displayString
+                },
 
 
                 cheapestFare: {

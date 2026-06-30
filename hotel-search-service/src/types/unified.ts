@@ -1,12 +1,12 @@
 export interface UnifiedSearchRequest {
-  destination: string;          // free text (city name) OR lat/lng
-  destinationCode?: string;     // explicit RateGain destination code
-  checkin: string;              // YYYY-MM-DD
-  checkout: string;             // YYYY-MM-DD
+  destination: string; // free text (city name) OR lat/lng
+  destinationCode?: string; // explicit RateGain destination code
+  checkin: string; // YYYY-MM-DD
+  checkout: string; // YYYY-MM-DD
   rooms: UnifiedRoom[];
-  currency?: string;            // default USD
-  countryCode?: string;         // default US
-  pageNo?: number;              // 1-indexed pagination
+  currency?: string; // default USD
+  countryCode?: string; // default US
+  pageNo?: number; // 1-indexed pagination
   _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
   providers?: string[];
 }
@@ -18,7 +18,7 @@ export interface UnifiedRoom {
 }
 
 export interface UnifiedHotel {
-  hotelId: string;              // "RG:ChIJ..." or "TJ:10000000012345"
+  hotelId: string; // "RG:ChIJ..." or "TJ:10000000012345"
   source: "RG" | "TJ";
   name: string;
   address: string;
@@ -28,12 +28,12 @@ export interface UnifiedHotel {
   latitude: number;
   longitude: number;
   images: string[];
-  price: number;                // Total stay price (base + taxes). Always total.
-  basePrice?: number;           // Base net price excluding taxes (room only cost)
-  taxAmount?: number;           // Taxes & fees excluded from base (add-on)
-  taxesIncluded?: boolean;      // true = price already includes all taxes; false = taxes added on top
+  price: number; // Total stay price (base + taxes). Always total.
+  basePrice?: number; // Base net price excluding taxes (room only cost)
+  taxAmount?: number; // Taxes & fees excluded from base (add-on)
+  taxesIncluded?: boolean; // true = price already includes all taxes; false = taxes added on top
   currency: string;
-  mealBasis?: string;           // "Room Only", "Breakfast", etc.
+  mealBasis?: string; // "Room Only", "Breakfast", etc.
   hotelSegment?: string;
   accTypeDesc?: string;
   accMultiDesc?: string;
@@ -48,10 +48,38 @@ export interface UnifiedHotel {
   commissionAmt?: number;
   commissionPct?: number;
   sellingRate?: number;
-  rawPayload: unknown;          // keep original for detail/book calls
-  altDeal?: {                   // cross-provider comparison
+  rawPayload: unknown; // keep original for detail/book calls
+  altDeal?: {
+    // cross-provider comparison
     source: "RG" | "TJ";
     price: number;
     currency?: string;
+  };
+  paymentType?: string;
+  packaging?: boolean;
+  boardCode?: string;
+  boardName?: string;
+  taxes?: {
+    taxes: {
+      included: boolean;
+      amount: string | number;
+      currency: string;
+      clientAmount?: string | number;
+      clientCurrency?: string;
+    }[];
+    allIncluded: boolean;
+  };
+  pricing?: {
+    totalPrice: number;
+    taxes: number | null;
+    mf: number;
+    mft: number;
+    currency: string;
+    basePrice: number | null;
+    markupAmount: number;
+    perNightPrice: number | null;
+    supplierTotalPrice: number;
+    finalTotalPrice: number;
+    taxesIncluded: boolean;
   };
 }

@@ -18,7 +18,17 @@ export class WalletController {
                 return res.status(401).json({ success: false, message: "Unauthorized" });
             }
 
-            const wallet = await WalletService.getWallet(new Types.ObjectId(req.user.userId));
+            console.log("The client type is: ", req.user?.clientType);
+
+            let userId: Types.ObjectId;
+
+            if (req.user?.clientType === 'b2c') {
+                userId = new Types.ObjectId("6a1ed2fb290ce7d307b05784");
+            } else {
+                userId = new Types.ObjectId(req.user.userId);
+            }
+
+            const wallet = await WalletService.getWallet(userId);
 
             if (!wallet) {
                 throw new NotFoundError("Wallet not found");

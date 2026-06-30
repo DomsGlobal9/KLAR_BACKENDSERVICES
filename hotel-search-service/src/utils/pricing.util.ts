@@ -33,12 +33,11 @@ export interface EnrichedPricing {
  */
 export function calculateNights(
   checkin: string | undefined,
-  checkout: string | undefined
+  checkout: string | undefined,
 ): number {
   try {
     if (!checkin || !checkout) return 1;
-    const diff =
-      new Date(checkout).getTime() - new Date(checkin).getTime();
+    const diff = new Date(checkout).getTime() - new Date(checkin).getTime();
     return Math.max(1, Math.round(diff / 86_400_000));
   } catch {
     return 1;
@@ -46,7 +45,6 @@ export function calculateNights(
 }
 
 export const calculateNightsFromDates = calculateNights;
-
 
 // ---------------------------------------------------------------------------
 // calculateEnrichedPricing
@@ -75,15 +73,15 @@ export interface PricingInput {
 export function calculateEnrichedPricing(
   input: PricingInput,
   markupRules: MarkupRule[],
-  nights: number
+  nights: number,
 ): EnrichedPricing {
   const { basePrice, totalPrice, taxes, mf, mft, currency: _currency } = input;
 
   // --- markup resolution ---
   const rule = markupRules.find(
     (r) =>
-      r.serviceType.toUpperCase() === 'HOTELS' ||
-      r.serviceType.toUpperCase() === 'HOTEL'
+      r.serviceType.toUpperCase() === "HOTELS" ||
+      r.serviceType.toUpperCase() === "HOTEL",
   );
 
   let markupAmount = 0;
