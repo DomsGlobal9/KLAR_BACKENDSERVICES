@@ -1,0 +1,85 @@
+    async commit(payload: any) {
+        const {
+            bookingId,
+            type,
+            roomTravellerInfo,
+            deliveryInfo,
+            paymentInfos,
+        } = payload;
+
+        if (!bookingId) throw new Error("[TripJack Book] bookingId is required");
+
+        const mappedRoomTravellerInfo = roomTravellerInfo?.map((room: any) => {
+            if (!room.travellerInfo) return room;
+            return {
+                travellerInfo: room.travellerInfo.map((traveller: any) => {
+                    const rawFN = (traveller.fN || traveller.firstName || "Guest").toString().replace(/[^a-zA-Z]/g, '');
+                    const rawLN = (traveller.lN || traveller.lastName || "User").toString().replace(/[^a-zA-Z]/g, '');
+                    
+                    const titleMap: Record<string, string> = {
+                        "MR": "Mr", "MRS": "Mrs", "MS": "Ms", "MISS": "Miss", "MASTER": "Master", "MSTR": "Master"
+                    };
+                    const inputTi = (traveller.ti || traveller.title || "Mr").replace(/\./g, '').trim().toUpperCase();
+                    const ti = titleMap[inputTi] || "Mr";
+                    const pt = (traveller.pt || traveller.paxType || "ADULT").trim().toUpperCase();
+
+                    const mappedTraveller: any = { fN: rawFN || "Guest", lN: rawLN || "User", ti, pt };
+                    if (pt === "ADULT") {
+                        if (traveller.pan) mappedTraveller.pan = traveller.pan.replace(/\s+/g, '').trim().toUpperCase();
+                        if (traveller.pNum) mappedTraveller.pNum = traveller.pNum.replace(/\s+/g, '').trim().toUpperCase();
+                    }
+                    return mappedTraveller;
+                })
+            };
+        });
+
+        const tjPayload: any = {
+            bookingId,
+            type: "HOTEL",
+            roomTravellerInfo: mappedRoomTravellerInfo,
+            deliveryInfo: {
+                emails: deliveryInfo?.emails || [],
+                contacts: deliveryInfo?.contacts || [],
+                code: deliveryInfo?.code || ["+91"]
+            }
+        };
+
+        if (paymentInfos && paymentInfos.length > 0) {
+            tjPayload.paymentInfos = paymentInfos;
+        }
+
+        console.log(`[TripJack] Book Request (${bookingId}):`, JSON.stringify(tjPayload, null, 2));
+
+        try {
+            const res = await tripJackOmsClient.post("/oms/v3/hotel/book", tjPayload);
+            const data = res.data;
+            console.log(`[TripJack] Book Response (${bookingId}):`, JSON.stringify(data, null, 2));
+
+            // Check for success status within 200 response
+            if (data?.status?.success === false) {
+                return {
+                    status: false,
+                    statusCode: 400,
+                    description: data.errors?.[0]?.message || data.status?.description || "Booking Failed",
+                    body: data
+                };
+            }
+
+            return {
+                status: true,
+                statusCode: 200,
+                description: "TripJack Book Success",
+                bookingId: data.bookingId || bookingId,
+                body: data,
+            };
+        } catch (error: any) {
+            const errorData = error.response?.data || { message: error.message };
+            console.error(`[TripJack] Book API Error (${bookingId}):`, JSON.stringify(errorData, null, 2));
+            return {
+                status: false,
+                statusCode: error.response?.status || 500,
+                description: errorData.description || errorData.message || "Request failed",
+                body: errorData
+            };
+        }
+    }

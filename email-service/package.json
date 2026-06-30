@@ -1,0 +1,38 @@
+{
+  "name": "email-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.ts",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/main.ts",
+    "clean": "rm -rf dist",
+    "deep-clean": "rm -rf dist node_modules package-lock.json",
+    "build": "npm run clean && tsc",
+    "start": "node dist/main.js",
+    "start:pm2": "pm2 start dist/main.js --name email-service",
+    "restart:pm2": "pm2 restart email-service",
+    "stop:pm2": "pm2 stop email-service",
+    "delete:pm2": "pm2 delete email-service",
+    "logs:pm2": "pm2 logs email-service",
+    "deploy": "git pull && npm install && npm run build && pm2 reload email-service"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.2",
+    "@types/nodemailer": "^8.0.0",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "nodemailer": "^8.0.5"
+  }
+}

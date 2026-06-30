@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Booking Voucher</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #2c3e50;
+            background-color: #f4f6f9;
+            padding: 22mm 20mm;
+            font-size: 11pt;
+            line-height: 1.5;
+        }
+        .main-container { width: 100%; max-width: 850px; margin: 0 auto; }
+        
+        /* Premium Header Styling */
+        .brand-header-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        .brand-header-table td { vertical-align: middle; }
+        .logo-img { height: 52px; max-width: 220px; object-fit: contain; display: block; }
+        
+        .header-meta-box { text-align: right; }
+        .header-meta-label { font-size: 8.5pt; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 2px; }
+
+        /* Full Width Status Card Banner */
+        .status-banner { 
+            background: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 14px; 
+            padding: 22px 26px; 
+            margin-bottom: 25px; 
+            display: table; 
+            width: 100%;
+        }
+        .status-cell-left { display: table-cell; vertical-align: middle; }
+        .status-cell-right { display: table-cell; text-align: right; vertical-align: middle; }
+        
+        .success-icon-circle {
+            display: inline-block;
+            width: 44px;
+            height: 44px;
+            background-color: #e6f7ed;
+            color: #268e4c;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 44px;
+            font-size: 20pt;
+            font-weight: bold;
+            margin-right: 16px;
+            vertical-align: middle;
+        }
+        .header-text-group { display: inline-block; vertical-align: middle; }
+        .main-title { font-size: 20pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; }
+        .sub-res-id { font-size: 11pt; color: #64748b; margin-top: 2px; }
+        
+        .pill-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 8.5pt; font-weight: 700; text-transform: uppercase; margin-left: 8px; }
+        .badge-confirmed { background-color: #e6f7ed; color: #268e4c; }
+        .badge-pending { background-color: #fff7ed; color: #c2410c; }
+        .pill-trip-type { background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+        /* 100% Full-Width Block Component Cards */
+        .full-width-card { 
+            background-color: #ffffff; 
+            border-radius: 14px; 
+            border: 1px solid #e2e8f0; 
+            padding: 26px; 
+            margin-bottom: 25px;
+            width: 100%;
+        }
+        
+        .section-label { font-size: 10pt; font-weight: 700; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 20px; letter-spacing: 0.5px; }
+        
+        /* 100% Layout Full Width Timeline Graphic */
+        .route-timeline { position: relative; padding-left: 32px; margin: 5px 0; }
+        .route-node { position: absolute; left: 0; width: 14px; height: 14px; border-radius: 50%; border: 3px solid #ffffff; box-shadow: 0 0 0 2px #0f294d; }
+        .node-pickup { top: 4px; background-color: #0f294d; }
+        .node-drop { bottom: 4px; background-color: #ea580c; }
+        .line-connector { position: absolute; left: 6px; top: 18px; bottom: 18px; width: 2px; background-color: #cbd5e1; }
+        
+        .route-heading { font-size: 8.5pt; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 3px; letter-spacing: 0.3px; }
+        .route-detail-txt { font-size: 12pt; font-weight: 600; color: #0f294d; margin-bottom: 22px; line-height: 1.4; width: 100%; }
+        
+        /* Multi-Column Data Grids inside Full Width Panels */
+        .data-grid-table { width: 100%; border-collapse: collapse; }
+        .data-grid-table td { width: 33.33%; padding: 4px 15px 4px 0; vertical-align: top; }
+        .data-grid-table td:last-child { padding-right: 0; }
+        
+        .item-label { font-size: 9pt; color: #64748b; font-weight: 500; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .item-value { font-size: 11.5pt; font-weight: 600; color: #0f294d; }
+        
+        .badge-feature { background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 6px; font-size: 8.5pt; font-weight: bold; margin-right: 6px; text-transform: uppercase; }
+
+        /* Unified Horizontal Split Panel for Passenger + Fare Summary */
+        .split-summary-table { width: 100%; border-collapse: collapse; }
+        .split-summary-table td { width: 50%; vertical-align: top; }
+        
+        .passenger-info-box { line-height: 1.5; }
+        .passenger-name { font-size: 13pt; font-weight: 700; color: #0f294d; margin-bottom: 4px; }
+        .passenger-meta { font-size: 10.5pt; color: #475569; margin-bottom: 2px; }
+
+        .fare-calculation-box { text-align: right; height: 100%; }
+        .amount-due-label { font-size: 11pt; font-weight: bold; color: #64748b; margin-bottom: 4px; }
+        .amount-due-numeric { font-size: 26pt; font-weight: 800; color: #0f294d; letter-spacing: -0.5px; }
+
+        .policy-list { padding-left: 20px; font-size: 10.5pt; color: #475569; }
+        .policy-list li { margin-bottom: 8px; line-height: 1.5; }
+        .policy-list li:last-child { margin-bottom: 0; }
+
+        .assistance-container { background-color: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #e2e8f0; margin-top: 15px; display: table; width: 100%; }
+        .assistance-cell { display: table-cell; width: 50%; vertical-align: top; }
+
+        .footer { margin-top: 45px; text-align: center; font-size: 9.5pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="main-container">
+
+    <table class="brand-header-table">
+        <tr>
+            <td>
+                <img src="{{logoSrc}}" alt="Klar Travels Logo" class="logo-img" />
+            </td>
+            <td class="header-meta-box">
+                <div class="header-meta-label">Booking Reference</div>
+                <div style="font-weight: 700; color:#0f294d; font-size:12pt; margin-bottom:6px; letter-spacing: 0.3px;">{{bookingId}}</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="status-banner">
+        <div class="status-cell-left">
+            <div class="success-icon-circle">✓</div>
+            <div class="header-text-group">
+                <h1 class="main-title">{{templateHeaderTitle}}</h1>
+                <div class="sub-res-id">Reservation ID: <strong>{{bookingId}}</strong></div>
+            </div>
+        </div>
+        <div class="status-cell-right">
+            <span class="pill-badge {{statusBadgeClass}}">{{status}}</span>
+            <span class="pill-badge pill-trip-type">{{tripType}}</span>
+        </div>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">📍 Route Itinerary</div>
+        <div class="route-timeline">
+            <div class="route-node node-pickup"></div>
+            <div class="line-connector"></div>
+            <div class="route-heading">Pickup Point</div>
+            <div class="route-detail-txt">{{sourceAddress}}</div>
+            
+            <div class="route-heading" style="margin-top: 5px;">Pickup Schedule Time</div>
+            <div class="route-detail-txt" style="font-size: 11pt; color:#475569; font-weight: normal; margin-bottom: 25px;">📅 {{pickupDate}}</div>
+            
+            <div class="route-node node-drop"></div>
+            <div class="route-heading">Destination Location</div>
+            <div class="route-detail-txt" style="margin-bottom:0;">{{destAddress}}</div>
+        </div>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">🚗 Vehicle Logistics Profile</div>
+        <table class="data-grid-table">
+            <tr>
+                <td>
+                    <div class="item-label">Vehicle Classification</div>
+                    <div class="item-value">{{vehicleClass}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Estimated Route Parameters</div>
+                    <div class="item-value">{{distance}} / {{duration}}</div>
+                </td>
+                <td>
+                    <div class="item-label">Amenities Included</div>
+                    <div class="item-value" style="margin-top: 3px;"><span class="badge-feature">WIFI</span><span class="badge-feature">WATER</span></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="full-width-card" style="border: 1px solid #cbd5e1; background-color: #ffffff;">
+        <table class="split-summary-table">
+            <tr>
+                <td>
+                    <div class="section-label" style="border-bottom: none; margin-bottom: 12px; padding-bottom: 0;">👥 Passenger Details</div>
+                    <div class="passenger-info-box">
+                        <div class="passenger-name">{{passengerName}}</div>
+                        <div class="passenger-meta">📞 {{passengerPhone}}</div>
+                        <div class="passenger-meta">✉ {{passengerEmail}}</div>
+                    </div>
+                </td>
+                <td style="padding-left: 20px;">
+                    <div class="section-label" style="border-bottom: none; margin-bottom: 12px; padding-bottom: 0; text-align: right;">💳 Financial Summary</div>
+                    <div class="fare-calculation-box">
+                        <div class="amount-due-label">Total Amount Paid</div>
+                        <div class="amount-due-numeric">₹{{grossAmount}}</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="full-width-card">
+        <div class="section-label">📜 Cancellation & Terms Profile</div>
+        <ul class="policy-list">
+            {{dynamicTerms}}
+        </ul>
+
+        <div class="section-label" style="margin-top: 22px; margin-bottom: 12px;">📦 Package Inclusions</div>
+        <ul class="policy-list">
+            {{dynamicInclusions}}
+        </ul>
+
+        <div class="section-label" style="margin-top: 22px; margin-bottom: 12px;">🚫 Package Exclusions</div>
+        <ul class="policy-list">
+            {{dynamicExclusions}}
+        </ul>
+
+        <div class="assistance-container">
+            <div class="assistance-cell">
+                <div class="item-label" style="color: #ea580c;">💁 Meet & Greet Assistance</div>
+                <div style="font-weight: 700; color: #0f294d; margin-top: 1px;">{{meetAndGreet}}</div>
+                <div style="font-size: 9.5pt; color: #64748b; margin-top: 2px;">Included Waiting Parameters: <strong>{{waitingTime}}</strong></div>
+            </div>
+            <div class="assistance-cell" style="padding-left: 15px;">
+                <div class="item-label">🧳 Baggage Policy Rule</div>
+                <ul class="policy-list" style="padding-left: 0; list-style-position: inside; margin-bottom: 0; font-size: 10pt;">
+                    {{dynamicBaggage}}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        {{helpline}}<br>
+        <span style="font-size: 8.5pt; color:#cbd5e1; margin-top: 5px; display:inline-block;">Thank you for choosing Klar Travels. Business Channel System Generated Document Statement.</span>
+    </div>
+
+</div>
+</body>
+</html>
