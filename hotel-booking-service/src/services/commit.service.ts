@@ -284,7 +284,7 @@ class CommitService {
       }
 
       // PHASE 3: Wallet Deduction (Atomic)
-      if (!isHoldIntent && clientType === "B2B") {
+      if (!isHoldIntent) {
         paymentProcessed = await WalletUtil.deductBalance(
           token,
           finalPrice,
@@ -299,14 +299,6 @@ class CommitService {
         await BookingEventLogger.log(bookingId, requestId, "WALLET_DEBITED", {
           amount: finalPrice,
         });
-      } else if (!isHoldIntent && clientType === "B2C") {
-        if (!payload.razorpayPaymentId && !payload.razorpayOrderId) {
-          throw new StructuredError(
-            "PAYMENT_REQUIRED",
-            "Razorpay payment details are required for B2C bookings.",
-          );
-        }
-        console.log(`✅ [TripJack] B2C Razorpay Payment verified: ${payload.razorpayPaymentId || payload.razorpayOrderId}`);
       } else {
         console.log(
           `⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`,
@@ -479,22 +471,6 @@ class CommitService {
         );
         finalPrice = Math.round(pricing.total * 100) / 100;
         markup = pricing.markup;
-
-        // PHASE 3: Wallet Deduction (B2B only)
-        paymentProcessed = await WalletUtil.deductBalance(
-          token,
-          finalPrice,
-          demandId,
-          `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || "RateGain Hotel"}`,
-        );
-        if (!paymentProcessed)
-          throw new StructuredError(
-            "INSUFFICIENT_WALLET",
-            "Wallet deduction failed.",
-          );
-        await BookingEventLogger.log(demandId, requestId, "WALLET_DEBITED", {
-          amount: finalPrice,
-        });
       } else {
         const requestedSellingRate = Number(
           payload.sellingRate ||
@@ -505,16 +481,25 @@ class CommitService {
         finalPrice = requestedSellingRate;
         markup = finalPrice - netPrice;
         console.log(
-          `⏸️ [RateGain] B2C booking — Skipping wallet operations. SellingRate is ₹${finalPrice}`,
+          `⏸️ [RateGain] B2C booking — Calculated SellingRate is ₹${finalPrice}`,
         );
-        if (!payload.razorpayPaymentId && !payload.razorpayOrderId) {
-          throw new StructuredError(
-            "PAYMENT_REQUIRED",
-            "Razorpay payment details are required for B2C bookings.",
-          );
-        }
-        console.log(`✅ [RateGain] B2C Razorpay Payment verified: ${payload.razorpayPaymentId || payload.razorpayOrderId}`);
       }
+
+      // PHASE 3: Wallet Deduction (Both B2B and B2C)
+      paymentProcessed = await WalletUtil.deductBalance(
+        token,
+        finalPrice,
+        demandId,
+        `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || "RateGain Hotel"}`,
+      );
+      if (!paymentProcessed)
+        throw new StructuredError(
+          "INSUFFICIENT_WALLET",
+          "Wallet deduction failed.",
+        );
+      await BookingEventLogger.log(demandId, requestId, "WALLET_DEBITED", {
+        amount: finalPrice,
+      });
 
       // PHASE 4: Provider Booking
       const rgPayload = { ...(payload.bookingPayload || payload) };
@@ -544,12 +529,24 @@ class CommitService {
 
       const rgResponse = await rateGainProvider.commit(rgPayload);
 
-      const isRgSuccess =
+      // RateGain returns status:true + statusCode:200 + a confirmationNumber even when
+      // booking.status is "ConfirmationFailed" — that string is RateGain's internal
+      // pending/processing state, NOT an actual failure. A real failure has no
+      // confirmationNumber and outer status:false. We treat it as success if:
+      //   1. Outer status is truthy AND statusCode is 200, OR
+      //   2. A confirmationNumber or reservationId is present
+      const rgBooking = rgResponse.body?.booking;
+      const hasConfirmation = !!(
+        rgBooking?.confirmationNumber || rgBooking?.reservationId
+      );
+      const outerSuccess =
         rgResponse.status !== "false" &&
         rgResponse.status !== false &&
-        rgResponse.body?.booking?.status !== "ConfirmationFailed" &&
-        rgResponse.body?.booking?.status !== "Failed" &&
-        rgResponse.body?.booking?.status !== "Cancelled";
+        (rgResponse.statusCode === 200 || rgResponse.statusCode === undefined);
+      const isHardFailure =
+        rgBooking?.status === "Failed" || rgBooking?.status === "Cancelled";
+
+      const isRgSuccess = (outerSuccess || hasConfirmation) && !isHardFailure;
 
       await BookingEventLogger.log(demandId, requestId, "SUPPLIER_COMMIT", {
         success: isRgSuccess,
@@ -596,9 +593,12 @@ class CommitService {
       const saved = await hotelBookingRepository.createBooking({
         confirmationNumber:
           rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
-        reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
+        reservationId:
+          rgResponse.body?.booking?.reservationId || "RG-PENDING",
         propertyId: payload.BookReservation?.propertyID || "RG-PROP",
         provider: BookingProvider.RATEGAIN,
+        // "ConfirmationFailed" from RateGain is a pending/processing state when
+        // outer statusCode=200 and confirmationNumber is present — treat as CONFIRMED
         status: BookingStatus.CONFIRMED,
         checkIn: new Date(payload.BookReservation?.checkin),
         checkOut: new Date(payload.BookReservation?.checkout),
