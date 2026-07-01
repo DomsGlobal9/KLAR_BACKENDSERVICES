@@ -320,25 +320,42 @@ class BookingLocalController {
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
             console.log("📝 createLocalBooking - START");
-            const token = this.extractToken(req);
 
-            if (!token) {
-                console.log("❌ createLocalBooking - No token");
-                return res.status(401).json({
-                    success: false,
-                    message: "Authorization token missing",
-                });
-            }
+            const { source } = req.body;
 
-            const userData = await this.validateToken(token);
-            console.log("👤 createLocalBooking - User validated:", userData?.id);
+            console.log("📝 createLocalBooking - Source:", source);
+            let userData = null;
 
-            if (!userData) {
-                console.log("❌ createLocalBooking - No user data");
-                return res.status(400).json({
-                    success: false,
-                    message: "User Data not found",
-                });
+            if (source === 'b2c') {
+                console.log("🟢 B2C source detected - Skipping token validation");
+
+                userData = {
+                    id: 'guest_user',
+                    email: req.body.email || 'guest@example.com',
+                    role: 'guest'
+                };
+            } else {
+
+                const token = this.extractToken(req);
+
+                if (!token) {
+                    console.log("❌ createLocalBooking - No token");
+                    return res.status(401).json({
+                        success: false,
+                        message: "Authorization token missing",
+                    });
+                }
+
+                userData = await this.validateToken(token);
+                console.log("👤 createLocalBooking - User validated:", userData?.id);
+
+                if (!userData) {
+                    console.log("❌ createLocalBooking - No user data");
+                    return res.status(400).json({
+                        success: false,
+                        message: "User Data not found",
+                    });
+                }
             }
 
             const result = await BookingService.createInitialBooking(req.body, userData);
@@ -413,6 +430,7 @@ class BookingLocalController {
                 totalPrice,
                 isHold,
                 orderId,
+                source, // Added source from request body
             } = req.body;
 
             if (!bookingId) {
@@ -422,25 +440,42 @@ class BookingLocalController {
                 });
             }
 
-            const token = this.extractToken(req);
+            let userData = null;
+            let isB2CSource = false;
 
-            if (!token) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Authorization token missing",
-                });
+            // Check if source is 'b2c' - skip token validation
+            if (source === 'b2c') {
+                console.log("🟢 B2C source detected - Skipping token validation");
+                isB2CSource = true;
+                // Use default guest user data
+                userData = {
+                    id: 'guest_user',
+                    clientType: 'b2c',
+                    email: req.body.email || 'guest@example.com'
+                };
+            } else {
+                // Normal flow - validate token
+                const token = this.extractToken(req);
+
+                if (!token) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Authorization token missing",
+                    });
+                }
+
+                userData = await this.validateToken(token);
+
+                if (!userData?.clientType) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid user data",
+                    });
+                }
             }
 
-            const userData = await this.validateToken(token);
-
-            if (!userData?.clientType) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid user data",
-                });
-            }
-
-            if (userData.clientType === 'b2c') {
+            // Skip payment status check for B2C source (guest users)
+            if (!isB2CSource && userData.clientType === 'b2c') {
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
 
                 if (paymentStatus.status != "paid") {
@@ -451,7 +486,8 @@ class BookingLocalController {
                 }
             }
 
-            if (userData.clientType === 'b2b') {
+            // Skip wallet balance check for B2C source (guest users)
+            if (!isB2CSource && userData.clientType === 'b2b') {
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
                 if (
@@ -481,6 +517,7 @@ class BookingLocalController {
                     });
                 }
             }
+
             console.log("Wallet Checked properly. Now trying to book");
 
             const result = await BookingService.updateAndTriggerBooking({
@@ -499,7 +536,8 @@ class BookingLocalController {
                 });
             }
 
-            if (userData.clientType === 'b2c') {
+            // Skip wallet deduction for B2C source (guest users)
+            if (!isB2CSource && userData.clientType === 'b2c') {
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice,
@@ -507,7 +545,7 @@ class BookingLocalController {
                 );
             }
 
-            if (userData.clientType === 'b2b') {
+            if (!isB2CSource && userData.clientType === 'b2b') {
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice
