@@ -60,6 +60,8 @@ export interface IBooking extends Document {
   hotelPhone?: string;
   rateComments?: string;
   paymentType?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
 
   // ─── Guest & Agent ─────────────────────────────
   guestName?: string;
@@ -152,6 +154,8 @@ const bookingSchema = new Schema<IBooking>(
     hotelPhone: { type: String },
     rateComments: { type: String },
     paymentType: { type: String },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
 
     // Guest & Agent
     guestName: { type: String },

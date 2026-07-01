@@ -182,8 +182,8 @@ class CommitService {
     clientType: string = "B2C",
     requestId: string = "",
   ) {
-    if (!token)
-      throw new Error("Authentication token is required for booking.");
+    if (clientType === "B2B" && !token)
+      throw new Error("Authentication token is required for B2B booking.");
 
     console.log(
       `[TripJack] Starting Secure OTA Flow for Agent: ${agentId}, ClientType: ${clientType}, RequestId: ${requestId}`,
@@ -262,7 +262,7 @@ class CommitService {
 
       // PHASE 2: Calculate Final Price & Markup
       if (clientType === "B2B") {
-        const markupRules = await WalletUtil.getMarkupRules(token);
+        const markupRules = await WalletUtil.getMarkupRules(token!);
         const pricing = PricingUtil.calculatePriceWithMarkup(
           netPrice,
           markupRules,
@@ -283,26 +283,31 @@ class CommitService {
         );
       }
 
-      // PHASE 3: Wallet Deduction (Atomic)
-      if (!isHoldIntent) {
-        paymentProcessed = await WalletUtil.deductBalance(
-          token,
-          finalPrice,
-          demandBookingId,
-          `Hotel Booking at ${payload.hotelName || "TripJack Hotel"}`,
-        );
-        if (!paymentProcessed)
-          throw new StructuredError(
-            "INSUFFICIENT_WALLET",
-            "Wallet deduction failed. Please check your balance.",
+      // PHASE 3: Wallet Deduction (Atomic) - ONLY FOR B2B
+      if (clientType === "B2B") {
+        if (!isHoldIntent) {
+          paymentProcessed = await WalletUtil.deductBalance(
+            token!,
+            finalPrice,
+            demandBookingId,
+            `Hotel Booking at ${payload.hotelName || "TripJack Hotel"}`,
           );
-        await BookingEventLogger.log(bookingId, requestId, "WALLET_DEBITED", {
-          amount: finalPrice,
-        });
+          if (!paymentProcessed)
+            throw new StructuredError(
+              "INSUFFICIENT_WALLET",
+              "Wallet deduction failed. Please check your balance.",
+            );
+          await BookingEventLogger.log(bookingId, requestId, "WALLET_DEBITED", {
+            amount: finalPrice,
+          });
+        } else {
+          console.log(
+            `⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`,
+          );
+        }
       } else {
-        console.log(
-          `⏸️ [TripJack] Hold Booking Requested — Deferring immediate internal wallet deduction.`,
-        );
+        // B2C Flow - Payment is already processed by Payment Gateway
+        paymentProcessed = true;
       }
 
       // PHASE 4: Provider Booking (Send ONLY Net Price)
@@ -371,6 +376,8 @@ class CommitService {
         starRating: payload.starRating,
         propertyCode: payload.propertyId || "TJ-PROP",
         tripJackRequest: tjPayload, // Cache the compiled outbound request payload
+        razorpayOrderId: payload.razorpayOrderId,
+        razorpayPaymentId: payload.razorpayPaymentId,
       });
 
       pollTripJackBookingStatus(
@@ -388,10 +395,10 @@ class CommitService {
         `❌ [TripJack] Critical Booking Error:`,
         bookingErr.message,
       );
-      if (paymentProcessed) {
+      if (paymentProcessed && clientType === "B2B") {
         console.log(`[TripJack] Rolling back wallet due to commit failure...`);
         await WalletUtil.refundBalance(
-          token,
+          token!,
           finalPrice,
           demandBookingId,
           "Auto-refund: System error during booking",
@@ -411,8 +418,8 @@ class CommitService {
     clientType: string = "B2C",
     requestId: string = "",
   ) {
-    if (!token)
-      throw new Error("Authentication token is required for booking.");
+    if (clientType === "B2B" && !token)
+      throw new Error("Authentication token is required for B2B booking.");
 
     console.log(
       `[RateGain] Starting Secure OTA Flow for Agent: ${agentId}, ClientType: ${clientType}, RequestId: ${requestId}`,
@@ -462,7 +469,7 @@ class CommitService {
 
       // PHASE 2: Markup & Total
       if (clientType === "B2B") {
-        const markupRules = await WalletUtil.getMarkupRules(token);
+        const markupRules = await WalletUtil.getMarkupRules(token!);
         let pricing = PricingUtil.calculatePriceWithMarkup(
           netPrice,
           markupRules,
@@ -485,21 +492,26 @@ class CommitService {
         );
       }
 
-      // PHASE 3: Wallet Deduction (Both B2B and B2C)
-      paymentProcessed = await WalletUtil.deductBalance(
-        token,
-        finalPrice,
-        demandId,
-        `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || "RateGain Hotel"}`,
-      );
-      if (!paymentProcessed)
-        throw new StructuredError(
-          "INSUFFICIENT_WALLET",
-          "Wallet deduction failed.",
+      // PHASE 3: Wallet Deduction (B2B ONLY)
+      if (clientType === "B2B") {
+        paymentProcessed = await WalletUtil.deductBalance(
+          token!,
+          finalPrice,
+          demandId,
+          `Hotel Booking at ${payload.BookReservation?.hotelName || payload.hotelName || "RateGain Hotel"}`,
         );
-      await BookingEventLogger.log(demandId, requestId, "WALLET_DEBITED", {
-        amount: finalPrice,
-      });
+        if (!paymentProcessed)
+          throw new StructuredError(
+            "INSUFFICIENT_WALLET",
+            "Wallet deduction failed.",
+          );
+        await BookingEventLogger.log(demandId, requestId, "WALLET_DEBITED", {
+          amount: finalPrice,
+        });
+      } else {
+        // B2C Flow - Payment is already processed by Payment Gateway
+        paymentProcessed = true;
+      }
 
       // PHASE 4: Provider Booking
       const rgPayload = { ...(payload.bookingPayload || payload) };
@@ -555,7 +567,7 @@ class CommitService {
       if (!isRgSuccess) {
         if (clientType === "B2B") {
           await WalletUtil.refundBalance(
-            token,
+            token!,
             finalPrice,
             demandId,
             "Auto-refund: RateGain booking failed",
@@ -636,16 +648,18 @@ class CommitService {
           rgResponse?.body?.booking?.hotel?.rooms?.[0]?.rates?.[0]?.paymentType,
         rateGainRequest: rgPayload,
         rateGainResponse: rgResponse,
+        razorpayOrderId: payload.razorpayOrderId,
+        razorpayPaymentId: payload.razorpayPaymentId,
       });
 
       notificationService.sendBookingConfirmation(saved);
 
       return rgResponse;
     } catch (err: any) {
-      if (paymentProcessed) {
+      if (paymentProcessed && clientType === "B2B") {
         console.log(`[RateGain] Rolling back wallet due to commit failure...`);
         await WalletUtil.refundBalance(
-          token,
+          token!,
           finalPrice,
           demandId,
           "Auto-refund: RateGain system error",

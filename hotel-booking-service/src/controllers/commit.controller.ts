@@ -80,6 +80,8 @@ export const commitController = async (req: any, res: Response) => {
         additionalMarkup: req.body.bookingFormData.additionalMarkup,
         couponCode: req.body.bookingFormData.couponCode,
         roomName: req.body.bookingFormData.roomName,
+        razorpayOrderId: req.body.razorpayOrderId,
+        razorpayPaymentId: req.body.razorpayPaymentId,
         bookingPayload: {
           ...(req.body.bookingPayload || {}),
           ...(compiledProviderPayload.gstInfo && {
