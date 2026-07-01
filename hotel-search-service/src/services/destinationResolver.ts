@@ -310,6 +310,19 @@ export async function resolveCityToCoords(
   if (!query || query.length < 2) return null;
   const normalizedQuery = query.toLowerCase().trim();
 
+  // Instant coordinates extraction if prefixed with "geo:"
+  if (normalizedQuery.startsWith("geo:")) {
+    const coords = normalizedQuery.replace("geo:", "").split(",");
+    if (coords.length === 2) {
+      const lat = parseFloat(coords[0]);
+      const lng = parseFloat(coords[1]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        console.log(`[GEO] Instantly parsing query "${query}" as coords: [${lat}, ${lng}]`);
+        return { lat, lng, radiusKm: 25 };
+      }
+    }
+  }
+
   // 0. Check Database Cache
   try {
     const cached = await GeoCacheModel.findOne({

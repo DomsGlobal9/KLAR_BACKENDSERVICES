@@ -33,9 +33,23 @@ export class HotelsService {
     }
 
     // 1. Resolve Location (Once) - Skip if direct search
-    const geoCenter = isDirectSearch
-      ? null
-      : await resolveCityToCoords(searchPayload.destination);
+    let geoCenter = null;
+    if (!isDirectSearch) {
+      if (searchPayload.destinationCode && searchPayload.destinationCode.startsWith("GEO:")) {
+        const coords = searchPayload.destinationCode.replace("GEO:", "").split(",");
+        if (coords.length === 2) {
+          const lat = parseFloat(coords[0]);
+          const lng = parseFloat(coords[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            geoCenter = { lat, lng, radiusKm: 25 };
+            console.log(`[GEO] Instant resolution from destinationCode GEO token: Lat=${lat}, Lng=${lng}`);
+          }
+        }
+      }
+      if (!geoCenter) {
+        geoCenter = await resolveCityToCoords(searchPayload.destination);
+      }
+    }
     searchPayload._geoCenter = geoCenter;
 
     if (geoCenter) {
@@ -203,130 +217,92 @@ Reported Total to UI:      ${totalToUI}
 
   async getHotelSuggestions(query: string) {
     const { HotelModel } = require("../models/Hotel.model");
-    const { RGDestinationModel } = require("../models/RGDestination.model");
+    const { City } = require("country-state-city");
 
     if (!query || query.trim().length < 2) {
       return [];
     }
 
+    const qLower = query.toLowerCase().trim();
     const escapedQuery = query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
     const prefixRegex = new RegExp("^" + escapedQuery, "i");
     const containsRegex = new RegExp(escapedQuery, "i");
 
-    // Execute queries concurrently for maximum speed
-    // 1. Fetch destination/city matches
-    let rgDests = await RGDestinationModel.find({ destName: prefixRegex })
-      .limit(10)
-      .lean();
-    if (rgDests.length < 5) {
-      const extraDests = await RGDestinationModel.find({
-        destName: containsRegex,
-        _id: { $nin: rgDests.map((d: any) => d._id) },
-      })
-        .limit(10 - rgDests.length)
-        .lean();
-      rgDests = [...rgDests, ...extraDests];
+    // 1. Fetch cities from local country-state-city package
+    const allCities = City.getAllCities();
+    const qWords = qLower.split(/\s+/).filter(Boolean);
+    const cityMatches = [];
+
+    for (const city of allCities) {
+      const cityNameLower = city.name.toLowerCase();
+      let matchesAll = true;
+      for (const word of qWords) {
+        if (!cityNameLower.includes(word)) {
+          matchesAll = false;
+          break;
+        }
+      }
+      
+      if (matchesAll) {
+        const score = cityNameLower.startsWith(qLower) ? 1 : (cityNameLower.includes(qLower) ? 2 : 3);
+        cityMatches.push({ city, score });
+      }
     }
 
-    // If no results, fallback to text search index
-    if (rgDests.length === 0) {
-      rgDests = await RGDestinationModel.find(
-        { $text: { $search: query } },
-        { score: { $meta: "textScore" } },
-      )
-        .sort({ score: { $meta: "textScore" } })
-        .limit(5)
-        .lean();
-    }
-
-    // Sort destinations by relevance:
-    // 1. Exact match first (destName exactly equals query)
-    // 2. Starts-with match (shorter names first — "Hyderabad India" before "Hyde Park NY")
-    // 3. Contains match last
-    const qLower = query.toLowerCase().trim();
-    rgDests.sort((a: any, b: any) => {
-      const aName = (a.destName || "").toLowerCase().trim();
-      const bName = (b.destName || "").toLowerCase().trim();
-      const aExact = aName === qLower ? 0 : aName.startsWith(qLower) ? 1 : 2;
-      const bExact = bName === qLower ? 0 : bName.startsWith(qLower) ? 1 : 2;
-      if (aExact !== bExact) return aExact - bExact;
-      // Among same tier: prefer shorter names (more specific match)
-      return aName.length - bName.length;
+    // Sort by:
+    // 1. Country priority (India 'IN' first)
+    // 2. Prefix match score (starts-with score 1 first, contains score 2 last)
+    // 3. Shorter name length first (more precise matches)
+    cityMatches.sort((a, b) => {
+      const aIsIN = a.city.countryCode === "IN" ? 1 : 0;
+      const bIsIN = b.city.countryCode === "IN" ? 1 : 0;
+      if (aIsIN !== bIsIN) return bIsIN - aIsIN; // India first
+      if (a.score !== b.score) return a.score - b.score;
+      return a.city.name.length - b.city.name.length;
     });
 
-    // 2. Fetch hotel matches
+    const { State, Country } = require("country-state-city");
+
+    const mappedCities = cityMatches.slice(0, 10).map((m) => {
+      const c = m.city;
+      const countryObj = Country.getCountryByCode(c.countryCode);
+      const countryName = countryObj ? countryObj.name : c.countryCode;
+
+      const stateObj = State.getStateByCodeAndCountry(c.stateCode, c.countryCode);
+      const stateName = stateObj ? stateObj.name : c.stateCode;
+
+      const statePart = stateName ? `${stateName}, ` : "";
+      const label = `${c.name}, ${statePart}${countryName}`;
+      const geoId = `GEO:${c.latitude},${c.longitude}`;
+      return {
+        id: geoId,
+        destCode: geoId,
+        destName: label,
+        label: label,
+        type: "city",
+        source: "GEO",
+      };
+    });
+
+    // 2. Fetch hotels from database
     let hotels = await HotelModel.find({
       $or: [{ name: prefixRegex }, { cityName: prefixRegex }],
     })
-      .limit(20)
+      .limit(15)
       .lean();
 
-    if (hotels.length < 10) {
+    if (hotels.length < 8) {
       const extraHotels = await HotelModel.find({
         $or: [{ name: containsRegex }, { cityName: containsRegex }],
         _id: { $nin: hotels.map((h: any) => h._id) },
       })
-        .limit(20 - hotels.length)
+        .limit(15 - hotels.length)
         .lean();
       hotels = [...hotels, ...extraHotels];
     }
 
-    // Fallback to text search for hotels if nothing found via regex
-    if (hotels.length === 0) {
-      hotels = await HotelModel.find(
-        { $text: { $search: query } },
-        { score: { $meta: "textScore" } },
-      )
-        .sort({ score: { $meta: "textScore" } })
-        .limit(15)
-        .lean();
-    }
-
-    // Extract matching cities from matched hotels and suggest them if they are not already in rgDests
-    const hotelCities = new Set<string>();
-    for (const h of hotels) {
-      if (h.cityName) {
-        hotelCities.add(h.cityName);
-      }
-    }
-
-        const existingCityNames = new Set(rgDests.map((d: any) => d.destName ? d.destName.toLowerCase().trim() : (d.label ? d.label.toLowerCase().trim() : "")));
-        
-        // Collect all new city names first, then do ONE batch lookup instead of N queries
-        const newCities: string[] = [];
-        for (const cityName of hotelCities) {
-            const normalizedCity = cityName.toLowerCase().trim();
-            if (!existingCityNames.has(normalizedCity) && normalizedCity.includes(query.toLowerCase().trim())) {
-                newCities.push(cityName);
-            }
-        }
-        
-        if (newCities.length > 0) {
-            
-            const escapedCities = newCities.map(c => c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&"));
-            const batchDests = await RGDestinationModel.find({
-                destName: { $in: newCities.map(c => new RegExp(`^${c}$`, "i")) }
-            }).lean();
-            const batchDestMap = new Map<string, any>(batchDests.map((d: any) => [d.destName.toLowerCase().trim(), d]));
-            
-            for (const cityName of newCities) {
-                const normalizedCity = cityName.toLowerCase().trim();
-                const dbDest = batchDestMap.get(normalizedCity) as any;
-                rgDests.push({
-                    destCode: dbDest?.destCode || cityName,
-                    destName: cityName
-                });
-                existingCityNames.add(normalizedCity);
-            }
-        }
-
     const suggestions = [
-      ...rgDests.map((d: any) => ({
-        id: d.destCode,
-        label: d.destName,
-        type: "city",
-        source: "RG",
-      })),
+      ...mappedCities,
       ...hotels.map((h: any) => {
         const hotelId = h.tjHotelId.startsWith("TJ:")
           ? h.tjHotelId
@@ -335,6 +311,7 @@ Reported Total to UI:      ${totalToUI}
           id: hotelId,
           hotelId: hotelId,
           label: `${h.name}, ${h.cityName}`,
+          name: h.name,
           type: "hotel",
           source: "TJ",
           city: h.cityName,
@@ -342,14 +319,11 @@ Reported Total to UI:      ${totalToUI}
       }),
     ];
 
-    // Deduplicate suggestions by name to fix "multiple times same location" issue
+    // Deduplicate suggestions by name
     const uniqueSuggestions = Array.from(
       new Map(
         suggestions.map((item) => {
-          const dedupeKey =
-            item.type === "city"
-              ? item.label.split(",")[0].toLowerCase().trim()
-              : item.label.toLowerCase().trim();
+          const dedupeKey = item.label.toLowerCase().trim();
           return [dedupeKey, item];
         }),
       ).values(),
