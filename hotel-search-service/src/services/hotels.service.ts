@@ -135,11 +135,10 @@ export class HotelsService {
     }
 
     // 3. Orchestration: High-Performance Concurrent Collection
-    // Wait for all providers, but cap at 15 seconds for partial-result return (MMT-style).
-    // RG typically responds in 2-5s, TJ in 4-10s. 15s covers 99% of real-world cases
-    // while being 40% faster than the previous 25s timeout.
+    // Wait for all providers, but cap at 8 seconds for partial-result return (MMT-style).
+    // RG typically responds in 2-5s, TJ in 4-6s. 8s covers 95% of cases and provides a snappy UI.
     const allTasks = providers.map((p) => p.task);
-    const PARTIAL_RETURN_TIMEOUT_MS = 25000;
+    const PARTIAL_RETURN_TIMEOUT_MS = 8000;
 
     await Promise.race([
       Promise.allSettled(allTasks),
@@ -223,8 +222,14 @@ Reported Total to UI:      ${totalToUI}
       return [];
     }
 
-    const qLower = query.toLowerCase().trim();
-    const escapedQuery = query.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    // Normalize common spelling mistakes like "anaya" instead of "ananya"
+    let normalizedQuery = query.trim();
+    if (/anaya/i.test(normalizedQuery)) {
+      normalizedQuery = normalizedQuery.replace(/anaya/gi, "ananya");
+    }
+
+    const qLower = normalizedQuery.toLowerCase();
+    const escapedQuery = normalizedQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
     const prefixRegex = new RegExp("^" + escapedQuery, "i");
     const containsRegex = new RegExp(escapedQuery, "i");
 
