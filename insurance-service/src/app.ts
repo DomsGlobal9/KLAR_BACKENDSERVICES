@@ -36,6 +36,15 @@ app.get("/", (_req: Request, res: Response) => {
 app.use("/api/insurance", routes);
 // app.use("/",              routes); 
 
+app.use((req, res) => {
+    console.log(`❌ Route not found: ${req.method} ${req.url}`);
+    res.status(404).json({ 
+        error: 'Route not found',
+        method: req.method,
+        url: req.url
+    });
+});
+
 app.use(errorHandler);
 
 export default app;
