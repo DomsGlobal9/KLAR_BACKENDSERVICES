@@ -34,7 +34,7 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.use("/api/insurance", routes);
-app.use("/",              routes); 
+// app.use("/",              routes); 
 
 app.use(errorHandler);
 
