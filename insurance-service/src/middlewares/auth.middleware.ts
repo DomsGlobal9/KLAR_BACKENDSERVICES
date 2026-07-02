@@ -70,34 +70,16 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
-// FIXED: Added back and explicitly exported the interface declaration so controllers can import it
+
+
 export interface AuthenticatedRequest extends Request {
     user?: any;
 }
+
 
 export const authenticateJWT = (
     req: AuthenticatedRequest,
@@ -115,6 +97,7 @@ export const authenticateJWT = (
             token = req.query.token;
         }
 
+        // 1. Guard check: If token is missing, exit early
         if (!token) {
             return res.status(401).json({
                 success: false,
@@ -124,18 +107,23 @@ export const authenticateJWT = (
         }
 
         // ===== BACKEND TTL OBJECT UNWRAPPER SAFEGUARD =====
+        // 2. We can safely use token.trim() now because TypeScript knows it's not null here
         if (token.trim().startsWith('{')) {
             try {
                 const parsed = JSON.parse(token);
+                // Fall back to the original token string if properties are missing
                 token = parsed.value || parsed.token || token;
             } catch (e) {
                 console.error("Failed parsing stringified token wrapper payload:", e);
             }
         }
 
-        console.log("Cleaned token parsing trace:", token.substring(0, 25) + "...");
+        // 3. Create a strictly typed string variable so TypeScript is 100% confident down the line
+        const activeToken: string = token ?? "";
 
-        const decoded = jwt.verify(token, env.jwtSecret);
+        console.log("Cleaned token parsing trace:", activeToken.substring(0, 25) + "...");
+
+        const decoded = jwt.verify(activeToken, env.jwtSecret);
         req.user = decoded;
         next();
     } catch (error) {
