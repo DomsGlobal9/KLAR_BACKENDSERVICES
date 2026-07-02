@@ -16,6 +16,7 @@ import { confirmController } from "../controllers/confirm.controller";
 import { bookingTemplateController } from "../controllers/booking-template.controller";
 
 import { authenticateJWT } from "../middlewares/auth.middleware";
+import { optionalAuthenticateJWT } from "../middlewares/optionalAuth.middleware";
 
 const router = Router();
 
@@ -57,10 +58,10 @@ import {
   commitModification,
 } from "../controllers/amend.controller";
 
-// RateGain booking flow — now protected
-router.post("/precheck", authenticateJWT, precheckController);
-router.post("/commit", authenticateJWT, commitController);
-router.post("/confirm", authenticateJWT, confirmController);
+// RateGain booking flow — optional auth for B2C guest users
+router.post("/precheck", optionalAuthenticateJWT, precheckController);
+router.post("/commit", optionalAuthenticateJWT, commitController);
+router.post("/confirm", optionalAuthenticateJWT, confirmController);
 router.post("/cancel", authenticateJWT, cancelController);
 router.get("/cancel/charges", authenticateJWT, getCancelChargesController);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);

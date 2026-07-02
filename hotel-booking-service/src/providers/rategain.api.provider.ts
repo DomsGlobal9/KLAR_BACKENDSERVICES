@@ -16,12 +16,11 @@ export class RateGainApiProvider {
     )
       .toString()
       .replace(/^RG:/, "");
+    const precheckGuestSeen = new Set<string>();
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        GuaranteeMethod: booking.GuaranteeMethod || "Agency",
-        GuaranteeType: booking.GuaranteeType || "Deposit",
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
@@ -42,20 +41,35 @@ export class RateGainApiProvider {
             RoomSelectionKey: rs.RoomSelectionKey || "",
             RoomRate: Number(Number(rs.RoomRate || 0).toFixed(2)),
             BoardName: rs.BoardName || "ROOM ONLY",
-            Guest: (rs.Guest || []).map((g: any) => ({
-              FirstName: g.FirstName || "Guest",
-              LastName: g.LastName || "Guest",
-              Primary: g.Primary !== false,
-              Email: g.Email || "[EMAIL_ADDRESS]",
-              EmailType: g.EmailType || 1,
-              ProfileType: g.ProfileType || 1,
-              Phone: g.Phone || "0000000000",
-              Line1: g.Line1 || "N/A",
-              City: g.City || "N/A",
-              StateCode: g.StateCode || "TN",
-              CountryCode: g.CountryCode || "IN",
-              PostalCode: g.PostalCode || "600001",
-            })),
+            Guest: (rs.Guest || []).map((g: any) => {
+              let fName = (g.FirstName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
+              let lName = (g.LastName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
+              
+              if (!fName) fName = "Guest";
+              if (!lName) lName = "Guest";
+
+              let fullName = `${fName}${lName}`.toLowerCase();
+              if (precheckGuestSeen.has(fullName)) {
+                fName = `${fName}${precheckGuestSeen.size + 1}`;
+                fullName = `${fName}${lName}`.toLowerCase();
+              }
+              precheckGuestSeen.add(fullName);
+
+              return {
+                FirstName: fName,
+                LastName: lName,
+                Primary: g.Primary !== false,
+                Email: g.Email || "[EMAIL_ADDRESS]",
+                EmailType: g.EmailType || 1,
+                ProfileType: g.ProfileType || 1,
+                Phone: g.Phone || "0000000000",
+                Line1: g.Line1 || "N/A",
+                City: g.City || "N/A",
+                StateCode: g.StateCode || "TN",
+                CountryCode: g.CountryCode || "IN",
+                PostalCode: g.PostalCode || "600001",
+              };
+            }),
           };
           if (rs.allocationDetails)
             mappedRs.allocationDetails = rs.allocationDetails;
@@ -80,12 +94,15 @@ export class RateGainApiProvider {
         "/api/SmartDistribution/PreCheckReservation",
         consolidatedPayload,
       );
+      console.log(
+        `[RateGain] PreCheck RAW Response (status=${response.status}): ${JSON.stringify(response.data, null, 2)}`,
+      );
       return response.data;
     } catch (error: any) {
       console.error(
-        "[RateGain] PreCheck Error:",
+        "[RateGain] PreCheck HTTP Error:",
         error.response?.status,
-        error.response?.data?.description || error.message,
+        JSON.stringify(error.response?.data || error.message, null, 2),
       );
       throw error;
     }
@@ -108,12 +125,14 @@ export class RateGainApiProvider {
     )
       .toString()
       .replace(/^RG:/, "");
+    const commitGuestSeen = new Set<string>();
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
+        // GuaranteeMethod and GuaranteeType intentionally omitted —
+        // SDS uses a line-of-credit model; sending these fields causes RateGain
+        // to return ConfirmationFailed. Payment is handled via wallet deduction.
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        GuaranteeMethod: booking.GuaranteeMethod || "Agency",
-        GuaranteeType: booking.GuaranteeType || "Deposit",
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
@@ -155,20 +174,35 @@ export class RateGainApiProvider {
             RoomSelectionKey: rs.RoomSelectionKey || "",
             RoomRate: Number(Number(rs.RoomRate || 0).toFixed(2)),
             BoardName: rs.BoardName || "ROOM ONLY",
-            Guest: (rs.Guest || []).map((g: any) => ({
-              FirstName: g.FirstName || "Guest",
-              LastName: g.LastName || "Guest",
-              Primary: g.Primary !== false,
-              Email: g.Email || "guest@example.com",
-              EmailType: g.EmailType || 1,
-              ProfileType: g.ProfileType || 1,
-              Phone: g.Phone || "0000000000",
-              Line1: g.Line1 || "N/A",
-              City: g.City || "N/A",
-              StateCode: g.StateCode || "N/A",
-              CountryCode: g.CountryCode || "US",
-              PostalCode: g.PostalCode || "00000",
-            })),
+            Guest: (rs.Guest || []).map((g: any) => {
+              let fName = (g.FirstName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
+              let lName = (g.LastName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
+              
+              if (!fName) fName = "Guest";
+              if (!lName) lName = "Guest";
+
+              let fullName = `${fName}${lName}`.toLowerCase();
+              if (commitGuestSeen.has(fullName)) {
+                fName = `${fName}${commitGuestSeen.size + 1}`;
+                fullName = `${fName}${lName}`.toLowerCase();
+              }
+              commitGuestSeen.add(fullName);
+
+              return {
+                FirstName: fName,
+                LastName: lName,
+                Primary: g.Primary !== false,
+                Email: g.Email || "guest@example.com",
+                EmailType: g.EmailType || 1,
+                ProfileType: g.ProfileType || 1,
+                Phone: g.Phone || "0000000000",
+                Line1: g.Line1 || "N/A",
+                City: g.City || "N/A",
+                StateCode: g.StateCode || "N/A",
+                CountryCode: g.CountryCode || "US",
+                PostalCode: g.PostalCode || "00000",
+              };
+            }),
           };
           if (rs.allocationDetails)
             mappedRs.allocationDetails = rs.allocationDetails;
@@ -193,12 +227,15 @@ export class RateGainApiProvider {
         "/api/SmartDistribution/CommitReservation",
         consolidatedPayload,
       );
+      console.log(
+        `[RateGain] Commit RAW Response (status=${response.status}): ${JSON.stringify(response.data, null, 2)}`,
+      );
       return response.data;
     } catch (error: any) {
       console.error(
-        "[RateGain] Commit Error:",
+        "[RateGain] Commit HTTP Error:",
         error.response?.status,
-        error.response?.data?.description || error.message,
+        JSON.stringify(error.response?.data || error.message, null, 2),
       );
       throw error;
     }
