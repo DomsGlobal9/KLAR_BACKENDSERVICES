@@ -1,7 +1,103 @@
+// import { Request, Response, NextFunction } from "express";
+// import jwt from "jsonwebtoken";
+// import { env } from "../config/env";
+
+
+// export const authenticateJWT = (
+//     req: AuthenticatedRequest,
+//     res: Response,
+//     next: NextFunction
+// ): Response | void => {
+//     try {
+//         const authHeader = req.headers.authorization;
+//         let token: string | null = null;
+
+//         if (authHeader) {
+//             const match = authHeader.match(/^Bearer\s+(.+)$/i);
+//             token = match ? match[1] : authHeader;
+//         } else if (req.query?.token && typeof req.query.token === "string") {
+//             token = req.query.token;
+//         }
+
+//         if (!token) {
+//             return res.status(401).json({
+//                 success: false,
+//                 message: "Authentication required. No token provided.",
+//                 code: "TOKEN_MISSING",
+//             });
+//         }
+
+//         // ===== BACKEND TTL OBJECT UNWRAPPER SAFEGUARD =====
+//         if (token.trim().startsWith('{')) {
+//             try {
+//                 const parsed = JSON.parse(token);
+//                 token = parsed.value || parsed.token || token;
+//             } catch (e) {
+//                 console.error("Failed parsing stringified token wrapper payload:", e);
+//             }
+//         }
+
+//         console.log("Cleaned token parsing trace:", token.substring(0, 25) + "...");
+
+//         const decoded = jwt.verify(token, env.jwtSecret);
+//         req.user = decoded;
+//         next();
+//     } catch (error) {
+//         if (error instanceof jwt.TokenExpiredError) {
+//             return res.status(401).json({
+//                 success: false,
+//                 message: "Token has expired",
+//                 code: "TOKEN_EXPIRED",
+//             });
+//         }
+//         return res.status(401).json({
+//             success: false,
+//             message: "Authentication failed",
+//             code: "AUTH_FAILED",
+//         });
+//     }
+// };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
+// FIXED: Added back and explicitly exported the interface declaration so controllers can import it
+export interface AuthenticatedRequest extends Request {
+    user?: any;
+}
 
 export const authenticateJWT = (
     req: AuthenticatedRequest,
