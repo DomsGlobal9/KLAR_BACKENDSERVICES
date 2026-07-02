@@ -7,6 +7,7 @@ const app = express();
 
 const corsOptions = {
     origin: [
+        'http://localhost:5009',
         'https://klartravels.com',
         'https://www.klartravels.com',
         'https://b2b.klartravels.com',
@@ -19,6 +20,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+app.options('/*splat', cors(corsOptions));
 
 app.use(express.json({ limit: "2mb" }));
 
