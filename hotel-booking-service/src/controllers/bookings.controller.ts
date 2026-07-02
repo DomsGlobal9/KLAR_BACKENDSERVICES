@@ -1,5 +1,38 @@
 import { Request, Response } from "express";
 import { bookingsService } from "../services/bookings.service";
+import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
+
+export const checkBookingsByEmail = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({
+        status: false,
+        statusCode: 400,
+        description: "Email is required",
+        body: null
+      });
+    }
+    const count = await hotelBookingRepository.countDocuments({
+      guestEmail: email.toLowerCase()
+    });
+    res.json({
+      status: true,
+      statusCode: 200,
+      body: {
+        hasBookings: count > 0
+      }
+    });
+  } catch (error: any) {
+    console.error("Check Bookings by Email Error:", error.message);
+    res.status(500).json({
+      status: false,
+      statusCode: 500,
+      description: error.message || "Failed to check bookings",
+      body: null
+    });
+  }
+};
 
 export const getBookings = async (_req: Request, res: Response) => {
   try {
@@ -39,11 +72,17 @@ export const getBookingDetails = async (req: any, res: Response) => {
     }
 
     // Ownership Check
-    const agentId = req.user?.userId || req.user?.id;
+    const userId = req.user?.userId || req.user?.id;
+    const userEmail = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
-    if (!isAdmin && booking.agentId !== agentId) {
+    const isOwner = 
+      booking.agentId === userId || 
+      booking.userId === userId || 
+      (userEmail && booking.guestEmail === userEmail);
+
+    if (!isAdmin && !isOwner) {
       return res.status(403).json({
         status: false,
         statusCode: 403,

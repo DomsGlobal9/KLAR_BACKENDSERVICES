@@ -13,6 +13,8 @@ import {
   requestForgotPasswordOTP,
   verifyForgotPasswordOTP,
   resetPassword,
+  requestGuestOTP,
+  verifyGuestOTP,
 } from "../controllers/auth.controller";
 import { authenticateJWT } from "../middlewares/authentication.middleware";
 
@@ -31,6 +33,12 @@ router.post("/signup/request-otp", requestSignupOTP);
 router.post("/signup/verify-otp", verifySignupOTP);
 router.post("/login/request-otp", requestLoginOTP);
 router.post("/login/verify-otp", verifyLoginOTP);
+
+/**
+ * Guest/B2C Booking access routes
+ */
+router.post("/guest/request-otp", requestGuestOTP);
+router.post("/guest/verify-otp", verifyGuestOTP);
 
 /**
  * Forgot password flow: request OTP, verify OTP, reset password

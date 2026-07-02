@@ -11,6 +11,7 @@ import { getPricingSummaryController } from "../controllers/pricing.controller";
 import {
   getBookings,
   getBookingDetails,
+  checkBookingsByEmail,
 } from "../controllers/bookings.controller";
 import { confirmController } from "../controllers/confirm.controller";
 import { bookingTemplateController } from "../controllers/booking-template.controller";
@@ -51,6 +52,7 @@ router.get("/health", (_req, res) => {
 
 // List bookings from DB
 router.get("/bookings", authenticateJWT, listController);
+router.get("/bookings/check/:email", checkBookingsByEmail);
 
 import {
   getModificationPolicy,

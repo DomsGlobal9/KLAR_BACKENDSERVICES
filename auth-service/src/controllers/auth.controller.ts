@@ -10,6 +10,7 @@ import { ClientType } from "../constants/clientTypes";
 import { envConfig } from "../config/env.config";
 import { UserModel } from "../models/user.model";
 import { OTPType } from "../models/otp.model";
+import { TokenPayload } from "../utils/JWT";
 
 
 export const signupB2B = async (
@@ -649,6 +650,76 @@ export const resetPassword = async (
     res.status(200).json({
       success: true,
       message: "Password reset successful",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const requestGuestOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const otpDoc = await OTPService.generateOTP(
+      email.toLowerCase(),
+      OTPType.GUEST_ACCESS
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "OTP generated successfully",
+      otp: otpDoc.otp,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyGuestOTP = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    await OTPService.verifyOTP(
+      email.toLowerCase(),
+      otp,
+      OTPType.GUEST_ACCESS
+    );
+
+    const tokenPayload: TokenPayload = {
+      userId: `guest-${email.toLowerCase()}`,
+      email: email.toLowerCase(),
+      clientType: "B2C",
+      roles: "GUEST",
+    };
+
+    const jwtUtil = AuthService.getInstance()["jwtUtil"];
+    const token = jwtUtil.generateAccessToken(tokenPayload);
+
+    res.status(200).json({
+      success: true,
+      message: "OTP verified successfully",
+      token,
+      email: email.toLowerCase(),
     });
   } catch (err) {
     next(err);
