@@ -14,6 +14,25 @@ export class WalletController {
      */
     static async getWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
+            console.log("\n@@@@@@@@@@@@@@@@@ Params got: ", req.params.source);
+            if (req.query.source === "b2c") {
+                const userId = new Types.ObjectId("6a1ed2fb290ce7d307b05784");
+                const wallet = await WalletService.getWallet(userId);
+                if (!wallet) throw new NotFoundError("Payment server error");
+
+                res.json({
+                    success: true,
+                    data: {
+                        id: wallet._id,
+                        balance: wallet.balance,
+                        currency: wallet.currency,
+                        status: wallet.status,
+                        lowBalanceAlert: wallet.lowBalanceAlert,
+                        emailAlerts: wallet.emailAlerts,
+                        smsAlerts: wallet.smsAlerts,
+                    },
+                });
+            }
             if (!req.user) {
                 return res.status(401).json({ success: false, message: "Unauthorized" });
             }
@@ -46,6 +65,33 @@ export class WalletController {
                     smsAlerts: wallet.smsAlerts,
                 },
             });
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getWalletb2c(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+        try {
+            console.log("\n@@@@@@@@@@@@@@@@@ Params got: ", req.params.source);
+            if (req.query.source === "b2c") {
+                const userId = new Types.ObjectId("6a1ed2fb290ce7d307b05784");
+                const wallet = await WalletService.getWallet(userId);
+                if (!wallet) throw new NotFoundError("Payment server error");
+
+                res.json({
+                    success: true,
+                    data: {
+                        id: wallet._id,
+                        balance: wallet.balance,
+                        currency: wallet.currency,
+                        status: wallet.status,
+                        lowBalanceAlert: wallet.lowBalanceAlert,
+                        emailAlerts: wallet.emailAlerts,
+                        smsAlerts: wallet.smsAlerts,
+                    },
+                });
+            }
+            
         } catch (err) {
             next(err);
         }

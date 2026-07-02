@@ -82,8 +82,14 @@ export class BookingRepository {
 
     async getBookingByIdAndUser(bookingId: string, userId: string) {
         return await BookingModel.findOne({
-            bookingId,
+            bookingId: bookingId,
             "userInfo.id": userId
+        });
+    }
+
+    async getBookingByBookingId(bookingId: string) {
+        return await BookingModel.findOne({
+            bookingId: bookingId
         });
     }
 

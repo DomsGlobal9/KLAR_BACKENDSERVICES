@@ -100,6 +100,7 @@ class VoucherController {
         try {
             console.log("📄 Downloading Voucher - START");
             const { bookingId } = req.params;
+            const source = req.query.source as string;
 
             const bookingIdStr = Array.isArray(bookingId) ? bookingId[0] : bookingId;
 
@@ -110,35 +111,57 @@ class VoucherController {
                 });
             }
 
-            const token = this.extractToken(req);
-            if (!token) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Authorization token missing",
-                });
+            let localBooking;
+
+            // If source is b2c, get booking without authentication
+            if (source === 'b2c') {
+                console.log(`📖 Fetching booking ${bookingIdStr} for B2C source`);
+                localBooking = await BookingService.getBookingDetailsBySource(
+                    bookingIdStr,
+                    'b2c'
+                );
+
+                if (!localBooking) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Booking not found",
+                    });
+                }
+            } else {
+                // For authenticated users
+                const token = this.extractToken(req);
+                if (!token) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Authorization token missing",
+                    });
+                }
+
+                const userData = await this.validateToken(token);
+                if (!userData?.id) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Invalid user credentials",
+                    });
+                }
+
+                localBooking = await BookingService.getBookingDetailsByUser(
+                    bookingIdStr,
+                    userData.id
+                );
+
+                if (!localBooking) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Booking not found or unauthorized",
+                    });
+                }
             }
 
-            const userData = await this.validateToken(token);
-            if (!userData?.id) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Invalid user credentials",
-                });
-            }
-
-            const localBooking = await BookingService.getBookingDetails(
-                bookingIdStr,
-                userData.id
-            );
-
-            if (!localBooking) {
-                return res.status(404).json({
-                    success: false,
-                    message: "Booking not found",
-                });
-            }
-
+            // Get booking details from Tripjack
             const tripjackResponse = await TripjackBookingService.getBookingDetails(bookingIdStr);
+
+            // Generate PDF
             const pdfBuffer = await BookingVoucherPdfService.generateFlightVoucherPDF(
                 tripjackResponse,
                 localBooking

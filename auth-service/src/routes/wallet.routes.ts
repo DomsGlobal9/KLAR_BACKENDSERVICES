@@ -7,6 +7,7 @@ const router = Router();
 /**
  * Wallet Routes - All require authentication
  */
+router.get("/:source", WalletController.getWalletb2c);
 router.get("/", authMiddleware, WalletController.getWallet);
 router.post("/credit", authMiddleware, WalletController.creditWallet);
 router.post("/debit", authMiddleware, WalletController.debitWallet);

@@ -5,10 +5,26 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
-app.use(cors());
+const corsOptions = {
+    origin: [
+        'https://klartravels.com',
+        'https://www.klartravels.com',
+        'https://b2b.klartravels.com',
+        'https://www.b2b.klartravels.com', 
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true, 
+    optionsSuccessStatus: 200 
+};
+
+app.use(cors(corsOptions));
+
+app.options('/*', cors(corsOptions));
+
 app.use(express.json({ limit: "2mb" }));
 
-// Root info
+
 app.get("/", (_req: Request, res: Response) => {
     res.status(200).json({
         service: "insurance-service",
@@ -18,7 +34,7 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.use("/api/insurance", routes);
-app.use("/",              routes); // also mount at root for internal calls
+app.use("/",              routes); 
 
 app.use(errorHandler);
 
