@@ -135,10 +135,10 @@ export class HotelsService {
     }
 
     // 3. Orchestration: High-Performance Concurrent Collection
-    // Wait for all providers, but cap at 8 seconds for partial-result return (MMT-style).
-    // RG typically responds in 2-5s, TJ in 4-6s. 8s covers 95% of cases and provides a snappy UI.
+    // Wait for all providers, but cap at 15 seconds for partial-result return (MMT-style).
+    // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases and provides a stable UI.
     const allTasks = providers.map((p) => p.task);
-    const PARTIAL_RETURN_TIMEOUT_MS = 8000;
+    const PARTIAL_RETURN_TIMEOUT_MS = 15000;
 
     await Promise.race([
       Promise.allSettled(allTasks),
