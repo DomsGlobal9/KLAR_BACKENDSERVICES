@@ -62,8 +62,8 @@ import {
 router.post("/precheck", optionalAuthenticateJWT, precheckController);
 router.post("/commit", optionalAuthenticateJWT, commitController);
 router.post("/confirm", optionalAuthenticateJWT, confirmController);
-router.post("/cancel", authenticateJWT, cancelController);
-router.get("/cancel/charges", authenticateJWT, getCancelChargesController);
+router.post("/cancel", optionalAuthenticateJWT, cancelController);
+router.get("/cancel/charges", optionalAuthenticateJWT, getCancelChargesController);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);
