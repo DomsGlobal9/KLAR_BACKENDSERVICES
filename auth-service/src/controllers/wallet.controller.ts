@@ -14,25 +14,6 @@ export class WalletController {
      */
     static async getWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
-            console.log("\n@@@@@@@@@@@@@@@@@ Params got: ", req.params.source);
-            if (req.query.source === "b2c") {
-                const userId = new Types.ObjectId("6a1ed2fb290ce7d307b05784");
-                const wallet = await WalletService.getWallet(userId);
-                if (!wallet) throw new NotFoundError("Payment server error");
-
-                res.json({
-                    success: true,
-                    data: {
-                        id: wallet._id,
-                        balance: wallet.balance,
-                        currency: wallet.currency,
-                        status: wallet.status,
-                        lowBalanceAlert: wallet.lowBalanceAlert,
-                        emailAlerts: wallet.emailAlerts,
-                        smsAlerts: wallet.smsAlerts,
-                    },
-                });
-            }
             if (!req.user) {
                 return res.status(401).json({ success: false, message: "Unauthorized" });
             }
@@ -72,11 +53,31 @@ export class WalletController {
 
     static async getWalletb2c(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
-            console.log("\n@@@@@@@@@@@@@@@@@ Params got: ", req.params.source);
-            if (req.query.source === "b2c") {
-                const userId = new Types.ObjectId("6a1ed2fb290ce7d307b05784");
-                const wallet = await WalletService.getWallet(userId);
-                if (!wallet) throw new NotFoundError("Payment server error");
+            console.log("\n getWalletb2c @@@@@@@@@@@@@@@@@ Params got: ", req.params.source);
+
+            if (req.params.source === "b2c") {
+                if (!req.query.amount) {
+                    return res.status(400).json({ success: false, message: "Amount Required for validate" });
+                }
+
+                // Get the actual USER_ID from environment variables
+                const userIdFromEnv = process.env.USER_ID;
+
+                if (!userIdFromEnv) {
+                    return res.status(500).json({
+                        success: false,
+                        message: "USER_ID not configured in environment"
+                    });
+                }
+
+                // Convert to ObjectId
+                const userId = new Types.ObjectId(userIdFromEnv);
+
+                const wallet = await WalletService.getWallet(userId, req.query.amount as string);
+
+                if (!wallet) {
+                    throw new NotFoundError("Wallet not found");
+                }
 
                 res.json({
                     success: true,
@@ -91,7 +92,7 @@ export class WalletController {
                     },
                 });
             }
-            
+
         } catch (err) {
             next(err);
         }
