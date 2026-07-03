@@ -8,7 +8,9 @@ export class WalletService {
     }
 
     static async getWallet(userId: Types.ObjectId) {
-        return Wallet.findOne({ userId });
+        const result = await Wallet.findOne({ userId });
+        console.log("WALLET Service: \n", result);
+        return result;
     }
 
     static async credit(

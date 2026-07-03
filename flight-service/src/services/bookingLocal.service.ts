@@ -267,102 +267,6 @@ class BookingService {
         }
     }
 
-    // async updateAndTriggerBooking(data: {
-    //     bookingId: string;
-    //     travellers?: any[];
-    //     tripjackPrice?: number;
-    //     markupPrice?: number;
-    //     totalPrice?: number;
-    //     isHold: boolean;
-    // }) {
-    //     const { bookingId, travellers, tripjackPrice, markupPrice, totalPrice, isHold } = data;
-
-    //     if (travellers?.length) {
-    //         for (const traveller of travellers) {
-    //             await this.bookingRepo.updateTravellerSSR(
-    //                 bookingId,
-    //                 traveller.travellerId,
-    //                 {
-    //                     ssrSeatInfos: traveller.ssrSeatInfos || [],
-    //                     ssrMealInfos: traveller.ssrMealInfos || [],
-    //                     ssrBaggageInfos: traveller.ssrBaggageInfos || []
-    //                 }
-    //             );
-    //         }
-    //     }
-
-    //     // Then update prices separately
-    //     const priceUpdateQuery: any = {};
-    //     if (tripjackPrice !== undefined) priceUpdateQuery.tripjackPrice = tripjackPrice;
-    //     if (markupPrice !== undefined) priceUpdateQuery.markupPrice = markupPrice;
-    //     if (totalPrice !== undefined) priceUpdateQuery.totalPrice = totalPrice;
-    //     if (isHold !== undefined) priceUpdateQuery.isHold = isHold;
-
-    //     if (Object.keys(priceUpdateQuery).length > 0) {
-    //         await this.bookingRepo.updatePrices(bookingId, priceUpdateQuery);
-    //     }
-
-    //     // Get the updated booking
-    //     const updatedBooking = await this.bookingRepo.getBookingById(bookingId);
-
-    //     if (!updatedBooking) {
-    //         throw new Error("Failed to get updated booking");
-    //     }
-
-
-    //     // Prepare payload for Tripjack
-    //     const tripjackPayload: FrontendBookingPayload = {
-    //         bookingId: updatedBooking.bookingId,
-    //         email: updatedBooking.email,
-    //         phone: updatedBooking.phone,
-    //         travellers: updatedBooking.travellers,
-    //         amount: updatedBooking.tripjackPrice || 0,
-    //         isHold: updatedBooking.isHold,
-    //         emergencyContact: updatedBooking.emergencyContact
-    //     };
-
-    //     if (updatedBooking.gstInfo?.gstNumber) {
-    //         tripjackPayload.gstInfo = updatedBooking.gstInfo;
-    //     }
-
-    //     validateBookingPayload(tripjackPayload);
-
-    //     const mapped = mapToTripjackBooking(tripjackPayload);
-
-    //     const response = await TripjackBookingService.book(mapped);
-
-    //     if (response.data.status.success === true) {
-    //         const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
-
-    //         await this.bookingRepo.updateBookingStatus(
-    //             bookingId,
-    //             tripjackBookingStatus?.order?.status
-    //         );
-
-    //         const to =
-    //             tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
-    //             tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
-    //             updatedBooking?.email || "";
-
-    //         if (!to) {
-    //             console.warn("No email found for booking:", updatedBooking.bookingId);
-    //             return response.data;
-    //         } else {
-    //             const html = flightConfirmationTemplate(tripjackBookingStatus);
-
-    //             await this.sendEmail(
-    //                 to,
-    //                 `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
-    //                 html
-    //             );
-    //         }
-
-    //         return response.data;
-    //     } else {
-    //         console.error("Tripjack booking failed:", response.data);
-    //         return null;
-    //     }
-    // }
 
     async getBookingsByUserId(userId: string) {
         if (!userId) {
@@ -372,9 +276,57 @@ class BookingService {
         return await this.bookingRepo.getBookingsByUserId(userId);
     }
 
-    async getBookingDetails(bookingId: string, userId: string) {
+    // async getBookingDetails(bookingId: string, userId?: string, source?: string) {
+
+    //     if (!bookingId) {
+    //         throw new Error("bookingId is required");
+    //     }
+
+    //     if (source === 'b2c') {
+    //         const booking = await this.bookingRepo.getBookingByBookingId(bookingId);
+    //         if (!booking) {
+    //             throw new Error("Booking not found");
+    //         }
+    //         return booking;
+    //     }
+
+    //     else if (userId) {
+    //         const booking = await this.bookingRepo.getBookingByIdAndUser(
+    //             bookingId,
+    //             userId as string,
+    //         );
+
+    //         if (!booking) {
+    //             throw new Error("Booking not found or unauthorized");
+    //         }
+
+    //         return booking;
+    //     }
+    // }
+
+
+
+
+
+    async getBookingDetailsBySource(bookingId: string, source: string) {
         if (!bookingId) {
             throw new Error("bookingId is required");
+        }
+
+        if (source === 'b2c') {
+            const booking = await this.bookingRepo.getBookingByBookingId(bookingId);
+            if (!booking) {
+                throw new Error("Booking not found");
+            }
+            return booking;
+        }
+
+        throw new Error("Invalid source parameter");
+    }
+
+    async getBookingDetailsByUser(bookingId: string, userId: string) {
+        if (!bookingId || !userId) {
+            throw new Error("bookingId and userId are required");
         }
 
         const booking = await this.bookingRepo.getBookingByIdAndUser(
@@ -387,6 +339,15 @@ class BookingService {
         }
 
         return booking;
+    }
+
+    async getBookingDetails(bookingId: string, userId?: string, source?: string) {
+        if (source === 'b2c') {
+            return this.getBookingDetailsBySource(bookingId, source);
+        } else if (userId) {
+            return this.getBookingDetailsByUser(bookingId, userId);
+        }
+        throw new Error("Either userId or source must be provided");
     }
 }
 

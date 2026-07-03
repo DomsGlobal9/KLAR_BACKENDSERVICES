@@ -20,95 +20,18 @@ class BookingLocalController {
     // ************************  Private Functions  ****************************
     // *************************************************************************
 
-    // private extractToken = (req: Request): string | null => {
-    //     const authHeader = req.headers.authorization;
-
-    //     if (authHeader?.startsWith("Bearer ")) {
-    //         const token = authHeader.split(" ")[1];
-    //         this.currentToken = token;
-    //         return token;
-    //     }
-
-    //     if (req.cookies?.token) {
-    //         const token = req.cookies.token;
-    //         this.currentToken = token;
-    //         return token;
-    //     }
-
-    //     return null;
-    // };
-
-    // private validateToken = async (token: string): Promise<any> => {
-    //     try {
-    //         const response = await axios.post(
-    //             `${this.authServiceUrl}/auth/validate-token`,
-    //             {},
-    //             {
-    //                 headers: {
-    //                     Authorization: `Bearer ${token}`,
-    //                 },
-    //             }
-    //         );
-
-    //         if (response.data.success) {
-    //             const userId = response.data.data.userId ||
-    //                 response.data.data.id ||
-    //                 response.data.data._id;
-
-    //             if (!userId) {
-    //                 console.error("❌ No user ID found in auth response:", response.data.data);
-    //                 throw new Error("No user ID in token validation response");
-    //             }
-
-    //             return {
-    //                 id: userId,
-    //                 email: response.data.data.email,
-    //                 roles: response.data.data.roles || ["user"],
-    //                 clientType: response.data.data.clientType || "b2c",
-    //             };
-    //         }
-
-    //         console.log("❌ TOKEN INVALID - success: false");
-    //         throw new Error("Token validation failed");
-    //     } catch (error: any) {
-    //         console.log("\n🔴 VALIDATION ERROR 🔴");
-    //         console.log("Error message:", error.message);
-
-    //         if (error.response) {
-    //             console.log("Error Status:", error.response.status);
-    //             console.log("Error Data:", JSON.stringify(error.response.data, null, 2));
-    //             console.log("Error Headers:", error.response.headers);
-    //         } else if (error.request) {
-    //             console.log("No response received from Auth Service");
-    //             console.log("Request:", error.request);
-    //         } else {
-    //             console.log("Error setting up request:", error.message);
-    //         }
-
-    //         throw new Error(
-    //             error.response?.data?.message ||
-    //             error.message ||
-    //             "Token validation failed"
-    //         );
-    //     }
-    // };
-
     private extractToken = (req: Request): string | null => {
         const authHeader = req.headers.authorization;
 
         if (authHeader?.startsWith("Bearer ")) {
             let token = authHeader.split(" ")[1];
 
-            // Check if token is a JSON string (stored as object with value/expiry)
             if (token && token.startsWith('{')) {
                 try {
                     const parsed = JSON.parse(token);
-                    // Extract the actual token from the JSON object
                     token = parsed.value || parsed.token || token;
-                    console.log('✅ Extracted token from JSON object');
                 } catch (e) {
                     // If parsing fails, keep as is
-                    console.log('⚠️ Token parsing failed, using raw token');
                 }
             }
 
@@ -119,12 +42,10 @@ class BookingLocalController {
         if (req.cookies?.token) {
             let token = req.cookies.token;
 
-            // Check if token is a JSON string
             if (token && token.startsWith('{')) {
                 try {
                     const parsed = JSON.parse(token);
                     token = parsed.value || parsed.token || token;
-                    console.log('✅ Extracted token from cookie JSON object');
                 } catch (e) {
                     // If parsing fails, keep as is
                 }
@@ -139,15 +60,13 @@ class BookingLocalController {
 
     private validateToken = async (token: string): Promise<any> => {
         try {
-            // Clean the token if it's still a JSON string
             let cleanToken = token;
             if (cleanToken && cleanToken.startsWith('{')) {
                 try {
                     const parsed = JSON.parse(cleanToken);
                     cleanToken = parsed.value || parsed.token || cleanToken;
-                    console.log('✅ Cleaned token from JSON object before validation');
                 } catch (e) {
-                    console.log('⚠️ Token parsing failed, using raw token');
+                    // If parsing fails, keep as is
                 }
             }
 
@@ -167,7 +86,6 @@ class BookingLocalController {
                     response.data.data._id;
 
                 if (!userId) {
-                    console.error("❌ No user ID found in auth response:", response.data.data);
                     throw new Error("No user ID in token validation response");
                 }
 
@@ -179,23 +97,8 @@ class BookingLocalController {
                 };
             }
 
-            console.log("❌ TOKEN INVALID - success: false");
             throw new Error("Token validation failed");
         } catch (error: any) {
-            console.log("\n🔴 VALIDATION ERROR 🔴");
-            console.log("Error message:", error.message);
-
-            if (error.response) {
-                console.log("Error Status:", error.response.status);
-                console.log("Error Data:", JSON.stringify(error.response.data, null, 2));
-                console.log("Error Headers:", error.response.headers);
-            } else if (error.request) {
-                console.log("No response received from Auth Service");
-                console.log("Request:", error.request);
-            } else {
-                console.log("Error setting up request:", error.message);
-            }
-
             throw new Error(
                 error.response?.data?.message ||
                 error.message ||
@@ -239,8 +142,6 @@ class BookingLocalController {
 
     private WalletBalanceCheck = async (bookingId: string, totalPrice: string): Promise<any> => {
         try {
-            console.log("WALLET BALANCE CHECK - BOOK Local Service running");
-
             const token = this.currentToken;
 
             if (!token) {
@@ -270,8 +171,6 @@ class BookingLocalController {
             return walletBalanceCheckResponse;
 
         } catch (error: any) {
-            console.error("Wallet balance check error:", error);
-
             return {
                 success: false,
                 message: error.response?.data?.message || error.message || "Wallet balance check failed",
@@ -286,13 +185,9 @@ class BookingLocalController {
 
     private PaymentStatusCheck = async (orderId: string): Promise<any> => {
         try {
-            console.log("PAYMENT Status Check: \n", orderId);
-
             const response = await axios.get(
                 `${this.paymentServiceUrl}/razorpay/razorpay-order/${orderId}`
             );
-
-            console.log("#################\n", response);
 
             if (!response?.data?.success === true) {
                 return {
@@ -319,30 +214,38 @@ class BookingLocalController {
 
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
-            console.log("📝 createLocalBooking - START");
-            const token = this.extractToken(req);
+            const { source } = req.body;
 
-            if (!token) {
-                console.log("❌ createLocalBooking - No token");
-                return res.status(401).json({
-                    success: false,
-                    message: "Authorization token missing",
-                });
-            }
+            let userData = null;
 
-            const userData = await this.validateToken(token);
-            console.log("👤 createLocalBooking - User validated:", userData?.id);
+            if (source === 'b2c') {
+                userData = {
+                    id: 'guest_user',
+                    email: req.body.email || 'guest@example.com',
+                    role: 'guest'
+                };
+            } else {
 
-            if (!userData) {
-                console.log("❌ createLocalBooking - No user data");
-                return res.status(400).json({
-                    success: false,
-                    message: "User Data not found",
-                });
+                const token = this.extractToken(req);
+
+                if (!token) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Authorization token missing",
+                    });
+                }
+
+                userData = await this.validateToken(token);
+
+                if (!userData) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "User Data not found",
+                    });
+                }
             }
 
             const result = await BookingService.createInitialBooking(req.body, userData);
-            console.log("✅ createLocalBooking - SUCCESS, Booking ID:", result?.bookingId);
 
             return res.status(201).json({
                 success: true,
@@ -350,7 +253,6 @@ class BookingLocalController {
                 data: result,
             });
         } catch (error: any) {
-            console.log("❌ createLocalBooking - ERROR:", error.message);
             return res.status(400).json({
                 success: false,
                 message: error.message,
@@ -413,6 +315,7 @@ class BookingLocalController {
                 totalPrice,
                 isHold,
                 orderId,
+                source,
             } = req.body;
 
             if (!bookingId) {
@@ -422,25 +325,37 @@ class BookingLocalController {
                 });
             }
 
-            const token = this.extractToken(req);
+            let userData = null;
+            let isB2CSource = false;
 
-            if (!token) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Authorization token missing",
-                });
+            if (source === 'b2c') {
+                isB2CSource = true;
+                userData = {
+                    id: 'guest_user',
+                    clientType: 'b2c',
+                    email: req.body.email || 'guest@example.com'
+                };
+            } else {
+                const token = this.extractToken(req);
+
+                if (!token) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Authorization token missing",
+                    });
+                }
+
+                userData = await this.validateToken(token);
+
+                if (!userData?.clientType) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid user data",
+                    });
+                }
             }
 
-            const userData = await this.validateToken(token);
-
-            if (!userData?.clientType) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid user data",
-                });
-            }
-
-            if (userData.clientType === 'b2c') {
+            if (!isB2CSource && userData.clientType === 'b2c') {
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
 
                 if (paymentStatus.status != "paid") {
@@ -451,7 +366,7 @@ class BookingLocalController {
                 }
             }
 
-            if (userData.clientType === 'b2b') {
+            if (!isB2CSource && userData.clientType === 'b2b') {
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
                 if (
@@ -481,7 +396,6 @@ class BookingLocalController {
                     });
                 }
             }
-            console.log("Wallet Checked properly. Now trying to book");
 
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
@@ -499,7 +413,7 @@ class BookingLocalController {
                 });
             }
 
-            if (userData.clientType === 'b2c') {
+            if (!isB2CSource && userData.clientType === 'b2c') {
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice,
@@ -507,7 +421,7 @@ class BookingLocalController {
                 );
             }
 
-            if (userData.clientType === 'b2b') {
+            if (!isB2CSource && userData.clientType === 'b2b') {
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice
@@ -530,33 +444,25 @@ class BookingLocalController {
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
-            console.log("\n========== GET USER BOOKINGS ==========");
             const token = this.extractToken(req);
 
             if (!token) {
-                console.log("❌ No token found");
                 return res.status(401).json({
                     success: false,
                     message: "Authorization token missing",
                 });
             }
 
-            console.log("✅ Token found, validating...");
             const userData = await this.validateToken(token);
 
-            console.log("✅ User data after validation:", userData);
-
             if (!userData?.id) {
-                console.log("❌ No user ID in userData");
                 return res.status(400).json({
                     success: false,
                     message: "Invalid user data",
                 });
             }
 
-            console.log(`✅ Fetching bookings for user: ${userData.id}`);
             const bookings = await BookingService.getBookingsByUserId(userData.id);
-            console.log(`✅ Found ${bookings.length} bookings`);
 
             return res.status(200).json({
                 success: true,
@@ -564,7 +470,6 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
-            console.log("❌ Error:", error.message);
             return res.status(400).json({
                 success: false,
                 message: error.message,
@@ -574,6 +479,38 @@ class BookingLocalController {
 
     public getBookingById = async (req: Request, res: Response) => {
         try {
+            console.log("\n ************ SOURCE got: ", req.query.source);
+            const { bookingId } = req.params;
+
+            if (!bookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Booking ID is required",
+                });
+            }
+
+            // If source is b2c, get booking without user authentication
+            if (req.query.source === 'b2c') {
+                console.log(`📖 Fetching booking ${bookingId} for B2C source`);
+                const booking = await BookingService.getBookingDetailsBySource(
+                    bookingId as string,
+                    'b2c'
+                );
+
+                if (!booking) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Booking not found",
+                    });
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    data: booking,
+                });
+            }
+
+            // For authenticated users
             const token = this.extractToken(req);
 
             if (!token) {
@@ -592,12 +529,18 @@ class BookingLocalController {
                 });
             }
 
-            const { bookingId } = req.params;
-
-            const booking = await BookingService.getBookingDetails(
+            console.log(`📖 Fetching booking ${bookingId} for user ${userData.id}`);
+            const booking = await BookingService.getBookingDetailsByUser(
                 bookingId as string,
                 userData.id
             );
+
+            if (!booking) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Booking not found or unauthorized",
+                });
+            }
 
             return res.status(200).json({
                 success: true,
@@ -605,9 +548,10 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
+            console.error("Error in getBookingById:", error);
             return res.status(400).json({
                 success: false,
-                message: error.message,
+                message: error.message || "Failed to fetch booking",
             });
         }
     };
