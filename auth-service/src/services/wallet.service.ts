@@ -9,12 +9,12 @@ export class WalletService {
 
     static async getWallet(userId: Types.ObjectId, amount?: string) {
         const result = await Wallet.findOne({ userId });
-        
+
         console.log("WALLET Service: \n", result);
 
         if (amount && result) {
             const amountValue = parseFloat(amount);
-            
+
             if(!result || result.balance == null) {
                 throw new Error("Wallet not found or balance is not available");
             }

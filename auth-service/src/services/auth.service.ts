@@ -286,14 +286,26 @@ export class AuthService {
     }
 
     public async getCurrentUser(userId: string): Promise<any> {
+        console.log('👤 === getCurrentUser called ===');
+        console.log('👤 Fetching user for userId:', userId);
 
         const user = await UserModel.findById(userId);
 
         if (!user) {
+            console.error('❌ User not found for userId:', userId);
             throw new UnauthorizedError('User not found');
         }
 
-        return {
+        console.log('📊 User found:', {
+            id: user._id,
+            email: user.email,
+            mobile: user.mobile,
+            clientType: user.clientType,
+            status: user.status,
+            createdBy: user.createdBy || 'No createdBy'
+        });
+
+        const result = {
             id: user._id.toString(),
             email: user.email,
             mobile: user.mobile,
@@ -303,6 +315,11 @@ export class AuthService {
             verificationStatus: user.verification?.status,
             createdBy: user.createdBy || '',
         };
+
+        console.log('✅ === getCurrentUser completed ===');
+        console.log('📤 Returning user data:', result);
+
+        return result;
     }
 
     public async getUserFullDetails(userId: string): Promise<any> {
