@@ -307,6 +307,9 @@ class BookingLocalController {
 
     public updateAndBook = async (req: Request, res: Response) => {
         try {
+            console.log('🚀 === updateAndBook called ===');
+            console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+
             const {
                 bookingId,
                 travellers,
@@ -318,7 +321,19 @@ class BookingLocalController {
                 source,
             } = req.body;
 
+            console.log('📌 Parameters:', {
+                bookingId,
+                travellersCount: travellers?.length || 0,
+                tripjackPrice,
+                markupPrice,
+                totalPrice,
+                isHold,
+                orderId,
+                source
+            });
+
             if (!bookingId) {
+                console.error('❌ bookingId is missing');
                 return res.status(400).json({
                     success: false,
                     message: "bookingId is required"
@@ -328,51 +343,80 @@ class BookingLocalController {
             let userData = null;
             let isB2CSource = false;
 
+            console.log(`🔍 Source detected: ${source}`);
+
             if (source === 'b2c') {
+                console.log('✅ B2C source detected - Setting up as B2C flow');
                 isB2CSource = true;
                 userData = {
                     id: 'guest_user',
                     clientType: 'b2c',
                     email: req.body.email || 'guest@example.com'
                 };
+                console.log('👤 B2C User Data:', userData);
             } else {
+                console.log('🔄 Non-B2C source - Validating token...');
                 const token = this.extractToken(req);
 
                 if (!token) {
+                    console.error('❌ Authorization token missing');
                     return res.status(401).json({
                         success: false,
                         message: "Authorization token missing",
                     });
                 }
 
+                console.log('🔑 Token validated successfully');
                 userData = await this.validateToken(token);
 
                 if (!userData?.clientType) {
+                    console.error('❌ Invalid user data - clientType missing');
                     return res.status(400).json({
                         success: false,
                         message: "Invalid user data",
                     });
                 }
+                console.log('👤 User Data from token:', userData);
             }
 
             if (!isB2CSource && userData.clientType === 'b2c') {
+                console.log('💰 B2C: Checking payment status for orderId:', orderId);
+
+                if (!orderId) {
+                    console.error('❌ B2C: orderId is required for payment verification');
+                    return res.status(400).json({
+                        success: false,
+                        message: "orderId is required for B2C payment verification",
+                    });
+                }
+
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
+                console.log('💰 B2C: Payment status response:', paymentStatus);
 
                 if (paymentStatus.status != "paid") {
+                    console.error(`❌ B2C: Payment not completed. Status: ${paymentStatus.status}`);
                     return res.status(400).json({
                         success: false,
                         message: "Payment not completed for this booking",
+                        data: {
+                            paymentStatus: paymentStatus.status
+                        }
                     });
                 }
+                console.log('✅ B2C: Payment status verified - PAID');
             }
 
             if (!isB2CSource && userData.clientType === 'b2b') {
+                console.log('💰 B2B: Checking wallet balance for bookingId:', bookingId);
+
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
+                console.log('💰 B2B: Wallet balance check result:', balanceCheck);
 
                 if (
                     balanceCheck.success != true ||
                     balanceCheck.data.hasSufficientBalance != true
                 ) {
+                    console.error('❌ B2B: Insufficient wallet balance');
                     return res.status(400).json({
                         success: false,
                         message: balanceCheck.message,
@@ -386,6 +430,7 @@ class BookingLocalController {
                 }
 
                 if (balanceCheck.isAlreadyPaid) {
+                    console.warn('⚠️ B2B: Booking already paid');
                     return res.status(400).json({
                         success: false,
                         message: "Booking already paid",
@@ -395,7 +440,18 @@ class BookingLocalController {
                         }
                     });
                 }
+                console.log('✅ B2B: Wallet balance sufficient');
             }
+
+            console.log('📝 Calling BookingService.updateAndTriggerBooking...');
+            console.log('📊 Service Payload:', {
+                bookingId,
+                travellersCount: travellers?.length || 0,
+                tripjackPrice,
+                markupPrice,
+                totalPrice,
+                isHold
+            });
 
             const result = await BookingService.updateAndTriggerBooking({
                 bookingId,
@@ -406,7 +462,10 @@ class BookingLocalController {
                 isHold
             });
 
+            console.log('📥 Service result:', result);
+
             if (!result) {
+                console.error('❌ Error while performing update or booking');
                 return res.status(400).json({
                     success: false,
                     message: "Error while perform updating or booking"
@@ -414,19 +473,31 @@ class BookingLocalController {
             }
 
             if (!isB2CSource && userData.clientType === 'b2c') {
+                console.log('💰 B2C: Deducting wallet balance for bookingId:', bookingId);
+                console.log('💰 B2C: Amount to deduct:', totalPrice);
+                console.log('💰 B2C: Admin wallet ID: 6a1ed2fb290ce7d307b05784');
+
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice,
                     '6a1ed2fb290ce7d307b05784'
                 );
+                console.log('✅ B2C: Wallet balance deducted successfully');
             }
 
             if (!isB2CSource && userData.clientType === 'b2b') {
+                console.log('💰 B2B: Deducting wallet balance for bookingId:', bookingId);
+                console.log('💰 B2B: Amount to deduct:', totalPrice);
+
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice
                 );
+                console.log('✅ B2B: Wallet balance deducted successfully');
             }
+
+            console.log('✅ === updateAndBook completed successfully ===');
+            console.log('📊 Final Result:', result);
 
             return res.status(200).json({
                 success: true,
@@ -435,9 +506,21 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
+            console.error('❌❌❌ updateAndBook Error:', error);
+            console.error('Error stack:', error.stack);
+
+            if (error.response?.data) {
+                console.error('Tripjack Error Response:', JSON.stringify(error.response.data, null, 2));
+                return res.status(error.response.status || 400).json({
+                    success: false,
+                    message: error.response.data?.errors?.[0]?.message || error.response.data?.message || "Tripjack API error",
+                    data: error.response.data
+                });
+            }
+
             return res.status(400).json({
                 success: false,
-                message: error.message
+                message: error.message || "An unexpected error occurred"
             });
         }
     };

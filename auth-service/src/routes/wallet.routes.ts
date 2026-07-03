@@ -7,12 +7,12 @@ const router = Router();
 /**
  * Wallet Routes - All require authentication
  */
-router.get("/:source", WalletController.getWalletb2c);
 router.get("/", authMiddleware, WalletController.getWallet);
+router.get("/transactions", authMiddleware, WalletController.getTransactions);
 router.post("/credit", authMiddleware, WalletController.creditWallet);
 router.post("/debit", authMiddleware, WalletController.debitWallet);
 router.post("/pay", authMiddleware, WalletController.debitWallet);
-router.get("/transactions", authMiddleware, WalletController.getTransactions);
 router.patch("/settings", authMiddleware, WalletController.updateSettings);
+router.get("/:source", WalletController.getWalletb2c);
 
 export default router;

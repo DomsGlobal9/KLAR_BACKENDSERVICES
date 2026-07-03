@@ -7,9 +7,23 @@ export class WalletService {
         return Wallet.create({ userId });
     }
 
-    static async getWallet(userId: Types.ObjectId) {
+    static async getWallet(userId: Types.ObjectId, amount?: string) {
         const result = await Wallet.findOne({ userId });
+
         console.log("WALLET Service: \n", result);
+
+        if (amount && result) {
+            const amountValue = parseFloat(amount);
+
+            if(!result || result.balance == null) {
+                throw new Error("Wallet not found or balance is not available");
+            }
+
+            if (result.balance < amountValue) {
+                throw new Error("Insufficient balance");
+            }
+        }
+
         return result;
     }
 

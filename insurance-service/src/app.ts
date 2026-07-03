@@ -7,6 +7,7 @@ const app = express();
 
 const corsOptions = {
     origin: [
+        'http://localhost:5009',
         'https://klartravels.com',
         'https://www.klartravels.com',
         'https://b2b.klartravels.com',
@@ -20,7 +21,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-app.options('/*', cors(corsOptions));
+app.options('/*splat', cors(corsOptions));
 
 app.use(express.json({ limit: "2mb" }));
 
@@ -34,7 +35,16 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.use("/api/insurance", routes);
-app.use("/",              routes); 
+// app.use("/",              routes); 
+
+app.use((req, res) => {
+    console.log(`❌ Route not found: ${req.method} ${req.url}`);
+    res.status(404).json({ 
+        error: 'Route not found',
+        method: req.method,
+        url: req.url
+    });
+});
 
 app.use(errorHandler);
 

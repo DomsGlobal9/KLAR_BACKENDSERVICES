@@ -34,9 +34,22 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
   }
 };
 
-export const getBookings = async (_req: Request, res: Response) => {
+export const getBookings = async (req: any, res: Response) => {
   try {
-    const bookings = await bookingsService.getAllBookings();
+    const agentId = req.user?.userId || req.user?.id || req.user?._id;
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
+    
+    if (!isAdmin && !agentId) {
+      return res.status(403).json({
+        status: false,
+        statusCode: 403,
+        description: "Access denied. Valid user context required.",
+        body: null,
+      });
+    }
+
+    const bookings = await bookingsService.getAllBookings(isAdmin ? undefined : agentId);
     res.json({
       status: true,
       statusCode: 200,
