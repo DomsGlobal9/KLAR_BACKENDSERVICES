@@ -5,29 +5,42 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 
 class BookingsService {
   /**
-   * Get all bookings from the database
-   * In a real app, this would be filtered by user ID or email.
+   * Get all bookings from the database filtered by user ID.
    */
-  async getAllBookings() {
+  async getAllBookings(agentId?: string) {
     try {
-      const bookings = await hotelBookingRepository.find({}, { createdAt: -1 });
+      const query = agentId ? { agentId } : {};
+      const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
-      // Fire-and-forget background sync for any HELD or PENDING bookings
-      setTimeout(() => {
-        bookings.forEach((b) => {
-          if (
-            (b.status === BookingStatus.HELD ||
-              b.status === BookingStatus.PENDING) &&
-            b.provider === BookingProvider.TRIPJACK
-          ) {
-            this.getBookingById(b.confirmationNumber || b.reservationId).catch(
-              () => {},
-            );
-          }
-        });
-      }, 100);
+      // Map to safe DTO to prevent leaking raw provider responses and margins
+      const mappedBookings = bookings.map((b: any) => ({
+        _id: b._id,
+        confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
+        reservationId: b.reservationId,
+        propertyId: b.propertyId || 'UNKNOWN',
+        provider: b.provider || 'rategain',
+        status: b.status || 'PENDING',
+        checkIn: b.checkIn || new Date().toISOString(),
+        checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
+        totalAmount: b.totalAmount || 0,
+        currencyCode: b.currencyCode || 'INR',
+        hotelName: b.hotelName || 'Hotel',
+        hotelImage: b.hotelImage,
+        hotelAddress: b.hotelAddress,
+        city: b.city,
+        starRating: b.starRating,
+        agentId: b.agentId,
+        guestName: b.guestName || 'Guest',
+        rooms: b.rooms?.map((r: any) => ({
+          roomType: r.roomType || r.roomName || 'Standard Room',
+          boardType: r.boardType || r.boardName,
+          guests: r.guests || 1,
+          price: r.price || 0,
+        })) || [],
+        createdAt: b.createdAt,
+      }));
 
-      return bookings;
+      return mappedBookings;
     } catch (error: any) {
       console.error("Error fetching bookings:", error.message);
       throw error;
@@ -97,6 +110,36 @@ class BookingsService {
             syncErr.message,
           );
         }
+      }
+
+      // Map to safe DTO
+      if (booking) {
+        return {
+          _id: booking._id,
+          confirmationNumber: booking.confirmationNumber || booking.reservationId || 'PENDING',
+          reservationId: booking.reservationId,
+          propertyId: booking.propertyId || 'UNKNOWN',
+          provider: booking.provider || 'rategain',
+          status: booking.status || 'PENDING',
+          checkIn: booking.checkIn || new Date().toISOString(),
+          checkOut: booking.checkOut || new Date(Date.now() + 86400000).toISOString(),
+          totalAmount: booking.totalAmount || 0,
+          currencyCode: booking.currencyCode || 'INR',
+          hotelName: booking.hotelName || 'Hotel',
+          hotelImage: booking.hotelImage,
+          hotelAddress: booking.hotelAddress,
+          city: booking.city,
+          starRating: booking.starRating,
+          agentId: booking.agentId,
+          guestName: booking.guestName || 'Guest',
+          rooms: booking.rooms?.map((r: any) => ({
+            roomType: r.roomType || r.roomName || 'Standard Room',
+            boardType: r.boardType || r.boardName,
+            guests: r.guests || 1,
+            price: r.price || 0,
+          })) || [],
+          createdAt: booking.createdAt,
+        };
       }
 
       return booking;
