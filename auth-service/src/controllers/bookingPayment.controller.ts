@@ -48,8 +48,8 @@ export class BookingPaymentController {
                     success: false,
                     message: result.isAlreadyPaid
                         ? "Booking already paid"
-                        // : "Insufficient wallet balance",
-                        : "Server error. Try again after sometime",
+                        : "Insufficient wallet balance",
+                        // : "Server error. Try again after sometime",
                     data: {
                         hasSufficientBalance: result.hasSufficientBalance,
                         currentBalance: result.currentBalance,
