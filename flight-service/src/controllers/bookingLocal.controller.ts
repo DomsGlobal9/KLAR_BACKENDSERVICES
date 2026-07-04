@@ -527,6 +527,26 @@ class BookingLocalController {
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
+            const { source, email } = req.query;
+
+            if (source === 'b2c') {
+                if (!email) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Email is required for B2C source",
+                    });
+                }
+
+                const bookings = await BookingService.getBookingsByEmail(email as string);
+
+                const reversedBookings = bookings.reverse();
+
+                return res.status(200).json({
+                    success: true,
+                    data: reversedBookings,
+                });
+            }
+
             const token = this.extractToken(req);
 
             if (!token) {
@@ -635,6 +655,43 @@ class BookingLocalController {
             return res.status(400).json({
                 success: false,
                 message: error.message || "Failed to fetch booking",
+            });
+        }
+    };
+
+    public checkBookingByEmail = async (req: Request, res: Response) => {
+        try {
+            const { email } = req.query;
+
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email is required"
+                });
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email as string)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid email format"
+                });
+            }
+
+            const exists = await BookingService.checkBookingExistsByEmail(email as string);
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    exists,
+                    email
+                }
+            });
+
+        } catch (error: any) {
+            return res.status(400).json({
+                success: false,
+                message: error.message || "Failed to check booking existence"
             });
         }
     };
