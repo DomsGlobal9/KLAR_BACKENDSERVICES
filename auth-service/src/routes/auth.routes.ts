@@ -15,6 +15,9 @@ import {
   resetPassword,
   requestGuestOTP,
   verifyGuestOTP,
+  changePassword,
+  updateProfile,
+  updateAddress,
 } from "../controllers/auth.controller";
 import { authenticateJWT } from "../middlewares/authentication.middleware";
 
@@ -51,6 +54,11 @@ router.post("/forgot-password/reset", resetPassword);
  * endpoint for service-to-service validation 
  */
 router.post("/validate-token", authenticateJWT, validateTokenForService);
+
+
+router.post("/change-password", authenticateJWT, changePassword);
+router.patch("/profile/update", authenticateJWT, updateProfile);
+router.patch("/profile/address", authenticateJWT, updateAddress);
 
 
 export default router;

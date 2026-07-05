@@ -798,3 +798,211 @@ export const verifyGuestOTP = async (
     next(err);
   }
 };
+
+/**
+ * Change Password Controller
+ * For authenticated users to change their password
+ */
+export const changePassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const userId = (req as any).user.userId;
+
+    // 1. Validate all fields are present
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "All password fields are required"
+      });
+    }
+
+    // 2. Check if new passwords match
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New passwords do not match"
+      });
+    }
+
+    // 3. Check password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters"
+      });
+    }
+
+    // 4. Get user from database
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // 5. Verify current password is correct
+    const passwordUtil = PasswordUtil.getInstance();
+    const isCurrentPasswordCorrect = await passwordUtil.comparePassword(
+      currentPassword,
+      user.passwordHash as string
+    );
+
+    if (!isCurrentPasswordCorrect) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect"
+      });
+    }
+
+    // 6. Check if new password is same as old password
+    const isSameAsOld = await passwordUtil.comparePassword(
+      newPassword,
+      user.passwordHash as string
+    );
+
+    if (isSameAsOld) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be different from current password"
+      });
+    }
+
+    // 7. Hash new password
+    const newPasswordHash = await passwordUtil.hashPassword(newPassword);
+
+    await UserModel.findByIdAndUpdate(
+      userId,
+      { $set: { passwordHash: newPasswordHash } },
+      { runValidators: false }  
+    );
+
+    // 8. Send success response
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully"
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Update User Profile Name Only
+ * Updates contactPerson in businessProfile
+ */
+export const updateProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { fullName } = req.body;
+
+    // 1. Validate
+    if (!fullName) {
+      return res.status(400).json({
+        success: false,
+        message: "Full name is required"
+      });
+    }
+
+    // 2. Find and update only the name
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          "businessProfile.contactPerson": fullName 
+        } 
+      },
+      { 
+        new: true,
+        runValidators: false
+      }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // 3. Return success
+    res.status(200).json({
+      success: true,
+      message: "Name updated successfully",
+      data: {
+        user: {
+          id: updatedUser._id,
+          email: updatedUser.email,
+          contactPerson: updatedUser.businessProfile?.contactPerson || '',
+        }
+      }
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+export const updateAddress = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { address, city, country } = req.body;
+
+    // Validate required fields
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: "Address is required"
+      });
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          "businessProfile.address": address,
+          "businessProfile.city": city,
+          "businessProfile.country": country
+        } 
+      },
+      { 
+        new: true,
+        runValidators: false
+      }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Address updated successfully",
+      data: {
+        address: updatedUser.businessProfile?.address,
+        city: updatedUser.businessProfile?.city,
+        country: updatedUser.businessProfile?.country
+      }
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
