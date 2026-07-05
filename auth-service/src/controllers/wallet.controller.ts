@@ -68,6 +68,12 @@ export class WalletController {
                     throw new NotFoundError("Wallet not found");
                 }
 
+                const requestedAmount = Number(req.query.amount);
+                const canUseWallet =
+                    wallet.status === 'ACTIVE' &&
+                    typeof wallet.balance === 'number' &&
+                    wallet.balance >= requestedAmount;
+
                 res.json({
                     success: true,
                     data: {
@@ -75,6 +81,7 @@ export class WalletController {
                         balance: wallet.balance,
                         currency: wallet.currency,
                         status: wallet.status,
+                        canUseWallet,
                         lowBalanceAlert: wallet.lowBalanceAlert,
                         emailAlerts: wallet.emailAlerts,
                         smsAlerts: wallet.smsAlerts,
