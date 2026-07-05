@@ -17,7 +17,7 @@ export class WalletController {
             let userId: Types.ObjectId;
 
             if (req.user?.clientType === 'b2c') {
-                userId = new Types.ObjectId("6a1ed2fb290ce7d307b05784");
+                userId = new Types.ObjectId(process.env.USER_ID);
             } else {
                 userId = new Types.ObjectId(req.user.userId);
             }
