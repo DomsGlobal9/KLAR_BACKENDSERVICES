@@ -39,10 +39,10 @@ router.get("/health", (_req, res) => {
 // ─── Insurance Flow ───────────────────────────────────────────────────────────
 
 // Search — Standalone, Student, AMT, Embedded
-router.post("/search", authenticateJWT, searchController);
+router.post("/search", searchController);
 
 // Review — get bookingId (bid) for Book API
-router.post("/review", authenticateJWT, reviewController);
+router.post("/review", reviewController);
 
 // Book — confirm insurance purchase + persist to DB
 router.post("/book", authenticateJWT, bookController);
