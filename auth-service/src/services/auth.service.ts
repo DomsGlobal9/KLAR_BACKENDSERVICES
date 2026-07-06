@@ -362,5 +362,47 @@ export class AuthService {
             updatedAt: user.updatedAt,
         };
     }
+
+    /**
+     * Change user password
+     * Verifies current password, checks for password reuse, then updates
+     */
+    public async changePassword(
+        userId: string,
+        currentPassword: string,
+        newPassword: string
+    ): Promise<void> {
+        // Find user
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            throw new UnauthorizedError('User not found');
+        }
+
+        // Verify current password
+        const isMatch = await this.passwordUtil.comparePassword(
+            currentPassword,
+            user.passwordHash as string
+        );
+
+        if (!isMatch) {
+            throw new UnauthorizedError('Current password is incorrect');
+        }
+
+        // Check if new password is same as old
+        const isSamePassword = await this.passwordUtil.comparePassword(
+            newPassword,
+            user.passwordHash as string
+        );
+
+        if (isSamePassword) {
+            throw new ConflictError('New password must be different from current password');
+        }
+
+        // Hash and update new password
+        const newPasswordHash = await this.passwordUtil.hashPassword(newPassword);
+        user.passwordHash = newPasswordHash;
+        await user.save();
+    }
+
 }
 
