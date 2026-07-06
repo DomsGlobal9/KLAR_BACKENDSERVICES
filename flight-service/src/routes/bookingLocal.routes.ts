@@ -8,5 +8,6 @@ router.put("/update", BookingLocalController.updateBookingDetails);
 router.put("/update-and-book", BookingLocalController.updateAndBook);
 router.get("/my-bookings", BookingLocalController.getUserBookings);
 router.get("/details/:bookingId", BookingLocalController.getBookingById);
+router.get('/check-email', BookingLocalController.checkBookingByEmail);
 
 export default router;

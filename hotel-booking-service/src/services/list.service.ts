@@ -7,6 +7,8 @@ class ListService {
     page?: number;
     limit?: number;
     agentId?: any;
+    isGuest?: boolean;
+    email?: string;
   }) {
     const filter: any = {};
 
@@ -17,7 +19,9 @@ class ListService {
       filter.status = query.status;
     }
 
-    if (query.agentId) {
+    if (query.isGuest && query.email) {
+      filter.guestEmail = query.email;
+    } else if (query.agentId) {
       filter.$or = [
         { agentId: query.agentId },
         { userId: query.agentId }, // Support filtering by userId as well

@@ -5,6 +5,7 @@ export enum OTPType {
     LOGIN = "LOGIN",
     PASSWORD_RESET = "PASSWORD_RESET",
     FORGOT_PASSWORD = "FORGOT_PASSWORD",
+    GUEST_ACCESS = "GUEST_ACCESS",
 }
 
 export interface IOTP extends Document {

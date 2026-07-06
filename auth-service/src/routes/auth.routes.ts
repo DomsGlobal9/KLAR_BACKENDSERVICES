@@ -13,6 +13,11 @@ import {
   requestForgotPasswordOTP,
   verifyForgotPasswordOTP,
   resetPassword,
+  requestGuestOTP,
+  verifyGuestOTP,
+  changePassword,
+  updateProfile,
+  updateAddress,
 } from "../controllers/auth.controller";
 import { authenticateJWT } from "../middlewares/authentication.middleware";
 
@@ -33,6 +38,12 @@ router.post("/login/request-otp", requestLoginOTP);
 router.post("/login/verify-otp", verifyLoginOTP);
 
 /**
+ * Guest/B2C Booking access routes
+ */
+router.post("/guest/request-otp", requestGuestOTP);
+router.post("/guest/verify-otp", verifyGuestOTP);
+
+/**
  * Forgot password flow: request OTP, verify OTP, reset password
  */
 router.post("/forgot-password/request-otp", requestForgotPasswordOTP);
@@ -43,6 +54,11 @@ router.post("/forgot-password/reset", resetPassword);
  * endpoint for service-to-service validation 
  */
 router.post("/validate-token", authenticateJWT, validateTokenForService);
+
+
+router.post("/change-password", authenticateJWT, changePassword);
+router.patch("/profile/update", authenticateJWT, updateProfile);
+router.patch("/profile/address", authenticateJWT, updateAddress);
 
 
 export default router;

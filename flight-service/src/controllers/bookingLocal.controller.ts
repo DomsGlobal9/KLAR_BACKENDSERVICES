@@ -356,12 +356,22 @@ class BookingLocalController {
             }
 
             if (!isB2CSource && userData.clientType === 'b2c') {
+                if (!orderId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "orderId is required for B2C payment verification",
+                    });
+                }
+
                 const paymentStatus = await this.PaymentStatusCheck(orderId);
 
                 if (paymentStatus.status != "paid") {
                     return res.status(400).json({
                         success: false,
                         message: "Payment not completed for this booking",
+                        data: {
+                            paymentStatus: paymentStatus.status
+                        }
                     });
                 }
             }
@@ -417,7 +427,7 @@ class BookingLocalController {
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice,
-                    '6a1ed2fb290ce7d307b05784'
+                    process.env.USER_ID
                 );
             }
 
@@ -435,15 +445,43 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
+            if (error.response?.data) {
+                return res.status(error.response.status || 400).json({
+                    success: false,
+                    message: error.response.data?.errors?.[0]?.message || error.response.data?.message || "Tripjack API error",
+                    data: error.response.data
+                });
+            }
+
             return res.status(400).json({
                 success: false,
-                message: error.message
+                message: error.message || "An unexpected error occurred"
             });
         }
     };
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
+            const { source, email } = req.query;
+
+            if (source === 'b2c') {
+                if (!email) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Email is required for B2C source",
+                    });
+                }
+
+                const bookings = await BookingService.getBookingsByEmail(email as string);
+
+                const reversedBookings = bookings.reverse();
+
+                return res.status(200).json({
+                    success: true,
+                    data: reversedBookings,
+                });
+            }
+
             const token = this.extractToken(req);
 
             if (!token) {
@@ -479,7 +517,6 @@ class BookingLocalController {
 
     public getBookingById = async (req: Request, res: Response) => {
         try {
-            console.log("\n ************ SOURCE got: ", req.query.source);
             const { bookingId } = req.params;
 
             if (!bookingId) {
@@ -489,9 +526,7 @@ class BookingLocalController {
                 });
             }
 
-            // If source is b2c, get booking without user authentication
             if (req.query.source === 'b2c') {
-                console.log(`📖 Fetching booking ${bookingId} for B2C source`);
                 const booking = await BookingService.getBookingDetailsBySource(
                     bookingId as string,
                     'b2c'
@@ -510,7 +545,6 @@ class BookingLocalController {
                 });
             }
 
-            // For authenticated users
             const token = this.extractToken(req);
 
             if (!token) {
@@ -529,7 +563,6 @@ class BookingLocalController {
                 });
             }
 
-            console.log(`📖 Fetching booking ${bookingId} for user ${userData.id}`);
             const booking = await BookingService.getBookingDetailsByUser(
                 bookingId as string,
                 userData.id
@@ -548,10 +581,46 @@ class BookingLocalController {
             });
 
         } catch (error: any) {
-            console.error("Error in getBookingById:", error);
             return res.status(400).json({
                 success: false,
                 message: error.message || "Failed to fetch booking",
+            });
+        }
+    };
+
+    public checkBookingByEmail = async (req: Request, res: Response) => {
+        try {
+            const { email } = req.query;
+
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email is required"
+                });
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email as string)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid email format"
+                });
+            }
+
+            const exists = await BookingService.checkBookingExistsByEmail(email as string);
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    exists,
+                    email
+                }
+            });
+
+        } catch (error: any) {
+            return res.status(400).json({
+                success: false,
+                message: error.message || "Failed to check booking existence"
             });
         }
     };
