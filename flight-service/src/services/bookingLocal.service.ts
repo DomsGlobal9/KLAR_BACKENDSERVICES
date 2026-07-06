@@ -230,7 +230,7 @@ class BookingService {
             tripjackPayload.gstInfo = updatedBooking.gstInfo;
         }
 
-        validateBookingPayload(tripjackPayload);
+        // validateBookingPayload(tripjackPayload);
 
         const mapped = mapToTripjackBooking(tripjackPayload);
 

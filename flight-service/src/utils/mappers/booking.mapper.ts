@@ -70,9 +70,9 @@ export function mapToTripjackBooking(
         result.gstInfo = {
             gstNumber: payload.gstInfo.gstNumber,
             registeredName: payload.gstInfo.registeredName,
-            Email: payload.gstInfo.email,
-            Mobile: payload.gstInfo.mobile,
-            Address: payload.gstInfo.address,
+            // Email: payload.gstInfo.email,
+            // Mobile: payload.gstInfo.mobile,
+            // Address: payload.gstInfo.address,
         };
     }
 

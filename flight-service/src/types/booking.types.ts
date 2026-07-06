@@ -80,8 +80,8 @@ export interface TripjackBookingPayload {
     gstInfo?: {
         gstNumber: string;
         registeredName: string;
-        Email: string;
-        Mobile: string;
-        Address: string;
+        Email?: string;
+        Mobile?: string;
+        Address?: string;
     };
 }
