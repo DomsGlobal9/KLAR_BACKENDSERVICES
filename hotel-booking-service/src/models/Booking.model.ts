@@ -86,6 +86,13 @@ export interface IBooking extends Document {
   // ─── Provider Error (for failed bookings only) ─
   failureReason?: string;
 
+  userInfo?: {
+    id?: string;
+    email?: string;
+    role?: string;
+    clientType?: string;
+  };
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -164,6 +171,13 @@ const bookingSchema = new Schema<IBooking>(
     agentId: { type: String, index: true },
     agentName: { type: String },
     userId: { type: String, index: true },
+
+    userInfo: {
+      id: { type: String },
+      email: { type: String },
+      role: { type: String },
+      clientType: { type: String },
+    },
 
     // Cancellation
     cancellationPolicy: { type: cancellationPolicySchema },

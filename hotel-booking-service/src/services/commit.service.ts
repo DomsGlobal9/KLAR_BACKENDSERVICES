@@ -128,6 +128,7 @@ class CommitService {
     token?: string,
     clientType: string = "B2C",
     requestId: string = "",
+    userInfo?: any,
   ) {
     const propertyId = (
       payload.propertyId ||
@@ -161,6 +162,7 @@ class CommitService {
           token,
           clientType,
           requestId,
+          userInfo,
         );
       }
       return this.#commitRateGain(
@@ -170,6 +172,7 @@ class CommitService {
         token,
         clientType,
         requestId,
+        userInfo,
       );
     });
   }
@@ -181,6 +184,7 @@ class CommitService {
     token?: string,
     clientType: string = "B2C",
     requestId: string = "",
+    userInfo?: any,
   ) {
     if (clientType === "B2B" && !token)
       throw new Error("Authentication token is required for B2B booking.");
@@ -378,6 +382,7 @@ class CommitService {
         tripJackRequest: tjPayload, // Cache the compiled outbound request payload
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        userInfo,
       });
 
       pollTripJackBookingStatus(
@@ -417,6 +422,7 @@ class CommitService {
     token?: string,
     clientType: string = "B2C",
     requestId: string = "",
+    userInfo?: any,
   ) {
     if (clientType === "B2B" && !token)
       throw new Error("Authentication token is required for B2B booking.");
@@ -650,6 +656,7 @@ class CommitService {
         rateGainResponse: rgResponse,
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        userInfo,
       });
 
       notificationService.sendBookingConfirmation(saved);

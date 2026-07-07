@@ -94,6 +94,23 @@ export const commitController = async (req: any, res: Response) => {
       );
     }
 
+    const userInfo = req.user
+      ? {
+          id: req.user.userId || req.user.id || req.user._id || "",
+          email: req.user.email || "",
+          role: req.user.role || req.user.roles?.[0] || "",
+          clientType: (req.user.clientType || "B2C").toLowerCase(),
+        }
+      : {
+          id: "guest_user",
+          email:
+            req.body.deliveryInfo?.emails?.[0] ||
+            req.body.guestEmail ||
+            "guest@example.com",
+          role: "guest",
+          clientType: "b2c",
+        };
+
     console.log(
       `[FORENSIC] Commit Booking [${requestId}]: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`,
     );
@@ -104,6 +121,7 @@ export const commitController = async (req: any, res: Response) => {
       token,
       clientType,
       requestId,
+      userInfo,
     );
     res.json({
       status: true,
