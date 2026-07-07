@@ -306,6 +306,7 @@ export async function seedDefaultGeo() {
  */
 export async function resolveCityToCoords(
   query: string,
+  clientType?: "B2B" | "B2C",
 ): Promise<{ lat: number; lng: number; radiusKm: number } | null> {
   if (!query || query.length < 2) return null;
   const normalizedQuery = query.toLowerCase().trim();
@@ -396,22 +397,28 @@ export async function resolveCityToCoords(
         s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
       const tryFindCity = async (cityName: string) => {
         const capitalized = capitalizeWord(cityName);
-        let found = await HotelModel.findOne({ cityName: capitalized })
+        const filter1: any = { cityName: capitalized };
+        if (clientType) filter1.clientType = clientType.toLowerCase();
+        let found = await HotelModel.findOne(filter1)
           .select("location")
           .lean();
         if (!found) {
-          found = await HotelModel.findOne({
+          const filter2: any = {
             cityName: {
               $in: [cityName.toLowerCase(), cityName.toUpperCase(), cityName],
             },
-          })
+          };
+          if (clientType) filter2.clientType = clientType.toLowerCase();
+          found = await HotelModel.findOne(filter2)
             .select("location")
             .lean();
         }
         if (!found) {
-          found = await HotelModel.findOne({
+          const filter3: any = {
             cityName: { $regex: `^${cityName}$`, $options: "i" },
-          })
+          };
+          if (clientType) filter3.clientType = clientType.toLowerCase();
+          found = await HotelModel.findOne(filter3)
             .select("location")
             .lean();
         }
@@ -629,6 +636,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
 export async function resolveForTJ(
   query: string,
   preResolvedGeo?: { lat: number; lng: number; radiusKm?: number } | null,
+  clientType?: "B2B" | "B2C",
 ): Promise<string[]> {
   const normalizedQuery = query.trim();
 
@@ -653,7 +661,7 @@ export async function resolveForTJ(
     preResolvedGeo && preResolvedGeo.lat && preResolvedGeo.lng
       ? preResolvedGeo
       : preResolvedGeo === undefined
-        ? await resolveCityToCoords(normalizedQuery)
+        ? await resolveCityToCoords(normalizedQuery, clientType)
         : null;
 
   if (geo) {
@@ -664,7 +672,7 @@ export async function resolveForTJ(
     );
 
     // Find hotels within dynamic radius
-    let hotels = await HotelModel.find({
+    const dbFilter: any = {
       location: {
         $near: {
           $geometry: {
@@ -674,14 +682,19 @@ export async function resolveForTJ(
           $maxDistance: radiusKm * 1000, // dynamic radius in meters
         },
       },
-    })
+    };
+    if (clientType) {
+      dbFilter.clientType = clientType.toLowerCase();
+    }
+
+    let hotels = await HotelModel.find(dbFilter)
       .select("tjHotelId countryName")
       .lean();
 
     // Sanity Check: If searching for India but resolved to Germany (or vice versa), filter out
     if (isIndianQuery) {
       hotels = hotels.filter(
-        (h) =>
+         (h) =>
           !h.countryName ||
           h.countryName.toLowerCase().includes("india") ||
           !h.countryName.toLowerCase().includes("germany"),
@@ -707,17 +720,25 @@ export async function resolveForTJ(
   );
 
   // Step A: Attempt Text Search
-  let hotels = await HotelModel.find({
-    $text: { $search: normalizedQuery },
-  })
+  const textFilter: any = { $text: { $search: normalizedQuery } };
+  if (clientType) {
+    textFilter.clientType = clientType.toLowerCase();
+  }
+
+  let hotels = await HotelModel.find(textFilter)
     .select("tjHotelId countryName")
     .lean();
 
   // Step B: Fallback to Phrase Regex
   if (hotels.length < 5) {
-    const regexHotels = await HotelModel.find({
+    const regexFilter: any = {
       cityName: { $regex: `^${normalizedQuery}$`, $options: "i" },
-    })
+    };
+    if (clientType) {
+      regexFilter.clientType = clientType.toLowerCase();
+    }
+
+    const regexHotels = await HotelModel.find(regexFilter)
       .select("tjHotelId countryName")
       .lean();
 

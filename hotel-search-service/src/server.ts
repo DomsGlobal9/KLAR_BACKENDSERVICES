@@ -15,6 +15,16 @@ async function start() {
   // Connect to MongoDB first
   await connectDB();
 
+  // Run DB migrations in the background so it doesn't block startup on large collections
+  try {
+    const { runMigrations } = require("./migrations");
+    runMigrations().catch((err: any) => {
+      console.error("❌ Error running database migrations:", err.message);
+    });
+  } catch (err: any) {
+    console.error("❌ Failed to initialize database migrations:", err.message);
+  }
+
   // Seed default geo cache values
   try {
     const { seedDefaultGeo } = require("./services/destinationResolver");

@@ -7,6 +7,8 @@ import {
   searchHotels,
   getHotelSuggestions,
   getPopularAreas,
+  createHotel,
+  updateHotel,
 } from "../controllers/hotels.controller";
 import { getProducts } from "../controllers/products.controller";
 import { HotelModel } from "../models/Hotel.model";
@@ -61,5 +63,7 @@ router.get("/hotels/popular-areas", getPopularAreas);
 router.post("/hotels/search", searchHotels);
 router.post("/", searchHotels); // Unified architecture POST /api/search
 router.post("/hotels/:propertyId/products", getProducts);
+router.post("/hotels", createHotel);
+router.put("/hotels/:tjHotelId", updateHotel);
 
 export default router;

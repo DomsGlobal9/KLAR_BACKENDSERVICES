@@ -119,7 +119,7 @@ export class HotelsService {
       if (isTjAllowed) {
         providers.push({
           name: "TJ",
-          task: searchTJ(searchPayload)
+          task: searchTJ(searchPayload, clientType)
             .then((res) => {
               tjCount = res.hotels.length;
               tjTotal = res.total;
@@ -381,7 +381,7 @@ Reported Total to UI:      ${totalToUI}
     };
   }
 
-  async getHotelSuggestions(query: string) {
+  async getHotelSuggestions(query: string, clientType: "B2B" | "B2C" = "B2C") {
     const { HotelModel } = require("../models/Hotel.model");
     const { City } = require("country-state-city");
 
@@ -474,17 +474,25 @@ Reported Total to UI:      ${totalToUI}
     });
 
     // 2. Fetch hotels from database
-    let hotels = await HotelModel.find({
+    const dbFilter: any = {
       $or: [{ name: prefixRegex }, { cityName: prefixRegex }],
-    })
+    };
+    if (clientType) {
+      dbFilter.clientType = clientType.toLowerCase();
+    }
+    let hotels = await HotelModel.find(dbFilter)
       .limit(15)
       .lean();
 
     if (hotels.length < 8) {
-      const extraHotels = await HotelModel.find({
+      const extraFilter: any = {
         $or: [{ name: containsRegex }, { cityName: containsRegex }],
         _id: { $nin: hotels.map((h: any) => h._id) },
-      })
+      };
+      if (clientType) {
+        extraFilter.clientType = clientType.toLowerCase();
+      }
+      const extraHotels = await HotelModel.find(extraFilter)
         .limit(15 - hotels.length)
         .lean();
       hotels = [...hotels, ...extraHotels];
@@ -504,6 +512,7 @@ Reported Total to UI:      ${totalToUI}
           type: "hotel",
           source: "TJ",
           city: h.cityName,
+          clientType: h.clientType || "b2c",
         };
       }),
     ];

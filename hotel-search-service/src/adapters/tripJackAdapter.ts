@@ -51,10 +51,11 @@ function tripTJCircuit() {
 
 export async function searchTJ(
   req: UnifiedSearchRequest,
+  clientType: "B2B" | "B2C" = "B2C",
 ): Promise<{ hotels: UnifiedHotel[]; total: number }> {
   if (isTJCircuitOpen()) return { hotels: [], total: 0 };
 
-  const hids = await resolveForTJ(req.destination, req._geoCenter);
+  const hids = await resolveForTJ(req.destination, req._geoCenter, clientType);
   if (!hids.length) return { hotels: [], total: 0 };
   const correlationId = uuidv4();
   const page = req.pageNo || 1;
@@ -177,7 +178,11 @@ export async function searchTJ(
     // ASYNC ENRICHMENT (don't wait for DB if it's too slow, but here we do it fast)
     try {
       const tjIds = mapped.map((h) => h.hotelId.replace("TJ:", ""));
-      const staticData = await HotelModel.find({ tjHotelId: { $in: tjIds } })
+      const filter: any = { tjHotelId: { $in: tjIds } };
+      if (clientType) {
+        filter.clientType = clientType.toLowerCase();
+      }
+      const staticData = await HotelModel.find(filter)
         .limit(100)
         .lean();
       const staticMap = new Map(staticData.map((s) => [s.tjHotelId, s]));
@@ -216,6 +221,7 @@ export async function searchTJ(
             hotelSegment:
               accTypeDesc || accMultiDesc || bh.hotelSegment || "Hotel",
             amenities: finalAmenities,
+            clientType: s.clientType || "b2c",
           };
         }
         return bh;

@@ -156,6 +156,9 @@ export async function syncTJHotels() {
                   images: imageUrls,
                   lastUpdated: new Date(),
                 },
+                $setOnInsert: {
+                  clientType: "b2c",
+                },
               },
               upsert: true,
             },

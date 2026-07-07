@@ -16,6 +16,7 @@ export interface IHotelData {
   accMultiDesc?: string;
   accomodationType?: string;
   lastUpdated: Date;
+  clientType?: "b2b" | "b2c";
 }
 
 export interface IHotel extends IHotelData, Document {}
@@ -36,6 +37,12 @@ const hotelSchema = new Schema<IHotel>(
     accTypeDesc: { type: String, default: "" },
     accMultiDesc: { type: String, default: "" },
     accomodationType: { type: String, default: "" },
+    clientType: {
+      type: String,
+      enum: ["b2b", "b2c"],
+      default: "b2c",
+      index: true,
+    },
     location: {
       type: {
         type: String,

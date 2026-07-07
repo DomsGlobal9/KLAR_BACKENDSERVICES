@@ -128,7 +128,12 @@ export class TripJackApiProvider {
         JSON.stringify(tjPayload, null, 2),
       );
 
-      localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
+      const clientType = payload.clientType;
+      const localHotelFilter: any = { tjHotelId: hidValue };
+      if (clientType) {
+        localHotelFilter.clientType = clientType.toLowerCase();
+      }
+      localHotel = await HotelModel.findOne(localHotelFilter).lean();
 
       staticDetailPromise = tripJackClient
         .post("/hms/v3/hotel/static-detail", { hid: hidValue })
@@ -451,6 +456,7 @@ export class TripJackApiProvider {
               pricingData.coordinates?.long ||
               pricingData.longitude,
           },
+          clientType: localHotel?.clientType || "b2c",
           products: Object.values(productsMap),
           options: options,
         },

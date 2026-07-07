@@ -6,6 +6,22 @@ import { MarkupRule } from "./pricing.util";
 
 export function getClientType(req: Request): "B2B" | "B2C" {
   try {
+    const xClientType = req.headers["x-client-type"];
+    if (xClientType && typeof xClientType === "string") {
+      if (xClientType.toUpperCase() === "B2B") return "B2B";
+      if (xClientType.toUpperCase() === "B2C") return "B2C";
+    }
+
+    if (req.query?.clientType && typeof req.query.clientType === "string") {
+      if (req.query.clientType.toUpperCase() === "B2B") return "B2B";
+      if (req.query.clientType.toUpperCase() === "B2C") return "B2C";
+    }
+
+    if (req.body?.clientType && typeof req.body.clientType === "string") {
+      if (req.body.clientType.toUpperCase() === "B2B") return "B2B";
+      if (req.body.clientType.toUpperCase() === "B2C") return "B2C";
+    }
+
     const authHeader = req.headers.authorization;
     let token = null;
 
