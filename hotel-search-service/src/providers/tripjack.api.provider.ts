@@ -5,6 +5,7 @@ import { HotelModel } from "../models/Hotel.model";
 import {
   calculateEnrichedPricing,
   calculateNightsFromDates,
+  deriveRefundable,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
 
@@ -313,6 +314,12 @@ export class TripJackApiProvider {
             nights,
           );
 
+          // Refundable status — TripJack provides an explicit flag; normalize the shape
+          const refundable = deriveRefundable({
+            explicit: opt.cancellation?.isRefundable,
+            cancellationPolicies: opt.cancellation?.penalties,
+          });
+
           const optionIdStr =
             opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
           return {
@@ -368,7 +375,9 @@ export class TripJackApiProvider {
               opt.cancellation?.holdConfirm ??
               opt.cancellation?.isRefundable ??
               false,
-            isRefundable: opt.cancellation?.isRefundable,
+            isRefundable: refundable.isRefundable,
+            refundableLabel: refundable.label,
+            freeCancellationUntil: refundable.freeCancellationUntil,
             cancellationPolicies: opt.cancellation?.penalties || [],
 
             amenities: optionAmenities,

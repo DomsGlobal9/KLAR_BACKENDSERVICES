@@ -117,6 +117,86 @@ export function calculateEnrichedPricing(
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// ---------------------------------------------------------------------------
+// deriveRefundable — single source of truth for refundable/non-refundable
+// Works for BOTH TripJack (explicit flag) and RateGain (derive from policies).
+// No fabrication: when there is genuinely no signal we return isRefundable=false
+// (the conservative, customer-safe default) and flag unknown=true so the UI can
+// show a neutral state instead of a false promise.
+// ---------------------------------------------------------------------------
+
+export interface RefundableInfo {
+  isRefundable: boolean;
+  freeCancellationUntil: string | null; // ISO date when penalties begin
+  label: string; // display-ready, computed once on the backend
+  unknown: boolean; // true when no supplier signal was available
+}
+
+const fmtCxlDate = (iso?: string | null): string => {
+  if (!iso) return "";
+  const d = new Date(iso.replace(" ", "T"));
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+};
+
+/**
+ * @param explicit  Supplier-provided boolean (TripJack `cancellation.isRefundable`). undefined for RG.
+ * @param cancellationPolicies  Array of { amount, from, toDate } (RG) or penalties (TJ).
+ * @param rateComments  Free-text rate notes (RG embeds "NON-REFUNDABLE RATE" here).
+ */
+export function deriveRefundable(opts: {
+  explicit?: boolean;
+  cancellationPolicies?: any[];
+  rateComments?: string;
+}): RefundableInfo {
+  const policies = Array.isArray(opts.cancellationPolicies)
+    ? opts.cancellationPolicies
+    : [];
+  const comments = opts.rateComments || "";
+
+  const firstPaid = policies.find((p) => Number(p.amount) > 0 && (p.from || p.toDate));
+  const freeWindow = policies.find((p) => Number(p.amount) === 0 && (p.from || p.toDate));
+  const freeUntilIso: string | null =
+    (firstPaid?.from || firstPaid?.toDate || freeWindow?.toDate || freeWindow?.from) ?? null;
+
+  // 1. Explicit supplier flag wins (TripJack)
+  if (typeof opts.explicit === "boolean") {
+    const until = opts.explicit ? freeUntilIso : null;
+    return {
+      isRefundable: opts.explicit,
+      freeCancellationUntil: until,
+      label: opts.explicit
+        ? until
+          ? `Free cancellation till ${fmtCxlDate(until)}`
+          : "Refundable"
+        : "Non-Refundable",
+      unknown: false,
+    };
+  }
+
+  // 2. Hard non-refundable signal in rate comments (RateGain)
+  if (/NON[-\s]?REFUNDABLE/i.test(comments)) {
+    return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
+  }
+
+  // 3. Derive from cancellation policies (RateGain): a 0-amount window => refundable
+  if (policies.length > 0) {
+    if (freeWindow) {
+      return {
+        isRefundable: true,
+        freeCancellationUntil: freeUntilIso,
+        label: freeUntilIso ? `Free cancellation till ${fmtCxlDate(freeUntilIso)}` : "Refundable",
+        unknown: false,
+      };
+    }
+    // Every policy charges a penalty from the start => non-refundable
+    return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
+  }
+
+  // 4. No signal at all — conservative default, flagged unknown for the UI
+  return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: true };
+}
+
 export function extractRGTaxes(taxObj: any, cur: string) {
   let inc = 0;
   let exc = 0;
@@ -186,9 +266,18 @@ export function enrichRateGainPrice(
     markupRules, nights
   );
 
+  // Refundable status derived once, server-side (RG has no explicit flag)
+  const refundable = deriveRefundable({
+    cancellationPolicies: rate.cancellationPolicies,
+    rateComments: rate.rateComments,
+  });
+
   return {
     ...rate,
     __enriched: true,
+    isRefundable: refundable.isRefundable,
+    refundableLabel: refundable.label,
+    freeCancellationUntil: refundable.freeCancellationUntil,
     price: round2(enriched.finalTotalPrice),
     netPrice: base,
     pricing: {
