@@ -1,6 +1,6 @@
 import { searchRG } from "../adapters/rateGainAdapter";
 import { searchTJ } from "../adapters/tripJackAdapter";
-import { resolveCityToCoords } from "./destinationResolver";
+import { resolveCityToCoords, resolveGeoCenter } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { getMarkupRules } from "../utils/auth";
@@ -46,8 +46,9 @@ export class HotelsService {
           const lat = parseFloat(coords[0]);
           const lng = parseFloat(coords[1]);
           if (!isNaN(lat) && !isNaN(lng)) {
-            geoCenter = { lat, lng, radiusKm: 25 };
-            console.log(`[GEO] Instant resolution from destinationCode GEO token: Lat=${lat}, Lng=${lng}`);
+            // Resolve geoCenter dynamically (snaps to official city center if close, e.g. Dubai)
+            geoCenter = await resolveGeoCenter(lat, lng);
+            console.log(`[GEO] Instant resolution from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km (resolved)`);
           }
         }
       }
@@ -376,7 +377,7 @@ Reported Total to UI:      ${totalToUI}
       results: optimizedResults,
       body: optimizedResults, // Fallback for some frontend components
       hotels: optimizedResults,
-      total: filters ? filteredResults.length : Math.max(rgTotal + tjTotal, filteredResults.length),
+      total: Math.max(rgTotal + tjTotal, filteredResults.length),
       facets,
     };
   }

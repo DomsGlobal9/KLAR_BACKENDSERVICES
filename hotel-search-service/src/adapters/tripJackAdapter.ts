@@ -59,7 +59,7 @@ export async function searchTJ(
   const correlationId = uuidv4();
   const page = req.pageNo || 1;
 
-  const targetCount = 30;
+  const targetCount = 20;
   const CHUNK_SIZE = 100; // Increased to 100 to find hotels faster per page
   const chunks: string[][] = [];
   for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
