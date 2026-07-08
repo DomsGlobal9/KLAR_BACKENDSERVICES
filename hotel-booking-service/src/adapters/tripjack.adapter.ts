@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { SupplierAdapter, PrecheckResultV1 } from "../models/PrecheckResult";
 import { tripJackProvider } from "../providers/tripjack.provider";
 import { CircuitBreaker } from "../services/CircuitBreaker";
+import { applyPlatformMarkup } from "../utils/pricing.util";
 
 const tripJackCircuitBreaker = new CircuitBreaker(5, 30000); // 5 failures -> Open for 30s
 
@@ -26,10 +27,16 @@ export class TripJackAdapter implements SupplierAdapter {
       );
       const occupancy = option.ris?.[0]?.adt || option.occupancy || 2;
 
-      const price =
-        option.tp || option.pricing?.totalPrice || option.totalPrice || 0;
-      const taxes =
-        option.tf || option.pricing?.totalTax || option.totalTax || 0;
+      const rawPrice = Number(
+        option.tp || option.pricing?.totalPrice || option.totalPrice || 0,
+      );
+      const taxes = Number(
+        option.tf || option.pricing?.totalTax || option.totalTax || 0,
+      );
+      // Raw amount to pay the supplier (EXCLUDES platform markup) = existing price+taxes total
+      const supplierNet = Math.round((rawPrice + taxes) * 100) / 100;
+      // Platform (super-admin) markup baked into the net we validate/charge ("api price")
+      const price = applyPlatformMarkup(rawPrice);
       const currency = "INR";
 
       // Generate hash of cancellation policy
@@ -47,6 +54,7 @@ export class TripJackAdapter implements SupplierAdapter {
         optionId: option.id || option.optionId || tjRes.optionId,
         price,
         taxes,
+        supplierNet,
         currency,
         originalResponse: tjRes,
       };

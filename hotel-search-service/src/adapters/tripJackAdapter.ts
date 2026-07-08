@@ -1,5 +1,5 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
-import { deriveRefundable } from "../utils/pricing.util";
+import { deriveRefundable, platformMarkupAmount, round2 } from "../utils/pricing.util";
 import { resolveForTJ } from "../services/destinationResolver";
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
@@ -278,6 +278,10 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     explicit: opt?.cancellation?.isRefundable,
     cancellationPolicies: opt?.cancellation?.penalties,
   });
+  // Platform (super-admin) markup baked into the net the agent sees ("api price").
+  const tjBase = Number(opt?.pricing?.basePrice ?? opt?.pricing?.totalPrice ?? 0);
+  const tjTotal = Number(opt?.pricing?.totalPrice ?? 0);
+  const tjPlatformAmt = platformMarkupAmount(tjBase);
   const finalAmenities =
     h.amenities && h.amenities.length > 0
       ? h.amenities
@@ -302,8 +306,8 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
           : [],
     // TJ: totalPrice already includes all taxes + management fees. taxesIncluded = true.
     // basePrice = the base net price (without taxes); taxAmount = taxes on top (0 at search level — detail has breakdown).
-    price: opt?.pricing?.totalPrice ?? 0,
-    basePrice: opt?.pricing?.basePrice ?? opt?.pricing?.totalPrice ?? 0,
+    price: round2(tjTotal + tjPlatformAmt),
+    basePrice: round2(tjBase + tjPlatformAmt),
     taxAmount: opt?.pricing?.taxes ?? 0,
     taxesIncluded: false, // TJ: taxes are NOT baked into basePrice; totalPrice = basePrice + taxes + mf + mft
     currency: opt?.pricing?.currency ?? "INR",
