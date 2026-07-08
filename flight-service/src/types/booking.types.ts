@@ -21,6 +21,7 @@ export interface FrontendTraveller {
 }
 
 export interface FrontendBookingPayload {
+
     bookingId: string;
     amount: number;
     email: string;
@@ -41,6 +42,7 @@ export interface FrontendBookingPayload {
         phone: string;
         name: string;
     };
+    
 }
 
 export interface TripjackTraveller {
