@@ -1,7 +1,7 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
-import { getRGRawPrice, extractRGTaxes, round2, deriveRefundable } from "../utils/pricing.util";
+import { getRGRawPrice, extractRGTaxes, round2, deriveRefundable, applyPlatformMarkup } from "../utils/pricing.util";
 
 export async function searchRG(
   req: UnifiedSearchRequest,
@@ -315,8 +315,9 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   const taxAmt = round2(includedTaxAmt + excludedTaxAmt);
   const taxesIncluded = taxAmt === 0;
 
-  const finalTotalPrice = round2(totalPrice);
-  const netBasePrice = round2(totalPrice - taxAmt);
+  // Platform (super-admin) markup baked into the net the agent sees ("api price").
+  const netBasePrice = applyPlatformMarkup(round2(totalPrice - taxAmt));
+  const finalTotalPrice = round2(netBasePrice + taxAmt);
 
   // Refundable status derived once, server-side (RG exposes no explicit flag)
   const refundable = deriveRefundable({
