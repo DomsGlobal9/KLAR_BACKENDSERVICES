@@ -21,9 +21,14 @@ const TravellerSchema = new Schema(
         firstName: String,
         lastName: String,
         dob: String,
+        gender: { type: String, enum: ["MALE", "FEMALE", "OTHER"] },
+
+        idType: String,
+        idNumber: String,
 
         passportNumber: String,
         passportNationality: String,
+        passportIssuingCountry: String,
         passportIssueDate: String,
         passportExpiryDate: String,
 

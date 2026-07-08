@@ -135,6 +135,7 @@ class SearchService {
 
             const response: any = {
                 sessionId,
+                isInternational: !!rawResponse.data?.searchResult?.conditions?.pcs,
                 flights: normalized,
                 airlineStats
             };
@@ -521,6 +522,7 @@ class SearchService {
 
             const response: any = {
                 sessionId,
+                isInternational: !!rawResponse.data?.searchResult?.conditions?.pcs,
                 flights: normalized,
                 airlineStats
             };
@@ -963,6 +965,7 @@ class SearchService {
 
             const response: any = {
                 sessionId,
+                isInternational: !!rawResponse.data?.searchResult?.conditions?.pcs,
                 flights: normalized,
                 airlineStats
             };

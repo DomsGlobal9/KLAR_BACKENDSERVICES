@@ -19,9 +19,14 @@ export interface Traveller {
     firstName: string;
     lastName: string;
     dob: string;
+    gender?: "MALE" | "FEMALE" | "OTHER";
+
+    idType?: "AADHAAR" | "PAN" | "PASSPORT" | "VOTER_ID" | "DRIVING_LICENCE" | string;
+    idNumber?: string;
 
     passportNumber?: string;
     passportNationality?: string;
+    passportIssuingCountry?: string;
     passportIssueDate?: string;
     passportExpiryDate?: string;
 
