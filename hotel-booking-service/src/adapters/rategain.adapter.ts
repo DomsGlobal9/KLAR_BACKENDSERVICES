@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { SupplierAdapter, PrecheckResultV1 } from "../models/PrecheckResult";
 import { rateGainProvider } from "../providers/rategain.provider";
 import { CircuitBreaker } from "../services/CircuitBreaker";
+import { applyPlatformMarkup } from "../utils/pricing.util";
 
 const rateGainCircuitBreaker = new CircuitBreaker(5, 30000); // 5 failures -> Open for 30s
 
@@ -98,7 +99,11 @@ export class RateGainAdapter implements SupplierAdapter {
 
       // Base price for validation engine (which sums price + taxes to equal supplierTotal)
       const taxes = Math.round(taxAmount * 100) / 100;
-      const price = Math.round((supplierTotal - taxes) * 100) / 100;
+      const supplierBase = Math.round((supplierTotal - taxes) * 100) / 100;
+      // Raw amount to pay the supplier (net + taxes, EXCLUDES platform markup)
+      const supplierNet = Math.round(supplierTotal * 100) / 100;
+      // Platform (super-admin) markup baked into the net we validate/charge ("api price")
+      const price = applyPlatformMarkup(supplierBase);
 
 
       const currency =
@@ -133,6 +138,7 @@ export class RateGainAdapter implements SupplierAdapter {
           option.RoomSelectionKey || option.optionId || option.rateKey || "",
         price,
         taxes,
+        supplierNet,
         currency,
         phone,
         rateComments,
