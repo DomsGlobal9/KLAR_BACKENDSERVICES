@@ -1,3 +1,16 @@
+export interface UnifiedFilters {
+  starRatings?: number[];
+  priceRange?: [number, number];
+  mealTypes?: string[];
+  propertyTypes?: string[];
+  amenities?: string[];
+  searchText?: string;
+  showOnlyAltDeals?: boolean;
+  providers?: string[];
+  userRatings?: number[];
+  selectedLocations?: string[];
+}
+
 export interface UnifiedSearchRequest {
   destination: string; // free text (city name) OR lat/lng
   destinationCode?: string; // explicit RateGain destination code
@@ -9,6 +22,8 @@ export interface UnifiedSearchRequest {
   pageNo?: number; // 1-indexed pagination
   _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
   providers?: string[];
+  filters?: UnifiedFilters;
+  sortBy?: string;
 }
 
 export interface UnifiedRoom {
@@ -43,6 +58,7 @@ export interface UnifiedHotel {
   holdConfirm?: boolean;
   amenities: string[];
   propertyCode?: string;
+  correlationId?: string;
   brandCode?: string;
   isMandatory?: boolean;
   commissionAmt?: number;

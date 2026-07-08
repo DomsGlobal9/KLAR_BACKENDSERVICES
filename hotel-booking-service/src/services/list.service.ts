@@ -7,6 +7,8 @@ class ListService {
     page?: number;
     limit?: number;
     agentId?: any;
+    isGuest?: boolean;
+    email?: string;
   }) {
     const filter: any = {};
 
@@ -17,7 +19,9 @@ class ListService {
       filter.status = query.status;
     }
 
-    if (query.agentId) {
+    if (query.isGuest && query.email) {
+      filter.guestEmail = query.email;
+    } else if (query.agentId) {
       filter.$or = [
         { agentId: query.agentId },
         { userId: query.agentId }, // Support filtering by userId as well
@@ -34,11 +38,39 @@ class ListService {
       hotelBookingRepository.countDocuments(filter),
     ]);
 
+    // Map to safe DTO to prevent leaking raw provider responses and margins
+    const mappedBookings = bookings.map((b: any) => ({
+      _id: b._id,
+      confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
+      reservationId: b.reservationId,
+      propertyId: b.propertyId || 'UNKNOWN',
+      provider: b.provider || 'rategain',
+      status: b.status || 'PENDING',
+      checkIn: b.checkIn || new Date().toISOString(),
+      checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
+      totalAmount: b.totalAmount || 0,
+      currencyCode: b.currencyCode || 'INR',
+      hotelName: b.hotelName || 'Hotel',
+      hotelImage: b.hotelImage,
+      hotelAddress: b.hotelAddress,
+      city: b.city,
+      starRating: b.starRating,
+      agentId: b.agentId,
+      guestName: b.guestName || 'Guest',
+      rooms: b.rooms?.map((r: any) => ({
+        roomType: r.roomType || r.roomName || 'Standard Room',
+        boardType: r.boardType || r.boardName,
+        guests: r.guests || 1,
+        price: r.price || 0,
+      })) || [],
+      createdAt: b.createdAt,
+    }));
+
     return {
       status: true,
       statusCode: 200,
       body: {
-        bookings,
+        bookings: mappedBookings,
         pagination: {
           page,
           limit,

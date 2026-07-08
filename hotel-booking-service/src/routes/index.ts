@@ -11,6 +11,7 @@ import { getPricingSummaryController } from "../controllers/pricing.controller";
 import {
   getBookings,
   getBookingDetails,
+  checkBookingsByEmail,
 } from "../controllers/bookings.controller";
 import { confirmController } from "../controllers/confirm.controller";
 import { bookingTemplateController } from "../controllers/booking-template.controller";
@@ -51,6 +52,7 @@ router.get("/health", (_req, res) => {
 
 // List bookings from DB
 router.get("/bookings", authenticateJWT, listController);
+router.get("/bookings/check/:email", checkBookingsByEmail);
 
 import {
   getModificationPolicy,
@@ -62,8 +64,8 @@ import {
 router.post("/precheck", optionalAuthenticateJWT, precheckController);
 router.post("/commit", optionalAuthenticateJWT, commitController);
 router.post("/confirm", optionalAuthenticateJWT, confirmController);
-router.post("/cancel", authenticateJWT, cancelController);
-router.get("/cancel/charges", authenticateJWT, getCancelChargesController);
+router.post("/cancel", optionalAuthenticateJWT, cancelController);
+router.get("/cancel/charges", optionalAuthenticateJWT, getCancelChargesController);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);

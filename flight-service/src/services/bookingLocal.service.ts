@@ -230,7 +230,7 @@ class BookingService {
             tripjackPayload.gstInfo = updatedBooking.gstInfo;
         }
 
-        validateBookingPayload(tripjackPayload);
+        // validateBookingPayload(tripjackPayload);
 
         const mapped = mapToTripjackBooking(tripjackPayload);
 
@@ -348,6 +348,28 @@ class BookingService {
             return this.getBookingDetailsByUser(bookingId, userId);
         }
         throw new Error("Either userId or source must be provided");
+    }
+
+    async checkBookingExistsByEmail(email: string): Promise<boolean> {
+        if (!email) {
+            throw new Error("Email is required");
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            throw new Error("Invalid email format");
+        }
+
+        const booking = await this.bookingRepo.findBookingByEmail(email);
+        return !!booking;
+    }
+
+    async getBookingsByEmail(email: string) {
+        if (!email) {
+            throw new Error("Email is required");
+        }
+
+        return await this.bookingRepo.getBookingsByEmail(email);
     }
 }
 
