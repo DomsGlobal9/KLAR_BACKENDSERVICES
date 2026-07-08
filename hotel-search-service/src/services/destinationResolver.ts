@@ -561,7 +561,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
   // 2.5. Comma Fallback (Hotel + City searches)
   if (!dest && normalizedQuery.includes(",")) {
     const parts = normalizedQuery.split(",");
-    const cityPart = parts[parts.length - 1].trim();
+    const cityPart = parts[0].trim();
     if (cityPart.length > 2 && cityPart !== normalizedQuery) {
       console.log(
         `[DEBUG] resolveForRG: Comma fallback to city part: "${cityPart}"`,
