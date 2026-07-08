@@ -1,3 +1,4 @@
+// email.service.ts
 import { mailTransporter } from "../app";
 import { envConfig } from "../config/env.config";
 import { getBookingConfirmationTemplate, BookingTemplateData } from "./templates";
@@ -30,8 +31,12 @@ export class EmailService {
     }
 
     async sendEmail(payload: SendEmailPayload): Promise<EmailResponse> {
-        console.log("EMAIL-SERVICE:", {payload});
         try {
+            console.log(`📨 [EMAIL] Preparing to send email`, {
+                to: Array.isArray(payload.to) ? payload.to.join(', ') : payload.to,
+                subject: payload.subject
+            });
+
             if (!payload.to || !payload.subject) {
                 throw new Error("to and subject are required");
             }
@@ -44,6 +49,8 @@ export class EmailService {
             const cc = this.processRecipients(payload.cc);
             const bcc = this.processRecipients(payload.bcc);
 
+            console.log(`📤 [EMAIL] Sending to ${to.length} recipients`);
+
             const result = await mailTransporter.sendMail({
                 from: `"${envConfig.DEFAULT_FROM_NAME}" <${envConfig.DEFAULT_FROM}>`,
                 to,
@@ -55,15 +62,22 @@ export class EmailService {
                 replyTo: payload.replyTo || envConfig.DEFAULT_REPLY_TO,
             });
 
-            console.log(`[EmailService] Email sent successfully! MessageID: ${result.messageId}`);
-            console.log(`[EmailService] Recipients: ${to.join(', ')}`);
+            console.log(`✅ [EMAIL] Email sent successfully`, {
+                messageId: result.messageId,
+                to: to.length,
+                timestamp: new Date().toISOString()
+            });
 
             return {
                 success: true,
                 messageId: result.messageId,
             };
         } catch (error: any) {
-            console.error("EmailService.sendEmail error:", error);
+            console.error(`❌ [EMAIL] Email sending failed:`, {
+                error: error.message,
+                to: Array.isArray(payload.to) ? payload.to.join(', ') : payload.to,
+                subject: payload.subject
+            });
             return {
                 success: false,
                 error: error.message,
@@ -72,6 +86,8 @@ export class EmailService {
     }
 
     async sendBulkEmails(payload: BulkEmailPayload) {
+        console.log(`📊 [BULK] Starting bulk email send: ${payload.emails.length} emails`);
+
         const results = [];
         let success = 0;
         let failed = 0;
@@ -79,13 +95,12 @@ export class EmailService {
         for (const email of payload.emails) {
             const res = await this.sendEmail(email);
             results.push(res);
-
             res.success ? success++ : failed++;
-
-            // small delay to avoid rate limit
+            console.log(`📊 [BULK] Progress: ${success + failed}/${payload.emails.length} (${success} success, ${failed} failed)`);
             await new Promise(r => setTimeout(r, 100));
         }
 
+        console.log(`✅ [BULK] Bulk email send completed: ${success} success, ${failed} failed`);
         return {
             success: failed === 0,
             total: payload.emails.length,
@@ -96,6 +111,7 @@ export class EmailService {
     }
 
     async sendTestEmail(to?: string) {
+        console.log(`🧪 [EMAIL] Sending test email to: ${to || envConfig.DEFAULT_FROM}`);
         return this.sendEmail({
             to: to || envConfig.DEFAULT_FROM,
             subject: "Test Email",
@@ -105,6 +121,7 @@ export class EmailService {
     }
 
     async sendBookingConfirmation(to: string | string[], data: BookingTemplateData) {
+        console.log(`🏨 [EMAIL] Sending booking confirmation to: ${Array.isArray(to) ? to.join(', ') : to}`);
         const html = getBookingConfirmationTemplate(data);
         return this.sendEmail({
             to,
@@ -114,6 +131,7 @@ export class EmailService {
     }
 
     validateEmails(emails: string | string[]) {
+        console.log(`🔍 [EMAIL] Validating ${Array.isArray(emails) ? emails.length : 1} email(s)`);
         const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const arr = Array.isArray(emails) ? emails : [emails];
 
@@ -122,18 +140,21 @@ export class EmailService {
 
         arr.forEach(e => (regex.test(e) ? valid.push(e) : invalid.push(e)));
 
+        console.log(`✅ [EMAIL] Validation complete: ${valid.length} valid, ${invalid.length} invalid`);
         return { valid, invalid };
     }
 
     async getServiceStatus() {
+        console.log(`🔍 [EMAIL] Checking service status`);
         try {
             await mailTransporter.verify();
-
+            console.log(`✅ [EMAIL] Service is healthy`);
             return {
                 status: "healthy",
                 timestamp: new Date().toISOString(),
             };
         } catch (error) {
+            console.error(`❌ [EMAIL] Service is unhealthy:`, error);
             return {
                 status: "unhealthy",
                 timestamp: new Date().toISOString(),
