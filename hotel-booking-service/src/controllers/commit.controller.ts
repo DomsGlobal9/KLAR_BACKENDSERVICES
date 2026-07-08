@@ -97,6 +97,12 @@ export const commitController = async (req: any, res: Response) => {
     console.log(
       `[FORENSIC] Commit Booking [${requestId}]: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`,
     );
+    const userInfo = {
+      id: req.user?.userId || req.user?.id || req.user?._id || "",
+      email: req.user?.email || "",
+      role: req.user?.role || req.user?.roles?.[0] || "",
+      clientType: clientType,
+    };
     const data = await commitService.commit(
       finalPayload,
       agentId,
@@ -104,6 +110,7 @@ export const commitController = async (req: any, res: Response) => {
       token,
       clientType,
       requestId,
+      userInfo,
     );
     res.json({
       status: true,

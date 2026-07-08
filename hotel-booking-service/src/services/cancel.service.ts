@@ -307,7 +307,9 @@ class CancelService {
 
           const brandCode =
             originalRequest.BrandCode ||
+            booking.brandCode ||
             rateGainResp.body?.brandCode ||
+            rateGainResp.body?.booking?.hotel?.brandCode ||
             rateGainResp.body?.BrandCode ||
             payload.BrandCode ||
             booking.propertyCode ||
@@ -322,6 +324,7 @@ class CancelService {
             ConfirmationNumber: booking.confirmationNumber,
             ReservationId: booking.reservationId,
             PropertyId: booking.propertyId,
+            hotelId: booking.propertyId, // also pass as hotelId so provider can find it
             PropertyCode:
               booking.propertyCode ||
               originalRequest.PropertyCode ||

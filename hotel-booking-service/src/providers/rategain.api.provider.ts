@@ -1,4 +1,5 @@
 import { rateGainClient } from "../clients/rategain.client";
+import { env } from "../config/env";
 
 export class RateGainApiProvider {
   /**
@@ -6,7 +7,10 @@ export class RateGainApiProvider {
    * Validate rate and availability before committing a booking.
    */
   async precheck(payload: any) {
-    const booking = payload.BookReservation || payload;
+    let booking = payload.BookReservation || payload;
+    if (booking.BookReservation) {
+      booking = booking.BookReservation;
+    }
     const rawPropertyId = (
       booking.propertyID ||
       booking.PropertyId ||
@@ -113,7 +117,10 @@ export class RateGainApiProvider {
    * Finalize and commit a hotel reservation.
    */
   async commit(payload: any) {
-    const booking = payload.BookReservation || payload;
+    let booking = payload.BookReservation || payload;
+    if (booking.BookReservation) {
+      booking = booking.BookReservation;
+    }
     const now = new Date().toISOString();
 
     const rawPropertyId = (
@@ -139,6 +146,10 @@ export class RateGainApiProvider {
         BrandCode: booking.BrandCode || booking.brandCode || "N/A",
         checkin: booking.checkin || booking.checkIn,
         checkout: booking.checkout || booking.checkOut,
+        CheckInDate: booking.checkin || booking.checkIn,
+        CheckOutDate: booking.checkout || booking.checkOut,
+        checkInDate: booking.checkin || booking.checkIn,
+        checkOutDate: booking.checkout || booking.checkOut,
         CountryCode: booking.CountryCode || "US",
         Currency: booking.Currency || booking.CurrencyCode || "USD",
         DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
@@ -147,24 +158,12 @@ export class RateGainApiProvider {
         EchoToken:
           booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
         Session: booking.Session || "",
-        SellingRate:
-          booking.SellingRate !== undefined
-            ? booking.SellingRate
-            : booking.sellingRate !== undefined
-              ? booking.sellingRate
-              : booking.BookingRate,
         BookingRate:
           booking.BookingRate !== undefined
             ? booking.BookingRate
             : booking.SellingRate !== undefined
               ? booking.SellingRate
               : booking.sellingRate,
-        sellingRate:
-          booking.sellingRate !== undefined
-            ? booking.sellingRate
-            : booking.SellingRate !== undefined
-              ? booking.SellingRate
-              : booking.BookingRate,
         RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
           const mappedRs: any = {
             RoomTypeCode: rs.RoomTypeCode || "Standard",
@@ -198,9 +197,9 @@ export class RateGainApiProvider {
                 Phone: g.Phone || "0000000000",
                 Line1: g.Line1 || "N/A",
                 City: g.City || "N/A",
-                StateCode: g.StateCode || "N/A",
-                CountryCode: g.CountryCode || "US",
-                PostalCode: g.PostalCode || "00000",
+                StateCode: g.StateCode || "TN",
+                CountryCode: g.CountryCode || "IN",
+                PostalCode: g.PostalCode || "600001",
               };
             }),
           };
@@ -237,24 +236,6 @@ export class RateGainApiProvider {
         error.response?.status,
         JSON.stringify(error.response?.data || error.message, null, 2),
       );
-      
-      // Sandbox Fallback: RateGain sandbox frequently rejects bookings. Mock success if in sandbox.
-      if (process.env.RATEGAIN_BASE_URL?.includes("sandbox") || process.env.USE_RATEGAIN_MOCK === "true") {
-        console.warn("⚠️ [RateGain] Sandbox Commit Error intercepted. Returning Mock Success!");
-        return {
-          status: true,
-          statusCode: 200,
-          message: "Mock success in sandbox",
-          body: {
-            booking: {
-              status: "Confirmed",
-              confirmationNumber: `RG-MOCK-${Date.now()}`,
-              reservationId: `RES-${Date.now()}`
-            }
-          }
-        };
-      }
-      
       throw error;
     }
   }
@@ -265,14 +246,31 @@ export class RateGainApiProvider {
    */
   async cancel(payload: any) {
     const booking = payload.CancelReservation || payload;
+    // Extract PropertyId UUID from any field: PropertyId, propertyId, propertyID, or hotelId (strip RG: prefix)
     const rawPropertyId = (
       booking.PropertyId ||
       booking.propertyId ||
       booking.propertyID ||
+      booking.hotelId ||
       ""
     )
       .toString()
       .replace(/^RG:/, "");
+
+    const brandCode =
+      booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+        ? booking.BrandCode
+        : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+          ? booking.brandCode
+          : "TkEvQQ==";
+
+    const propertyCode =
+      booking.PropertyCode ||
+      booking.propertyCode ||
+      rawPropertyId ||
+      "N/A";
+
+    console.log(`[RateGain Cancel] PropertyId="${rawPropertyId}", PropertyCode="${propertyCode}", BrandCode="${brandCode}"`);
 
     const unwrappedPayload = {
       ConfirmationNumber:
@@ -284,11 +282,9 @@ export class RateGainApiProvider {
       DemandCancelId: booking.DemandCancelId || `demand-cancel-${Date.now()}`,
       TimeStamp: booking.TimeStamp || new Date().toISOString(),
       EchoToken: booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
-      BrandCode:
-        booking.BrandCode && booking.BrandCode !== "N/A"
-          ? booking.BrandCode
-          : "TkEvQQ==",
-      PropertyCode: booking.PropertyCode || rawPropertyId || "N/A",
+      Session: booking.Session || `klar-session-${Date.now()}`,
+      BrandCode: brandCode,
+      PropertyCode: propertyCode,
       PropertyId: rawPropertyId,
     };
 
@@ -305,7 +301,9 @@ export class RateGainApiProvider {
       console.error(
         "[RateGain] Cancel Error:",
         error.response?.status,
-        error.response?.data?.description || error.message,
+        error.response?.data ? JSON.stringify(error.response.data) : error.message,
+        "Payload Sent:",
+        JSON.stringify(unwrappedPayload, null, 2)
       );
       throw error;
     }

@@ -74,7 +74,7 @@ router.post("/amend/commit", authenticateJWT, commitModification);
 router.get("/special-requests", specialRequestsController);
 
 // New booking management routes
-router.get("/bookings/:id", authenticateJWT, getBookingDetails);
+router.get("/bookings/:id", optionalAuthenticateJWT, getBookingDetails);
 
 /**
  * Client Confirmation Template Endpoint

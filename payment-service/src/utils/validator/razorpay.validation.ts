@@ -1,12 +1,14 @@
 export const validateCreateOrder = (body: any): string | null => {
     if (!body.userId) {
-        return 'userId is required';
+        body.userId = body.userEmail || 'guest';
     }
-    if (!body.userEmail) {
-        return 'userEmail is required';
-    }
+
+
     if (!body.clientType) {
-        return 'clientType is required';
+        body.clientType = 'B2C';
+    }
+    if (!body.platform) {
+        body.platform = body.clientType;
     }
     if (!body.amount) {
         return 'amount is required';

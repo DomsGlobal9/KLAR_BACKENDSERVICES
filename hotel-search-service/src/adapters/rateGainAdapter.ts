@@ -6,7 +6,9 @@ export async function searchRG(
   req: UnifiedSearchRequest,
   clientType: "B2B" | "B2C" = "B2C",
 ): Promise<{ hotels: UnifiedHotel[]; total: number }> {
-  let destCode = (req.destinationCode || "").toString().trim() || null;
+  // Ignore GEO: tokens — they're internal geo coordinate strings, NOT valid RateGain destination codes
+  let rawDestCode = (req.destinationCode || "").toString().trim();
+  let destCode = (rawDestCode && !rawDestCode.startsWith("GEO:")) ? rawDestCode : null;
   const isDirectRG = req.destination?.startsWith("RG:");
 
   const payload: any = {
@@ -276,65 +278,81 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
 
     commissionAmt = Number(
       h.CommissionAmt ||
-        h.commissionAmt ||
-        h.roomRates?.[0]?.CommissionAmt ||
-        h.roomRates?.[0]?.commissionAmt ||
-        h.options?.[0]?.CommissionAmt ||
-        h.options?.[0]?.commissionAmt ||
-        0,
+      h.commissionAmt ||
+      h.roomRates?.[0]?.CommissionAmt ||
+      h.roomRates?.[0]?.commissionAmt ||
+      h.options?.[0]?.CommissionAmt ||
+      h.options?.[0]?.commissionAmt ||
+      0,
     );
 
     commissionPct = Number(
       h.CommissionPct ||
-        h.commissionPct ||
-        h.roomRates?.[0]?.CommissionPct ||
-        h.roomRates?.[0]?.commissionPct ||
-        h.options?.[0]?.CommissionPct ||
-        h.options?.[0]?.commissionPct ||
-        0,
+      h.commissionPct ||
+      h.roomRates?.[0]?.CommissionPct ||
+      h.roomRates?.[0]?.commissionPct ||
+      h.options?.[0]?.CommissionPct ||
+      h.options?.[0]?.commissionPct ||
+      0,
     );
   }
 
   // Taxes: RG separates taxes in taxAmount/taxes/totalTax fields
   // Sometimes it's a nested object: { taxes: [{ amount: '75', clientAmount: '1830' }] }
-  let extractedTaxAmt = 0;
+  let includedTaxAmt = 0;
+  let excludedTaxAmt = 0;
 
-  const extractTaxFromObj = (taxObj: any) => {
-    if (!taxObj) return 0;
-    if (typeof taxObj === "number") return taxObj;
-    if (typeof taxObj === "string") return Number(taxObj) || 0;
+  const extractTaxDetails = (taxObj: any) => {
+    if (!taxObj) return null;
+    if (typeof taxObj === "number") return { inc: 0, exc: taxObj };
+    if (typeof taxObj === "string") return { inc: 0, exc: Number(taxObj) || 0 };
     if (Array.isArray(taxObj.taxes)) {
-      return taxObj.taxes.reduce(
-        (sum: number, t: any) =>
-          sum + (Number(t.clientAmount || t.amount) || 0),
-        0,
-      );
+      let inc = 0;
+      let exc = 0;
+      taxObj.taxes.forEach((t: any) => {
+        const amt = Number(t.clientAmount || t.amount) || 0;
+        const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
+        if (isInc) {
+          inc += amt;
+        } else {
+          exc += amt;
+        }
+      });
+      return { inc, exc };
     }
-    return 0;
+    return null;
   };
 
-  extractedTaxAmt =
-    extractTaxFromObj(h.taxes) ||
-    extractTaxFromObj(h.options?.[0]?.taxes) ||
-    extractTaxFromObj(h.roomRates?.[0]?.taxes) ||
-    Number(
-      h.taxAmount ||
+  const taxDet =
+    extractTaxDetails(h.taxes) ||
+    extractTaxDetails(h.options?.[0]?.taxes) ||
+    extractTaxDetails(h.roomRates?.[0]?.taxes);
+
+  if (taxDet) {
+    includedTaxAmt = taxDet.inc;
+    excludedTaxAmt = taxDet.exc;
+  } else {
+    excludedTaxAmt =
+      Number(
+        h.taxAmount ||
         h.totalTax ||
         h.taxesAndFees ||
         h.roomRates?.[0]?.taxAmount,
-    ) ||
-    0;
+      ) || 0;
+  }
 
-  const taxAmt = extractedTaxAmt;
-  // If taxAmount exists and is > 0, taxes are excluded from base price (need to be added)
-  const taxesIncluded = taxAmt === 0; // RG usually excludes taxes; taxesIncluded=false unless no tax field
+  const taxAmt = includedTaxAmt + excludedTaxAmt;
+  const taxesIncluded = taxAmt === 0;
+
+  const finalTotalPrice = totalPrice + excludedTaxAmt;
+  const netBasePrice = totalPrice - includedTaxAmt;
 
   return {
     hotelId: `RG:${h.propertyId}`,
     source: "RG",
-    name: h.propertyName,
-    address: h.address || "",
-    city: h.city || h.destinationName || "",
+    name: h.propertyName || h.hotelName || h.name || h.propertyNameClean || h.HotelName || "",
+    address: h.address || h.hotelAddress || "",
+    city: h.city || h.cityName || h.destinationName || h.CityName || "",
     country: h.countryName || h.country || "",
     starRating:
       parseFloat(h.categoryCode) ||
@@ -344,8 +362,8 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
     latitude: h.latitude || 0,
     longitude: h.longitude || 0,
     images: imagesList.filter(Boolean),
-    price: totalPrice,
-    basePrice: totalPrice - taxAmt, // net base (total minus taxes)
+    price: finalTotalPrice,
+    basePrice: netBasePrice, // net base (total minus included taxes)
     taxAmount: taxAmt,
     taxesIncluded,
     currency: h.currency || "INR",
@@ -378,33 +396,33 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
       h.mealBasis ||
       h.roomRates?.[0]?.boardName ||
       h.options?.[0]?.boardName ||
-      "LUNCH INCLUDED",
+      "",
     taxes: {
       taxes:
         taxAmt > 0
           ? [
-              {
-                included: false,
-                amount: taxAmt.toFixed(2),
-                currency: h.currency || "INR",
-                clientAmount: taxAmt.toFixed(2),
-                clientCurrency: h.currency || "INR",
-              },
-            ]
+            {
+              included: false,
+              amount: taxAmt.toFixed(2),
+              currency: h.currency || "INR",
+              clientAmount: taxAmt.toFixed(2),
+              clientCurrency: h.currency || "INR",
+            },
+          ]
           : [],
       allIncluded: taxesIncluded,
     },
     pricing: {
-      totalPrice: totalPrice,
+      totalPrice: finalTotalPrice,
       taxes: taxAmt,
       mf: 0,
       mft: 0,
       currency: h.currency || "INR",
-      basePrice: totalPrice - taxAmt,
+      basePrice: netBasePrice,
       markupAmount: 0,
-      perNightPrice: isPerNight ? totalPrice : null,
-      supplierTotalPrice: totalPrice,
-      finalTotalPrice: totalPrice,
+      perNightPrice: isPerNight ? finalTotalPrice : null,
+      supplierTotalPrice: finalTotalPrice,
+      finalTotalPrice: finalTotalPrice,
       taxesIncluded: taxesIncluded,
     },
     rawPayload: h,
