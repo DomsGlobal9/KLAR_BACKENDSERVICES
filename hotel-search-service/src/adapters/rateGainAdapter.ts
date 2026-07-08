@@ -14,8 +14,8 @@ export async function searchRG(
   const payload: any = {
     checkin: req.checkin,
     checkout: req.checkout,
-    CountryCode: req.countryCode ?? "IN",
-    Currency: req.currency ?? "INR",
+    ...(req.countryCode ? { CountryCode: req.countryCode } : {}),
+    ...(req.currency ? { Currency: req.currency } : {}),
     Rooms: req.rooms.map((r) => ({
       NumberOfRoom: 1,
       Adults: r.adults,

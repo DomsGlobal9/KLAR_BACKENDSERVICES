@@ -118,11 +118,20 @@ export class FlightFilter {
         const startTime = this.timeToMinutes(start);
         const endTime = this.timeToMinutes(end);
 
-        // Handle overnight ranges (e.g., 22:00 to 06:00)
+        const isNextDay = this.isNextDay(flight.from.date, flight.to.date);
+        const isMultiDay = this.isMultiDay(flight.from.date, flight.to.date);
+
+        if (isNextDay || isMultiDay) {
+            if (startTime <= endTime) {
+                return flightTime >= startTime && flightTime <= endTime;
+            } else {
+                return flightTime >= startTime || flightTime <= endTime;
+            }
+        }
+
         if (startTime <= endTime) {
             return flightTime >= startTime && flightTime <= endTime;
         } else {
-            // Overnight range
             return flightTime >= startTime || flightTime <= endTime;
         }
     }
@@ -135,10 +144,20 @@ export class FlightFilter {
         const startTime = this.timeToMinutes(start);
         const endTime = this.timeToMinutes(end);
 
+        const isNextDay = this.isNextDay(flight.from.date, flight.to.date);
+        const isMultiDay = this.isMultiDay(flight.from.date, flight.to.date);
+
+        if (isNextDay || isMultiDay) {
+            if (startTime <= endTime) {
+                return flightTime >= startTime && flightTime <= endTime;
+            } else {
+                return flightTime >= startTime || flightTime <= endTime;
+            }
+        }
+
         if (startTime <= endTime) {
             return flightTime >= startTime && flightTime <= endTime;
         } else {
-            // Overnight range
             return flightTime >= startTime || flightTime <= endTime;
         }
     }
@@ -282,5 +301,35 @@ export class FlightFilter {
      */
     private static isValidTimeFormat(time: string): boolean {
         return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
+    }
+
+    /**
+     * Helper: Check if flight arrives next day
+     */
+    private static isNextDay(fromDate: string, toDate: string): boolean {
+        try {
+            const from = new Date(fromDate);
+            const to = new Date(toDate);
+            const diffTime = to.getTime() - from.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays === 1;
+        } catch {
+            return fromDate !== toDate;
+        }
+    }
+
+    /**
+     * Helper: Check if flight arrives after multiple days
+     */
+    private static isMultiDay(fromDate: string, toDate: string): boolean {
+        try {
+            const from = new Date(fromDate);
+            const to = new Date(toDate);
+            const diffTime = to.getTime() - from.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays > 1;
+        } catch {
+            return false;
+        }
     }
 }
