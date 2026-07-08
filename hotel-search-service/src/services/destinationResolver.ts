@@ -444,6 +444,35 @@ export async function resolveCityToCoords(
     }
   }
 
+  // Strategy 3: Fallback to fuzzy match in country-state-city (if Nominatim and DB exact matches fail)
+  if (lat === null || lng === null) {
+    try {
+      console.log(`[GEO] Exact fallback failed. Checking country-state-city fuzzy matches for "${normalizedQuery}"...`);
+      const { City } = require("country-state-city");
+      const { fuzzyFindCities } = require("../utils/fuzzy");
+      const allCities = City.getAllCities();
+
+      const fuzzyMatches = fuzzyFindCities(normalizedQuery, allCities);
+      if (fuzzyMatches.length > 0) {
+        const bestMatch = fuzzyMatches[0];
+        lat = parseFloat(bestMatch.latitude);
+        lng = parseFloat(bestMatch.longitude);
+        radiusKm = 20; // default fallback radius
+        boundingBox = [
+          (lat - 0.2).toString(),
+          (lat + 0.2).toString(),
+          (lng - 0.2).toString(),
+          (lng + 0.2).toString(),
+        ];
+        console.log(
+          `[GEO] Resolved fuzzy match "${query}" to "${bestMatch.name}" [${lat}, ${lng}] from country-state-city`
+        );
+      }
+    } catch (fuzzyErr: any) {
+      console.error(`[GEO] country-state-city fuzzy search error:`, fuzzyErr.message);
+    }
+  }
+
   // 3. Save to database cache if resolved
   if (lat !== null && lng !== null) {
     try {

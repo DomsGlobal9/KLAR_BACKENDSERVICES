@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { hotelsService } from "../services/hotels.service";
-import { getClientType } from "../utils/auth";
+import { getClientType, extractToken } from "../utils/auth";
 
 export const searchHotels = async (
   req: Request,
@@ -9,7 +9,8 @@ export const searchHotels = async (
 ) => {
   try {
     const clientType = getClientType(req);
-    const data = await hotelsService.searchHotels(req.body, clientType);
+    const token = extractToken(req);
+    const data = await hotelsService.searchHotels(req.body, clientType, token);
     res.status(200).json(data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json({
@@ -38,6 +39,40 @@ export const getHotelSuggestions = async (
       status: false,
       description: error.message,
       body: [],
+    });
+  }
+};
+
+export const getPopularAreas = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { PopularAreaModel } = require("../models/PopularArea.model");
+    const docs = await PopularAreaModel.find().lean();
+    
+    const grouped: Record<string, Array<{ name: string; description: string; tag?: string }>> = {};
+    for (const doc of docs) {
+      if (!grouped[doc.cityKey]) {
+        grouped[doc.cityKey] = [];
+      }
+      grouped[doc.cityKey].push({
+        name: doc.name,
+        description: doc.description,
+        tag: doc.tag || undefined,
+      });
+    }
+
+    res.status(200).json({
+      status: true,
+      body: grouped,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: false,
+      description: error.message,
+      body: {},
     });
   }
 };

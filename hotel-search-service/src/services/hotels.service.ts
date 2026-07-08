@@ -3,6 +3,8 @@ import { searchTJ } from "../adapters/tripJackAdapter";
 import { resolveCityToCoords } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
+import { getMarkupRules } from "../utils/auth";
+import { calculateNights, calculateEnrichedPricing } from "../utils/pricing.util";
 
 export class HotelsService {
   /**
@@ -13,8 +15,11 @@ export class HotelsService {
   async searchHotels(
     searchPayload: UnifiedSearchRequest,
     clientType: "B2B" | "B2C" = "B2C",
+    token?: string | null,
   ) {
     const totalStartTime = Date.now();
+    const markupRules = token ? await getMarkupRules(token) : [];
+    const nights = calculateNights(searchPayload.checkin, searchPayload.checkout);
     const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
     console.log(
       `[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}, ClientType: ${clientType}`,
@@ -206,11 +211,173 @@ Reported Total to UI:      ${totalToUI}
       );
     }
 
+    // 1. Compute facets on the unfiltered/geofenced list
+    const facets = computeFacets(finalOutputHotels, markupRules, nights);
+
+    // 2. Apply filters (if provided)
+    let filteredResults = finalOutputHotels;
+    const filters = searchPayload.filters;
+    if (filters) {
+      // Text search
+      if (filters.searchText && filters.searchText.trim()) {
+        const q = filters.searchText.toLowerCase().trim();
+        filteredResults = filteredResults.filter((h) => {
+          const name = (h.name || "").toLowerCase();
+          const city = (h.city || "").toLowerCase();
+          const address = (h.address || "").toLowerCase();
+          return name.includes(q) || city.includes(q) || address.includes(q);
+        });
+      }
+
+      // Star ratings
+      if (filters.starRatings && filters.starRatings.length > 0) {
+        filteredResults = filteredResults.filter((h) =>
+          filters.starRatings!.includes(Math.round(h.starRating || 0))
+        );
+      }
+
+      // Price range (against marked-up price)
+      if (filters.priceRange && filters.priceRange[1] > 0) {
+        const [minP, maxP] = filters.priceRange;
+        filteredResults = filteredResults.filter((h) => {
+          const enriched = calculateEnrichedPricing(
+            {
+              basePrice: h.basePrice ?? h.price,
+              totalPrice: h.price,
+              taxes: h.taxAmount ?? 0,
+              mf: 0,
+              mft: 0,
+              currency: h.currency,
+            },
+            markupRules,
+            nights
+          );
+          const price = enriched.finalTotalPrice;
+          return price >= minP && price <= maxP;
+        });
+      }
+
+      // Meal types
+      if (filters.mealTypes && filters.mealTypes.length > 0) {
+        filteredResults = filteredResults.filter((h) => {
+          const hMeals = getMealTypes(h);
+          return hMeals.some((m) => filters.mealTypes!.includes(m));
+        });
+      }
+
+      // Property types
+      if (filters.propertyTypes && filters.propertyTypes.length > 0) {
+        filteredResults = filteredResults.filter((h) => {
+          const label = getPropertyTypeLabel(h);
+          return filters.propertyTypes!.includes(label);
+        });
+      }
+
+      // Amenities (ALL must match)
+      if (filters.amenities && filters.amenities.length > 0) {
+        filteredResults = filteredResults.filter((h) => {
+          const hAmenities = (h.amenities || []).map((a: string) => a.toLowerCase());
+          return filters.amenities!.every((a) =>
+            hAmenities.some((ha) => ha.includes(a.toLowerCase()))
+          );
+        });
+      }
+
+      // Show only alternative deals
+      if (filters.showOnlyAltDeals) {
+        filteredResults = filteredResults.filter((h) => !!h.altDeal);
+      }
+
+      // Providers
+      if (filters.providers && filters.providers.length > 0) {
+        filteredResults = filteredResults.filter((h) =>
+          h.source && filters.providers!.includes(h.source)
+        );
+      }
+
+      // User ratings
+      if (filters.userRatings && filters.userRatings.length > 0) {
+        const minRating = Math.min(...filters.userRatings);
+        filteredResults = filteredResults.filter((h) => {
+          const rating = h.starRating || 0;
+          return rating >= minRating;
+        });
+      }
+
+      // Selected locations
+      if (filters.selectedLocations && filters.selectedLocations.length > 0) {
+        filteredResults = filteredResults.filter((h) => {
+          const hotelCity = (h.city || "").trim();
+          const hotelAddr = (h.address || "").split(",")[0]?.trim() || "";
+          return filters.selectedLocations!.some(
+            (loc) => hotelCity === loc || hotelAddr === loc
+          );
+        });
+      }
+    }
+
+    // 3. Apply sorting (if provided)
+    const sortBy = searchPayload.sortBy;
+    if (sortBy) {
+      filteredResults.sort((a, b) => {
+        const enrichedA = calculateEnrichedPricing(
+          {
+            basePrice: a.basePrice ?? a.price,
+            totalPrice: a.price,
+            taxes: a.taxAmount ?? 0,
+            mf: 0,
+            mft: 0,
+            currency: a.currency,
+          },
+          markupRules,
+          nights
+        );
+        const priceA = enrichedA.finalTotalPrice;
+
+        const enrichedB = calculateEnrichedPricing(
+          {
+            basePrice: b.basePrice ?? b.price,
+            totalPrice: b.price,
+            taxes: b.taxAmount ?? 0,
+            mf: 0,
+            mft: 0,
+            currency: b.currency,
+          },
+          markupRules,
+          nights
+        );
+        const priceB = enrichedB.finalTotalPrice;
+
+        if (sortBy === "price_asc") return priceA - priceB;
+        if (sortBy === "price_desc") return priceB - priceA;
+        if (sortBy === "rating_desc") {
+          const rd = (b.starRating || 0) - (a.starRating || 0);
+          return rd !== 0 ? rd : priceA - priceB;
+        }
+        if (sortBy === "price_rating") {
+          const scoreA = priceA * 0.5 + (5 - (a.starRating || 0)) * 10000 * 0.5;
+          const scoreB = priceB * 0.5 + (5 - (b.starRating || 0)) * 10000 * 0.5;
+          return scoreA - scoreB;
+        }
+        return 0;
+      });
+    }
+
+    // 4. Optimize payload: Strip rawPayload, ensure correlationId is propagated
+    const optimizedResults = filteredResults.map((hotel) => {
+      const { rawPayload, ...rest } = hotel;
+      return {
+        ...rest,
+        correlationId: (rawPayload as any)?._correlationId || hotel.correlationId || "",
+      };
+    });
+
     return {
-      results: finalOutputHotels,
-      body: finalOutputHotels, // Fallback for some frontend components
-      hotels: finalOutputHotels,
-      total: Math.max(rgTotal + tjTotal, finalOutputHotels.length),
+      results: optimizedResults,
+      body: optimizedResults, // Fallback for some frontend components
+      hotels: optimizedResults,
+      total: filters ? filteredResults.length : Math.max(rgTotal + tjTotal, filteredResults.length),
+      facets,
     };
   }
 
@@ -236,7 +403,7 @@ Reported Total to UI:      ${totalToUI}
     // 1. Fetch cities from local country-state-city package
     const allCities = City.getAllCities();
     const qWords = qLower.split(/\s+/).filter(Boolean);
-    const cityMatches = [];
+    const cityMatches: Array<{ city: any; score: number }> = [];
 
     for (const city of allCities) {
       const cityNameLower = city.name.toLowerCase();
@@ -254,9 +421,26 @@ Reported Total to UI:      ${totalToUI}
       }
     }
 
+    // Fuzzy matching fallback if exact matches are lacking
+    if (cityMatches.length < 3) {
+      const { fuzzyFindCities } = require("../utils/fuzzy");
+      const fuzzyResults = fuzzyFindCities(normalizedQuery, allCities);
+      
+      for (const fuzzyCity of fuzzyResults) {
+        const alreadyMatched = cityMatches.some(
+          (m) =>
+            m.city.name.toLowerCase() === fuzzyCity.name.toLowerCase() &&
+            m.city.countryCode === fuzzyCity.countryCode
+        );
+        if (!alreadyMatched) {
+          cityMatches.push({ city: fuzzyCity, score: 4 });
+        }
+      }
+    }
+
     // Sort by:
     // 1. Country priority (India 'IN' first)
-    // 2. Prefix match score (starts-with score 1 first, contains score 2 last)
+    // 2. Prefix/Fuzzy match score (starts-with/exact match first, fuzzy last)
     // 3. Shorter name length first (more precise matches)
     cityMatches.sort((a, b) => {
       const aIsIN = a.city.countryCode === "IN" ? 1 : 0;
@@ -357,4 +541,197 @@ function getDistanceKm(
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+const PROPERTY_TYPE_KEYWORDS: Record<string, string> = {
+  resort: "Resort",
+  hotel: "Hotel",
+  apartment: "Apartment",
+  villa: "Villa",
+  hostel: "Hostel",
+  guesthouse: "Guesthouse",
+  "b&b": "B&B",
+  motel: "Motel",
+  lodge: "Lodge",
+  camp: "Camp",
+  tent: "Tent",
+  cabin: "Cabin",
+  cottage: "Cottage",
+  palace: "Hotel",
+};
+
+function getPropertyTypeLabel(hotel: any): string {
+  const explicit = hotel.accTypeDesc || hotel.accMultiDesc;
+  if (explicit && typeof explicit === "string" && explicit.trim().length > 2) {
+    const clean = explicit.trim();
+    for (const [key, label] of Object.entries(PROPERTY_TYPE_KEYWORDS)) {
+      if (clean.toLowerCase().includes(key)) return label;
+    }
+    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+  }
+
+  const specificSources = [
+    hotel.accTypeDesc,
+    hotel.accMultiDesc,
+    hotel.name || "",
+    ...(hotel.amenities || []),
+  ];
+
+  const specificEntries = Object.entries(PROPERTY_TYPE_KEYWORDS).filter(
+    ([key]) => key !== "hotel",
+  );
+
+  for (const src of specificSources) {
+    const text = Array.isArray(src) ? src.join(" ") : String(src || "");
+    const lower = text.toLowerCase();
+    for (const [key, label] of specificEntries) {
+      if (lower.includes(key)) return label;
+    }
+  }
+
+  if (hotel.hotelSegment && typeof hotel.hotelSegment === "string") {
+    const cleanSeg = hotel.hotelSegment.trim();
+    if (cleanSeg.toLowerCase() !== "hotel") {
+      for (const [key, label] of Object.entries(PROPERTY_TYPE_KEYWORDS)) {
+        if (cleanSeg.toLowerCase().includes(key)) return label;
+      }
+      return cleanSeg;
+    }
+  }
+
+  return "Hotel";
+}
+
+function getMealTypes(hotel: any): string[] {
+  const types = new Set<string>();
+  const boardSources = [
+    hotel.mealBasis,
+    hotel.boardName,
+    hotel.boardCode,
+    ...(hotel.hotelBoards || []),
+  ].filter(Boolean);
+
+  boardSources.forEach((b) => {
+    const titleCase = b
+      .trim()
+      .split(" ")
+      .map(
+        (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+      )
+      .join(" ");
+    types.add(titleCase);
+  });
+  return Array.from(types);
+}
+
+function computeFacets(hotels: any[], markupRules: any[], nights: number) {
+  const starRatingCounts: Record<number, number> = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0,
+    5: 0,
+  };
+  const propertyTypeCounts: Record<string, number> = {};
+  const mealTypeCounts: Record<string, number> = {};
+  const amenityCounts: Record<string, number> = {};
+  const providerCounts: Record<string, number> = { TJ: 0, RG: 0 };
+  const locationCounts: Record<string, number> = {};
+
+  let minPrice = Infinity;
+  let maxPrice = -Infinity;
+
+  hotels.forEach((hotel) => {
+    // 1. Star Rating
+    const star = Math.round(Number(hotel.starRating || hotel.rating || 0));
+    if (star >= 1 && star <= 5) {
+      starRatingCounts[star] = (starRatingCounts[star] || 0) + 1;
+    }
+
+    // 2. Property Type
+    const propType = getPropertyTypeLabel(hotel);
+    if (propType) {
+      propertyTypeCounts[propType] = (propertyTypeCounts[propType] || 0) + 1;
+    }
+
+    // 3. Meal Type
+    const meals = getMealTypes(hotel);
+    meals.forEach((m) => {
+      mealTypeCounts[m] = (mealTypeCounts[m] || 0) + 1;
+    });
+
+    // 4. Amenities
+    const amenities = hotel.amenities || [];
+    amenities.forEach((a: string) => {
+      const normalized = a
+        .trim()
+        .split(/\s+/)
+        .map(
+          (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+        )
+        .join(" ");
+      if (normalized) {
+        amenityCounts[normalized] = (amenityCounts[normalized] || 0) + 1;
+      }
+    });
+
+    // 5. Providers
+    if (hotel.source === "TJ" || hotel.source === "RG") {
+      providerCounts[hotel.source] = (providerCounts[hotel.source] || 0) + 1;
+    }
+
+    // 6. Prices
+    const enriched = calculateEnrichedPricing(
+      {
+        basePrice: hotel.basePrice ?? hotel.price,
+        totalPrice: hotel.price,
+        taxes: hotel.taxAmount ?? 0,
+        mf: 0,
+        mft: 0,
+        currency: hotel.currency,
+      },
+      markupRules,
+      nights,
+    );
+    const markedUpPrice = enriched.finalTotalPrice;
+    if (markedUpPrice < minPrice) minPrice = markedUpPrice;
+    if (markedUpPrice > maxPrice) maxPrice = markedUpPrice;
+
+    // 7. Top Locations
+    if (hotel.address) {
+      const addressParts = hotel.address
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      if (addressParts.length > 1) {
+        const locality = addressParts[addressParts.length - 2];
+        if (locality && locality.length > 2 && !/\d/.test(locality)) {
+          const normalizedLoc = locality
+            .split(/\s+/)
+            .map(
+              (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+            )
+            .join(" ");
+          locationCounts[normalizedLoc] =
+            (locationCounts[normalizedLoc] || 0) + 1;
+        }
+      }
+    }
+  });
+
+  const topLocations = Object.entries(locationCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({ name, count }));
+
+  return {
+    starRatingCounts,
+    propertyTypeCounts,
+    mealTypeCounts,
+    amenityCounts,
+    providerCounts,
+    minPrice: minPrice === Infinity ? 0 : minPrice,
+    maxPrice: maxPrice === -Infinity ? 0 : maxPrice,
+    topLocations,
+  };
 }

@@ -23,6 +23,14 @@ async function start() {
     console.error("❌ Failed to seed default geo cache:", err.message);
   }
 
+  // Seed default popular areas
+  try {
+    const { seedPopularAreas } = require("./models/PopularArea.model");
+    await seedPopularAreas();
+  } catch (err: any) {
+    console.error("❌ Failed to seed default popular areas:", err.message);
+  }
+
   if (process.env.ENABLE_AUTO_SYNC === "true") {
     console.log(
       "⏳ Starting background sync processes (RateGain + TripJack)...",
