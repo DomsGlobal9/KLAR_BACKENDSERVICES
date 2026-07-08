@@ -31,6 +31,13 @@ export interface ICancellationPolicy {
   penalty?: number; // Amount to be charged
 }
 
+export interface IUserInfo {
+  id?: string;
+  email?: string;
+  role?: string;
+  clientType?: string;
+}
+
 export interface IBooking extends Document {
   // ─── Identifiers ───────────────────────────────
   confirmationNumber: string; // Provider's booking ID (TG-XXXXX)
@@ -70,6 +77,7 @@ export interface IBooking extends Document {
   agentId?: string;
   agentName?: string;
   userId?: string;
+  userInfo?: IUserInfo;
 
   // ─── Cancellation ──────────────────────────────
   cancellationPolicy?: ICancellationPolicy;
@@ -82,6 +90,7 @@ export interface IBooking extends Document {
   rateGainRequest?: any;
   rateGainResponse?: any;
   propertyCode?: string;
+  brandCode?: string; // RateGain BrandCode stored for cancellation
 
   // ─── Provider Error (for failed bookings only) ─
   failureReason?: string;
@@ -105,6 +114,16 @@ const cancellationPolicySchema = new Schema<ICancellationPolicy>(
     isRefundable: { type: Boolean, default: false },
     deadline: { type: String },
     penalty: { type: Number },
+  },
+  { _id: false },
+);
+
+const userInfoSchema = new Schema(
+  {
+    id: { type: String },
+    email: { type: String },
+    role: { type: String },
+    clientType: { type: String },
   },
   { _id: false },
 );
@@ -164,6 +183,7 @@ const bookingSchema = new Schema<IBooking>(
     agentId: { type: String, index: true },
     agentName: { type: String },
     userId: { type: String, index: true },
+    userInfo: { type: userInfoSchema },
 
     // Cancellation
     cancellationPolicy: { type: cancellationPolicySchema },
@@ -176,6 +196,7 @@ const bookingSchema = new Schema<IBooking>(
     rateGainRequest: { type: Schema.Types.Mixed },
     rateGainResponse: { type: Schema.Types.Mixed },
     propertyCode: { type: String },
+    brandCode: { type: String }, // RateGain BrandCode for cancellation
 
     // Only for debugging failed bookings
     failureReason: { type: String },

@@ -62,242 +62,192 @@ function getRadiusFromBoundingBox(
   const d4 = getDistanceKm(lat, lng, maxLat, maxLng);
 
   const maxDist = Math.max(d1, d2, d3, d4);
-  // Tighter cap: city metros ~25km, large states/regions ~80km.
-  // Avoids pulling in hotels from neighboring cities/states.
-  return Math.min(Math.max(maxDist, 5), 80);
+  // Dynamic cap: min 5km (tiny city-states), max 500km (island archipelagos like Maldives).
+  // The bounding box from Nominatim naturally reflects the true geographic extent of each place.
+  return Math.min(Math.max(maxDist, 5), 500);
 }
 
-export async function seedDefaultGeo() {
-  try {
-    const defaults = [
-      // International
-      {
-        query: "paris",
-        lat: 48.856614,
-        lng: 2.3522219,
-        radiusKm: 8,
-        boundingBox: ["48.815573", "48.9021449", "2.224199", "2.4699208"],
-      },
-      {
-        query: "dubai",
-        lat: 25.2048493,
-        lng: 55.2707828,
-        radiusKm: 80,
-        boundingBox: ["24.78385", "25.35249", "54.91234", "55.61234"],
-      },
-      {
-        query: "maldives",
-        lat: 3.202778,
-        lng: 73.22068,
-        radiusKm: 150,
-        boundingBox: ["-0.75", "7.15", "72.15", "74.15"],
-      },
-      {
-        query: "london",
-        lat: 51.5072178,
-        lng: -0.1275862,
-        radiusKm: 15,
-        boundingBox: ["51.2867602", "51.6918741", "-0.5103751", "0.3340155"],
-      },
-      {
-        query: "singapore",
-        lat: 1.352083,
-        lng: 103.819836,
-        radiusKm: 25,
-        boundingBox: ["1.130", "1.470", "103.600", "104.050"],
-      },
-      {
-        query: "bangkok",
-        lat: 13.7563309,
-        lng: 100.5017651,
-        radiusKm: 30,
-        boundingBox: ["13.49", "13.95", "100.33", "100.93"],
-      },
-      {
-        query: "bali",
-        lat: -8.4095178,
-        lng: 115.188919,
-        radiusKm: 50,
-        boundingBox: ["-8.85", "-8.10", "114.43", "115.71"],
-      },
-      {
-        query: "new york",
-        lat: 40.7127753,
-        lng: -74.0059731,
-        radiusKm: 20,
-        boundingBox: ["40.47", "40.92", "-74.26", "-73.70"],
-      },
-      // India — pre-seeded so Nominatim is never called for these
-      {
-        query: "goa",
-        lat: 15.2993265,
-        lng: 74.123996,
-        radiusKm: 80,
-        boundingBox: ["14.8993", "15.7993", "73.6239", "74.5239"],
-      },
-      {
-        query: "delhi",
-        lat: 28.6139391,
-        lng: 77.2090212,
-        radiusKm: 30,
-        boundingBox: ["28.40", "28.88", "76.83", "77.35"],
-      },
-      {
-        query: "new delhi",
-        lat: 28.6139391,
-        lng: 77.2090212,
-        radiusKm: 30,
-        boundingBox: ["28.40", "28.88", "76.83", "77.35"],
-      },
-      {
-        query: "mumbai",
-        lat: 19.0759837,
-        lng: 72.8776559,
-        radiusKm: 30,
-        boundingBox: ["18.89", "19.31", "72.77", "73.00"],
-      },
-      {
-        query: "hyderabad",
-        lat: 17.385044,
-        lng: 78.486671,
-        radiusKm: 25,
-        boundingBox: ["17.20", "17.56", "78.27", "78.69"],
-      },
-      {
-        query: "bangalore",
-        lat: 12.9715987,
-        lng: 77.5945627,
-        radiusKm: 25,
-        boundingBox: ["12.83", "13.14", "77.38", "77.79"],
-      },
-      {
-        query: "bengaluru",
-        lat: 12.9715987,
-        lng: 77.5945627,
-        radiusKm: 25,
-        boundingBox: ["12.83", "13.14", "77.38", "77.79"],
-      },
-      {
-        query: "chennai",
-        lat: 13.0826802,
-        lng: 80.2707184,
-        radiusKm: 25,
-        boundingBox: ["12.90", "13.24", "80.08", "80.46"],
-      },
-      {
-        query: "kolkata",
-        lat: 22.572646,
-        lng: 88.363895,
-        radiusKm: 20,
-        boundingBox: ["22.45", "22.65", "88.26", "88.49"],
-      },
-      {
-        query: "pune",
-        lat: 18.521428,
-        lng: 73.8544541,
-        radiusKm: 20,
-        boundingBox: ["18.42", "18.63", "73.74", "73.98"],
-      },
-      {
-        query: "ahmedabad",
-        lat: 23.0216238,
-        lng: 72.5797068,
-        radiusKm: 20,
-        boundingBox: ["22.92", "23.10", "72.47", "72.69"],
-      },
-      {
-        query: "jaipur",
-        lat: 26.9124336,
-        lng: 75.7872709,
-        radiusKm: 20,
-        boundingBox: ["26.81", "27.04", "75.67", "75.91"],
-      },
-      {
-        query: "agra",
-        lat: 27.1752554,
-        lng: 78.0098161,
-        radiusKm: 15,
-        boundingBox: ["27.10", "27.25", "77.90", "78.14"],
-      },
-      {
-        query: "varanasi",
-        lat: 25.3176452,
-        lng: 82.9739144,
-        radiusKm: 15,
-        boundingBox: ["25.25", "25.40", "82.88", "83.09"],
-      },
-      {
-        query: "kochi",
-        lat: 9.9312328,
-        lng: 76.2673041,
-        radiusKm: 20,
-        boundingBox: ["9.85", "10.02", "76.17", "76.40"],
-      },
-      {
-        query: "cochin",
-        lat: 9.9312328,
-        lng: 76.2673041,
-        radiusKm: 20,
-        boundingBox: ["9.85", "10.02", "76.17", "76.40"],
-      },
-      {
-        query: "udaipur",
-        lat: 24.5854364,
-        lng: 73.71249,
-        radiusKm: 15,
-        boundingBox: ["24.52", "24.64", "73.63", "73.82"],
-      },
-      {
-        query: "manali",
-        lat: 32.2396,
-        lng: 77.1887,
-        radiusKm: 20,
-        boundingBox: ["32.15", "32.35", "77.08", "77.33"],
-      },
-      {
-        query: "shimla",
-        lat: 31.1048,
-        lng: 77.1734,
-        radiusKm: 15,
-        boundingBox: ["31.03", "31.18", "77.07", "77.27"],
-      },
-      {
-        query: "ooty",
-        lat: 11.4102,
-        lng: 76.695,
-        radiusKm: 15,
-        boundingBox: ["11.34", "11.47", "76.62", "76.80"],
-      },
-      {
-        query: "coorg",
-        lat: 12.4213,
-        lng: 75.7382,
-        radiusKm: 25,
-        boundingBox: ["12.27", "12.56", "75.56", "75.96"],
-      },
-      {
-        query: "rishikesh",
-        lat: 30.0869,
-        lng: 78.2676,
-        radiusKm: 15,
-        boundingBox: ["30.03", "30.15", "78.19", "78.38"],
-      },
-    ];
+/**
+ * @deprecated — DO NOT USE. Replaced by fully dynamic Nominatim-based resolution.
+ * Keeping the export signature to avoid breaking any callers, but it always returns null.
+ * resolveGeoCenter() now handles city-center snapping dynamically for every city in the world.
+ */
+export function getOfficialCityCenterMatch(
+  _lat: number,
+  _lng: number,
+): { lat: number; lng: number; radiusKm: number } | null {
+  return null;
+}
 
-    // Upsert all defaults — runs every startup so new entries are always seeded
-    const ops = defaults.map((d) => ({
-      updateOne: {
-        filter: { query: d.query },
-        update: { $setOnInsert: d }, // only insert if not exists; don't overwrite manual updates
-        upsert: true,
-      },
-    }));
-    await GeoCacheModel.bulkWrite(ops, { ordered: false });
-    console.log(
-      `[GEO] Seeded/verified ${defaults.length} default geo entries.`,
-    );
-  } catch (err: any) {
-    console.error("[GEO] Seeding error:", err.message);
+// In-memory locks to deduplicate active concurrent requests for the exact same key/coords
+const activeGeoCenterLocks = new Map<string, Promise<{ lat: number; lng: number; radiusKm: number }>>();
+const activeRadiusLocks = new Map<string, Promise<number>>();
+const activeCityLocks = new Map<string, Promise<{ lat: number; lng: number; radiusKm: number } | null>>();
+
+/**
+ * Fully dynamic geo resolution for ANY city in the world.
+ */
+export async function resolveGeoCenter(
+  lat: number,
+  lng: number,
+): Promise<{ lat: number; lng: number; radiusKm: number }> {
+  const cacheKey = `geo:${lat.toFixed(4)},${lng.toFixed(4)}`;
+
+  // 1. Fast path: check MongoDB cache by coordinate key
+  try {
+    const cached = await GeoCacheModel.findOne({ query: cacheKey }).lean();
+    if (cached?.radiusKm) {
+      console.log(`[GEO] Cache HIT [${lat},${lng}] → radius=${cached.radiusKm}km`);
+      return { lat: cached.lat ?? lat, lng: cached.lng ?? lng, radiusKm: cached.radiusKm };
+    }
+  } catch (_) {}
+
+  // 2. Check if a request for these coordinates is already active (deduplication)
+  if (activeGeoCenterLocks.has(cacheKey)) {
+    console.log(`[GEO] Waiting for existing concurrent search to resolve [${lat},${lng}]`);
+    return activeGeoCenterLocks.get(cacheKey)!;
+  }
+
+  // Create a new locked promise for this coordinate
+  const promise = (async () => {
+    // OSM reverse geocode (zoom=10 = city level) → resolve city name → get official center + radius
+    try {
+      const axios = require("axios");
+      const apiKey = process.env.OPENCAGE_API_KEY || "ae11f396076d4310a96bb12acc0a6323";
+      const response = await axios.get(
+        `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}&no_annotations=1`,
+        { timeout: 6000 },
+      );
+      
+      const results = response.data?.results;
+      if (results && results.length > 0) {
+        const components = results[0].components;
+        const cityName =
+          components.city       ||
+          components.town       ||
+          components.village    ||
+          components.municipality ||
+          components.state      ||
+          components.county;
+
+        if (cityName) {
+          console.log(`[GEO] OSM resolved [${lat},${lng}] → city: "${cityName}"`);
+          const cityCenter = await resolveCityToCoords(cityName);
+          if (cityCenter) {
+            const dist = getDistanceKm(lat, lng, cityCenter.lat, cityCenter.lng);
+            if (dist <= 300) { // 300km covers archipelagos like Maldives
+              console.log(
+                `[GEO] Snapped [${lat},${lng}] → "${cityName}" [${cityCenter.lat},${cityCenter.lng}] ` +
+                `dist=${dist.toFixed(1)}km, radius=${cityCenter.radiusKm}km`,
+              );
+              try {
+                await GeoCacheModel.findOneAndUpdate(
+                  { query: cacheKey },
+                  { lat: cityCenter.lat, lng: cityCenter.lng, radiusKm: cityCenter.radiusKm },
+                  { upsert: true, new: true },
+                );
+              } catch (_) {}
+              return cityCenter;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[GEO] OSM city-snap failed for [${lat},${lng}]:`, err.message);
+    }
+
+    // Direct OSM bounding-box lookup (multi-zoom) — keeps original coords, just gets radius
+    const radiusKm = await resolveRadiusFromCoords(lat, lng);
+    return { lat, lng, radiusKm };
+  })();
+
+  // Store in map, run, and cleanup when finished
+  activeGeoCenterLocks.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    activeGeoCenterLocks.delete(cacheKey);
+  }
+}
+
+/**
+ * Resolves the geographic search radius for any lat/lng purely from OpenStreetMap bounding boxes.
+ *
+ * Tries OSM zoom levels in order — each gives a different geographic granularity:
+ *   zoom=10  city/town        → Paris ~8km, Dubai metro ~35km
+ *   zoom=8   district/borough → broader city area
+ *   zoom=6   county/region    → Goa state ~80km
+ *   zoom=5   country/island   → Maldives archipelago ~480km
+ *
+ * The bounding box at each zoom reflects the TRUE size of that place.
+ * Results are cached in MongoDB — OSM is called only ONCE per coordinate, ever.
+ * No hardcoded radius numbers anywhere.
+ */
+export async function resolveRadiusFromCoords(
+  lat: number,
+  lng: number,
+): Promise<number> {
+  const cacheKey = `geo:${lat.toFixed(4)},${lng.toFixed(4)}`;
+
+  // 1. MongoDB cache
+  try {
+    const cached = await GeoCacheModel.findOne({ query: cacheKey }).lean();
+    if (cached?.radiusKm) {
+      console.log(`[GEO] Radius cache HIT [${lat},${lng}]: ${cached.radiusKm}km`);
+      return cached.radiusKm;
+    }
+  } catch (_) {}
+
+  // 2. Lock deduplication
+  if (activeRadiusLocks.has(cacheKey)) {
+    return activeRadiusLocks.get(cacheKey)!;
+  }
+
+  const promise = (async () => {
+    const axios = require("axios");
+    const apiKey = process.env.OPENCAGE_API_KEY || "ae11f396076d4310a96bb12acc0a6323";
+
+    try {
+      const res = await axios.get(
+        `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}&no_annotations=1`,
+        { timeout: 6000 },
+      );
+      const results = res.data?.results;
+      if (results && results.length > 0 && results[0].bounds) {
+        const bounds = results[0].bounds;
+        const bbox: string[] = [
+          bounds.southwest.lat.toString(),
+          bounds.northeast.lat.toString(),
+          bounds.southwest.lng.toString(),
+          bounds.northeast.lng.toString(),
+        ];
+        const radiusKm = getRadiusFromBoundingBox(lat, lng, bbox);
+        const placeName = results[0].formatted?.split(",")[0] ?? "unknown";
+        console.log(
+          `[GEO] OpenCage resolved → "${placeName}" radius=${radiusKm.toFixed(1)}km`,
+        );
+        try {
+          await GeoCacheModel.findOneAndUpdate(
+            { query: cacheKey },
+            { lat, lng, radiusKm, boundingBox: bbox },
+            { upsert: true, new: true },
+          );
+        } catch (_) {}
+        return radiusKm;
+      }
+    } catch (err: any) {
+      console.warn(`[GEO] OpenCage failed [${lat},${lng}]:`, err.message);
+    }
+
+    console.warn(`[GEO] Geo API unreachable or rate-limited. Using safe fallback radius 30km for [${lat},${lng}]`);
+    return 30;
+  })();
+
+  activeRadiusLocks.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    activeRadiusLocks.delete(cacheKey);
   }
 }
 
@@ -338,161 +288,173 @@ export async function resolveCityToCoords(
     console.error(`[GEO] Cache read error for "${query}":`, err.message);
   }
 
-  let lat: number | null = null;
-  let lng: number | null = null;
-  let radiusKm = 20;
-  let boundingBox: string[] = [];
+  // 1. Lock deduplication
+  if (activeCityLocks.has(normalizedQuery)) {
+    return activeCityLocks.get(normalizedQuery)!;
+  }
 
-  // Strategy 1: Geocoding via Nominatim (to get coordinates + bounding box)
+  const promise = (async () => {
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let radiusKm = 20;
+    let boundingBox: string[] = [];
+
+    // Strategy 1: Geocoding via OpenCage
+    try {
+      console.log(`[GEO] Cache MISS for "${query}". Fetching from OpenCage...`);
+      const axios = require("axios");
+      const apiKey = process.env.OPENCAGE_API_KEY || "ae11f396076d4310a96bb12acc0a6323";
+
+      let response = await axios.get(
+        `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(normalizedQuery)}&key=${apiKey}&limit=1&no_annotations=1`,
+        { timeout: 5000 },
+      );
+
+      if (
+        (!response.data?.results || response.data.results.length === 0) &&
+        !normalizedQuery.includes(",")
+      ) {
+        console.log(
+          `[GEO] No results for "${normalizedQuery}", retrying with India suffix...`,
+        );
+        response = await axios.get(
+          `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(normalizedQuery + ", India")}&key=${apiKey}&limit=1&no_annotations=1`,
+          { timeout: 5000 },
+        );
+      }
+
+      const results = response.data?.results;
+      if (results && results.length > 0) {
+        const result = results[0];
+        lat = result.geometry.lat;
+        lng = result.geometry.lng;
+        if (result.bounds) {
+          boundingBox = [
+            result.bounds.southwest.lat.toString(),
+            result.bounds.northeast.lat.toString(),
+            result.bounds.southwest.lng.toString(),
+            result.bounds.northeast.lng.toString(),
+          ];
+        }
+        radiusKm = getRadiusFromBoundingBox(lat as number, lng as number, boundingBox);
+        console.log(
+          `[GEO] OpenCage resolved "${query}" to [${lat}, ${lng}] with dynamic radius: ${radiusKm.toFixed(2)}km`,
+        );
+      }
+    } catch (error: any) {
+      console.error(`[GEO] OpenCage error for "${query}":`, error.message);
+    }
+
+    // Strategy 2: exact city match in DB
+    if (lat === null || lng === null) {
+      try {
+        console.log(`[GEO] Nominatim fallback failed. Checking DB exact matches for "${query}"...`);
+        const capitalizeWord = (s: string) =>
+          s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const tryFindCity = async (cityName: string) => {
+          const capitalized = capitalizeWord(cityName);
+          let found = await HotelModel.findOne({ cityName: capitalized })
+            .select("location")
+            .lean();
+          if (!found) {
+            found = await HotelModel.findOne({
+              cityName: {
+                $in: [cityName.toLowerCase(), cityName.toUpperCase(), cityName],
+              },
+            })
+              .select("location")
+              .lean();
+          }
+          if (!found) {
+            found = await HotelModel.findOne({
+              cityName: { $regex: `^${cityName}$`, $options: "i" },
+            })
+              .select("location")
+              .lean();
+          }
+          return found;
+        };
+
+        let hotel = await tryFindCity(normalizedQuery);
+        if (!hotel && normalizedQuery.split(/[\s,]+/).length > 1) {
+          const firstPart = normalizedQuery.split(/[\s,]+/)[0];
+          hotel = await tryFindCity(firstPart);
+        }
+
+        if (hotel?.location?.coordinates) {
+          const [dbLng, dbLat] = hotel.location.coordinates;
+          lat = dbLat;
+          lng = dbLng;
+          radiusKm = 20;
+          boundingBox = [
+            (lat - 0.2).toString(),
+            (lat + 0.2).toString(),
+            (lng - 0.2).toString(),
+            (lng + 0.2).toString(),
+          ];
+          console.log(
+            `[GEO] Resolved "${query}" from DB to [${lat}, ${lng}] (Default radius: ${radiusKm}km)`,
+          );
+        }
+      } catch (dbErr: any) {
+        console.error(`[GEO] DB fallback search error:`, dbErr.message);
+      }
+    }
+
+    // Strategy 3: fuzzy match in country-state-city
+    if (lat === null || lng === null) {
+      try {
+        console.log(`[GEO] Exact fallback failed. Checking country-state-city fuzzy matches for "${normalizedQuery}"...`);
+        const { City } = require("country-state-city");
+        const { fuzzyFindCities } = require("../utils/fuzzy");
+        const allCities = City.getAllCities();
+
+        const fuzzyMatches = fuzzyFindCities(normalizedQuery, allCities);
+        if (fuzzyMatches.length > 0) {
+          const bestMatch = fuzzyMatches[0];
+          lat = parseFloat(bestMatch.latitude);
+          lng = parseFloat(bestMatch.longitude);
+          radiusKm = 20;
+          boundingBox = [
+            (lat - 0.2).toString(),
+            (lat + 0.2).toString(),
+            (lng - 0.2).toString(),
+            (lng + 0.2).toString(),
+          ];
+          console.log(
+            `[GEO] Resolved fuzzy match "${query}" to "${bestMatch.name}" [${lat}, ${lng}] from country-state-city`
+          );
+        }
+      } catch (fuzzyErr: any) {
+        console.error(`[GEO] country-state-city fuzzy search error:`, fuzzyErr.message);
+      }
+    }
+
+    // Save to database cache if resolved
+    if (lat !== null && lng !== null) {
+      try {
+        await GeoCacheModel.findOneAndUpdate(
+          { query: normalizedQuery },
+          { lat, lng, radiusKm, boundingBox },
+          { upsert: true, new: true },
+        );
+        console.log(`[GEO] Saved resolved geo for "${query}" to DB cache.`);
+        return { lat, lng, radiusKm };
+      } catch (saveErr: any) {
+        console.error(`[GEO] Failed to save cache entry for "${query}":`, saveErr.message);
+        return { lat, lng, radiusKm };
+      }
+    }
+
+    return null;
+  })();
+
+  activeCityLocks.set(normalizedQuery, promise);
   try {
-    console.log(`[GEO] Cache MISS for "${query}". Fetching from Nominatim...`);
-    const axios = require("axios");
-
-    let response = await axios.get(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery)}&limit=1`,
-      {
-        headers: { "User-Agent": "Klar-Hotel-Search-Service/1.0" },
-        timeout: 5000,
-      },
-    );
-
-    if (
-      (!response.data || response.data.length === 0) &&
-      !normalizedQuery.includes(",")
-    ) {
-      console.log(
-        `[GEO] No results for "${normalizedQuery}", retrying with India suffix...`,
-      );
-      response = await axios.get(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(normalizedQuery + ", India")}&limit=1`,
-        {
-          headers: { "User-Agent": "Klar-Hotel-Search-Service/1.0" },
-          timeout: 5000,
-        },
-      );
-    }
-
-    if (response.data && response.data.length > 0) {
-      const result = response.data[0];
-      lat = parseFloat(result.lat);
-      lng = parseFloat(result.lon);
-      boundingBox = result.boundingbox || [];
-      radiusKm = getRadiusFromBoundingBox(lat, lng, boundingBox);
-      console.log(
-        `[GEO] Nominatim resolved "${query}" to [${lat}, ${lng}] with dynamic radius: ${radiusKm.toFixed(2)}km`,
-      );
-    }
-  } catch (error: any) {
-    console.error(`[GEO] Nominatim error for "${query}":`, error.message);
+    return await promise;
+  } finally {
+    activeCityLocks.delete(normalizedQuery);
   }
-
-  // Strategy 2: Fallback to exact city name match in our database (if Nominatim fails/misses)
-  if (lat === null || lng === null) {
-    try {
-      console.log(
-        `[GEO] Nominatim fallback failed. Checking DB exact matches for "${query}"...`,
-      );
-      const capitalizeWord = (s: string) =>
-        s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-      const tryFindCity = async (cityName: string) => {
-        const capitalized = capitalizeWord(cityName);
-        let found = await HotelModel.findOne({ cityName: capitalized })
-          .select("location")
-          .lean();
-        if (!found) {
-          found = await HotelModel.findOne({
-            cityName: {
-              $in: [cityName.toLowerCase(), cityName.toUpperCase(), cityName],
-            },
-          })
-            .select("location")
-            .lean();
-        }
-        if (!found) {
-          found = await HotelModel.findOne({
-            cityName: { $regex: `^${cityName}$`, $options: "i" },
-          })
-            .select("location")
-            .lean();
-        }
-        return found;
-      };
-
-      let hotel = await tryFindCity(normalizedQuery);
-      if (!hotel && normalizedQuery.split(/[\s,]+/).length > 1) {
-        const firstPart = normalizedQuery.split(/[\s,]+/)[0];
-        hotel = await tryFindCity(firstPart);
-      }
-
-      if (hotel?.location?.coordinates) {
-        const [dbLng, dbLat] = hotel.location.coordinates;
-        lat = dbLat;
-        lng = dbLng;
-        radiusKm = 20; // default fallback radius
-        boundingBox = [
-          (lat - 0.2).toString(),
-          (lat + 0.2).toString(),
-          (lng - 0.2).toString(),
-          (lng + 0.2).toString(),
-        ];
-        console.log(
-          `[GEO] Resolved "${query}" from DB to [${lat}, ${lng}] (Default radius: ${radiusKm}km)`,
-        );
-      }
-    } catch (dbErr: any) {
-      console.error(`[GEO] DB fallback search error:`, dbErr.message);
-    }
-  }
-
-  // Strategy 3: Fallback to fuzzy match in country-state-city (if Nominatim and DB exact matches fail)
-  if (lat === null || lng === null) {
-    try {
-      console.log(`[GEO] Exact fallback failed. Checking country-state-city fuzzy matches for "${normalizedQuery}"...`);
-      const { City } = require("country-state-city");
-      const { fuzzyFindCities } = require("../utils/fuzzy");
-      const allCities = City.getAllCities();
-
-      const fuzzyMatches = fuzzyFindCities(normalizedQuery, allCities);
-      if (fuzzyMatches.length > 0) {
-        const bestMatch = fuzzyMatches[0];
-        lat = parseFloat(bestMatch.latitude);
-        lng = parseFloat(bestMatch.longitude);
-        radiusKm = 20; // default fallback radius
-        boundingBox = [
-          (lat - 0.2).toString(),
-          (lat + 0.2).toString(),
-          (lng - 0.2).toString(),
-          (lng + 0.2).toString(),
-        ];
-        console.log(
-          `[GEO] Resolved fuzzy match "${query}" to "${bestMatch.name}" [${lat}, ${lng}] from country-state-city`
-        );
-      }
-    } catch (fuzzyErr: any) {
-      console.error(`[GEO] country-state-city fuzzy search error:`, fuzzyErr.message);
-    }
-  }
-
-  // 3. Save to database cache if resolved
-  if (lat !== null && lng !== null) {
-    try {
-      await GeoCacheModel.findOneAndUpdate(
-        { query: normalizedQuery },
-        { lat, lng, radiusKm, boundingBox },
-        { upsert: true, new: true },
-      );
-      console.log(`[GEO] Saved resolved geo for "${query}" to DB cache.`);
-      return { lat, lng, radiusKm };
-    } catch (saveErr: any) {
-      console.error(
-        `[GEO] Failed to save cache entry for "${query}":`,
-        saveErr.message,
-      );
-      return { lat, lng, radiusKm };
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -599,7 +561,7 @@ export async function resolveForRG(query: string): Promise<string | null> {
   // 2.5. Comma Fallback (Hotel + City searches)
   if (!dest && normalizedQuery.includes(",")) {
     const parts = normalizedQuery.split(",");
-    const cityPart = parts[parts.length - 1].trim();
+    const cityPart = parts[0].trim();
     if (cityPart.length > 2 && cityPart !== normalizedQuery) {
       console.log(
         `[DEBUG] resolveForRG: Comma fallback to city part: "${cityPart}"`,

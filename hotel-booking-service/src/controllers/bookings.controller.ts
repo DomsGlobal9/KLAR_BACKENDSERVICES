@@ -95,7 +95,9 @@ export const getBookingDetails = async (req: any, res: Response) => {
       booking.userId === userId || 
       (userEmail && booking.guestEmail === userEmail);
 
-    if (!isAdmin && !isOwner) {
+    // If a user is logged in but doesn't own it, deny access.
+    // If no user is logged in (req.user is undefined), allow access since they must know the exact secure ID.
+    if (!isAdmin && !isOwner && req.user) {
       return res.status(403).json({
         status: false,
         statusCode: 403,

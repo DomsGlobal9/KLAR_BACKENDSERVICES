@@ -65,15 +65,17 @@ export function mapToTripjackBooking(
             ecn: payload.emergencyContact.name,
         };
     }
-
     if (payload.gstInfo) {
-        result.gstInfo = {
+        const gstInfo: any = {
             gstNumber: payload.gstInfo.gstNumber,
             registeredName: payload.gstInfo.registeredName,
-            // Email: payload.gstInfo.email,
-            // Mobile: payload.gstInfo.mobile,
-            // Address: payload.gstInfo.address,
         };
+
+        if (payload.gstInfo.email?.trim()) gstInfo.email = payload.gstInfo.email.trim();
+        if (payload.gstInfo.mobile?.trim()) gstInfo.mobile = payload.gstInfo.mobile.trim();
+        if (payload.gstInfo.address?.trim()) gstInfo.address = payload.gstInfo.address.trim();
+
+        result.gstInfo = gstInfo;
     }
 
     return result;

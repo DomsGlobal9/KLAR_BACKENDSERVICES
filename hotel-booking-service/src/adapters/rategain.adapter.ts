@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { SupplierAdapter, PrecheckResultV1 } from "../models/PrecheckResult";
 import { rateGainProvider } from "../providers/rategain.provider";
 import { CircuitBreaker } from "../services/CircuitBreaker";
+import { applyPlatformMarkup } from "../utils/pricing.util";
 
 const rateGainCircuitBreaker = new CircuitBreaker(5, 30000); // 5 failures -> Open for 30s
 
@@ -41,30 +42,69 @@ export class RateGainAdapter implements SupplierAdapter {
       );
       const occupancy = option.NumberOfAdults || option.adults || 2;
 
-      const price =
+      const rawPrice =
         option.RoomRate ||
-        option.Pricing?.TotalPrice ||
+        option.totalAmount ||
+        option.sellingRate ||
+        option.totalRate ||
         option.price ||
+        option.net ||
+        option.rate ||
         option.totalPrice ||
+        option.netPrice ||
+        option.displayRatePerNight ||
+        option.lowestRate ||
+        option.Pricing?.TotalPrice ||
         0;
+      
+      const supplierTotal = Number(rawPrice);
 
-      let taxes = 0;
-      if (option.taxes?.taxes && Array.isArray(option.taxes.taxes)) {
-        taxes = option.taxes.taxes.reduce(
-          (sum: number, t: any) =>
-            sum + (Number(t.clientAmount || t.amount) || 0),
-          0,
-        );
-      } else {
-        taxes = Number(
+      const cur =
+        rgRes?.body?.CurrencyCode ||
+        rgRes?.CurrencyCode ||
+        rgRes?.BookReservation?.CurrencyCode ||
+        rgRes?.body?.preCheckResponse?.currency ||
+        option.currency ||
+        "INR";
+
+      let inc = 0;
+      let exc = 0;
+      const taxObj = option.taxes;
+      
+      if (taxObj && Array.isArray(taxObj.taxes)) {
+        taxObj.taxes.forEach((t: any) => {
+          if ((t.clientCurrency || cur) !== cur) return;
+          const amt = Number(t.clientAmount ?? (t.clientCurrency === cur ? t.amount : 0)) || 0;
+          const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
+          if (isInc) {
+            inc += amt;
+          } else {
+            exc += amt;
+          }
+        });
+      }
+
+      let taxAmount = inc + exc;
+      if (taxAmount === 0) {
+        taxAmount = Number(
           option.Tax ||
             option.Pricing?.TotalTax ||
             option.taxAmount ||
             option.totalTax ||
             option.taxes ||
-            0,
+            option.taxesAndFees ||
+            0
         );
       }
+
+      // Base price for validation engine (which sums price + taxes to equal supplierTotal)
+      const taxes = Math.round(taxAmount * 100) / 100;
+      const supplierBase = Math.round((supplierTotal - taxes) * 100) / 100;
+      // Raw amount to pay the supplier (net + taxes, EXCLUDES platform markup)
+      const supplierNet = Math.round(supplierTotal * 100) / 100;
+      // Platform (super-admin) markup baked into the net we validate/charge ("api price")
+      const price = applyPlatformMarkup(supplierBase);
+
 
       const currency =
         rgRes?.body?.CurrencyCode ||
@@ -98,6 +138,7 @@ export class RateGainAdapter implements SupplierAdapter {
           option.RoomSelectionKey || option.optionId || option.rateKey || "",
         price,
         taxes,
+        supplierNet,
         currency,
         phone,
         rateComments,

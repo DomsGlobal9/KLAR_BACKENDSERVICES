@@ -2,6 +2,7 @@ import { rateGainClient } from "../clients/rategain.client";
 import {
   calculateEnrichedPricing,
   calculateNightsFromDates,
+  enrichRateGainPrice,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
 
@@ -172,52 +173,12 @@ export class RateGainApiProvider {
       // ── Enrich each rate with backend-computed pricing (safe — never throws) ──
       const enrichRate = (rate: any) => {
         try {
-          // RateGain getproducts returns RoomRate as the primary price field
-          const totalPrice = Number(
-            rate.RoomRate ||
-              rate.totalAmount ||
-              rate.sellingRate ||
-              rate.totalRate ||
-              rate.price ||
-              rate.net ||
-              rate.rate ||
-              rate.totalPrice ||
-              rate.netPrice ||
-              0,
-          );
-          const taxAmount = Number(
-            rate.taxAmount || rate.taxes || rate.totalTax || rate.tax || 0,
-          );
-          const basePrice = totalPrice - taxAmount;
-          const currency =
-            rate.currency || payload.Currency || payload.currency || "INR";
-
-          const enriched = calculateEnrichedPricing(
-            {
-              basePrice,
-              totalPrice,
-              taxes: taxAmount,
-              mf: 0,
-              mft: 0,
-              currency,
-            },
+          return enrichRateGainPrice(
+            rate,
             markupRules,
             nights,
+            payload.Currency || payload.currency || "INR"
           );
-
-          return {
-            ...rate,
-            price: enriched.finalTotalPrice,
-            netPrice: enriched.basePrice,
-            pricing: {
-              totalPrice,
-              taxes: taxAmount,
-              mf: 0,
-              mft: 0,
-              currency,
-              ...enriched,
-            },
-          };
         } catch {
           return rate; // fallback: return rate unchanged if enrichment fails
         }
@@ -241,7 +202,9 @@ export class RateGainApiProvider {
                 ? obj.rates
                 : null;
             if (rates) {
-              const enrichedRates = rates.map(enrichRate);
+              const enrichedRates = rates
+                .map(enrichRate)
+                .sort((a: any, b: any) => (a.price || 0) - (b.price || 0));
               return { ...obj, rate: enrichedRates, rates: enrichedRates };
             }
             // If it's a rate itself

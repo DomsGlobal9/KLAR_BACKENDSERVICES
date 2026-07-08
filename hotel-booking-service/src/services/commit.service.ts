@@ -3,7 +3,7 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { tripJackAdapter } from "../adapters/tripjack.adapter";
 import { rateGainAdapter } from "../adapters/rategain.adapter";
 import { ValidationEngine, StructuredError } from "./ValidationEngine";
-import { BookingStatus, BookingProvider } from "../models/Booking.model";
+import { BookingStatus, BookingProvider, IUserInfo } from "../models/Booking.model";
 import { BookingEventLogger } from "../models/BookingEvent";
 import { RedisLockUtil } from "./RedisLockUtil";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
@@ -128,6 +128,7 @@ class CommitService {
     token?: string,
     clientType: string = "B2C",
     requestId: string = "",
+    userInfo?: IUserInfo,
   ) {
     const propertyId = (
       payload.propertyId ||
@@ -161,6 +162,7 @@ class CommitService {
           token,
           clientType,
           requestId,
+          userInfo,
         );
       }
       return this.#commitRateGain(
@@ -170,6 +172,7 @@ class CommitService {
         token,
         clientType,
         requestId,
+        userInfo,
       );
     });
   }
@@ -181,6 +184,7 @@ class CommitService {
     token?: string,
     clientType: string = "B2C",
     requestId: string = "",
+    userInfo?: IUserInfo,
   ) {
     if (clientType === "B2B" && !token)
       throw new Error("Authentication token is required for B2B booking.");
@@ -310,7 +314,8 @@ class CommitService {
         paymentProcessed = true;
       }
 
-      // PHASE 4: Provider Booking (Send ONLY Net Price)
+      // PHASE 4: Provider Booking (pay the supplier the RAW net — EXCLUDES platform markup)
+      const supplierAmount = freshPrecheck.supplierNet ?? netPrice;
       const tjPayload = {
         bookingId,
         type: "HOTEL",
@@ -318,7 +323,7 @@ class CommitService {
         deliveryInfo: payload.deliveryInfo,
         ...(payload.gstInfo && { gstInfo: payload.gstInfo }),
         // Guaranteed positive net amount injection for instant confirmations; strict omission for holds
-        paymentInfos: !isHoldIntent ? [{ amount: netPrice }] : undefined,
+        paymentInfos: !isHoldIntent ? [{ amount: supplierAmount }] : undefined,
       };
 
       const tjResponse = await tripJackProvider.commit(tjPayload);
@@ -378,6 +383,7 @@ class CommitService {
         tripJackRequest: tjPayload, // Cache the compiled outbound request payload
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        userInfo,
       });
 
       pollTripJackBookingStatus(
@@ -417,6 +423,7 @@ class CommitService {
     token?: string,
     clientType: string = "B2C",
     requestId: string = "",
+    userInfo?: IUserInfo,
   ) {
     if (clientType === "B2B" && !token)
       throw new Error("Authentication token is required for B2B booking.");
@@ -515,6 +522,25 @@ class CommitService {
 
       // PHASE 4: Provider Booking
       const rgPayload = { ...(payload.bookingPayload || payload) };
+
+      // Override RoomTypeCode and allocationDetails with the validated values from freshPrecheck
+      const validatedRooms = freshPrecheck.originalResponse?.body?.preCheckResponse?.rooms || [];
+      if (validatedRooms.length > 0) {
+        const selections = rgPayload.BookReservation?.RoomSelection || rgPayload.RoomSelection || [];
+        selections.forEach((rs: any, idx: number) => {
+          const validatedRoom = validatedRooms[idx] || validatedRooms[0];
+          const validatedRoomCode = validatedRoom?.RoomCode;
+          const validatedAllocation = validatedRoom?.rates?.[0]?.allocationDetails || validatedRoom?.allocationDetails;
+          
+          if (validatedRoomCode) {
+            rs.RoomTypeCode = validatedRoomCode;
+          }
+          if (validatedAllocation) {
+            rs.allocationDetails = validatedAllocation;
+          }
+        });
+      }
+
       const b2cSellingRate = Number(
         payload.sellingRate ||
           payload.BookReservation?.sellingRate ||
@@ -524,17 +550,17 @@ class CommitService {
 
       const roundedNetPrice = Number(netPrice.toFixed(2));
       const roundedSellingRate = clientType === "B2C" ? Number(b2cSellingRate.toFixed(2)) : roundedNetPrice;
+      // Pay the supplier the RAW net (EXCLUDES platform markup); fall back to netPrice if unavailable.
+      const supplierBookingRate = Number(
+        (freshPrecheck.supplierNet ?? netPrice).toFixed(2),
+      );
 
       if (rgPayload.BookReservation) {
-        rgPayload.BookReservation.BookingRate = roundedNetPrice;
-        rgPayload.BookReservation.sellingRate = roundedSellingRate;
-        rgPayload.BookReservation.SellingRate = roundedSellingRate;
+        rgPayload.BookReservation.BookingRate = supplierBookingRate;
         delete rgPayload.BookReservation.GuaranteeMethod;
         delete rgPayload.BookReservation.GuaranteeType;
       } else {
-        rgPayload.BookingRate = roundedNetPrice;
-        rgPayload.sellingRate = roundedSellingRate;
-        rgPayload.SellingRate = roundedSellingRate;
+        rgPayload.BookingRate = supplierBookingRate;
         delete rgPayload.GuaranteeMethod;
         delete rgPayload.GuaranteeType;
       }
@@ -648,8 +674,13 @@ class CommitService {
           rgResponse?.body?.booking?.hotel?.rooms?.[0]?.rates?.[0]?.paymentType,
         rateGainRequest: rgPayload,
         rateGainResponse: rgResponse,
+        brandCode:
+          rgPayload.BookReservation?.BrandCode ||
+          rgPayload.BrandCode ||
+          undefined,
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        userInfo,
       });
 
       notificationService.sendBookingConfirmation(saved);
