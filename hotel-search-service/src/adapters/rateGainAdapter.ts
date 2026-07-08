@@ -1,7 +1,7 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
-import { getRGRawPrice, extractRGTaxes, round2 } from "../utils/pricing.util";
+import { getRGRawPrice, extractRGTaxes, round2, deriveRefundable } from "../utils/pricing.util";
 
 export async function searchRG(
   req: UnifiedSearchRequest,
@@ -318,9 +318,22 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   const finalTotalPrice = round2(totalPrice);
   const netBasePrice = round2(totalPrice - taxAmt);
 
+  // Refundable status derived once, server-side (RG exposes no explicit flag)
+  const refundable = deriveRefundable({
+    cancellationPolicies:
+      h.cancellationPolicies ||
+      h.options?.[0]?.cancellationPolicies ||
+      h.roomRates?.[0]?.cancellationPolicies,
+    rateComments:
+      h.rateComments || h.options?.[0]?.rateComments || h.roomRates?.[0]?.rateComments,
+  });
+
   return {
     hotelId: `RG:${h.propertyId}`,
     source: "RG",
+    isRefundable: refundable.isRefundable,
+    refundableLabel: refundable.label,
+    freeCancellationUntil: refundable.freeCancellationUntil,
     name: h.propertyName || h.hotelName || h.name || h.propertyNameClean || h.HotelName || "",
     address: h.address || h.hotelAddress || "",
     city: h.city || h.cityName || h.destinationName || h.CityName || "",

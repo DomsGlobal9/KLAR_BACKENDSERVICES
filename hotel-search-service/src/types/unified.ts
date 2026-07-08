@@ -54,6 +54,8 @@ export interface UnifiedHotel {
   accMultiDesc?: string;
   accomodationType?: string;
   isRefundable?: boolean;
+  refundableLabel?: string; // display-ready, e.g. "Free cancellation till 06 Jul" / "Non-Refundable"
+  freeCancellationUntil?: string | null; // ISO date penalties begin, null when non-refundable
   onHoldAllowed?: boolean;
   holdConfirm?: boolean;
   amenities: string[];

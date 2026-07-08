@@ -1,4 +1,5 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
+import { deriveRefundable } from "../utils/pricing.util";
 import { resolveForTJ } from "../services/destinationResolver";
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
@@ -273,6 +274,10 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
   const opt = h.options?.[0];
   const hotelId = h.tjHotelId || h.hotelId || h.id;
   const rating = parseInt(h.rating) || 0;
+  const refundable = deriveRefundable({
+    explicit: opt?.cancellation?.isRefundable,
+    cancellationPolicies: opt?.cancellation?.penalties,
+  });
   const finalAmenities =
     h.amenities && h.amenities.length > 0
       ? h.amenities
@@ -307,7 +312,9 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     accTypeDesc: h.accTypeDesc,
     accMultiDesc: h.accMultiDesc,
     accomodationType: h.accomodationType,
-    isRefundable: opt?.cancellation?.isRefundable,
+    isRefundable: refundable.isRefundable,
+    refundableLabel: refundable.label,
+    freeCancellationUntil: refundable.freeCancellationUntil,
     onHoldAllowed:
       opt?.onHoldAllowed ??
       opt?.cancellation?.onHoldAllowed ??
