@@ -70,9 +70,9 @@ export const createRazorpayOrderService = async (
         currency: currency,
         receipt: orderId,
         notes: {
-            userId: data.userId,
-            userEmail: data.userEmail,
-            mobile: data.mobile,
+            userId: data.userId || 'guest',
+            userEmail: data.userEmail || 'guest',
+            mobile: data.mobile || 'guest',
             clientType: data.clientType,
             orderId: orderId,
             platform: data.platform,

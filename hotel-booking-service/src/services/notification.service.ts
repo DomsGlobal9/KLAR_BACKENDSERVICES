@@ -83,10 +83,14 @@ class NotificationService {
       );
       return response.data;
     } catch (error: any) {
-      console.error(
-        `[NotificationService] Error sending booking confirmation:`,
-        error.response?.data || error.message,
-      );
+      console.error(`[NotificationService] Error sending booking confirmation:`);
+      console.error(`Message:`, error.message);
+      if (error.response) {
+        console.error(`Response Status:`, error.response.status);
+        console.error(`Response Data:`, error.response.data);
+      } else {
+        console.error(`Code:`, error.code);
+      }
     }
   }
 }

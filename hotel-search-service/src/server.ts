@@ -15,13 +15,7 @@ async function start() {
   // Connect to MongoDB first
   await connectDB();
 
-  // Seed default geo cache values
-  try {
-    const { seedDefaultGeo } = require("./services/destinationResolver");
-    await seedDefaultGeo();
-  } catch (err: any) {
-    console.error("❌ Failed to seed default geo cache:", err.message);
-  }
+
 
   // Seed default popular areas
   try {

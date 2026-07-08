@@ -73,11 +73,11 @@ export function validateBookingPayload(payload: FrontendBookingPayload) {
         throw new Error("Infants cannot exceed adults");
     }
 
-    if (payload.gstInfo?.gstNumber) {
-        if (!GST_REGEX.test(payload.gstInfo.gstNumber)) {
-            throw new Error("Invalid GST");
-        }
-    }
+    // if (payload.gstInfo?.gstNumber) {
+    //     if (!GST_REGEX.test(payload.gstInfo.gstNumber)) {
+    //         throw new Error("Invalid GST");
+    //     }
+    // }
 
     if (payload.emergencyContact) {
         if (!PHONE_REGEX.test(payload.emergencyContact.phone)) {
