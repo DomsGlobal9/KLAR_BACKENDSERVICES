@@ -23,7 +23,7 @@ export class RateGainApiProvider {
     }
   }
 
-  async getBestProperties(payload: any, signal?: AbortSignal | null) {
+  async getBestProperties(payload: any) {
     const rateGainPayload: any = {
       destinationCode: payload.destinationCode || payload.destCode,
       checkin: payload.checkin || payload.checkIn,
@@ -77,15 +77,9 @@ export class RateGainApiProvider {
       const res = await rateGainClient.post(
         "/api/SmartDistribution/bestproperties",
         rateGainPayload,
-        { signal: signal ?? undefined },
       );
       return res.data;
     } catch (error: any) {
-      // Deliberate cancellation once the partial-return window elapsed — surface
-      // it quietly so the orchestrator's catch drops it without logging noise.
-      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
-        throw error;
-      }
       console.error(
         "[RateGain] BestProperties Error:",
         error.response?.status,
@@ -120,15 +114,6 @@ export class RateGainApiProvider {
 
     // Start markup fetch in parallel — doesn't block the RateGain API call
     const markupRulesPromise = getMarkupRules(token);
-
-    // Same for the static-data lookup: it enriches the response but nothing in
-    // the RateGain call depends on it, so it must not sit behind it.
-    const staticHotelPromise = HotelModel.findOne({ tjHotelId: propertyId })
-      .lean()
-      .catch((err) => {
-        console.warn("[RateGain] Failed to fetch static data from DB:", err);
-        return null;
-      });
 
     const rateGainPayload: any = {
       propertyID: propertyId,
@@ -175,12 +160,9 @@ export class RateGainApiProvider {
     }
 
     try {
-      console.log(`[RateGain] Requesting products for property ${propertyId}`);
-      if (DEBUG_PAYLOADS) {
-        console.log(
-          `[RateGain] Products payload: ${JSON.stringify(rateGainPayload, null, 2)}`,
-        );
-      }
+      console.log(
+        `[RateGain] Requesting Products: ${JSON.stringify(rateGainPayload, null, 2)}`,
+      );
       const res = await rateGainClient.post(
         "/api/SmartDistribution/getproducts",
         rateGainPayload,
