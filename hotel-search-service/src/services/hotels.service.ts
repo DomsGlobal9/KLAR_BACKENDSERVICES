@@ -238,7 +238,24 @@ Reported Total to UI:      ${totalToUI}
       }
 
       // Price range (against marked-up price)
-      if (filters.priceRange && filters.priceRange[1] > 0) {
+      if (filters.priceRanges && filters.priceRanges.length > 0) {
+        filteredResults = filteredResults.filter((h) => {
+          const enriched = calculateEnrichedPricing(
+            {
+              basePrice: h.basePrice ?? h.price,
+              totalPrice: h.price,
+              taxes: h.taxAmount ?? 0,
+              mf: 0,
+              mft: 0,
+              currency: h.currency,
+            },
+            markupRules,
+            nights
+          );
+          const price = enriched.finalTotalPrice;
+          return filters.priceRanges!.some(([minP, maxP]) => price >= minP && price <= maxP);
+        });
+      } else if (filters.priceRange && filters.priceRange[1] > 0) {
         const [minP, maxP] = filters.priceRange;
         filteredResults = filteredResults.filter((h) => {
           const enriched = calculateEnrichedPricing(

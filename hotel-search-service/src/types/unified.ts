@@ -1,6 +1,7 @@
 export interface UnifiedFilters {
   starRatings?: number[];
   priceRange?: [number, number];
+  priceRanges?: Array<[number, number]>;
   mealTypes?: string[];
   propertyTypes?: string[];
   amenities?: string[];

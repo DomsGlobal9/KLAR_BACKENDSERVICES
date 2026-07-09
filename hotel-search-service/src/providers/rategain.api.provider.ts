@@ -4,6 +4,7 @@ import {
   calculateNightsFromDates,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
+import { HotelModel } from "../models/Hotel.model";
 
 export class RateGainApiProvider {
   async getDestinations() {
@@ -172,8 +173,15 @@ export class RateGainApiProvider {
       // ── Enrich each rate with backend-computed pricing (safe — never throws) ──
       const enrichRate = (rate: any) => {
         try {
+          const parseAmt = (val: any) => {
+            if (typeof val === 'number') return isNaN(val) ? 0 : val;
+            if (!val) return 0;
+            const parsed = Number(val.toString().replace(/,/g, ''));
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
           // RateGain getproducts returns RoomRate as the primary price field
-          const totalPrice = Number(
+          const totalPrice = parseAmt(
             rate.RoomRate ||
               rate.totalAmount ||
               rate.sellingRate ||
@@ -185,19 +193,18 @@ export class RateGainApiProvider {
               rate.netPrice ||
               0,
           );
-          // Helper to extract included and excluded taxes
+
           let includedTaxAmt = 0;
           let excludedTaxAmt = 0;
 
+          // Process taxes
           const extractTaxDetails = (taxObj: any) => {
             if (!taxObj) return null;
-            if (typeof taxObj === "number") return { inc: 0, exc: taxObj };
-            if (typeof taxObj === "string") return { inc: 0, exc: Number(taxObj) || 0 };
-            if (Array.isArray(taxObj.taxes)) {
+            if (taxObj.taxes && Array.isArray(taxObj.taxes)) {
               let inc = 0;
               let exc = 0;
               taxObj.taxes.forEach((t: any) => {
-                const amt = Number(t.clientAmount || t.amount) || 0;
+                const amt = parseAmt(t.clientAmount || t.amount);
                 const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
                 if (isInc) {
                   inc += amt;
@@ -215,7 +222,7 @@ export class RateGainApiProvider {
             includedTaxAmt = taxDet.inc;
             excludedTaxAmt = taxDet.exc;
           } else {
-            excludedTaxAmt = Number(
+            excludedTaxAmt = parseAmt(
               rate.taxAmount || rate.totalTax || rate.tax || rate.taxesAndFees || 0
             );
           }
@@ -295,7 +302,36 @@ export class RateGainApiProvider {
           return newObj;
         };
 
-        return enrichDeep(rawData);
+        let finalData = enrichDeep(rawData);
+
+        try {
+          const staticHotel = await HotelModel.findOne({
+            tjHotelId: propertyId,
+          }).lean();
+
+          if (staticHotel) {
+            finalData = {
+              ...finalData,
+              images: staticHotel.images || [],
+              name: staticHotel.name,
+              address: staticHotel.address,
+              city: staticHotel.cityName,
+              starRating: staticHotel.starRating,
+              latitude: staticHotel.location?.coordinates?.[1],
+              longitude: staticHotel.location?.coordinates?.[0],
+              description: staticHotel.accMultiDesc || staticHotel.accTypeDesc || "",
+            };
+          }
+        } catch (dbErr) {
+          console.warn("[RateGain] Failed to fetch static data from DB:", dbErr);
+        }
+
+        return {
+          status: true,
+          statusCode: 200,
+          description: "Success",
+          body: finalData
+        };
       } catch (enrichErr: any) {
         console.warn(
           "[RateGain] Pricing enrichment warning (non-fatal):",
