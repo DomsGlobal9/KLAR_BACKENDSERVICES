@@ -1,7 +1,9 @@
 import axios from "axios";
+import Handlebars from 'handlebars';
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../config/env.config";
 import { Booking } from "../types/bookingLocal.types";
+import { getLogoBase64 } from "../utils/helper/logo.utils";
 import { formatPhoneNumber } from "../utils/helper/phoneFormater.helper";
 import { BookingRepository } from "../repositories/bookingLocal.repository";
 import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
@@ -9,6 +11,8 @@ import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
 import { FrontendBookingPayload } from "../types/booking.types";
 import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
+import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
+import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
 
 
 class BookingService {
@@ -31,8 +35,196 @@ class BookingService {
         }
     }
 
+    private async sendBookingEmails(bookingId: string) {
+        try {
+            const booking = await this.bookingRepo.getBookingById(bookingId);
+            if (!booking) return;
+
+            const [tripjackData, dbData] = await Promise.all([
+                TripjackBookingService.getBookingDetails(bookingId),
+                this.getBookingDetails(bookingId),
+            ]);
+
+            if (!tripjackData) return;
+
+            await this.bookingRepo.updateBookingStatus(bookingId, tripjackData?.order?.status);
+
+            // Get emails
+            const travellerEmail = tripjackData?.order?.DeliveryInformation?.Emails?.[0] ||
+                tripjackData?.order?.contactInfo?.emails?.[0] ||
+                booking?.email || "";
+
+            const agentEmail = dbData?.userInfo?.email || "";
+
+            // Prepare data for template
+            const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
+            const segments = [];
+            for (const trip of tripInfo) {
+                for (const segment of (trip.SegmentInformation || [])) {
+                    segments.push({
+                        departureAirport: segment.DepartureAirport,
+                        arrivalAirport: segment.ArrivalAirport,
+                        departureTime: segment.DepartureTime,
+                        arrivalTime: segment.ArrivalTime,
+                        flightDetails: segment.FlightDetails,
+                        duration: segment.Duration,
+                        numberOfStops: segment.NumberOfStops,
+                        baggageInfo: segment.BaggageInfo,
+                    });
+                }
+            }
+
+            const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
+            const formattedTravellers = travellers.map((t: any) => ({
+                title: t.Title || '',
+                firstName: t.FirstName || '',
+                lastName: t.LastName || '',
+                paxType: t.PaxType || '',
+                dateOfBirth: t.DateOfBirth || '',
+                seatInfo: t.SSR_Seat_Information || {},
+                mealInfo: t.SSR_Meal_Information || {},
+                baggageInfo: t.SSR_Baggage_Information || {},
+                pnrDetails: t.pnrDetails || {}
+            }));
+
+            const templateData = {
+                bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
+                bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
+                status: tripjackData?.order?.status || '',
+                totalAmount: tripjackData?.order?.Amount || 0,
+                totalPrice: booking?.totalPrice || 0,
+                markupPrice: booking?.markupPrice || 0,
+                tripjackPrice: booking?.tripjackPrice || 0,
+                travellers: formattedTravellers,
+                segments: segments,
+                emergencyContact: tripjackData?.order?.EmergencyContactInformation || {},
+                travellerEmail: booking?.email || '',
+                agentEmail: dbData?.userInfo?.email || '',
+                isMultiCity: segments.length > 1,
+                isRoundTrip: segments.length === 2,
+                isOneWay: segments.length === 1
+            };
+
+            // Register helpers globally
+            Handlebars.registerHelper('formatDate', function (dateString: string) {
+                if (!dateString) return 'N/A';
+                return new Date(dateString).toLocaleString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            });
+
+            Handlebars.registerHelper('formatTime', function (dateString: string) {
+                if (!dateString) return 'N/A';
+                return new Date(dateString).toLocaleString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            });
+
+            Handlebars.registerHelper('formatPrice', function (price: number) {
+                if (!price) return '₹0';
+                return `₹${price.toFixed(2)}`;
+            });
+
+            Handlebars.registerHelper('getAirlineName', function (airlineInfo: any) {
+                return airlineInfo?.AirlineName || 'N/A';
+            });
+
+            // Compile templates
+            const clientTemplate = Handlebars.compile(flightBookingConfirmationTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            const agencyTemplate = Handlebars.compile(flightAgencyBookingConfirmationTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            // Send emails
+            if (travellerEmail) {
+                await this.sendEmail(
+                    travellerEmail,
+                    `Flight Booking Confirmation - ${bookingId}`,
+                    clientTemplate(templateData)
+                );
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                await this.sendEmail(
+                    agentEmail,
+                    `Flight Booking Confirmation - ${bookingId} (Agency Copy)`,
+                    agencyTemplate(templateData)
+                );
+            }
+
+        } catch (error) {
+            console.error(`Email failed for ${bookingId}:`, error);
+        }
+    }
+
+    private async processBookingAftermath(
+        updatedBooking: any,
+        bookingId: string
+    ) {
+        try {
+            console.log(`📦 [Booking] Processing aftermath for ${bookingId}`);
+            console.log(`📦 [Update Booking] Processing aftermath for ${updatedBooking}`);
+
+            const [tripjackBookingStatus, ownDatabaseBookingStatus] = await Promise.all([
+                TripjackBookingService.getBookingDetails(updatedBooking.bookingId),
+                this.getBookingDetails(updatedBooking.bookingId),
+            ]);
+
+            await this.bookingRepo.updateBookingStatus(
+                bookingId,
+                tripjackBookingStatus?.order?.status
+            );
+
+            const travellerEmail = tripjackBookingStatus?.order?.DeliveryInformation?.Emails?.[0] ||
+                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+                updatedBooking?.email || "";
+
+            const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
+
+            console.log(`📧 [Booking] Traveller Email: ${travellerEmail}`);
+            console.log(`📧 [Booking] Agent Email: ${agentEmail}`);
+
+            const html = flightConfirmationTemplate(tripjackBookingStatus);
+            const subject = `Flight Booking Confirmation - ${updatedBooking.bookingId}`;
+
+            if (travellerEmail) {
+                await this.sendEmail(
+                    travellerEmail,
+                    subject,
+                    html
+                );
+                console.log(`✅ [Booking] Email sent to traveller: ${travellerEmail}`);
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                await this.sendEmail(
+                    agentEmail,
+                    subject,
+                    html
+                );
+                console.log(`✅ [Booking] Email sent to agent: ${agentEmail}`);
+            }
+
+            console.log(`✅ [Booking] Aftermath completed for ${bookingId}`);
+        } catch (error: any) {
+            console.error(`❌ [Booking] Aftermath failed for ${bookingId}:`, error.message);
+        }
+    }
+
     async createInitialBooking(data: Partial<Booking>, userData: any) {
-        
+
         if (!data.bookingId) {
             throw new Error("bookingId is required");
         }
@@ -230,18 +422,10 @@ class BookingService {
         }
 
         const priceUpdateQuery: any = {};
-        if (tripjackPrice !== undefined) {
-            priceUpdateQuery.tripjackPrice = tripjackPrice;
-        }
-        if (markupPrice !== undefined) {
-            priceUpdateQuery.markupPrice = markupPrice;
-        }
-        if (totalPrice !== undefined) {
-            priceUpdateQuery.totalPrice = totalPrice;
-        }
-        if (isHold !== undefined) {
-            priceUpdateQuery.isHold = isHold;
-        }
+        if (tripjackPrice !== undefined) priceUpdateQuery.tripjackPrice = tripjackPrice;
+        if (markupPrice !== undefined) priceUpdateQuery.markupPrice = markupPrice;
+        if (totalPrice !== undefined) priceUpdateQuery.totalPrice = totalPrice;
+        if (isHold !== undefined) priceUpdateQuery.isHold = isHold;
 
         if (Object.keys(priceUpdateQuery).length > 0) {
             await this.bookingRepo.updatePrices(bookingId, priceUpdateQuery);
@@ -272,35 +456,11 @@ class BookingService {
         }
 
         const mapped = mapToTripjackBooking(tripjackPayload);
-
         const response = await TripjackBookingService.book(mapped);
 
         if (response?.data?.status?.success === true) {
-            try {
-                const tripjackBookingStatus = await TripjackBookingService.getBookingDetails(updatedBooking.bookingId);
-
-                await this.bookingRepo.updateBookingStatus(
-                    bookingId,
-                    tripjackBookingStatus?.order?.status
-                );
-
-                const to = tripjackBookingStatus?.order?.deliveryInfo?.emails?.[0] ||
-                    tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
-                    updatedBooking?.email || "";
-
-                if (to) {
-                    const html = flightConfirmationTemplate(tripjackBookingStatus);
-                    await this.sendEmail(
-                        to,
-                        `Flight Booking Confirmation - ${updatedBooking.bookingId}`,
-                        html
-                    );
-                }
-
-                return response.data;
-            } catch (error: any) {
-                return response.data;
-            }
+            this.sendBookingEmails(bookingId);
+            return response.data;
         } else {
             return null;
         }
@@ -331,9 +491,10 @@ class BookingService {
     }
 
     async getBookingDetailsByUser(bookingId: string, userId: string) {
-        if (!bookingId || !userId) {
-            throw new Error("bookingId and userId are required");
+        if (!bookingId) {
+            throw new Error("bookingId is required");
         }
+
 
         const booking = await this.bookingRepo.getBookingByIdAndUser(
             bookingId,
@@ -352,6 +513,9 @@ class BookingService {
             return this.getBookingDetailsBySource(bookingId, source);
         } else if (userId) {
             return this.getBookingDetailsByUser(bookingId, userId);
+        }
+        else {
+            return this.bookingRepo.getBookingById(bookingId);
         }
         throw new Error("Either userId or source must be provided");
     }
@@ -376,6 +540,210 @@ class BookingService {
         }
 
         return await this.bookingRepo.getBookingsByEmail(email);
+    }
+
+
+
+
+
+
+
+    // ===================================
+    // ===================================
+    // ==========TESTING==================
+    // ===================================
+    // ===================================
+
+
+
+    async processBookingAftermathById(bookingId: string) {
+        try {
+            console.log(`🧪 [TEST] Processing aftermath for booking: ${bookingId}`);
+
+            const booking = await this.bookingRepo.getBookingById(bookingId);
+            if (!booking) {
+                throw new Error("Booking not found");
+            }
+
+            const [tripjackBookingStatus, ownDatabaseBookingStatus] = await Promise.all([
+                TripjackBookingService.getBookingDetails(bookingId),
+                this.getBookingDetails(bookingId),
+            ]);
+
+            console.log("******************** TRIP Jack Booking Status get: \n", JSON.stringify(tripjackBookingStatus, null, 2));
+            console.log("******************** Own Database Booking Status get: \n", JSON.stringify(ownDatabaseBookingStatus, null, 2));
+
+            if (!tripjackBookingStatus) {
+                throw new Error("Failed to get booking details from Tripjack");
+            }
+
+            const travellerEmail = tripjackBookingStatus?.order?.DeliveryInformation?.Emails?.[0] ||
+                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+                booking?.email || "";
+
+            const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
+
+            console.log(`📧 [TEST] Traveller Email: ${travellerEmail}`);
+            console.log(`📧 [TEST] Agent Email: ${agentEmail}`);
+
+            // Register helpers
+            Handlebars.registerHelper('formatDate', function (dateString: string) {
+                if (!dateString) return 'N/A';
+                const date = new Date(dateString);
+                return date.toLocaleString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            });
+
+            Handlebars.registerHelper('formatTime', function (dateString: string) {
+                if (!dateString) return 'N/A';
+                const date = new Date(dateString);
+                return date.toLocaleString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            });
+
+            Handlebars.registerHelper('formatPrice', function (price: number) {
+                if (!price) return '₹0';
+                return `₹${price.toFixed(2)}`;
+            });
+
+            Handlebars.registerHelper('getAirlineName', function (airlineInfo: any) {
+                return airlineInfo?.AirlineName || 'N/A';
+            });
+
+            Handlebars.registerHelper('getFlightNumber', function (flightDetails: any) {
+                return flightDetails?.FirstName || 'N/A';
+            });
+
+            // Transform data for templates
+            const templateData = this.prepareTemplateData(
+                tripjackBookingStatus,
+                ownDatabaseBookingStatus,
+                booking
+            );
+
+            console.log(`📧 [TEST] Template Data:`, JSON.stringify(templateData, null, 2));
+
+            // Compile templates with proper options
+            const clientTemplate = Handlebars.compile(flightBookingConfirmationTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            const agencyTemplate = Handlebars.compile(flightAgencyBookingConfirmationTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            if (travellerEmail) {
+                const clientHtml = clientTemplate(templateData);
+                await this.sendEmail(
+                    travellerEmail,
+                    `Flight Booking Confirmation - ${bookingId}`,
+                    clientHtml
+                );
+                console.log(`✅ [TEST] Client email sent to traveller: ${travellerEmail}`);
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                const agencyHtml = agencyTemplate(templateData);
+                await this.sendEmail(
+                    agentEmail,
+                    `Flight Booking Confirmation - ${bookingId} (Agency Copy)`,
+                    agencyHtml
+                );
+                console.log(`✅ [TEST] Agency email sent to agent: ${agentEmail}`);
+            }
+
+            console.log(`✅ [TEST] Aftermath completed for ${bookingId}`);
+
+            return {
+                success: true,
+                bookingId,
+                status: tripjackBookingStatus?.order?.status,
+                emailSent: {
+                    traveller: !!travellerEmail,
+                    agent: !!agentEmail && agentEmail !== travellerEmail
+                },
+                emails: {
+                    traveller: travellerEmail || null,
+                    agent: (agentEmail && agentEmail !== travellerEmail) ? agentEmail : null
+                }
+            };
+        } catch (error: any) {
+            console.error(`❌ [TEST] Aftermath failed for ${bookingId}:`, error.message);
+            return {
+                success: false,
+                bookingId,
+                error: error.message
+            };
+        }
+    }
+
+
+    private prepareTemplateData(tripjackData: any, dbData: any, booking: any) {
+        const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
+        const segments = [];
+
+        // Extract all segments from all trips
+        for (const trip of tripInfo) {
+            const segmentInfo = trip.SegmentInformation || [];
+            for (const segment of segmentInfo) {
+                segments.push({
+                    departureAirport: segment.DepartureAirport,
+                    arrivalAirport: segment.ArrivalAirport,
+                    departureTime: segment.DepartureTime,
+                    arrivalTime: segment.ArrivalTime,
+                    flightDetails: segment.FlightDetails,
+                    duration: segment.Duration,
+                    numberOfStops: segment.NumberOfStops,
+                    baggageInfo: segment.BaggageInfo,
+                    segmentNumber: segment.SegmentNumber
+                });
+            }
+        }
+
+        // Extract traveller information
+        const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
+        const formattedTravellers = travellers.map((traveller: any) => ({
+            title: traveller.Title || '',
+            firstName: traveller.FirstName || '',
+            lastName: traveller.LastName || '',
+            paxType: traveller.PaxType || '',
+            dateOfBirth: traveller.DateOfBirth || '',
+            seatInfo: traveller.SSR_Seat_Information || {},
+            mealInfo: traveller.SSR_Meal_Information || {},
+            baggageInfo: traveller.SSR_Baggage_Information || {},
+            pnrDetails: traveller.pnrDetails || {}
+        }));
+
+        return {
+            bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
+            bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
+            status: tripjackData?.order?.status || '',
+            totalAmount: tripjackData?.order?.Amount || 0,
+            totalPrice: booking?.totalPrice || 0,
+            markupPrice: booking?.markupPrice || 0,
+            tripjackPrice: booking?.tripjackPrice || 0,
+            travellers: formattedTravellers,
+            segments: segments,
+            emergencyContact: tripjackData?.order?.EmergencyContactInformation || {},
+            deliveryInfo: tripjackData?.order?.DeliveryInformation || {},
+            travellerEmail: booking?.email || '',
+            agentEmail: dbData?.userInfo?.email || '',
+            userInfo: dbData?.userInfo || {},
+            isMultiCity: segments.length > 1,
+            isRoundTrip: segments.length === 2,
+            isOneWay: segments.length === 1
+        };
     }
 }
 

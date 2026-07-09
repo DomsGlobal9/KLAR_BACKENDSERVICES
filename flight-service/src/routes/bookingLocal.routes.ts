@@ -10,4 +10,12 @@ router.get("/my-bookings", BookingLocalController.getUserBookings);
 router.get("/details/:bookingId", BookingLocalController.getBookingById);
 router.get('/check-email', BookingLocalController.checkBookingByEmail);
 
+// ===================================
+// ===================================
+// ==========TESTING==================
+// ===================================
+// ===================================
+
+router.post('/test', BookingLocalController.testProcessAftermath);
+
 export default router;

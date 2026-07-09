@@ -609,6 +609,35 @@ class BookingLocalController {
             });
         }
     };
+
+    // =======
+    // TESTING
+    // =======
+
+    public testProcessAftermath = async (req: Request, res: Response) => {
+        try {
+            const bookingId = req.params.bookingId || req.query.bookingId || req.body.bookingId;
+
+            if (!bookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "bookingId is required"
+                });
+            }
+
+            console.log(`🧪 [API] Testing processBookingAftermath for: ${bookingId}`);
+
+            const result = await BookingService.processBookingAftermathById(bookingId);
+
+            res.status(result.success ? 200 : 500).json(result);
+        } catch (error: any) {
+            console.error(`❌ [API] Test error:`, error.message);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    };
 }
 
 export default new BookingLocalController();

@@ -1,9 +1,9 @@
-import { Router } from "express";
-import FlightDocumentController from "../controllers/flight-client-template.controller"
+// import { Router } from "express";
+// import FlightDocumentController from "../controllers/flight-client-template.controller"
 
-const router = Router();
+// const router = Router();
 
-// Add this GET route for the PDF
-router.get("/client-document-template/:bookingId", FlightDocumentController.getDocumentPdf);
+// // Add this GET route for the PDF
+// router.get("/client-document-template/:bookingId", FlightDocumentController.getDocumentPdf);
 
-export default router;
+// export default router;
