@@ -180,15 +180,7 @@ export class RateGainApiProvider {
             return isNaN(parsed) ? 0 : parsed;
           };
 
-          const parseAmt = (val: any) => {
-            if (typeof val === 'number') return isNaN(val) ? 0 : val;
-            if (!val) return 0;
-            const parsed = Number(val.toString().replace(/,/g, ''));
-            return isNaN(parsed) ? 0 : parsed;
-          };
-
           // RateGain getproducts returns RoomRate as the primary price field
-          const totalPrice = parseAmt(
           const totalPrice = parseAmt(
             rate.RoomRate ||
               rate.totalAmount ||
@@ -244,8 +236,8 @@ export class RateGainApiProvider {
 
           const enriched = calculateEnrichedPricing(
             {
-              basePrice,
-              totalPrice,
+              basePrice: netBasePrice,
+              totalPrice: trueTotalPrice,
               taxes: taxAmount,
               mf: 0,
               mft: 0,
@@ -260,7 +252,7 @@ export class RateGainApiProvider {
             price: enriched.finalTotalPrice,
             netPrice: enriched.basePrice,
             pricing: {
-              totalPrice,
+              totalPrice: trueTotalPrice,
               taxes: taxAmount,
               mf: 0,
               mft: 0,
