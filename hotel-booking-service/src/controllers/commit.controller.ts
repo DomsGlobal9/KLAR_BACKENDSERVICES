@@ -10,7 +10,7 @@ export const commitController = async (req: any, res: Response) => {
     const agentId = req.user?.userId || req.user?.id || req.user?._id || null;
     const agentName = req.user?.email || null; // Fallback to email if name isn't in token
     const token = req.headers.authorization?.split(" ")[1] || "";
-    const clientType = req.user?.clientType || "B2C";
+    const clientType = req.headers["x-client-type"] || req.body.clientType || req.user?.clientType || "B2C";
 
     let finalPayload = req.body;
 

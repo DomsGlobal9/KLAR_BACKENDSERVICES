@@ -383,6 +383,7 @@ class CommitService {
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
         userInfo,
+        clientType,
       });
 
       pollTripJackBookingStatus(
@@ -676,6 +677,7 @@ class CommitService {
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
         userInfo,
+        clientType,
       });
 
       notificationService.sendBookingConfirmation(saved);

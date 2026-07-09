@@ -7,9 +7,9 @@ class BookingsService {
   /**
    * Get all bookings from the database filtered by user ID.
    */
-  async getAllBookings(agentId?: string) {
+  async getAllBookings(filter: any = {}) {
     try {
-      const query = agentId ? { agentId } : {};
+      const query = { ...filter };
       const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
       // Map to safe DTO to prevent leaking raw provider responses and margins
@@ -112,35 +112,7 @@ class BookingsService {
         }
       }
 
-      // Map to safe DTO
-      if (booking) {
-        return {
-          _id: booking._id,
-          confirmationNumber: booking.confirmationNumber || booking.reservationId || 'PENDING',
-          reservationId: booking.reservationId,
-          propertyId: booking.propertyId || 'UNKNOWN',
-          provider: booking.provider || 'rategain',
-          status: booking.status || 'PENDING',
-          checkIn: booking.checkIn || new Date().toISOString(),
-          checkOut: booking.checkOut || new Date(Date.now() + 86400000).toISOString(),
-          totalAmount: booking.totalAmount || 0,
-          currencyCode: booking.currencyCode || 'INR',
-          hotelName: booking.hotelName || 'Hotel',
-          hotelImage: booking.hotelImage,
-          hotelAddress: booking.hotelAddress,
-          city: booking.city,
-          starRating: booking.starRating,
-          agentId: booking.agentId,
-          guestName: booking.guestName || 'Guest',
-          rooms: booking.rooms?.map((r: any) => ({
-            roomType: r.roomType || r.roomName || 'Standard Room',
-            boardType: r.boardType || r.boardName,
-            guests: r.guests || 1,
-            price: r.price || 0,
-          })) || [],
-          createdAt: booking.createdAt,
-        };
-      }
+
 
       return booking;
     } catch (error: any) {
