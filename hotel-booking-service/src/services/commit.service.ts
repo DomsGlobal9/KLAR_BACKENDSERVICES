@@ -388,7 +388,7 @@ class CommitService {
         guestEmail: payload.deliveryInfo?.emails?.[0] || "",
         guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
         agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
-        userId: clientType === "B2C" ? (agentId || undefined) : undefined,
+        userId: (clientType === "B2C" || clientType === "GUEST") ? (agentId || undefined) : undefined,
         agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
         rooms,
         hotelName: payload.hotelName,
@@ -696,7 +696,7 @@ class CommitService {
           payload.deliveryInfo?.contacts?.[0] ||
           "",
         agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
-        userId: clientType === "B2C" ? (agentId || undefined) : undefined,
+        userId: (clientType === "B2C" || clientType === "GUEST") ? (agentId || undefined) : undefined,
         agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
         rooms: rgRooms.length > 0 ? rgRooms : undefined,
         hotelName: payload.hotelName,

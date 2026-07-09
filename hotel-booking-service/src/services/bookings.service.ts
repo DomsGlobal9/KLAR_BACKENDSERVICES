@@ -195,6 +195,9 @@ class BookingsService {
           city: booking.city,
           starRating: booking.starRating,
           agentId: booking.agentId,
+          userId: booking.userId,
+          guestEmail: booking.guestEmail,
+          userInfo: booking.userInfo,
           guestName: booking.guestName || 'Guest',
           rooms: booking.rooms?.map((r: any) => ({
             roomType: r.roomType || r.roomName || 'Standard Room',
