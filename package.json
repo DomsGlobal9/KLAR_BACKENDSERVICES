@@ -5,5 +5,8 @@
   "scripts": {
     "dev": "echo \"Please run 'npm run dev' inside the individual service folders (e.g., auth-service, hotel-booking-service, hotel-search-service).\"",
     "install-all": "npm install --prefix auth-service && npm install --prefix hotel-booking-service && npm install --prefix hotel-search-service"
+  },
+  "dependencies": {
+    "mongoose": "^9.7.4"
   }
 }
