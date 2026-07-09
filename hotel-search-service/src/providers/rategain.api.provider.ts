@@ -193,10 +193,44 @@ export class RateGainApiProvider {
               rate.netPrice ||
               0,
           );
-          const taxAmount = Number(
-            rate.taxAmount || rate.taxes || rate.totalTax || rate.tax || 0,
-          );
-          const basePrice = totalPrice - taxAmount;
+
+          let includedTaxAmt = 0;
+          let excludedTaxAmt = 0;
+
+          // Process taxes
+          const extractTaxDetails = (taxObj: any) => {
+            if (!taxObj) return null;
+            if (taxObj.taxes && Array.isArray(taxObj.taxes)) {
+              let inc = 0;
+              let exc = 0;
+              taxObj.taxes.forEach((t: any) => {
+                const amt = parseAmt(t.clientAmount || t.amount);
+                const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
+                if (isInc) {
+                  inc += amt;
+                } else {
+                  exc += amt;
+                }
+              });
+              return { inc, exc };
+            }
+            return null;
+          };
+
+          const taxDet = extractTaxDetails(rate.taxes);
+          if (taxDet) {
+            includedTaxAmt = taxDet.inc;
+            excludedTaxAmt = taxDet.exc;
+          } else {
+            excludedTaxAmt = parseAmt(
+              rate.taxAmount || rate.totalTax || rate.tax || rate.taxesAndFees || 0
+            );
+          }
+
+          const taxAmount = includedTaxAmt + excludedTaxAmt;
+          const netBasePrice = totalPrice - includedTaxAmt;
+          const trueTotalPrice = totalPrice + excludedTaxAmt;
+
           const currency =
             rate.currency || payload.Currency || payload.currency || "INR";
 
