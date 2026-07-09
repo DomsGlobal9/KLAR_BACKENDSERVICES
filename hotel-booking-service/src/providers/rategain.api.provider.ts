@@ -164,6 +164,11 @@ export class RateGainApiProvider {
             : booking.SellingRate !== undefined
               ? booking.SellingRate
               : booking.sellingRate,
+        // Spec v1.5.3: B2C Net + Commission model requires SellingRate (the MSP
+        // from precheck). Only sent when provided (B2C); omitted for B2B.
+        ...(booking.SellingRate !== undefined && booking.SellingRate !== null
+          ? { SellingRate: Number(Number(booking.SellingRate).toFixed(2)) }
+          : {}),
         RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
           const mappedRs: any = {
             RoomTypeCode: rs.RoomTypeCode || "Standard",
@@ -304,6 +309,39 @@ export class RateGainApiProvider {
         error.response?.data ? JSON.stringify(error.response.data) : error.message,
         "Payload Sent:",
         JSON.stringify(unwrappedPayload, null, 2)
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /api/SmartDistribution/GetReservation
+   * Fetch the current status of an existing reservation by confirmationNumber / reservationId.
+   * Used by the status-sync path to resolve MANUAL_REVIEW bookings.
+   */
+  async getReservationDetails(confirmationNumber: string, reservationId?: string, propertyId?: string, brandCode?: string) {
+    const payload = {
+      ConfirmationNumber: confirmationNumber,
+      ...(reservationId ? { ReservationId: reservationId } : {}),
+      ...(propertyId ? { PropertyId: propertyId.replace(/^RG:/, "") } : {}),
+      ...(brandCode ? { BrandCode: brandCode } : {}),
+      EchoToken: `echo-${Date.now()}`,
+      TimeStamp: new Date().toISOString(),
+    };
+
+    try {
+      console.log(`[RateGain] GetReservation request: ${JSON.stringify(payload)}`);
+      const response = await rateGainClient.post(
+        "/api/SmartDistribution/GetReservation",
+        payload,
+      );
+      console.log(`[RateGain] GetReservation response (status=${response.status}): ${JSON.stringify(response.data)}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(
+        "[RateGain] GetReservation Error:",
+        error.response?.status,
+        error.response?.data ? JSON.stringify(error.response.data) : error.message,
       );
       throw error;
     }

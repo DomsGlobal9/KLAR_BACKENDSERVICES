@@ -42,7 +42,7 @@ export class RateGainApiProvider {
           if (childrenAges.length > 0) {
             paxes = childrenAges.map((age: number) => ({
               type: "Child",
-              age: age || 5,
+              age: age ?? 5, // default only missing ages; preserve 0 (infant)
             }));
           } else {
             paxes = Array(childrenCount)
@@ -121,7 +121,6 @@ export class RateGainApiProvider {
       BrandCode: payload.BrandCode || payload.brandCode || "N/A",
       checkin: payload.checkin || payload.checkIn,
       checkout: payload.checkout || payload.checkOut,
-      CountryCode: payload.CountryCode || payload.countryCode,
       Currency: payload.Currency || payload.currency,
       Rooms: (payload.Rooms || payload.rooms || []).map((r: any) => {
         const adultsCount = r.adults || r.Adults || 2;
@@ -132,7 +131,7 @@ export class RateGainApiProvider {
           if (childrenAges.length > 0) {
             paxes = childrenAges.map((age: number) => ({
               type: "Child",
-              age: age || 5,
+              age: age ?? 5, // default only missing ages; preserve 0 (infant)
             }));
           } else {
             paxes = Array(childrenCount)

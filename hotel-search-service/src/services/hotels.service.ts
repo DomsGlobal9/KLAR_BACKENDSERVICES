@@ -1,5 +1,4 @@
-import { searchRG } from "../adapters/rateGainAdapter";
-import { searchTJ } from "../adapters/tripJackAdapter";
+import { supplierRegistry } from "../suppliers";
 import { resolveCityToCoords, resolveGeoCenter } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
@@ -25,11 +24,37 @@ export class HotelsService {
       `[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}, ClientType: ${clientType}`,
     );
 
-    const isDirectTJ =
-      searchPayload.destination.startsWith("TJ:") ||
-      /^\d{8,15}$/.test(searchPayload.destination.trim());
-    const isDirectRG = searchPayload.destination.startsWith("RG:");
-    const isDirectSearch = isDirectTJ || isDirectRG;
+    // Guard against clearly-invalid input BEFORE hitting suppliers: avoids a wasted
+    // supplier round-trip on bad dates and prevents a crash in the adapters' rooms.map()
+    // when `rooms` is missing/empty. Valid searches are unaffected.
+    const ci = new Date(searchPayload.checkin);
+    const co = new Date(searchPayload.checkout);
+    const roomsOk =
+      Array.isArray(searchPayload.rooms) &&
+      searchPayload.rooms.length > 0 &&
+      searchPayload.rooms.every((r) => Number(r.adults) >= 1);
+    if (
+      !searchPayload.checkin ||
+      !searchPayload.checkout ||
+      isNaN(ci.getTime()) ||
+      isNaN(co.getTime()) ||
+      ci.getTime() >= co.getTime() ||
+      !roomsOk
+    ) {
+      console.warn(
+        `[Search] Rejected invalid input — checkin=${searchPayload.checkin}, checkout=${searchPayload.checkout}, rooms=${JSON.stringify(searchPayload.rooms)}. Returning empty result set.`,
+      );
+      const emptyFacets = computeFacets([], markupRules, nights);
+      return {
+        results: [],
+        body: [],
+        hotels: [],
+        total: 0,
+        facets: emptyFacets,
+      };
+    }
+
+    const isDirectSearch = supplierRegistry.isDirectSearch(searchPayload.destination);
 
     if (isDirectSearch) {
       console.log(
@@ -46,9 +71,42 @@ export class HotelsService {
           const lat = parseFloat(coords[0]);
           const lng = parseFloat(coords[1]);
           if (!isNaN(lat) && !isNaN(lng)) {
-            // Resolve geoCenter dynamically (snaps to official city center if close, e.g. Dubai)
-            geoCenter = await resolveGeoCenter(lat, lng);
-            console.log(`[GEO] Instant resolution from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km (resolved)`);
+            const geoFromToken = await resolveGeoCenter(lat, lng);
+
+            // ── Cross-validate the GEO token against the text destination ──────
+            // A stale/wrong GEO token (e.g. Philippines "Goa" instead of Indian
+            // "Goa") can arrive from session-cached search params. If the text
+            // destination resolves to a very different place (>500 km away), we
+            // discard the bad token and use the text resolution instead.
+            if (searchPayload.destination && searchPayload.destination.trim().length > 2) {
+              const geoFromText = await resolveCityToCoords(searchPayload.destination);
+              if (geoFromText) {
+                const dist = getDistanceKm(
+                  geoFromToken.lat, geoFromToken.lng,
+                  geoFromText.lat, geoFromText.lng,
+                );
+                if (dist > 500) {
+                  console.warn(
+                    `[GEO] ⚠️  GEO token [${lat},${lng}] is ${dist.toFixed(0)}km from text-resolved ` +
+                    `"${searchPayload.destination}" [${geoFromText.lat},${geoFromText.lng}]. ` +
+                    `Discarding bad GEO token — using text resolution.`,
+                  );
+                  geoCenter = geoFromText;
+                } else {
+                  geoCenter = geoFromToken;
+                  console.log(
+                    `[GEO] Instant resolution from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km (validated, ${dist.toFixed(0)}km from text)`,
+                  );
+                }
+              } else {
+                // Text resolution failed — trust the GEO token
+                geoCenter = geoFromToken;
+                console.log(`[GEO] Instant resolution from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km (resolved)`);
+              }
+            } else {
+              geoCenter = geoFromToken;
+              console.log(`[GEO] Instant resolution from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km (resolved)`);
+            }
           }
         }
       }
@@ -69,81 +127,50 @@ export class HotelsService {
     }
 
     const finalResults: UnifiedHotel[] = [];
-    let rgTotal = 0;
-    let tjTotal = 0;
-    let rgCount = 0;
-    let tjCount = 0;
+    const providerStats: Record<string, { count: number; total: number }> = {};
 
-    // 2. Define Providers based on Mode
-    const providers: { name: string; task: Promise<void> }[] = [];
+    // 2. Fan out to every supplier enabled for this mode/destination/providers-filter.
+    //    Adding a new supplier = register() it in suppliers/index.ts; nothing below
+    //    this line ever needs to change.
     const requestedProviders = searchPayload.providers;
+    const eligibleSuppliers = supplierRegistry.getModeAndDirectEligible(
+      mode,
+      searchPayload.destination,
+    );
+    const enabledSuppliers = supplierRegistry.getEnabled({
+      mode,
+      destination: searchPayload.destination,
+      requestedCodes: requestedProviders,
+    });
 
-    if (
-      (mode === "UNIFIED" || mode === "RG_ONLY") &&
-      (!isDirectSearch || isDirectRG)
-    ) {
-      const isRgAllowed =
-        !requestedProviders ||
-        requestedProviders.length === 0 ||
-        requestedProviders.includes("RG");
-      if (isRgAllowed) {
-        providers.push({
-          name: "RG",
-          task: searchRG(searchPayload, clientType)
-            .then((res) => {
-              rgCount = res.hotels.length;
-              rgTotal = res.total;
-              finalResults.push(...res.hotels);
-              console.log(
-                `[OK] RG finished in ${Date.now() - totalStartTime}ms (${rgCount} hotels)`,
-              );
-            })
-            .catch((err) => {
-              console.error(`[ERR] RG failed: ${err.message}`);
-            }),
-        });
-      } else {
-        console.log(
-          `[SKIP] RG skipped because providers filter is active and does not include RG`,
+    if (requestedProviders && requestedProviders.length > 0) {
+      eligibleSuppliers
+        .filter((s) => !requestedProviders.includes(s.code))
+        .forEach((s) =>
+          console.log(
+            `[SKIP] ${s.code} skipped because providers filter is active and does not include ${s.code}`,
+          ),
         );
-      }
     }
 
-    if (
-      (mode === "UNIFIED" || mode === "TJ_ONLY") &&
-      (!isDirectSearch || isDirectTJ)
-    ) {
-      const isTjAllowed =
-        !requestedProviders ||
-        requestedProviders.length === 0 ||
-        requestedProviders.includes("TJ");
-      if (isTjAllowed) {
-        providers.push({
-          name: "TJ",
-          task: searchTJ(searchPayload)
-            .then((res) => {
-              tjCount = res.hotels.length;
-              tjTotal = res.total;
-              finalResults.push(...res.hotels);
-              console.log(
-                `[OK] TJ finished in ${Date.now() - totalStartTime}ms (${tjCount} hotels)`,
-              );
-            })
-            .catch((err) => {
-              console.error(`[ERR] TJ failed: ${err.message}`);
-            }),
-        });
-      } else {
-        console.log(
-          `[SKIP] TJ skipped because providers filter is active and does not include TJ`,
-        );
-      }
-    }
+    const allTasks = enabledSuppliers.map((supplier) =>
+      supplier
+        .search(searchPayload, clientType)
+        .then((res) => {
+          providerStats[supplier.code] = { count: res.hotels.length, total: res.total };
+          finalResults.push(...res.hotels);
+          console.log(
+            `[OK] ${supplier.code} finished in ${Date.now() - totalStartTime}ms (${res.hotels.length} hotels)`,
+          );
+        })
+        .catch((err) => {
+          console.error(`[ERR] ${supplier.code} failed: ${err.message}`);
+        }),
+    );
 
     // 3. Orchestration: High-Performance Concurrent Collection
     // Wait for all providers, but cap at 15 seconds for partial-result return (MMT-style).
     // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases and provides a stable UI.
-    const allTasks = providers.map((p) => p.task);
     const PARTIAL_RETURN_TIMEOUT_MS = 15000;
 
     await Promise.race([
@@ -165,27 +192,30 @@ export class HotelsService {
     // Senior Dev: If we are on Page 1 and have fewer than 10 results but provider says more,
     // we should still respect the provider's total for pagination to work,
     // but only if the provider actually returned something.
-    const totalToUI = Math.max(rgTotal + tjTotal, deduplicatedResults.length);
+    const sumProviderTotals = Object.values(providerStats).reduce(
+      (sum, s) => sum + s.total,
+      0,
+    );
+    const totalToUI = Math.max(sumProviderTotals, deduplicatedResults.length);
 
     const totalDuration = Date.now() - totalStartTime;
 
-    const tjLog =
-      (mode === "UNIFIED" || mode === "TJ_ONLY") &&
-      (!isDirectSearch || isDirectTJ)
-        ? `${tjCount} (Total: ${tjTotal})`
-        : "[SKIPPED]";
-    const rgLog =
-      (mode === "UNIFIED" || mode === "RG_ONLY") &&
-      (!isDirectSearch || isDirectRG)
-        ? `${rgCount} (Total: ${rgTotal})`
-        : "[SKIPPED]";
+    // Per-supplier status lines — automatically includes any future registered supplier.
+    const statusLines = supplierRegistry
+      .all()
+      .map((s) => {
+        const wasQueried = enabledSuppliers.includes(s);
+        const stat = providerStats[s.code];
+        const line = wasQueried && stat ? `${stat.count} (Total: ${stat.total})` : "[SKIPPED]";
+        return `${s.code} Status: ${line}`;
+      })
+      .join("\n");
 
     console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏨 FINAL SEARCH SUMMARY (Senior OTA Logic)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TJ Status: ${tjLog}
-RG Status: ${rgLog}
+${statusLines}
 ----------------------------------------------------
 Total Combined Unique:     ${deduplicatedResults.length}
 Items Merged (Cheaper Wins): ${dedupMeta.duplicatedCount}
@@ -197,12 +227,18 @@ Reported Total to UI:      ${totalToUI}
 
     let finalOutputHotels = deduplicatedResults;
     if (geoCenter) {
+      // Exact api-derived radius (same as TJ $near and RG Geofilter), no rounding.
       const allowedRadiusKm = geoCenter.radiusKm || 20;
 
       finalOutputHotels = deduplicatedResults.filter((hotel) => {
         const lat = Number(hotel.latitude);
         const lng = Number(hotel.longitude);
-        if (!lat || !lng) return true; // Keep if coordinates are missing/invalid to avoid false positives
+        // Keep if coordinates are genuinely missing/invalid (NaN) or the [0,0]
+        // "no-coords" sentinel — to avoid false negatives. A real hotel on the
+        // equator (lat 0) or prime meridian (lng 0) is still distance-checked.
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+          return true;
+        }
 
         const dist = getDistanceKm(geoCenter.lat, geoCenter.lng, lat, lng);
         return dist <= allowedRadiusKm;
@@ -381,10 +417,33 @@ Reported Total to UI:      ${totalToUI}
         markupRules,
         nights,
       );
+      // The cross-provider "compare" price must include markup too, otherwise the
+      // alternative-deal price shown next to the (marked-up) main price is unfair/wrong.
+      const altDeal = rest.altDeal
+        ? {
+            ...rest.altDeal,
+            price: round2(
+              calculateEnrichedPricing(
+                {
+                  basePrice: rest.altDeal.price,
+                  totalPrice: rest.altDeal.price,
+                  taxes: 0,
+                  mf: 0,
+                  mft: 0,
+                  currency: hotel.currency,
+                },
+                markupRules,
+                nights,
+              ).finalTotalPrice,
+            ),
+          }
+        : rest.altDeal;
+
       return {
         ...rest,
         // price now INCLUDES markup; basePrice stays the net room cost
         price: round2(enriched.finalTotalPrice),
+        altDeal,
         pricing: {
           ...(rest.pricing || {}),
           markupAmount: round2(enriched.markupAmount),
@@ -400,56 +459,86 @@ Reported Total to UI:      ${totalToUI}
       results: optimizedResults,
       body: optimizedResults, // Fallback for some frontend components
       hotels: optimizedResults,
-      total: Math.max(rgTotal + tjTotal, filteredResults.length),
+      total: Math.max(sumProviderTotals, filteredResults.length),
       facets,
     };
   }
 
   async getHotelSuggestions(query: string) {
     const { HotelModel } = require("../models/Hotel.model");
-    const { City } = require("country-state-city");
+    const { City, State, Country } = require("country-state-city");
 
-    if (!query || query.trim().length < 2) {
-      return [];
-    }
+    if (!query || query.trim().length < 2) return [];
 
-    // Normalize common spelling mistakes like "anaya" instead of "ananya"
+    // Normalize common typos
     let normalizedQuery = query.trim();
     if (/anaya/i.test(normalizedQuery)) {
       normalizedQuery = normalizedQuery.replace(/anaya/gi, "ananya");
     }
-
     const qLower = normalizedQuery.toLowerCase();
-    const escapedQuery = normalizedQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-    const prefixRegex = new RegExp("^" + escapedQuery, "i");
-    const containsRegex = new RegExp(escapedQuery, "i");
 
-    // 1. Fetch cities from local country-state-city package
-    const allCities = City.getAllCities();
-    const qWords = qLower.split(/\s+/).filter(Boolean);
-    const cityMatches: Array<{ city: any; score: number }> = [];
+    // ─── 1. COLLECT ALL MATCHING STATES (primary destinations) ───────────────
+    const allStates = State.getAllStates();
+    type StateMatch = { state: any; score: number };
+    const stateMatches: StateMatch[] = [];
 
-    for (const city of allCities) {
-      const cityNameLower = city.name.toLowerCase();
-      let matchesAll = true;
-      for (const word of qWords) {
-        if (!cityNameLower.includes(word)) {
-          matchesAll = false;
-          break;
-        }
+    for (const state of allStates) {
+      const nameLower = state.name.toLowerCase();
+      // Score 1: state name starts with query (highest — "Goa" for "goa")
+      if (nameLower.startsWith(qLower)) {
+        stateMatches.push({ state, score: 1 });
       }
-      
-      if (matchesAll) {
-        const score = cityNameLower.startsWith(qLower) ? 1 : (cityNameLower.includes(qLower) ? 2 : 3);
-        cityMatches.push({ city, score });
+      // Score 2: every query word appears in state name
+      else {
+        const qWords = qLower.split(/\s+/).filter((w) => w.length > 1);
+        if (qWords.length > 1 && qWords.every((w) => nameLower.includes(w))) {
+          stateMatches.push({ state, score: 2 });
+        }
       }
     }
 
-    // Fuzzy matching fallback if exact matches are lacking
+    // Sort: India first, then score, then name length
+    stateMatches.sort((a, b) => {
+      const aIN = a.state.countryCode === "IN" ? 0 : 1;
+      const bIN = b.state.countryCode === "IN" ? 0 : 1;
+      if (aIN !== bIN) return aIN - bIN;
+      if (a.score !== b.score) return a.score - b.score;
+      return a.state.name.length - b.state.name.length;
+    });
+
+    // ─── 2. COLLECT ALL MATCHING CITIES ──────────────────────────────────────
+    const allCities = City.getAllCities();
+    type CityMatch = { city: any; score: number };
+    const cityMatches: CityMatch[] = [];
+
+    for (const city of allCities) {
+      const nameLower = city.name.toLowerCase();
+
+      // Score 1: full name starts with the entire query — best match ("Rio de" → "Rio de Janeiro")
+      if (nameLower.startsWith(qLower)) {
+        cityMatches.push({ city, score: 1 });
+        continue;
+      }
+
+      // Score 2: each space-separated word in query appears in the city name
+      // (single-char "connecting" words like "de", "di", "al" are included intentionally)
+      const qWords = qLower.split(/\s+/).filter(Boolean);
+      if (qWords.length > 1 && qWords.every((w) => nameLower.includes(w))) {
+        cityMatches.push({ city, score: 2 });
+        continue;
+      }
+
+      // Score 3: first significant word is a prefix of city name
+      const firstWord = qWords[0] || qLower;
+      if (firstWord.length >= 3 && nameLower.startsWith(firstWord)) {
+        cityMatches.push({ city, score: 3 });
+      }
+    }
+
+    // Fuzzy fallback when we have very few results
     if (cityMatches.length < 3) {
       const { fuzzyFindCities } = require("../utils/fuzzy");
       const fuzzyResults = fuzzyFindCities(normalizedQuery, allCities);
-      
       for (const fuzzyCity of fuzzyResults) {
         const alreadyMatched = cityMatches.some(
           (m) =>
@@ -462,87 +551,195 @@ Reported Total to UI:      ${totalToUI}
       }
     }
 
-    // Sort by:
-    // 1. Country priority (India 'IN' first)
-    // 2. Prefix/Fuzzy match score (starts-with/exact match first, fuzzy last)
-    // 3. Shorter name length first (more precise matches)
+    // Sort cities: India first, score, shorter name first
     cityMatches.sort((a, b) => {
-      const aIsIN = a.city.countryCode === "IN" ? 1 : 0;
-      const bIsIN = b.city.countryCode === "IN" ? 1 : 0;
-      if (aIsIN !== bIsIN) return bIsIN - aIsIN; // India first
+      const aIN = a.city.countryCode === "IN" ? 0 : 1;
+      const bIN = b.city.countryCode === "IN" ? 0 : 1;
+      if (aIN !== bIN) return aIN - bIN;
       if (a.score !== b.score) return a.score - b.score;
       return a.city.name.length - b.city.name.length;
     });
 
-    const { State, Country } = require("country-state-city");
+    // ─── 3. BUILD NAME AMBIGUITY MAP (for smart labeling) ────────────────────
+    // A name is "ambiguous" if it appears in more than one country globally.
+    // e.g. "Hyderabad" exists in India AND Pakistan → show "Hyderabad, India"
+    // "Goa" only exists in India → show just "Goa"
+    const stateName2Countries = new Map<string, Set<string>>();
+    for (const state of allStates) {
+      const key = state.name.toLowerCase();
+      if (!stateName2Countries.has(key)) stateName2Countries.set(key, new Set());
+      stateName2Countries.get(key)!.add(state.countryCode);
+    }
 
-    const mappedCities = cityMatches.slice(0, 10).map((m) => {
-      const c = m.city;
-      const countryObj = Country.getCountryByCode(c.countryCode);
-      const countryName = countryObj ? countryObj.name : c.countryCode;
+    const cityName2Countries = new Map<string, Set<string>>();
+    for (const city of allCities) {
+      const key = city.name.toLowerCase();
+      if (!cityName2Countries.has(key)) cityName2Countries.set(key, new Set());
+      cityName2Countries.get(key)!.add(city.countryCode);
+    }
 
-      const stateObj = State.getStateByCodeAndCountry(c.stateCode, c.countryCode);
-      const stateName = stateObj ? stateObj.name : c.stateCode;
+    const isStateAmbiguous = (name: string) =>
+      (stateName2Countries.get(name.toLowerCase())?.size ?? 0) > 1;
+    const isCityAmbiguous = (name: string) =>
+      (cityName2Countries.get(name.toLowerCase())?.size ?? 0) > 1;
 
-      const statePart = stateName ? `${stateName}, ` : "";
-      const label = `${c.name}, ${statePart}${countryName}`;
-      const geoId = `GEO:${c.latitude},${c.longitude}`;
-      return {
+    // ─── 4. SMART LABEL HELPER ───────────────────────────────────────────────
+    const getCountryName = (code: string) => {
+      const c = Country.getCountryByCode(code);
+      return c ? c.name : code;
+    };
+
+    // ─── 5. BUILD PRIMARY STATE RESULTS WITH SUB-CITY SUGGESTIONS ────────────
+    // IMPORTANT: We intentionally do NOT use `country-state-city` lat/lng for
+    // the primary state destCode. Those coordinates are unreliable and can point
+    // to the wrong country (e.g. Goa Philippines instead of Goa India).
+    // Instead, we leave destCode empty so the backend falls back to the proven
+    // OpenCage/MongoDB geocaching pipeline which correctly resolves "Goa" → India.
+    const results: any[] = [];
+    const usedStateCodes = new Set<string>(); // stateCode+countryCode
+    const usedStateNames = new Set<string>(); // name+countryCode
+
+    for (const { state } of stateMatches.slice(0, 3)) {
+      const stateKey = `${state.isoCode}::${state.countryCode}`;
+      if (usedStateCodes.has(stateKey)) continue;
+      usedStateCodes.add(stateKey);
+      usedStateNames.add(`${state.name.toLowerCase()}::${state.countryCode}`);
+
+      // Label: only add country when ambiguous across multiple countries
+      const ambiguous = isStateAmbiguous(state.name);
+      const countryFull = getCountryName(state.countryCode);
+      const countryLabel = ambiguous ? `, ${countryFull}` : "";
+      const label = `${state.name}${countryLabel}`;
+      const subtitle = `City in ${countryFull}`;
+
+      // Unique but non-GEO id (safe for deduplication; NOT passed as a GEO token)
+      const stateId = `STATE:${state.countryCode}:${state.isoCode}`;
+
+      // Sub-cities within this state
+      const stateCities: any[] = City.getCitiesOfState(state.countryCode, state.isoCode) || [];
+      const queryMatchesStateName =
+        state.name.toLowerCase().startsWith(qLower) ||
+        qLower.startsWith(state.name.toLowerCase());
+
+      let subCities: any[] = [];
+      if (queryMatchesStateName) {
+        // Query is the whole state name → show top discovery sub-cities
+        subCities = stateCities
+          .filter((c: any) => c.name.toLowerCase() !== state.name.toLowerCase())
+          .slice(0, 5);
+      } else {
+        // Query partially matches state → show matching sub-cities
+        subCities = stateCities
+          .filter(
+            (c: any) =>
+              c.name.toLowerCase().startsWith(qLower) ||
+              c.name.toLowerCase().includes(qLower),
+          )
+          .slice(0, 5);
+      }
+
+      const subSuggestions = subCities.map((c: any, idx: number) => ({
+        // Sub-city destCode is just the city name — backend geocodes it correctly
+        id: `CITY:${c.name}:${state.isoCode}:${state.countryCode}`,
+        name: c.name,
+        destCode: "", // empty → text-resolution in backend
+        subtitle: `in ${state.name}`,
+        tag: idx === 0 ? "POPULAR" : idx === 1 ? "TRENDING" : undefined,
+      }));
+
+      results.push({
+        id: stateId,
+        destCode: "",          // ← empty: backend will text-resolve using `name`
+        destName: label,
+        label,
+        name: label,
+        type: "city",
+        source: "GEO",
+        subtitle,
+        subSuggestions,
+      });
+    }
+
+    // ─── 6. ADD INDIVIDUAL CITY RESULTS (for cities not covered by states above) ─
+    // Avoid showing a city if its parent state is already in results
+    for (const { city } of cityMatches.slice(0, 12)) {
+      if (results.length >= 6) break;
+
+      const stateKey = `${city.stateCode}::${city.countryCode}`;
+      const nameKey = `${city.name.toLowerCase()}::${city.countryCode}`;
+      
+      // Skip if parent state already shown as primary result (by code or exact name match)
+      if (usedStateCodes.has(stateKey) || usedStateNames.has(nameKey)) continue;
+
+      const ambiguous = isCityAmbiguous(city.name);
+      const countryLabel = ambiguous ? `, ${getCountryName(city.countryCode)}` : "";
+      const label = `${city.name}${countryLabel}`;
+
+      const stateObj = State.getStateByCodeAndCountry(city.stateCode, city.countryCode);
+      const stateName = stateObj?.name || city.stateCode;
+      const countryFull = getCountryName(city.countryCode);
+      const subtitle = stateName && stateName !== city.name
+        ? `City in ${stateName}, ${countryFull}`
+        : `City in ${countryFull}`;
+
+      const geoId = `GEO:${city.latitude},${city.longitude}`;
+
+      results.push({
         id: geoId,
         destCode: geoId,
         destName: label,
-        label: label,
+        label,
+        name: label,
         type: "city",
         source: "GEO",
-      };
-    });
+        subtitle,
+        subSuggestions: [],
+      });
+    }
 
-    // 2. Fetch hotels from database
+    // ─── 7. ADD HOTEL NAME MATCHES ────────────────────────────────────────────
+    const escapedQuery = normalizedQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    const prefixRegex = new RegExp("^" + escapedQuery, "i");
+    const containsRegex = new RegExp(escapedQuery, "i");
+
     let hotels = await HotelModel.find({
       $or: [{ name: prefixRegex }, { cityName: prefixRegex }],
     })
-      .limit(15)
+      .limit(12)
       .lean();
 
-    if (hotels.length < 8) {
+    if (hotels.length < 6) {
       const extraHotels = await HotelModel.find({
         $or: [{ name: containsRegex }, { cityName: containsRegex }],
         _id: { $nin: hotels.map((h: any) => h._id) },
       })
-        .limit(15 - hotels.length)
+        .limit(12 - hotels.length)
         .lean();
       hotels = [...hotels, ...extraHotels];
     }
 
-    const suggestions = [
-      ...mappedCities,
-      ...hotels.map((h: any) => {
-        const hotelId = h.tjHotelId.startsWith("TJ:")
-          ? h.tjHotelId
-          : `TJ:${h.tjHotelId}`;
-        return {
-          id: hotelId,
-          hotelId: hotelId,
-          label: `${h.name}, ${h.cityName}`,
-          name: h.name,
-          type: "hotel",
-          source: "TJ",
-          city: h.cityName,
-        };
-      }),
-    ];
+    const hotelSuggestions = hotels.map((h: any) => {
+      const hotelId = h.tjHotelId.startsWith("TJ:") ? h.tjHotelId : `TJ:${h.tjHotelId}`;
+      return {
+        id: hotelId,
+        hotelId,
+        label: `${h.name}, ${h.cityName}`,
+        name: h.name,
+        type: "hotel",
+        source: "TJ",
+        city: h.cityName,
+        subtitle: `Hotel in ${h.cityName}`,
+      };
+    });
 
-    // Deduplicate suggestions by name
-    const uniqueSuggestions = Array.from(
-      new Map(
-        suggestions.map((item) => {
-          const dedupeKey = item.label.toLowerCase().trim();
-          return [dedupeKey, item];
-        }),
-      ).values(),
+    const allResults = [...results, ...hotelSuggestions];
+
+    // Final deduplication by label
+    const uniqueResults = Array.from(
+      new Map(allResults.map((item) => [item.label.toLowerCase().trim(), item])).values()
     );
 
-    return uniqueSuggestions;
+    return uniqueResults;
   }
 }
 
@@ -659,7 +856,9 @@ function computeFacets(hotels: any[], markupRules: any[], nights: number) {
   const propertyTypeCounts: Record<string, number> = {};
   const mealTypeCounts: Record<string, number> = {};
   const amenityCounts: Record<string, number> = {};
-  const providerCounts: Record<string, number> = { TJ: 0, RG: 0 };
+  const providerCounts: Record<string, number> = Object.fromEntries(
+    supplierRegistry.all().map((s) => [s.code, 0]),
+  );
   const locationCounts: Record<string, number> = {};
 
   let minPrice = Infinity;
@@ -700,7 +899,7 @@ function computeFacets(hotels: any[], markupRules: any[], nights: number) {
     });
 
     // 5. Providers
-    if (hotel.source === "TJ" || hotel.source === "RG") {
+    if (hotel.source && hotel.source in providerCounts) {
       providerCounts[hotel.source] = (providerCounts[hotel.source] || 0) + 1;
     }
 

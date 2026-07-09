@@ -40,7 +40,8 @@ export interface IUserInfo {
 
 export interface IBooking extends Document {
   // ─── Identifiers ───────────────────────────────
-  confirmationNumber: string; // Provider's booking ID (TG-XXXXX)
+  confirmationNumber: string; // Provider's booking ID (TG-XXXXX). Used for supplier cancel.
+  hotelConfirmationNumber?: string; // Real hotel/PMS confirmation number (display only)
   reservationId: string;
   propertyId: string;
   provider: BookingProvider;
@@ -136,6 +137,7 @@ const bookingSchema = new Schema<IBooking>(
       index: true,
       unique: true,
     },
+    hotelConfirmationNumber: { type: String },
     reservationId: { type: String, required: true },
     propertyId: { type: String, required: true },
 

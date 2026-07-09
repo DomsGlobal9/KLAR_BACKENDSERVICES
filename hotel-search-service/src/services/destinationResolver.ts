@@ -620,6 +620,9 @@ export async function resolveForTJ(
 
   if (geo) {
     const { lat, lng } = geo;
+    // Exact api-derived radius (no rounding) — same value used by RG (Geofilter)
+    // and the post-filter, so all three cover the IDENTICAL distance and we never
+    // drop hotels sitting in the last fraction of a km.
     const radiusKm = geo.radiusKm || 20;
     console.log(
       `[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] with radius ${radiusKm}km for "${normalizedQuery}"`,
