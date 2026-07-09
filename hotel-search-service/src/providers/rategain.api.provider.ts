@@ -2,6 +2,7 @@ import { rateGainClient } from "../clients/rategain.client";
 import {
   calculateEnrichedPricing,
   calculateNightsFromDates,
+  enrichRateGainPrice,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
 
@@ -172,87 +173,12 @@ export class RateGainApiProvider {
       // ── Enrich each rate with backend-computed pricing (safe — never throws) ──
       const enrichRate = (rate: any) => {
         try {
-          // RateGain getproducts returns RoomRate as the primary price field
-          const totalPrice = Number(
-            rate.RoomRate ||
-              rate.totalAmount ||
-              rate.sellingRate ||
-              rate.totalRate ||
-              rate.price ||
-              rate.net ||
-              rate.rate ||
-              rate.totalPrice ||
-              rate.netPrice ||
-              0,
-          );
-          // Helper to extract included and excluded taxes
-          let includedTaxAmt = 0;
-          let excludedTaxAmt = 0;
-
-          const extractTaxDetails = (taxObj: any) => {
-            if (!taxObj) return null;
-            if (typeof taxObj === "number") return { inc: 0, exc: taxObj };
-            if (typeof taxObj === "string") return { inc: 0, exc: Number(taxObj) || 0 };
-            if (Array.isArray(taxObj.taxes)) {
-              let inc = 0;
-              let exc = 0;
-              taxObj.taxes.forEach((t: any) => {
-                const amt = Number(t.clientAmount || t.amount) || 0;
-                const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
-                if (isInc) {
-                  inc += amt;
-                } else {
-                  exc += amt;
-                }
-              });
-              return { inc, exc };
-            }
-            return null;
-          };
-
-          const taxDet = extractTaxDetails(rate.taxes);
-          if (taxDet) {
-            includedTaxAmt = taxDet.inc;
-            excludedTaxAmt = taxDet.exc;
-          } else {
-            excludedTaxAmt = Number(
-              rate.taxAmount || rate.totalTax || rate.tax || rate.taxesAndFees || 0
-            );
-          }
-
-          const taxAmount = includedTaxAmt + excludedTaxAmt;
-          const netBasePrice = totalPrice - includedTaxAmt;
-          const trueTotalPrice = totalPrice + excludedTaxAmt;
-
-          const currency =
-            rate.currency || payload.Currency || payload.currency || "INR";
-
-          const enriched = calculateEnrichedPricing(
-            {
-              basePrice: netBasePrice,
-              totalPrice: trueTotalPrice,
-              taxes: taxAmount,
-              mf: 0,
-              mft: 0,
-              currency,
-            },
+          return enrichRateGainPrice(
+            rate,
             markupRules,
             nights,
+            payload.Currency || payload.currency || "INR"
           );
-
-          return {
-            ...rate,
-            price: enriched.finalTotalPrice,
-            netPrice: enriched.basePrice,
-            pricing: {
-              totalPrice: trueTotalPrice,
-              taxes: taxAmount,
-              mf: 0,
-              mft: 0,
-              currency,
-              ...enriched,
-            },
-          };
         } catch {
           return rate; // fallback: return rate unchanged if enrichment fails
         }
@@ -276,7 +202,9 @@ export class RateGainApiProvider {
                 ? obj.rates
                 : null;
             if (rates) {
-              const enrichedRates = rates.map(enrichRate);
+              const enrichedRates = rates
+                .map(enrichRate)
+                .sort((a: any, b: any) => (a.price || 0) - (b.price || 0));
               return { ...obj, rate: enrichedRates, rates: enrichedRates };
             }
             // If it's a rate itself

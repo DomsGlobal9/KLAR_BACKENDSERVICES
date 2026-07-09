@@ -1,5 +1,37 @@
 import { MarkupRule } from "./wallet.util";
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ---------------------------------------------------------------------------
+// PLATFORM (super-admin) markup — MUST mirror hotel-search-service config.
+// A hidden margin added to the raw supplier net BEFORE agents see it.
+// Booking uses it to (a) validate against the api price the agent saw, and
+// (b) still pay the supplier the raw net. Superadmin-configured via env.
+// ---------------------------------------------------------------------------
+export const PLATFORM_MARKUP = {
+  enabled: (process.env.PLATFORM_MARKUP_ENABLED || "false") === "true",
+  type:
+    (process.env.PLATFORM_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
+      ? ("PERCENTAGE" as const)
+      : ("FIXED" as const),
+  value: Number(process.env.PLATFORM_MARKUP_VALUE || 0),
+};
+
+/** Amount the platform adds on top of a raw supplier NET price. */
+export function platformMarkupAmount(supplierNet: number): number {
+  if (!PLATFORM_MARKUP.enabled || !supplierNet || supplierNet <= 0) return 0;
+  const amt =
+    PLATFORM_MARKUP.type === "PERCENTAGE"
+      ? (supplierNet * PLATFORM_MARKUP.value) / 100
+      : PLATFORM_MARKUP.value;
+  return round2(Math.max(0, amt));
+}
+
+/** api net (what the agent sees) = supplier net + platform markup. */
+export function applyPlatformMarkup(supplierNet: number): number {
+  return round2(supplierNet + platformMarkupAmount(supplierNet));
+}
+
 export class PricingUtil {
   /**
    * Calculates the final price and markup based on net price, admin rules, and agent additional markup.

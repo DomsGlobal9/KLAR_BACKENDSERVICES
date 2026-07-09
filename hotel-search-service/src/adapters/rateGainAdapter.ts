@@ -1,6 +1,7 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
+import { getRGRawPrice, extractRGTaxes, round2, deriveRefundable, applyPlatformMarkup } from "../utils/pricing.util";
 
 export async function searchRG(
   req: UnifiedSearchRequest,
@@ -231,19 +232,8 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   }
 
   // ── Price extraction ──────────────────────────────────────────────────────
-  // RG bestproperties response uses various price field names.
-  // We always normalize to TOTAL STAY price for uniform display.
-  // RG typically returns per-night rates; we expose both.
-  const rgRawPrice =
-    h.totalAmount || // Total stay (preferred)
-    h.totalRate ||
-    h.displayRatePerNight || // Per-night (need to check)
-    h.lowestRate ||
-    h.price ||
-    h.rate ||
-    h.roomRates?.[0]?.totalAmount ||
-    h.options?.[0]?.price ||
-    0;
+  // We use the shared getRGRawPrice so search and details exactly match
+  const rgRawPrice = getRGRawPrice(h);
 
   // RG bestproperties usually returns totalAmount as total stay.
   // If only per-night field found, mark it; otherwise treat as total.
@@ -298,40 +288,21 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   }
 
   // Taxes: RG separates taxes in taxAmount/taxes/totalTax fields
-  // Sometimes it's a nested object: { taxes: [{ amount: '75', clientAmount: '1830' }] }
   let includedTaxAmt = 0;
   let excludedTaxAmt = 0;
+  const cur = h.currency || "INR";
 
-  const extractTaxDetails = (taxObj: any) => {
-    if (!taxObj) return null;
-    if (typeof taxObj === "number") return { inc: 0, exc: taxObj };
-    if (typeof taxObj === "string") return { inc: 0, exc: Number(taxObj) || 0 };
-    if (Array.isArray(taxObj.taxes)) {
-      let inc = 0;
-      let exc = 0;
-      taxObj.taxes.forEach((t: any) => {
-        const amt = Number(t.clientAmount || t.amount) || 0;
-        const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
-        if (isInc) {
-          inc += amt;
-        } else {
-          exc += amt;
-        }
-      });
-      return { inc, exc };
-    }
-    return null;
-  };
-
-  const taxDet =
-    extractTaxDetails(h.taxes) ||
-    extractTaxDetails(h.options?.[0]?.taxes) ||
-    extractTaxDetails(h.roomRates?.[0]?.taxes);
+  let taxDet = null;
+  if (h.taxes) taxDet = extractRGTaxes(h.taxes, cur);
+  if ((!taxDet || (taxDet.inc === 0 && taxDet.exc === 0)) && h.options?.[0]?.taxes) taxDet = extractRGTaxes(h.options[0].taxes, cur);
+  if ((!taxDet || (taxDet.inc === 0 && taxDet.exc === 0)) && h.roomRates?.[0]?.taxes) taxDet = extractRGTaxes(h.roomRates[0].taxes, cur);
 
   if (taxDet) {
     includedTaxAmt = taxDet.inc;
     excludedTaxAmt = taxDet.exc;
-  } else {
+  }
+  
+  if (includedTaxAmt === 0 && excludedTaxAmt === 0) {
     excludedTaxAmt =
       Number(
         h.taxAmount ||
@@ -341,15 +312,29 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
       ) || 0;
   }
 
-  const taxAmt = includedTaxAmt + excludedTaxAmt;
+  const taxAmt = round2(includedTaxAmt + excludedTaxAmt);
   const taxesIncluded = taxAmt === 0;
 
-  const finalTotalPrice = totalPrice + excludedTaxAmt;
-  const netBasePrice = totalPrice - includedTaxAmt;
+  // Platform (super-admin) markup baked into the net the agent sees ("api price").
+  const netBasePrice = applyPlatformMarkup(round2(totalPrice - taxAmt));
+  const finalTotalPrice = round2(netBasePrice + taxAmt);
+
+  // Refundable status derived once, server-side (RG exposes no explicit flag)
+  const refundable = deriveRefundable({
+    cancellationPolicies:
+      h.cancellationPolicies ||
+      h.options?.[0]?.cancellationPolicies ||
+      h.roomRates?.[0]?.cancellationPolicies,
+    rateComments:
+      h.rateComments || h.options?.[0]?.rateComments || h.roomRates?.[0]?.rateComments,
+  });
 
   return {
     hotelId: `RG:${h.propertyId}`,
     source: "RG",
+    isRefundable: refundable.isRefundable,
+    refundableLabel: refundable.label,
+    freeCancellationUntil: refundable.freeCancellationUntil,
     name: h.propertyName || h.hotelName || h.name || h.propertyNameClean || h.HotelName || "",
     address: h.address || h.hotelAddress || "",
     city: h.city || h.cityName || h.destinationName || h.CityName || "",

@@ -5,8 +5,9 @@ export interface PrecheckResultV1 {
   cancellationPolicyHash: string;
   occupancy: number;
   optionId: string;
-  price: number;
+  price: number; // api net (INCLUDES platform markup) — validated against what the agent saw
   taxes: number;
+  supplierNet?: number; // raw amount to pay the supplier (EXCLUDES platform markup)
   currency: string;
   phone?: string;
   rateComments?: string;
