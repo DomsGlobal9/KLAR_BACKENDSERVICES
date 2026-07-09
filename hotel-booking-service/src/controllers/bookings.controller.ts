@@ -14,7 +14,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.trim().toLowerCase(),
+      guestEmail: email.toLowerCase(),
       clientType: "GUEST"
     });
     res.json({
@@ -39,6 +39,7 @@ export const getBookings = async (req: any, res: Response) => {
   try {
     const agentId = req.user?.userId || req.user?.id || req.user?._id;
     const email = req.user?.email;
+    const email = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
     
@@ -46,9 +47,14 @@ export const getBookings = async (req: any, res: Response) => {
     const query: any = {};
     
     if (!clientType) {
+    const clientType = req.query.clientType as string;
+    const query: any = {};
+    
+    if (!clientType) {
       return res.status(403).json({
         status: false,
         statusCode: 403,
+        description: "clientType is required",
         description: "clientType is required",
         body: null,
       });
@@ -76,17 +82,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        if (email) {
-          // A signed-up B2C user also owns the GUEST bookings they made on the
-          // same email before registering. guestEmail is stored lowercased.
-          query.$or = [
-            { userId: agentId },
-            { guestEmail: email.toLowerCase() },
-          ];
-          query.clientType = { $in: ['B2C', 'GUEST'] };
-        } else {
-          query.userId = agentId;
-        }
+        query.userId = agentId;
       } else if (clientType === 'GUEST') {
         if (!email) {
           return res.status(403).json({
@@ -96,7 +92,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.guestEmail = email.toLowerCase();
+        query.guestEmail = email;
       } else {
         return res.status(403).json({
           status: false,
