@@ -10,6 +10,7 @@ export interface IVisaApplication extends Document {
     destinationCountry: string;
     travelDate: Date;
     purpose: string;
+    source: string;
     
     // Employment Fields (Optional)
     employmentStatus?: 'Employed' | 'Self Employed';
@@ -50,6 +51,7 @@ const VisaApplicationSchema = new Schema({
     destinationCountry: { type: String, required: true },
     travelDate: { type: Date, required: true },
     purpose: { type: String, required: true },
+    source: { type: String},
     
     // Employment Fields
     employmentStatus: { 
