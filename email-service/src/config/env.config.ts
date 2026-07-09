@@ -17,6 +17,8 @@ type EnvConfig = {
     DEFAULT_FROM: string;
     DEFAULT_FROM_NAME: string;
     DEFAULT_REPLY_TO: string;
+
+    REDIS_URL: string;
 };
 
 const requiredEnv = (key: string, value?: string): string => {
@@ -43,4 +45,5 @@ export const envConfig: EnvConfig = {
     DEFAULT_FROM: requiredEnv("DEFAULT_FROM", process.env.DEFAULT_FROM_EMAIL),
     DEFAULT_FROM_NAME: requiredEnv("DEFAULT_FROM_NAME", process.env.DEFAULT_FROM_NAME),
     DEFAULT_REPLY_TO: requiredEnv("DEFAULT_REPLY_TO", process.env.DEFAULT_REPLY_TO),
+    REDIS_URL: requiredEnv("REDIS_URL", process.env.REDIS_URL),
 };

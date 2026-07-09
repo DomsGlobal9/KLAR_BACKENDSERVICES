@@ -8,8 +8,6 @@ import bookingRoutes from "./booking.routes";
 import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
-import flightDocumentRoute from "./flight-client-template.route";
-import flightBookingAgencyTemplateRoute from "./flight-agency-template.routes";
 import voucherRoutes from "./voucher.routes";
 
 
@@ -24,8 +22,6 @@ router.use("/search", searchRoutes);
 router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
-router.use("/client-booking-document", flightDocumentRoute);
-router.use("/agency", flightBookingAgencyTemplateRoute);
 router.use("/voucher", voucherRoutes);
 
 
