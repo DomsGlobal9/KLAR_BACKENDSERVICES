@@ -68,12 +68,14 @@ async function pollTripJackBookingStatus(
     const tjStatus: string = details?.order?.status || "";
 
     const isSystemPending = details?.isSystemPending === true;
+    // A status is only truly terminal if the system is no longer pending
     const isTerminal =
-      TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus);
+      !isSystemPending &&
+      (TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus));
 
     if (
-      !isTerminal &&
-      (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
+      isSystemPending ||
+      (!isTerminal && (TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus))
     ) {
       const backoffDelay = POLL_INTERVAL_MS;
       console.log(
