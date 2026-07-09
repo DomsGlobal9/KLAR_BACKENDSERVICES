@@ -28,12 +28,17 @@ const executeBookingStatusCron = async () => {
 
   try {
     /**
-     * Get all pending and held bookings
+     * Get all bookings in a non-terminal state
      */
     const bookings = await hotelBookingRepository.find(
       {
-        status: { $in: [BookingStatus.PENDING, BookingStatus.HELD] },
-        provider: BookingProvider.TRIPJACK,
+        status: {
+          $nin: [
+            BookingStatus.CONFIRMED,
+            BookingStatus.CANCELLED,
+            BookingStatus.FAILED,
+          ],
+        },
       },
       null,
       undefined,
