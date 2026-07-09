@@ -10,9 +10,9 @@ class BookingsService {
   /**
    * Get all bookings from the database filtered by user ID.
    */
-  async getAllBookings(agentId?: string) {
+  async getAllBookings(filter: any = {}) {
     try {
-      const query = agentId ? { agentId } : {};
+      const query = { ...filter };
       const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
       // Map to safe DTO to prevent leaking raw provider responses and margins

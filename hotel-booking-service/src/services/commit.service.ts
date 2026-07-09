@@ -400,6 +400,7 @@ class CommitService {
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
         userInfo,
+        clientType,
       });
 
       pollTripJackBookingStatus(
@@ -718,6 +719,7 @@ class CommitService {
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
         userInfo,
+        clientType,
       });
 
       // Only email a confirmation voucher for a genuinely confirmed booking.
