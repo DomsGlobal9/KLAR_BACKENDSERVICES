@@ -585,13 +585,9 @@ class CommitService {
         rgPayload.BookReservation.BookingRate = supplierBookingRate;
         if (rgSellingRate !== undefined)
           rgPayload.BookReservation.SellingRate = rgSellingRate;
-        delete rgPayload.BookReservation.GuaranteeMethod;
-        delete rgPayload.BookReservation.GuaranteeType;
       } else {
         rgPayload.BookingRate = supplierBookingRate;
         if (rgSellingRate !== undefined) rgPayload.SellingRate = rgSellingRate;
-        delete rgPayload.GuaranteeMethod;
-        delete rgPayload.GuaranteeType;
       }
 
       const rgResponse = await rateGainProvider.commit(rgPayload);

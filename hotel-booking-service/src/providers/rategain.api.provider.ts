@@ -24,18 +24,44 @@ export class RateGainApiProvider {
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
+        ...(booking.GuaranteeMethod ? { GuaranteeMethod: booking.GuaranteeMethod } : {}),
+        ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
+        ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
-        BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+        BrandCode:
+          booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+            ? booking.BrandCode
+            : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+              ? booking.brandCode
+              : "TkEvQQ==",
         checkin: booking.checkin || booking.checkIn,
         checkout: booking.checkout || booking.checkOut,
+        CheckInDate: booking.checkin || booking.checkIn,
+        CheckOutDate: booking.checkout || booking.checkOut,
+        checkInDate: booking.checkin || booking.checkIn,
+        checkOutDate: booking.checkout || booking.checkOut,
         CountryCode: booking.CountryCode || "IN",
         Currency: booking.Currency || booking.CurrencyCode || "INR",
+        DemandBookingId: booking.DemandBookingId || `demand-precheck-${Date.now()}`,
+        ReservationDate: booking.ReservationDate || new Date().toISOString(),
+        TimeStamp: booking.TimeStamp || new Date().toISOString(),
         EchoToken:
           booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
         Session: booking.Session || "",
+        BookingRate:
+          booking.BookingRate !== undefined
+            ? booking.BookingRate
+            : booking.SellingRate !== undefined
+              ? booking.SellingRate
+              : booking.sellingRate,
+        ...(booking.SellingRate !== undefined && booking.SellingRate !== null
+          ? { SellingRate: Number(Number(booking.SellingRate).toFixed(2)) }
+          : booking.sellingRate !== undefined && booking.sellingRate !== null
+            ? { SellingRate: Number(Number(booking.sellingRate).toFixed(2)) }
+            : {}),
         RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
           const mappedRs: any = {
             RoomTypeCode: rs.RoomTypeCode || "Standard",
@@ -136,14 +162,19 @@ export class RateGainApiProvider {
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
-        // GuaranteeMethod and GuaranteeType intentionally omitted —
-        // SDS uses a line-of-credit model; sending these fields causes RateGain
-        // to return ConfirmationFailed. Payment is handled via wallet deduction.
+        ...(booking.GuaranteeMethod ? { GuaranteeMethod: booking.GuaranteeMethod } : {}),
+        ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
+        ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
         propertyID: rawPropertyId,
         PropertyId: rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
-        BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+        BrandCode:
+          booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+            ? booking.BrandCode
+            : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+              ? booking.brandCode
+              : "TkEvQQ==",
         checkin: booking.checkin || booking.checkIn,
         checkout: booking.checkout || booking.checkOut,
         CheckInDate: booking.checkin || booking.checkIn,
@@ -168,7 +199,9 @@ export class RateGainApiProvider {
         // from precheck). Only sent when provided (B2C); omitted for B2B.
         ...(booking.SellingRate !== undefined && booking.SellingRate !== null
           ? { SellingRate: Number(Number(booking.SellingRate).toFixed(2)) }
-          : {}),
+          : booking.sellingRate !== undefined && booking.sellingRate !== null
+            ? { SellingRate: Number(Number(booking.sellingRate).toFixed(2)) }
+            : {}),
         RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
           const mappedRs: any = {
             RoomTypeCode: rs.RoomTypeCode || "Standard",

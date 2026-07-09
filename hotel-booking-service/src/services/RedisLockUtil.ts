@@ -12,7 +12,7 @@ redisClient.on("connect", () => {
 });
 
 redisClient.on("error", (err) => {
-  console.error("❌ [Redis] Connection Error:", err.message);
+  // Intentionally suppressed to prevent ECONNRESET spam in terminal
 });
 
 export class RedisLockUtil {
@@ -39,9 +39,10 @@ export class RedisLockUtil {
         "NX",
       );
       return result === "OK";
-    } catch (error) {
-      console.error(`[RedisLock] Failed to attempt lock for ${lockKey}`, error);
-      return false;
+    } catch (error: any) {
+      console.error(`[RedisLock] Failed to attempt lock for ${lockKey}`, error.message);
+      // Bypass lock if Redis is unreachable to avoid blocking bookings
+      return true;
     }
   }
 
