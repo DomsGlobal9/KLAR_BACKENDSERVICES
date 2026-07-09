@@ -21,44 +21,46 @@ class BookingsService {
    * Get all bookings from the database filtered by user ID.
    */
   async getAllBookings(filter: any = {}) {
-    try {
-      const query = { ...filter };
-      const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
+  async getAllBookings(filter: any = {}) {
+      try {
+        const query = { ...filter };
+        const query = { ...filter };
+        const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
-      // Map to safe DTO to prevent leaking raw provider responses and margins
-      const mappedBookings = bookings.map((b: any) => ({
-        _id: b._id,
-        confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
-        reservationId: b.reservationId,
-        propertyId: b.propertyId || 'UNKNOWN',
-        provider: b.provider || 'rategain',
-        status: b.status || 'PENDING',
-        checkIn: b.checkIn || new Date().toISOString(),
-        checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
-        totalAmount: b.totalAmount || 0,
-        currencyCode: b.currencyCode || 'INR',
-        hotelName: b.hotelName || 'Hotel',
-        hotelImage: b.hotelImage,
-        hotelAddress: b.hotelAddress,
-        city: b.city,
-        starRating: b.starRating,
-        agentId: b.agentId,
-        guestName: b.guestName || 'Guest',
-        rooms: b.rooms?.map((r: any) => ({
-          roomType: r.roomType || r.roomName || 'Standard Room',
-          boardType: r.boardType || r.boardName,
-          guests: r.guests || 1,
-          price: r.price || 0,
-        })) || [],
-        createdAt: b.createdAt,
-      }));
+        // Map to safe DTO to prevent leaking raw provider responses and margins
+        const mappedBookings = bookings.map((b: any) => ({
+          _id: b._id,
+          confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
+          reservationId: b.reservationId,
+          propertyId: b.propertyId || 'UNKNOWN',
+          provider: b.provider || 'rategain',
+          status: b.status || 'PENDING',
+          checkIn: b.checkIn || new Date().toISOString(),
+          checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
+          totalAmount: b.totalAmount || 0,
+          currencyCode: b.currencyCode || 'INR',
+          hotelName: b.hotelName || 'Hotel',
+          hotelImage: b.hotelImage,
+          hotelAddress: b.hotelAddress,
+          city: b.city,
+          starRating: b.starRating,
+          agentId: b.agentId,
+          guestName: b.guestName || 'Guest',
+          rooms: b.rooms?.map((r: any) => ({
+            roomType: r.roomType || r.roomName || 'Standard Room',
+            boardType: r.boardType || r.boardName,
+            guests: r.guests || 1,
+            price: r.price || 0,
+          })) || [],
+          createdAt: b.createdAt,
+        }));
 
-      return mappedBookings;
-    } catch (error: any) {
-      console.error("Error fetching bookings:", error.message);
-      throw error;
+        return mappedBookings;
+      } catch (error: any) {
+        console.error("Error fetching bookings:", error.message);
+        throw error;
+      }
     }
-  }
 
   /**
    * Pull the live status from the supplier and persist any transition.
@@ -71,8 +73,8 @@ class BookingsService {
    * the in-request poll in commit.service and this method race, exactly one
    * of them owns the transition and sends the confirmation email.
    */
-  async syncBookingStatus(booking: any): Promise<any> {
-    if (!booking || TERMINAL_STATUSES.has(booking.status)) return booking;
+  async syncBookingStatus(booking: any): Promise < any > {
+      if(!booking || TERMINAL_STATUSES.has(booking.status)) return booking;
 
     if (booking.provider === BookingProvider.TRIPJACK) {
       return this.syncTripJackStatus(booking);
@@ -265,7 +267,11 @@ class BookingsService {
   async getBookingById(id: string) {
     try {
       const query: any = {
-        $or: [{ confirmationNumber: id }, { reservationId: id }],
+        $or: [
+          { confirmationNumber: id },
+          { reservationId: id },
+          { publicToken: id },
+        ],
       };
 
       if (id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -274,40 +280,54 @@ class BookingsService {
 
       let booking = await hotelBookingRepository.findOne(query);
 
-      if (booking) {
-        booking = await this.syncBookingStatus(booking);
-      }
+      // Sync live status for HELD or PENDING bookings from TripJack
+      if (
+        booking &&
+        (booking.status === BookingStatus.HELD ||
+          booking.status === BookingStatus.PENDING) &&
+        booking.provider === BookingProvider.TRIPJACK
+      ) {
+        try {
+          const tjDetails = await tripJackProvider.getBookingDetails(
+            booking.confirmationNumber,
+          );
 
-      if (booking) {
-        return {
-          _id: booking._id,
-          confirmationNumber: booking.confirmationNumber || booking.reservationId || 'PENDING',
-          reservationId: booking.reservationId,
-          propertyId: booking.propertyId || 'UNKNOWN',
-          provider: booking.provider || 'rategain',
-          status: booking.status || 'PENDING',
-          checkIn: booking.checkIn || new Date().toISOString(),
-          checkOut: booking.checkOut || new Date(Date.now() + 86400000).toISOString(),
-          totalAmount: booking.totalAmount || 0,
-          currencyCode: booking.currencyCode || 'INR',
-          hotelName: booking.hotelName || 'Hotel',
-          hotelImage: booking.hotelImage,
-          hotelAddress: booking.hotelAddress,
-          city: booking.city,
-          starRating: booking.starRating,
-          agentId: booking.agentId,
-          userId: booking.userId,
-          guestEmail: booking.guestEmail,
-          userInfo: booking.userInfo,
-          guestName: booking.guestName || 'Guest',
-          rooms: booking.rooms?.map((r: any) => ({
-            roomType: r.roomType || r.roomName || 'Standard Room',
-            boardType: r.boardType || r.boardName,
-            guests: r.guests || 1,
-            price: r.price || 0,
-          })) || [],
-          createdAt: booking.createdAt,
-        };
+          if (tjDetails) {
+            const orderStatus = tjDetails?.order?.status;
+            const rsta = tjDetails?.itemInfos?.HOTEL?.ops?.[0]?.rsta;
+            let newStatus: BookingStatus = booking.status;
+
+            if (orderStatus === "SUCCESS" || rsta === "S") {
+              newStatus = BookingStatus.CONFIRMED;
+            } else if (orderStatus === "ON_HOLD" || rsta === "O") {
+              newStatus = BookingStatus.HELD;
+            } else if (
+              orderStatus === "CANCELLED" ||
+              rsta === "C" ||
+              tjDetails?.status?.description
+                ?.toLowerCase()
+                ?.includes("cancelled")
+            ) {
+              newStatus = BookingStatus.CANCELLED;
+            } else if (orderStatus === "FAILED" || orderStatus === "ABORTED") {
+              newStatus = BookingStatus.FAILED;
+            }
+
+            if (newStatus !== booking.status) {
+              booking.status = newStatus;
+              // Optionally save the updated response payload
+              await hotelBookingRepository.findByIdAndUpdate(booking._id, {
+                status: newStatus,
+                tripJackResponse: tjDetails,
+              });
+            }
+          }
+        } catch (syncErr: any) {
+          console.error(
+            `Failed to sync live status for booking ${id}:`,
+            syncErr.message,
+          );
+        }
       }
 
       return booking;
