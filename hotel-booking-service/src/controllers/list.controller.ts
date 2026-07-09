@@ -11,13 +11,17 @@ export const listController = async (req: any, res: Response) => {
     const email = req.user?.email;
     console.log(`[FORENSIC] req.user:`, JSON.stringify(req.user));
 
+    const clientType = req.headers["x-client-type"] || req.query.clientType || "B2C";
+    
     const data = await listService.list({
       status: status as string | undefined,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
-      agentId: isAdmin ? undefined : agentId,
+      agentId: agentId,
       isGuest,
       email,
+      clientType: clientType as string,
+      isAdmin,
     });
     console.log(
       `[FORENSIC] List Bookings: isAdmin=${isAdmin}, agentId=${agentId}, count=${data.body?.bookings?.length || 0}`,

@@ -79,6 +79,7 @@ export interface IBooking extends Document {
   agentName?: string;
   userId?: string;
   userInfo?: IUserInfo;
+  clientType: string;
 
   // ─── Cancellation ──────────────────────────────
   cancellationPolicy?: ICancellationPolicy;
@@ -186,6 +187,7 @@ const bookingSchema = new Schema<IBooking>(
     agentName: { type: String },
     userId: { type: String, index: true },
     userInfo: { type: userInfoSchema },
+    clientType: { type: String, enum: ["B2B", "B2C", "GUEST"], required: true },
 
     // Cancellation
     cancellationPolicy: { type: cancellationPolicySchema },
@@ -210,6 +212,8 @@ const bookingSchema = new Schema<IBooking>(
 
 bookingSchema.index({ agentId: 1, createdAt: -1 });
 bookingSchema.index({ userId: 1, createdAt: -1 });
+bookingSchema.index({ guestEmail: 1, createdAt: -1 });
+bookingSchema.index({ clientType: 1, createdAt: -1 });
 bookingSchema.index({ propertyId: 1, checkIn: 1 });
 
 export const BookingModel: Model<IBooking> =

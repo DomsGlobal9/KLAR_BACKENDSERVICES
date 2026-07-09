@@ -14,7 +14,8 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.toLowerCase()
+      guestEmail: email.toLowerCase(),
+      clientType: "GUEST"
     });
     res.json({
       status: true,
@@ -37,19 +38,66 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
 export const getBookings = async (req: any, res: Response) => {
   try {
     const agentId = req.user?.userId || req.user?.id || req.user?._id;
+    const email = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
     
-    if (!isAdmin && !agentId) {
+    const clientType = req.query.clientType as string;
+    const query: any = {};
+    
+    if (!clientType) {
       return res.status(403).json({
         status: false,
         statusCode: 403,
-        description: "Access denied. Valid user context required.",
+        description: "clientType is required",
         body: null,
       });
     }
+    
+    query.clientType = clientType;
 
-    const bookings = await bookingsService.getAllBookings(isAdmin ? undefined : agentId);
+    if (!isAdmin) {
+      if (clientType === 'B2B') {
+        if (!agentId) {
+          return res.status(403).json({
+            status: false,
+            statusCode: 403,
+            description: "Access denied. Valid user context required.",
+            body: null,
+          });
+        }
+        query.agentId = agentId;
+      } else if (clientType === 'B2C') {
+        if (!agentId) {
+          return res.status(403).json({
+            status: false,
+            statusCode: 403,
+            description: "Access denied. Valid user context required.",
+            body: null,
+          });
+        }
+        query.userId = agentId;
+      } else if (clientType === 'GUEST') {
+        if (!email) {
+          return res.status(403).json({
+            status: false,
+            statusCode: 403,
+            description: "Access denied. Valid guest context required.",
+            body: null,
+          });
+        }
+        query.guestEmail = email;
+      } else {
+        return res.status(403).json({
+          status: false,
+          statusCode: 403,
+          description: "Invalid clientType",
+          body: null,
+        });
+      }
+    }
+
+    const bookings = await bookingsService.getAllBookings(query);
     res.json({
       status: true,
       statusCode: 200,

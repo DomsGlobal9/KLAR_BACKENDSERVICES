@@ -4,6 +4,7 @@ import {
   calculateNightsFromDates,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
+import { HotelModel } from "../models/Hotel.model";
 
 export class RateGainApiProvider {
   async getDestinations() {
@@ -172,18 +173,25 @@ export class RateGainApiProvider {
       // ── Enrich each rate with backend-computed pricing (safe — never throws) ──
       const enrichRate = (rate: any) => {
         try {
+          const parseAmt = (val: any) => {
+            if (typeof val === 'number') return isNaN(val) ? 0 : val;
+            if (!val) return 0;
+            const parsed = Number(val.toString().replace(/,/g, ''));
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
           // RateGain getproducts returns RoomRate as the primary price field
-          const totalPrice = Number(
+          const totalPrice = parseAmt(
             rate.RoomRate ||
-              rate.totalAmount ||
-              rate.sellingRate ||
-              rate.totalRate ||
-              rate.price ||
-              rate.net ||
-              rate.rate ||
-              rate.totalPrice ||
-              rate.netPrice ||
-              0,
+            rate.totalAmount ||
+            rate.sellingRate ||
+            rate.totalRate ||
+            rate.price ||
+            rate.net ||
+            rate.rate ||
+            rate.totalPrice ||
+            rate.netPrice ||
+            0,
           );
           const taxAmount = Number(
             rate.taxAmount || rate.taxes || rate.totalTax || rate.tax || 0,
@@ -260,7 +268,36 @@ export class RateGainApiProvider {
           return newObj;
         };
 
-        return enrichDeep(rawData);
+        let finalData = enrichDeep(rawData);
+
+        try {
+          const staticHotel = await HotelModel.findOne({
+            tjHotelId: propertyId,
+          }).lean();
+
+          if (staticHotel) {
+            finalData = {
+              ...finalData,
+              images: staticHotel.images || [],
+              name: staticHotel.name,
+              address: staticHotel.address,
+              city: staticHotel.cityName,
+              starRating: staticHotel.starRating,
+              latitude: staticHotel.location?.coordinates?.[1],
+              longitude: staticHotel.location?.coordinates?.[0],
+              description: staticHotel.accMultiDesc || staticHotel.accTypeDesc || "",
+            };
+          }
+        } catch (dbErr) {
+          console.warn("[RateGain] Failed to fetch static data from DB:", dbErr);
+        }
+
+        return {
+          status: true,
+          statusCode: 200,
+          description: "Success",
+          body: finalData
+        };
       } catch (enrichErr: any) {
         console.warn(
           "[RateGain] Pricing enrichment warning (non-fatal):",

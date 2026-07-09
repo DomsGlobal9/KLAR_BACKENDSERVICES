@@ -10,9 +10,9 @@ class BookingsService {
   /**
    * Get all bookings from the database filtered by user ID.
    */
-  async getAllBookings(agentId?: string) {
+  async getAllBookings(filter: any = {}) {
     try {
-      const query = agentId ? { agentId } : {};
+      const query = { ...filter };
       const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
       // Map to safe DTO to prevent leaking raw provider responses and margins
@@ -116,7 +116,7 @@ class BookingsService {
           );
         }
       }
-      
+
       // Sync live status from RateGain on every detail fetch
       if (
         booking &&
@@ -156,7 +156,7 @@ class BookingsService {
               const isCancelled = /^cancelled$/i.test(rgStatus);
               const newStatus = isCancelled ? BookingStatus.CANCELLED : BookingStatus.FAILED;
               const statusChanged = booking.status !== newStatus;
-              
+
               await hotelBookingRepository.findByIdAndUpdate(booking._id, {
                 status: newStatus,
                 rateGainResponse: rgDetails,
