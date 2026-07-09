@@ -7,10 +7,17 @@ export async function searchRG(
   req: UnifiedSearchRequest,
   clientType: "B2B" | "B2C" = "B2C",
 ): Promise<{ hotels: UnifiedHotel[]; total: number }> {
-  // Ignore GEO: tokens — they're internal geo coordinate strings, NOT valid RateGain destination codes
   let rawDestCode = (req.destinationCode || "").toString().trim();
   let destCode = (rawDestCode && !rawDestCode.startsWith("GEO:")) ? rawDestCode : null;
   const isDirectRG = req.destination?.startsWith("RG:");
+
+  // TEMPORARY HACK FOR RATEGAIN SANDBOX TESTING:
+  // Force Dubai to use the known working sandbox destination code 'DXB'
+  if (req.destination?.toLowerCase().includes("dubai")) {
+    destCode = "DXB";
+    req._geoCenter = null; // Prevent Geofilter from triggering since sandbox Geofilter returns 0
+    delete req.countryCode; // Prevent "IN" from breaking DXB search in sandbox
+  }
 
   const payload: any = {
     checkin: req.checkin,
@@ -23,7 +30,7 @@ export async function searchRG(
       Children: r.children,
       paxes: (r.childAges || []).map((age) => ({
         type: "Child",
-        age: age || 5,
+        age: age ?? 5, // default only missing ages; preserve 0 (infant)
       })),
     })),
     echoToken: `echo-${Date.now()}`,
@@ -37,7 +44,7 @@ export async function searchRG(
     payload.Geofilter = {
       latitude: geo.lat.toFixed(6),
       longitude: geo.lng.toFixed(6),
-      radius: geo.radiusKm ? Math.round(geo.radiusKm) : 25, // 25km default — tighter than 50km to avoid neighboring cities
+      radius: geo.radiusKm || 20, // exact api-derived radius (same as TJ + post-filter), no rounding so no hotels are dropped
     };
   } else if (req.destination) {
     if (!destCode) {

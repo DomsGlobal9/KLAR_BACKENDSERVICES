@@ -2,6 +2,9 @@ import { BookingProvider, BookingStatus } from "../models/Booking.model";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 
 import { tripJackProvider } from "../providers/tripjack.provider";
+import { rateGainProvider } from "../providers/rategain.provider";
+import { notificationService } from "./notification.service";
+
 
 class BookingsService {
   /**
@@ -111,8 +114,60 @@ class BookingsService {
           );
         }
       }
+      // RateGain MANUAL_REVIEW → poll GetReservation for a live status update.
+      // This mirrors the TripJack sync above and resolves the case where RG
+      // accepted the booking but couldn't confirm it synchronously.
+      if (
+        booking &&
+        booking.status === BookingStatus.MANUAL_REVIEW &&
+        booking.provider === BookingProvider.RATEGAIN
+      ) {
+        try {
+          const rgDetails = await rateGainProvider.getReservationDetails(
+            booking.confirmationNumber,
+            booking.reservationId,
+            booking.propertyId,
+            booking.brandCode,
+          );
 
-      // Map to safe DTO
+          if (rgDetails) {
+            const rgStatus = (
+              rgDetails?.body?.booking?.status ||
+              rgDetails?.booking?.status ||
+              rgDetails?.status ||
+              ""
+            ).toString().trim();
+
+            if (/^confirmed$/i.test(rgStatus)) {
+              await hotelBookingRepository.findByIdAndUpdate(booking._id, {
+                status: BookingStatus.CONFIRMED,
+                rateGainResponse: rgDetails,
+                ...(rgDetails?.body?.booking?.confirmationNumber
+                  ? { confirmationNumber: rgDetails.body.booking.confirmationNumber }
+                  : {}),
+              });
+              booking.status = BookingStatus.CONFIRMED;
+              // Fire confirmation email now that we have a real confirmation
+              notificationService.sendBookingConfirmation(booking);
+              console.log(`[RG Sync] Booking ${id} resolved from MANUAL_REVIEW → CONFIRMED`);
+            } else if (/^(failed|cancelled|rejected)$/i.test(rgStatus)) {
+              await hotelBookingRepository.findByIdAndUpdate(booking._id, {
+                status: BookingStatus.FAILED,
+                rateGainResponse: rgDetails,
+              });
+              booking.status = BookingStatus.FAILED;
+              console.log(`[RG Sync] Booking ${id} resolved from MANUAL_REVIEW → FAILED (rgStatus: ${rgStatus})`);
+            } else {
+              // Still in limbo — log and leave as MANUAL_REVIEW for next poll
+              console.log(`[RG Sync] Booking ${id} still MANUAL_REVIEW (rgStatus: "${rgStatus || 'unknown'}")`);
+            }
+          }
+        } catch (rgSyncErr: any) {
+          console.error(`[RG Sync] Failed to sync MANUAL_REVIEW for booking ${id}:`, rgSyncErr.message);
+          // Non-fatal: return whatever we have from the DB
+        }
+      }
+
       if (booking) {
         return {
           _id: booking._id,

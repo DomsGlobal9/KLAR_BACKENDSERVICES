@@ -413,10 +413,19 @@ class CancelService {
 
     // ─── Step 3: Update local DB status if cancellation succeeded ───
     try {
+      // Per RateGain spec §8, a successful cancel returns outer status:true AND
+      // body.status "CANCELLED" with a cancellationNumber. Require the inner
+      // confirmation too — don't mark CANCELLED off a bare success envelope.
+      const rgBody = rateGainResponse?.body;
+      const rgCancelNumber = rgBody?.cancellationNumber;
+      const rgCancelled =
+        /^cancelled$/i.test((rgBody?.status || "").toString().trim()) ||
+        !!rgCancelNumber;
       if (
         rateGainResponse &&
         (rateGainResponse.status === true ||
-          rateGainResponse.status === "success")
+          rateGainResponse.status === "success") &&
+        rgCancelled
       ) {
         const targetId = confirmationNumber || reservationId || bookingId;
         if (targetId) {
@@ -439,7 +448,10 @@ class CancelService {
                   ? cancelChargesInfo.applicableCharge
                   : undefined,
               cancelChargesInfo: cancelChargesInfo,
-              cancellationDetails: cancelChargesInfo?.cancellation,
+              cancellationDetails: {
+                ...(cancelChargesInfo?.cancellation || {}),
+                ...(rgCancelNumber ? { cancellationNumber: rgCancelNumber } : {}),
+              },
             },
             { new: true },
           );

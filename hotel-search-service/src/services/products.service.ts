@@ -1,5 +1,4 @@
-import { rateGainProvider } from "../providers/rategain.provider";
-import { tripJackProvider } from "../providers/tripjack.provider";
+import { supplierRegistry } from "../suppliers";
 
 class ProductsService {
   async getProducts(payload: any) {
@@ -9,30 +8,13 @@ class ProductsService {
       ""
     ).toString();
 
-    if (this.isTripJack(propertyId)) {
-      return tripJackProvider.getProducts(payload);
+    // Adding a new supplier = register() it in suppliers/index.ts; this
+    // routing never needs to change.
+    const supplier = supplierRegistry.resolveByPropertyId(propertyId);
+    if (!supplier) {
+      throw new Error(`No supplier registered to handle propertyId: ${propertyId}`);
     }
-
-    // Default to RateGain
-    return rateGainProvider.getAllProducts(payload);
-  }
-
-  private isTripJack(propertyId: string): boolean {
-    // 1. Explicit TJ prefix
-    if (propertyId.startsWith("TJ:")) return true;
-
-    // 2. RG prefix is definitely not TripJack
-    if (propertyId.startsWith("RG:")) return false;
-
-    // 3. UUID format: RateGain uses UUIDs, TripJack uses numeric IDs
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(propertyId)) return false;
-
-    // 4. Numeric format: TripJack uses numeric IDs
-    if (/^\d+$/.test(propertyId)) return true;
-
-    return false;
+    return supplier.getProducts(payload);
   }
 }
 
