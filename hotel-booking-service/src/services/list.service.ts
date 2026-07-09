@@ -9,8 +9,14 @@ class ListService {
     agentId?: any;
     isGuest?: boolean;
     email?: string;
+    clientType?: string;
+    isAdmin?: boolean;
   }) {
     const filter: any = {};
+
+    if (query.clientType) {
+      filter.clientType = query.clientType;
+    }
 
     if (
       query.status &&
@@ -19,13 +25,14 @@ class ListService {
       filter.status = query.status;
     }
 
-    if (query.isGuest && query.email) {
-      filter.guestEmail = query.email;
-    } else if (query.agentId) {
-      filter.$or = [
-        { agentId: query.agentId },
-        { userId: query.agentId }, // Support filtering by userId as well
-      ];
+    if (!query.isAdmin) {
+      if (query.clientType === 'GUEST') {
+        if (query.email) filter.guestEmail = query.email;
+      } else if (query.clientType === 'B2B') {
+        if (query.agentId) filter.agentId = query.agentId;
+      } else {
+        if (query.agentId) filter.userId = query.agentId;
+      }
     }
     console.log(`[FORENSIC] ListService Filter:`, JSON.stringify(filter));
 

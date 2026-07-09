@@ -387,8 +387,9 @@ class CommitService {
           : "",
         guestEmail: payload.deliveryInfo?.emails?.[0] || "",
         guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
-        agentId: agentId || undefined,
-        agentName: agentName || undefined,
+        agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
+        userId: clientType === "B2C" ? (agentId || undefined) : undefined,
+        agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
         rooms,
         hotelName: payload.hotelName,
         hotelImage: extractHotelImage(payload.hotelImage),
@@ -687,12 +688,16 @@ class CommitService {
         guestEmail:
           primaryGuest?.Email ||
           payload.BookReservation?.emailAddress ||
-          payload.emailAddress ||
+          payload.deliveryInfo?.emails?.[0] ||
           "",
         guestMobile:
-          primaryGuest?.Phone || payload.BookReservation?.phoneNumber || "",
-        agentId: agentId || undefined,
-        agentName: agentName || undefined,
+          primaryGuest?.ContactNumber ||
+          payload.BookReservation?.phoneNumber ||
+          payload.deliveryInfo?.contacts?.[0] ||
+          "",
+        agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
+        userId: clientType === "B2C" ? (agentId || undefined) : undefined,
+        agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
         rooms: rgRooms.length > 0 ? rgRooms : undefined,
         hotelName: payload.hotelName,
         hotelImage: extractHotelImage(payload.hotelImage),
