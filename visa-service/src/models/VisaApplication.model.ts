@@ -110,4 +110,32 @@ const VisaApplicationSchema = new Schema({
     }
 }, { timestamps: true });
 
+
+export interface IVisaPlan extends Document {
+  title: string;
+  processingTime: string;
+  stayPeriod: string;
+  validity: string;
+  entry: string;
+  country: string;
+  isPopular?: boolean;
+  countryAliases?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const VisaPlanSchema = new Schema({
+  title: { type: String, required: true },
+  processingTime: { type: String, required: true },
+  stayPeriod: { type: String, required: true },
+  validity: { type: String, required: true },
+  entry: { type: String, required: true },
+  country: { type: String, required: true },
+  isPopular: { type: Boolean, default: false },
+  countryAliases: { type: [String], default: [] }
+}, { timestamps: true });
+
+export const VisaApplication = mongoose.model<IVisaApplication>('VisaApplication', VisaApplicationSchema);
+export const VisaPlanModel = mongoose.model<IVisaPlan>('VisaPlan', VisaPlanSchema);
+
 export default mongoose.model<IVisaApplication>('VisaApplication', VisaApplicationSchema);
