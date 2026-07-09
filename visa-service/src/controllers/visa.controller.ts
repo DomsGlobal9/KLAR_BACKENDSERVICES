@@ -4,9 +4,87 @@ import { VALID_CATEGORIES } from '../service/visa.service';
 
 export class VisaController {
     // Helper function to get string from params
-    private getStringParam(param: string | string[]): string {
-        return Array.isArray(param) ? param[0] : param;
+    // private getStringParam(param: string | string[]): string {
+    //     return Array.isArray(param) ? param[0] : param;
+    // }
+
+    private getStringParam(param: any): string {
+    if (!param) return '';
+    if (Array.isArray(param)) {
+        return typeof param[0] === 'string' ? param[0] : JSON.stringify(param[0]);
     }
+    if (typeof param === 'object') {
+        return ''; // Filters out nested ParsedQs structures safely
+    }
+    return String(param);
+}
+
+
+    // POST: Create a standard visa plan
+    async createVisaPlan(req: Request, res: Response): Promise<void> {
+        try {
+            const planData = req.body;
+            
+            // Basic input check
+            if (!planData.title || !planData.country) {
+                res.status(400).json({
+                    success: false,
+                    message: "Failed to create plan: 'title' and 'country' fields are required."
+                });
+                return;
+            }
+
+            const newPlan = await visaService.createVisaPlan(planData);
+            res.status(201).json({
+                success: true,
+                message: 'Visa plan created successfully',
+                data: newPlan
+            });
+        } catch (error) {
+            console.error('Error creating visa plan:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create visa plan',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }
+
+    // GET: Retrieve all active visa plans
+    async getVisaPlans(req: Request, res: Response): Promise<void> {
+        try {
+            const { country } = req.query;
+            const filter: any = {};
+
+            if (country) {
+                const searchStr = this.getStringParam(country).trim();
+                // Matches either the target country directly or structural alias combinations
+                filter.$or = [
+                    { country: { $regex: new RegExp(`^${searchStr}$`, 'i') } },
+                    { countryAliases: { $regex: new RegExp(`^${searchStr}$`, 'i') } }
+                ];
+            }
+
+            const plans = await visaService.getVisaPlans(filter);
+            res.status(200).json({
+                success: true,
+                count: plans.length,
+                data: plans
+            });
+        } catch (error) {
+            console.error('Error fetching visa plans:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch visa plans',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }
+
+
+
+
+
 
     // Submit visa application
     async submitVisaApplication(req: Request, res: Response): Promise<void> {
