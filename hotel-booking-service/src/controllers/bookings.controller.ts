@@ -14,7 +14,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.trim().toLowerCase(),
+      guestEmail: email.toLowerCase(),
       clientType: "GUEST"
     });
     res.json({
@@ -76,17 +76,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        if (email) {
-          // A signed-up B2C user also owns the GUEST bookings they made on the
-          // same email before registering. guestEmail is stored lowercased.
-          query.$or = [
-            { userId: agentId },
-            { guestEmail: email.toLowerCase() },
-          ];
-          query.clientType = { $in: ['B2C', 'GUEST'] };
-        } else {
-          query.userId = agentId;
-        }
+        query.userId = agentId;
       } else if (clientType === 'GUEST') {
         if (!email) {
           return res.status(403).json({
@@ -96,7 +86,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.guestEmail = email.toLowerCase();
+        query.guestEmail = email;
       } else {
         return res.status(403).json({
           status: false,
@@ -144,15 +134,14 @@ export const getBookingDetails = async (req: any, res: Response) => {
 
     // Ownership Check
     const userId = req.user?.userId || req.user?.id;
-    const userEmail = req.user?.email?.toLowerCase();
+    const userEmail = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
     const isOwner = 
       booking.agentId === userId || 
       booking.userId === userId || 
-      (booking as any).userInfo?.id === userId ||
-      (userEmail && booking.guestEmail?.toLowerCase() === userEmail);
+      (userEmail && booking.guestEmail === userEmail);
 
     // If a user is logged in but doesn't own it, deny access.
     // If no user is logged in (req.user is undefined), allow access since they must know the exact secure ID.
@@ -165,21 +154,10 @@ export const getBookingDetails = async (req: any, res: Response) => {
       });
     }
 
-    // Anonymous callers reach this by knowing the booking id (the guest
-    // confirmation link). That is enough to see the stay, not enough to see who
-    // booked it — strip the identity fields.
-    const body: any = { ...booking };
-    if (!req.user) {
-      delete body.guestEmail;
-      delete body.userInfo;
-      delete body.userId;
-      delete body.agentId;
-    }
-
     res.json({
       status: true,
       statusCode: 200,
-      body,
+      body: booking,
     });
   } catch (error: any) {
     console.error("Get Booking Details Error:", error.message);
