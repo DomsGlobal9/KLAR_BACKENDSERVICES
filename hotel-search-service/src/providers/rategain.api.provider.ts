@@ -6,9 +6,6 @@ import {
 import { getMarkupRules } from "../utils/auth";
 import { HotelModel } from "../models/Hotel.model";
 
-/** Full supplier request/response bodies. Multi-megabyte and pretty-printed — opt-in only. */
-const DEBUG_PAYLOADS = process.env.HOTEL_DEBUG_PAYLOADS === "true";
-
 export class RateGainApiProvider {
   async getDestinations() {
     try {
@@ -201,7 +198,15 @@ export class RateGainApiProvider {
             return isNaN(parsed) ? 0 : parsed;
           };
 
+          const parseAmt = (val: any) => {
+            if (typeof val === 'number') return isNaN(val) ? 0 : val;
+            if (!val) return 0;
+            const parsed = Number(val.toString().replace(/,/g, ''));
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
           // RateGain getproducts returns RoomRate as the primary price field
+          const totalPrice = parseAmt(
           const totalPrice = parseAmt(
             rate.RoomRate ||
               rate.totalAmount ||
@@ -325,19 +330,26 @@ export class RateGainApiProvider {
 
         let finalData = enrichDeep(rawData);
 
-        const staticHotel = await staticHotelPromise;
-        if (staticHotel) {
-          finalData = {
-            ...finalData,
-            images: staticHotel.images || [],
-            name: staticHotel.name,
-            address: staticHotel.address,
-            city: staticHotel.cityName,
-            starRating: staticHotel.starRating,
-            latitude: staticHotel.location?.coordinates?.[1],
-            longitude: staticHotel.location?.coordinates?.[0],
-            description: staticHotel.accMultiDesc || staticHotel.accTypeDesc || "",
-          };
+        try {
+          const staticHotel = await HotelModel.findOne({
+            tjHotelId: propertyId,
+          }).lean();
+
+          if (staticHotel) {
+            finalData = {
+              ...finalData,
+              images: staticHotel.images || [],
+              name: staticHotel.name,
+              address: staticHotel.address,
+              city: staticHotel.cityName,
+              starRating: staticHotel.starRating,
+              latitude: staticHotel.location?.coordinates?.[1],
+              longitude: staticHotel.location?.coordinates?.[0],
+              description: staticHotel.accMultiDesc || staticHotel.accTypeDesc || "",
+            };
+          }
+        } catch (dbErr) {
+          console.warn("[RateGain] Failed to fetch static data from DB:", dbErr);
         }
 
         return {
