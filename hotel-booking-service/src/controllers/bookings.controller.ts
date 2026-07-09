@@ -76,7 +76,16 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.userId = agentId;
+        if (email) {
+          query.$or = [
+            { userId: agentId },
+            { guestEmail: email.toLowerCase() },
+            { guestEmail: email }
+          ];
+          query.clientType = { $in: ['B2C', 'GUEST'] };
+        } else {
+          query.userId = agentId;
+        }
       } else if (clientType === 'GUEST') {
         if (!email) {
           return res.status(403).json({
@@ -134,14 +143,15 @@ export const getBookingDetails = async (req: any, res: Response) => {
 
     // Ownership Check
     const userId = req.user?.userId || req.user?.id;
-    const userEmail = req.user?.email;
+    const userEmail = req.user?.email?.toLowerCase();
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
     const isOwner = 
       booking.agentId === userId || 
       booking.userId === userId || 
-      (userEmail && booking.guestEmail === userEmail);
+      (booking as any).userInfo?.id === userId ||
+      (userEmail && booking.guestEmail?.toLowerCase() === userEmail);
 
     // If a user is logged in but doesn't own it, deny access.
     // If no user is logged in (req.user is undefined), allow access since they must know the exact secure ID.
