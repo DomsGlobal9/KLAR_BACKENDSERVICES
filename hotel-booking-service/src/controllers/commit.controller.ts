@@ -30,16 +30,16 @@ export const commitController = async (req: any, res: Response) => {
           req.body.providerContext.hotelId || req.body.bookingFormData.hotelId,
         netPrice: Number(
           req.body.bookingFormData.totalNet ||
-            req.body.bookingFormData.precheckResponse?.body?.hInfo?.ops?.[0]
-              ?.tp ||
-            req.body.bookingFormData.totalPrice ||
-            0,
+          req.body.bookingFormData.precheckResponse?.body?.hInfo?.ops?.[0]
+            ?.tp ||
+          req.body.bookingFormData.totalPrice ||
+          0,
         ),
         sellingRate: Number(req.body.bookingFormData.totalPrice || 0),
         totalPrice: Number(
           req.body.bookingFormData.totalPrice ||
-            req.body.bookingFormData.totalNet ||
-            0,
+          req.body.bookingFormData.totalNet ||
+          0,
         ),
 
         // TripJack dynamic check parameters
