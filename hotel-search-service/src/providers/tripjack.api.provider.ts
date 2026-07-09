@@ -5,6 +5,9 @@ import { HotelModel } from "../models/Hotel.model";
 import {
   calculateEnrichedPricing,
   calculateNightsFromDates,
+  deriveRefundable,
+  platformMarkupAmount,
+  round2,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
 
@@ -292,7 +295,7 @@ export class TripJackApiProvider {
             roomImages = opt.roomInfo[0].images;
           }
 
-          // ── Backend pricing enrichment (markup + per-night) ────────────
+          // ── Backend pricing enrichment (platform markup + agent markup + per-night) ──
           const rawTotalPrice = Number(opt.pricing?.totalPrice ?? 0);
           const rawBasePrice = Number(opt.pricing?.basePrice ?? rawTotalPrice);
           const rawTaxes = Number(opt.pricing?.taxes ?? 0);
@@ -300,10 +303,15 @@ export class TripJackApiProvider {
           const rawMft = Number(opt.pricing?.mft ?? 0);
           const rawCurrency = opt.pricing?.currency ?? "INR";
 
+          // Platform (super-admin) markup baked into the net the agent sees ("api price").
+          const platformAmt = platformMarkupAmount(rawBasePrice);
+          const apiBasePrice = round2(rawBasePrice + platformAmt);
+          const apiTotalPrice = round2(rawTotalPrice + platformAmt);
+
           const enriched = calculateEnrichedPricing(
             {
-              basePrice: rawBasePrice,
-              totalPrice: rawTotalPrice,
+              basePrice: apiBasePrice,
+              totalPrice: apiTotalPrice,
               taxes: rawTaxes,
               mf: rawMf,
               mft: rawMft,
@@ -312,6 +320,12 @@ export class TripJackApiProvider {
             markupRules,
             nights,
           );
+
+          // Refundable status — TripJack provides an explicit flag; normalize the shape
+          const refundable = deriveRefundable({
+            explicit: opt.cancellation?.isRefundable,
+            cancellationPolicies: opt.cancellation?.penalties,
+          });
 
           const optionIdStr =
             opt.id || opt.optionId || `${payload.propertyId}-${idx}`;
@@ -368,7 +382,9 @@ export class TripJackApiProvider {
               opt.cancellation?.holdConfirm ??
               opt.cancellation?.isRefundable ??
               false,
-            isRefundable: opt.cancellation?.isRefundable,
+            isRefundable: refundable.isRefundable,
+            refundableLabel: refundable.label,
+            freeCancellationUntil: refundable.freeCancellationUntil,
             cancellationPolicies: opt.cancellation?.penalties || [],
 
             amenities: optionAmenities,

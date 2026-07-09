@@ -314,7 +314,8 @@ class CommitService {
         paymentProcessed = true;
       }
 
-      // PHASE 4: Provider Booking (Send ONLY Net Price)
+      // PHASE 4: Provider Booking (pay the supplier the RAW net — EXCLUDES platform markup)
+      const supplierAmount = freshPrecheck.supplierNet ?? netPrice;
       const tjPayload = {
         bookingId,
         type: "HOTEL",
@@ -322,7 +323,7 @@ class CommitService {
         deliveryInfo: payload.deliveryInfo,
         ...(payload.gstInfo && { gstInfo: payload.gstInfo }),
         // Guaranteed positive net amount injection for instant confirmations; strict omission for holds
-        paymentInfos: !isHoldIntent ? [{ amount: netPrice }] : undefined,
+        paymentInfos: !isHoldIntent ? [{ amount: supplierAmount }] : undefined,
       };
 
       const tjResponse = await tripJackProvider.commit(tjPayload);
@@ -549,13 +550,17 @@ class CommitService {
 
       const roundedNetPrice = Number(netPrice.toFixed(2));
       const roundedSellingRate = clientType === "B2C" ? Number(b2cSellingRate.toFixed(2)) : roundedNetPrice;
+      // Pay the supplier the RAW net (EXCLUDES platform markup); fall back to netPrice if unavailable.
+      const supplierBookingRate = Number(
+        (freshPrecheck.supplierNet ?? netPrice).toFixed(2),
+      );
 
       if (rgPayload.BookReservation) {
-        rgPayload.BookReservation.BookingRate = roundedNetPrice;
+        rgPayload.BookReservation.BookingRate = supplierBookingRate;
         delete rgPayload.BookReservation.GuaranteeMethod;
         delete rgPayload.BookReservation.GuaranteeType;
       } else {
-        rgPayload.BookingRate = roundedNetPrice;
+        rgPayload.BookingRate = supplierBookingRate;
         delete rgPayload.GuaranteeMethod;
         delete rgPayload.GuaranteeType;
       }

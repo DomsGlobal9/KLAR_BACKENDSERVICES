@@ -4,7 +4,7 @@ import { resolveCityToCoords, resolveGeoCenter } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { getMarkupRules } from "../utils/auth";
-import { calculateNights, calculateEnrichedPricing } from "../utils/pricing.util";
+import { calculateNights, calculateEnrichedPricing, round2 } from "../utils/pricing.util";
 
 export class HotelsService {
   /**
@@ -364,11 +364,34 @@ Reported Total to UI:      ${totalToUI}
       });
     }
 
-    // 4. Optimize payload: Strip rawPayload, ensure correlationId is propagated
+    // 4. Bake markup into the returned price (single source of truth — same as the
+    //    detail/products path). Search now returns FINAL prices; the frontend renders
+    //    them verbatim (no client-side markup). B2C / no-rule => markup 0.
     const optimizedResults = filteredResults.map((hotel) => {
       const { rawPayload, ...rest } = hotel;
+      const enriched = calculateEnrichedPricing(
+        {
+          basePrice: hotel.basePrice ?? hotel.price,
+          totalPrice: hotel.price,
+          taxes: hotel.taxAmount ?? 0,
+          mf: 0,
+          mft: 0,
+          currency: hotel.currency,
+        },
+        markupRules,
+        nights,
+      );
       return {
         ...rest,
+        // price now INCLUDES markup; basePrice stays the net room cost
+        price: round2(enriched.finalTotalPrice),
+        pricing: {
+          ...(rest.pricing || {}),
+          markupAmount: round2(enriched.markupAmount),
+          perNightPrice: round2(enriched.perNightPrice),
+          finalTotalPrice: round2(enriched.finalTotalPrice),
+          supplierTotalPrice: round2(enriched.supplierTotalPrice),
+        },
         correlationId: (rawPayload as any)?._correlationId || hotel.correlationId || "",
       };
     });

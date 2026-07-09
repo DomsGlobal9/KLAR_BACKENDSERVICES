@@ -114,3 +114,230 @@ export function calculateEnrichedPricing(
     taxesIncluded,
   };
 }
+
+export const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ---------------------------------------------------------------------------
+// PLATFORM (super-admin) markup
+// A hidden margin the platform adds to the RAW supplier net BEFORE anyone sees
+// it. Agents (and their customers) perceive the result as "the API price".
+// Superadmin-configured via env; the agent's own markup is applied AFTER this.
+//   supplier net 500  --(+platform 100)-->  api net 600  --(+agent markup)-->  sell price
+// The supplier is still paid the raw net (500) at booking — see stripPlatformMarkup().
+// ---------------------------------------------------------------------------
+
+export interface PlatformMarkupConfig {
+  enabled: boolean;
+  type: "FIXED" | "PERCENTAGE";
+  value: number;
+}
+
+export const PLATFORM_MARKUP: PlatformMarkupConfig = {
+  enabled: (process.env.PLATFORM_MARKUP_ENABLED || "false") === "true",
+  type: (process.env.PLATFORM_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
+    ? "PERCENTAGE"
+    : "FIXED",
+  value: Number(process.env.PLATFORM_MARKUP_VALUE || 0),
+};
+
+/** Amount the platform adds on top of a raw supplier NET price. */
+export function platformMarkupAmount(supplierNet: number): number {
+  if (!PLATFORM_MARKUP.enabled || !supplierNet || supplierNet <= 0) return 0;
+  const amt =
+    PLATFORM_MARKUP.type === "PERCENTAGE"
+      ? (supplierNet * PLATFORM_MARKUP.value) / 100
+      : PLATFORM_MARKUP.value;
+  return round2(Math.max(0, amt));
+}
+
+/** api net (what the agent sees) = supplier net + platform markup. */
+export function applyPlatformMarkup(supplierNet: number): number {
+  return round2(supplierNet + platformMarkupAmount(supplierNet));
+}
+
+/** Reverse of applyPlatformMarkup: recover the raw supplier NET to send to the supplier. */
+export function stripPlatformMarkup(apiNet: number): number {
+  if (!PLATFORM_MARKUP.enabled || !apiNet || apiNet <= 0) return round2(apiNet);
+  if (PLATFORM_MARKUP.type === "PERCENTAGE") {
+    return round2(apiNet / (1 + PLATFORM_MARKUP.value / 100));
+  }
+  return round2(Math.max(0, apiNet - PLATFORM_MARKUP.value));
+}
+
+// ---------------------------------------------------------------------------
+// deriveRefundable — single source of truth for refundable/non-refundable
+// Works for BOTH TripJack (explicit flag) and RateGain (derive from policies).
+// No fabrication: when there is genuinely no signal we return isRefundable=false
+// (the conservative, customer-safe default) and flag unknown=true so the UI can
+// show a neutral state instead of a false promise.
+// ---------------------------------------------------------------------------
+
+export interface RefundableInfo {
+  isRefundable: boolean;
+  freeCancellationUntil: string | null; // ISO date when penalties begin
+  label: string; // display-ready, computed once on the backend
+  unknown: boolean; // true when no supplier signal was available
+}
+
+const fmtCxlDate = (iso?: string | null): string => {
+  if (!iso) return "";
+  const d = new Date(iso.replace(" ", "T"));
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+};
+
+/**
+ * @param explicit  Supplier-provided boolean (TripJack `cancellation.isRefundable`). undefined for RG.
+ * @param cancellationPolicies  Array of { amount, from, toDate } (RG) or penalties (TJ).
+ * @param rateComments  Free-text rate notes (RG embeds "NON-REFUNDABLE RATE" here).
+ */
+export function deriveRefundable(opts: {
+  explicit?: boolean;
+  cancellationPolicies?: any[];
+  rateComments?: string;
+}): RefundableInfo {
+  const policies = Array.isArray(opts.cancellationPolicies)
+    ? opts.cancellationPolicies
+    : [];
+  const comments = opts.rateComments || "";
+
+  const firstPaid = policies.find((p) => Number(p.amount) > 0 && (p.from || p.toDate));
+  const freeWindow = policies.find((p) => Number(p.amount) === 0 && (p.from || p.toDate));
+  const freeUntilIso: string | null =
+    (firstPaid?.from || firstPaid?.toDate || freeWindow?.toDate || freeWindow?.from) ?? null;
+
+  // 1. Explicit supplier flag wins (TripJack)
+  if (typeof opts.explicit === "boolean") {
+    const until = opts.explicit ? freeUntilIso : null;
+    return {
+      isRefundable: opts.explicit,
+      freeCancellationUntil: until,
+      label: opts.explicit
+        ? until
+          ? `Free cancellation till ${fmtCxlDate(until)}`
+          : "Refundable"
+        : "Non-Refundable",
+      unknown: false,
+    };
+  }
+
+  // 2. Hard non-refundable signal in rate comments (RateGain)
+  if (/NON[-\s]?REFUNDABLE/i.test(comments)) {
+    return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
+  }
+
+  // 3. Derive from cancellation policies (RateGain): a 0-amount window => refundable
+  if (policies.length > 0) {
+    if (freeWindow) {
+      return {
+        isRefundable: true,
+        freeCancellationUntil: freeUntilIso,
+        label: freeUntilIso ? `Free cancellation till ${fmtCxlDate(freeUntilIso)}` : "Refundable",
+        unknown: false,
+      };
+    }
+    // Every policy charges a penalty from the start => non-refundable
+    return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
+  }
+
+  // 4. No signal at all — conservative default, flagged unknown for the UI
+  return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: true };
+}
+
+export function extractRGTaxes(taxObj: any, cur: string) {
+  let inc = 0;
+  let exc = 0;
+  if (!taxObj) return { inc, exc };
+  if (typeof taxObj === "number") return { inc: 0, exc: taxObj };
+  if (typeof taxObj === "string") return { inc: 0, exc: Number(taxObj) || 0 };
+
+  if (Array.isArray(taxObj.taxes)) {
+    for (const t of taxObj.taxes) {
+      if ((t.clientCurrency || cur) !== cur) continue;
+      const amt = Number(t.clientAmount ?? (t.clientCurrency === cur ? t.amount : 0)) || 0;
+      const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
+      if (isInc) {
+        inc += amt;
+      } else {
+        exc += amt;
+      }
+    }
+  }
+  return { inc, exc };
+}
+
+export function getRGRawPrice(rate: any): number {
+  return Number(
+    rate.RoomRate ??
+    rate.totalAmount ??
+    rate.sellingRate ??
+    rate.totalRate ??
+    rate.price ??
+    rate.net ??
+    rate.rate ??
+    rate.totalPrice ??
+    rate.netPrice ??
+    rate.displayRatePerNight ??
+    rate.lowestRate ??
+    rate.roomRates?.[0]?.totalAmount ??
+    rate.options?.[0]?.price ??
+    0
+  );
+}
+
+export function enrichRateGainPrice(
+  rate: any,
+  markupRules: MarkupRule[],
+  nights: number,
+  fallbackCurrency: string
+) {
+  if (rate.__enriched) return rate;
+
+  // Supplier total is AUTHORITATIVE (== cancellation liability == what we'll be invoiced)
+  const supplierTotal = round2(getRGRawPrice(rate));
+  const cur = rate.currency || fallbackCurrency || "INR";
+
+  const taxDet = extractRGTaxes(rate.taxes, cur);
+  let taxAmount = taxDet.inc + taxDet.exc;
+
+  if (taxAmount === 0) {
+    taxAmount = Number(rate.taxAmount || rate.totalTax || rate.tax || rate.taxesAndFees || 0);
+  }
+  taxAmount = round2(taxAmount);
+
+  const supplierBase = round2(supplierTotal - taxAmount);
+  // Platform (super-admin) markup is baked into the net the agent sees ("api price").
+  const base = applyPlatformMarkup(supplierBase);
+  const total = round2(base + taxAmount);
+
+  const enriched = calculateEnrichedPricing(
+    { basePrice: base, totalPrice: total, taxes: taxAmount, mf: 0, mft: 0, currency: cur },
+    markupRules, nights
+  );
+
+  // Refundable status derived once, server-side (RG has no explicit flag)
+  const refundable = deriveRefundable({
+    cancellationPolicies: rate.cancellationPolicies,
+    rateComments: rate.rateComments,
+  });
+
+  return {
+    ...rate,
+    __enriched: true,
+    isRefundable: refundable.isRefundable,
+    refundableLabel: refundable.label,
+    freeCancellationUntil: refundable.freeCancellationUntil,
+    price: round2(enriched.finalTotalPrice),
+    netPrice: base,
+    pricing: {
+      totalPrice: total,
+      taxes: taxAmount,
+      currency: cur,
+      ...enriched,
+      markupAmount: round2(enriched.markupAmount),
+      perNightPrice: round2(enriched.perNightPrice),
+      supplierTotalPrice: round2(enriched.supplierTotalPrice),
+      finalTotalPrice: round2(enriched.finalTotalPrice)
+    }
+  };
+}
