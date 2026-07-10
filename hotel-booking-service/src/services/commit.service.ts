@@ -9,8 +9,8 @@ import { RedisLockUtil } from "./RedisLockUtil";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { notificationService } from "./notification.service";
 import { refundService } from "./refund.service";
+import { refundService } from "./refund.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
-import { PaymentUtil } from "../utils/payment.util";
 import { PricingUtil, round2 } from "../utils/pricing.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
@@ -61,6 +61,22 @@ async function pollTripJackBookingStatus(
         },
         { status: BookingStatus.MANUAL_REVIEW, tripJackResponse: details },
       );
+      // Only park it if the status cron hasn't already resolved the booking —
+      // otherwise we'd drag a CONFIRMED booking back into MANUAL_REVIEW.
+      await hotelBookingRepository.findOneAndUpdate(
+        {
+          _id: dbBookingId,
+          status: {
+            $nin: [
+              BookingStatus.CONFIRMED,
+              BookingStatus.HELD,
+              BookingStatus.CANCELLED,
+              BookingStatus.FAILED,
+            ],
+          },
+        },
+        { status: BookingStatus.MANUAL_REVIEW, tripJackResponse: details },
+      );
       await BookingEventLogger.log(
         tjBookingId,
         dbBookingId,
@@ -84,11 +100,17 @@ async function pollTripJackBookingStatus(
     const isSystemPending = details?.isSystemPending === true;
     // A success status is only truly terminal if the system is no longer pending.
     // Failure/cancellation statuses are always terminal.
+    // A success status is only truly terminal if the system is no longer pending.
+    // Failure/cancellation statuses are always terminal.
     const isTerminal =
+      (!isSystemPending && TJ_SUCCESS_STATUSES.has(tjStatus)) ||
+      TJ_FAILED_STATUSES.has(tjStatus);
       (!isSystemPending && TJ_SUCCESS_STATUSES.has(tjStatus)) ||
       TJ_FAILED_STATUSES.has(tjStatus);
 
     if (
+      !isTerminal &&
+      (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
       !isTerminal &&
       (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
     ) {
@@ -110,13 +132,20 @@ async function pollTripJackBookingStatus(
       // Conditional transition: if the status cron resolved this booking first,
       // `updated` is null and we skip the (duplicate) confirmation email.
       const updated = await hotelBookingRepository.transitionStatus(
+      // Conditional transition: if the status cron resolved this booking first,
+      // `updated` is null and we skip the (duplicate) confirmation email.
+      const updated = await hotelBookingRepository.transitionStatus(
         dbBookingId,
+        newStatus,
         newStatus,
         {
           tripJackResponse: details,
           ...(hotelConfirmationNumber ? { hotelConfirmationNumber } : {}),
         },
       );
+      if (updated && newStatus === BookingStatus.CONFIRMED) {
+        notificationService.sendBookingConfirmation(updated);
+      }
       if (updated && newStatus === BookingStatus.CONFIRMED) {
         notificationService.sendBookingConfirmation(updated);
       }
@@ -127,6 +156,18 @@ async function pollTripJackBookingStatus(
       await hotelBookingRepository.findByIdAndUpdate(dbBookingId, {
         tripJackResponse: details,
       });
+
+      // TripJack rejected the booking outright. Return the money now rather
+      // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
+      // picks wallet vs Razorpay from the record and only closes the booking
+      // out to FAILED once the refund lands.
+      const booking = await hotelBookingRepository.findOne({ _id: dbBookingId });
+      if (booking) {
+        await refundService.refundFailedBooking(
+          booking,
+          `TripJack returned a terminal status of ${tjStatus}.`,
+        );
+      }
 
       // TripJack rejected the booking outright. Return the money now rather
       // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
@@ -352,6 +393,8 @@ class CommitService {
       } else {
         finalPrice = round2(Number(finalPrice));
         markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
+        finalPrice = round2(Number(finalPrice));
+        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         console.log(
           `✅ [Klar] B2C Booking Price: ₹${finalPrice}, Markup: ₹${markup}`,
         );
@@ -441,7 +484,12 @@ class CommitService {
       // Split the price the customer actually paid (finalPrice), matching the
       // RateGain path; splitting netPrice made room prices sum to less than
       // totalAmount on the voucher.
+      // Build lean rooms array — one entry per room, no raw blobs.
+      // Split the price the customer actually paid (finalPrice), matching the
+      // RateGain path; splitting netPrice made room prices sum to less than
+      // totalAmount on the voucher.
       const numRooms = (payload.roomTravellerInfo || []).length || 1;
+      const pricePerRoom = round2(finalPrice / numRooms);
       const pricePerRoom = round2(finalPrice / numRooms);
       const rooms = (payload.roomTravellerInfo || [{}]).map((room: any) => ({
         roomType: payload.roomName || payload.roomType || "Standard Room",
@@ -462,6 +510,9 @@ class CommitService {
         checkOut: payload.checkOut
           ? new Date(payload.checkOut)
           : new Date(Date.now() + 86400000),
+        totalAmount: round2(finalPrice),
+        netAmount: round2(netPrice),
+        markupAmount: round2(markup),
         totalAmount: round2(finalPrice),
         netAmount: round2(netPrice),
         markupAmount: round2(markup),
@@ -496,8 +547,21 @@ class CommitService {
       // window. An unattached rejection here would take the process down, and
       // the 2-minute status cron is the safety net if this poll dies.
       void pollTripJackBookingStatus(
+      if (saved) {
+        notificationService.sendBookingStatusEmail(saved, saved.status);
+      }
+
+      // Fire-and-forget: the response must not wait on TripJack's 180s async
+      // window. An unattached rejection here would take the process down, and
+      // the 2-minute status cron is the safety net if this poll dies.
+      void pollTripJackBookingStatus(
         tjResponse.bookingId || bookingId,
         saved._id.toString(),
+      ).catch((pollErr: any) =>
+        console.error(
+          `[TripJack] Background poll crashed for ${tjResponse.bookingId || bookingId}:`,
+          pollErr?.message,
+        ),
       ).catch((pollErr: any) =>
         console.error(
           `[TripJack] Background poll crashed for ${tjResponse.bookingId || bookingId}:`,
@@ -598,6 +662,7 @@ class CommitService {
           payload.couponCode || payload.BookReservation?.couponCode,
         );
         finalPrice = pricing.total;
+        finalPrice = pricing.total;
         markup = pricing.markup;
       } else {
         const requestedSellingRate = Number(
@@ -606,6 +671,9 @@ class CommitService {
           payload.BookReservation?.SellingRate ||
           netPrice,
         );
+        finalPrice = round2(requestedSellingRate);
+        // A selling rate below net is a loss, not a negative markup.
+        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         finalPrice = round2(requestedSellingRate);
         // A selling rate below net is a loss, not a negative markup.
         markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
@@ -804,6 +872,9 @@ class CommitService {
         totalAmount: round2(finalPrice),
         netAmount: round2(netPrice),
         markupAmount: round2(markup),
+        totalAmount: round2(finalPrice),
+        netAmount: round2(netPrice),
+        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.FirstName || ""} ${primaryGuest.LastName || ""}`.trim()
           : "",
@@ -850,6 +921,8 @@ class CommitService {
         clientType,
       });
 
+      if (saved) {
+        notificationService.sendBookingStatusEmail(saved, saved.status);
       if (saved) {
         notificationService.sendBookingStatusEmail(saved, saved.status);
       }

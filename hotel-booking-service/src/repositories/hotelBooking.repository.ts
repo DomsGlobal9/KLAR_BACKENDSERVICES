@@ -73,17 +73,6 @@ export class HotelBookingRepository {
   }
 
   /**
-   * Update one
-   */
-  async updateOne(
-    query: FilterQuery<IBooking>,
-    update: UpdateQuery<IBooking>,
-    options?: any,
-  ): Promise<any> {
-    return await BookingModel.updateOne(query, update, options);
-  }
-
-  /**
    * Apply `update` only if the booking is not already in `targetStatus`.
    * Returns the updated document when THIS caller performed the transition,
    * and null when another worker (in-request poll / cron / reconciliation)
@@ -111,13 +100,21 @@ export class HotelBookingRepository {
     beforeDate: Date,
     toStatus: BookingStatus,
     failureReason: string,
+    toStatus: BookingStatus,
+    failureReason: string,
   ): Promise<number> {
     const result = await BookingModel.updateMany(
       { status: { $in: statuses }, createdAt: { $lt: beforeDate } },
       { $set: { status: toStatus, failureReason } },
     );
     return result.modifiedCount;
+    const result = await BookingModel.updateMany(
+      { status: { $in: statuses }, createdAt: { $lt: beforeDate } },
+      { $set: { status: toStatus, failureReason } },
+    );
+    return result.modifiedCount;
   }
+
 
 }
 
