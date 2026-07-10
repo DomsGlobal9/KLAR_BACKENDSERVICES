@@ -39,7 +39,6 @@ export const getBookings = async (req: any, res: Response) => {
   try {
     const agentId = req.user?.userId || req.user?.id || req.user?._id;
     const email = req.user?.email;
-    const email = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
     
@@ -47,14 +46,9 @@ export const getBookings = async (req: any, res: Response) => {
     const query: any = {};
     
     if (!clientType) {
-    const clientType = req.query.clientType as string;
-    const query: any = {};
-    
-    if (!clientType) {
       return res.status(403).json({
         status: false,
         statusCode: 403,
-        description: "clientType is required",
         description: "clientType is required",
         body: null,
       });
@@ -148,18 +142,6 @@ export const getBookingDetails = async (req: any, res: Response) => {
       });
     }
 
-    // Anonymous access is a capability URL: only the unguessable publicToken
-    // grants it — never the semi-predictable _id, confirmation number or
-    // reservation id. Logged-in owners are handled by the ownership check below.
-    if (!req.user && booking.publicToken && booking.publicToken !== id) {
-      return res.status(403).json({
-        status: false,
-        statusCode: 403,
-        description: "Access denied.",
-        body: null,
-      });
-    }
-
     // Ownership Check
     const userId = req.user?.userId || req.user?.id;
     const userEmail = req.user?.email?.toLowerCase();
@@ -194,21 +176,9 @@ export const getBookingDetails = async (req: any, res: Response) => {
       delete body.agentId;
     }
 
-    // Anonymous callers reach this by knowing the booking id (the guest
-    // confirmation link). That is enough to see the stay, not enough to see who
-    // booked it — strip the identity fields.
-    const body: any = { ...booking };
-    if (!req.user) {
-      delete body.guestEmail;
-      delete body.userInfo;
-      delete body.userId;
-      delete body.agentId;
-    }
-
     res.json({
       status: true,
       statusCode: 200,
-      body,
       body,
     });
   } catch (error: any) {

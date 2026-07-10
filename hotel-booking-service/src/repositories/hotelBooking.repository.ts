@@ -100,21 +100,13 @@ export class HotelBookingRepository {
     beforeDate: Date,
     toStatus: BookingStatus,
     failureReason: string,
-    toStatus: BookingStatus,
-    failureReason: string,
   ): Promise<number> {
     const result = await BookingModel.updateMany(
       { status: { $in: statuses }, createdAt: { $lt: beforeDate } },
       { $set: { status: toStatus, failureReason } },
     );
     return result.modifiedCount;
-    const result = await BookingModel.updateMany(
-      { status: { $in: statuses }, createdAt: { $lt: beforeDate } },
-      { $set: { status: toStatus, failureReason } },
-    );
-    return result.modifiedCount;
   }
-
 
 }
 

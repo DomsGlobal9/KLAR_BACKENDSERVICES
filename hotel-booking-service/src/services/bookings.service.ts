@@ -15,56 +15,43 @@ const TERMINAL_STATUSES: ReadonlySet<BookingStatus> = new Set([
   BookingStatus.CANCELLED,
   BookingStatus.FAILED,
 ]);
-import { refundService } from "./refund.service";
-
-/**
- * Statuses the supplier can no longer move us out of. Once a booking lands
- * here we stop calling the supplier on every read — mirrors the flight
- * service, whose status cron skips SUCCESS/FAILED/CANCELLED/ABORTED.
- */
-const TERMINAL_STATUSES: ReadonlySet<BookingStatus> = new Set([
-  BookingStatus.CANCELLED,
-  BookingStatus.FAILED,
-]);
 
 class BookingsService {
   /**
    * Get all bookings from the database filtered by user ID.
    */
   async getAllBookings(filter: any = {}) {
-  async getAllBookings(filter: any = {}) {
-      try {
-        const query = { ...filter };
-        const query = { ...filter };
-        const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
+    try {
+      const query = { ...filter };
+      const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
-        // Map to safe DTO to prevent leaking raw provider responses and margins
-        const mappedBookings = bookings.map((b: any) => ({
-          _id: b._id,
-          confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
-          reservationId: b.reservationId,
-          propertyId: b.propertyId || 'UNKNOWN',
-          provider: b.provider || 'rategain',
-          status: b.status || 'PENDING',
-          checkIn: b.checkIn || new Date().toISOString(),
-          checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
-          totalAmount: b.totalAmount || 0,
-          currencyCode: b.currencyCode || 'INR',
-          hotelName: b.hotelName || 'Hotel',
-          hotelImage: b.hotelImage,
-          hotelAddress: b.hotelAddress,
-          city: b.city,
-          starRating: b.starRating,
-          agentId: b.agentId,
-          guestName: b.guestName || 'Guest',
-          rooms: b.rooms?.map((r: any) => ({
-            roomType: r.roomType || r.roomName || 'Standard Room',
-            boardType: r.boardType || r.boardName,
-            guests: r.guests || 1,
-            price: r.price || 0,
-          })) || [],
-          createdAt: b.createdAt,
-        }));
+      // Map to safe DTO to prevent leaking raw provider responses and margins
+      const mappedBookings = bookings.map((b: any) => ({
+        _id: b._id,
+        confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
+        reservationId: b.reservationId,
+        propertyId: b.propertyId || 'UNKNOWN',
+        provider: b.provider || 'rategain',
+        status: b.status || 'PENDING',
+        checkIn: b.checkIn || new Date().toISOString(),
+        checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
+        totalAmount: b.totalAmount || 0,
+        currencyCode: b.currencyCode || 'INR',
+        hotelName: b.hotelName || 'Hotel',
+        hotelImage: b.hotelImage,
+        hotelAddress: b.hotelAddress,
+        city: b.city,
+        starRating: b.starRating,
+        agentId: b.agentId,
+        guestName: b.guestName || 'Guest',
+        rooms: b.rooms?.map((r: any) => ({
+          roomType: r.roomType || r.roomName || 'Standard Room',
+          boardType: r.boardType || r.boardName,
+          guests: r.guests || 1,
+          price: r.price || 0,
+        })) || [],
+        createdAt: b.createdAt,
+      }));
 
       return mappedBookings;
     } catch (error: any) {
@@ -151,10 +138,12 @@ class BookingsService {
       const isSystemPending = tjDetails?.isSystemPending === true;
 
       let newStatus: BookingStatus = booking.status;
-      if (orderStatus === "SUCCESS" || rsta === "S") {
-        newStatus = BookingStatus.CONFIRMED;
-      } else if (orderStatus === "ON_HOLD" || rsta === "O") {
-        newStatus = BookingStatus.HELD;
+      if (!isSystemPending) {
+        if (orderStatus === "SUCCESS" || rsta === "S") {
+          newStatus = BookingStatus.CONFIRMED;
+        } else if (orderStatus === "ON_HOLD" || rsta === "O") {
+          newStatus = BookingStatus.HELD;
+        }
       }
 
       if (
@@ -276,11 +265,7 @@ class BookingsService {
   async getBookingById(id: string) {
     try {
       const query: any = {
-        $or: [
-          { confirmationNumber: id },
-          { reservationId: id },
-          { publicToken: id },
-        ],
+        $or: [{ confirmationNumber: id }, { reservationId: id }],
       };
 
       if (id.match(/^[0-9a-fA-F]{24}$/)) {

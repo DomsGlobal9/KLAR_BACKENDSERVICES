@@ -66,7 +66,6 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
   const clientEmail =
     booking.guestEmail ||
     booking.tripJackRequest?.deliveryInfo?.emails?.[0] ||
-    booking.rateGainRequest?.BookReservation?.RoomSelection?.[0]?.Guest?.[0]?.Email ||
     "N/A";
 
   let clientPhone = "N/A";
@@ -77,8 +76,6 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
   } else if (booking.tripJackRequest?.deliveryInfo?.contacts?.[0]) {
     const countryCode = booking.tripJackRequest?.deliveryInfo?.code?.[0] || "";
     clientPhone = `${countryCode} ${booking.tripJackRequest.deliveryInfo.contacts[0]}`.trim();
-  } else if (booking.rateGainRequest?.BookReservation?.RoomSelection?.[0]?.Guest?.[0]?.Phone) {
-    clientPhone = booking.rateGainRequest.BookReservation.RoomSelection[0].Guest[0].Phone;
   }
 
   const roomName =
@@ -101,25 +98,6 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
 
   // Meta Date
   let metaDateLabel = "Booked On";
-  
-  // Times
-  const checkInTimeStr =
-    booking.checkInTime ||
-    booking.tripJackRequest?.hotelInfo?.checkInTime ||
-    booking.tripJackRequest?.hotelInfo?.checkIn ||
-    booking.tripJackRequest?.hInfo?.ops?.[0]?.checkInTime ||
-    booking.rateGainResponse?.hotelInfo?.checkInTime ||
-    booking.rateGainRequest?.hotelInfo?.checkInTime ||
-    "14:00";
-  const checkOutTimeStr =
-    booking.checkOutTime ||
-    booking.tripJackRequest?.hotelInfo?.checkOutTime ||
-    booking.tripJackRequest?.hotelInfo?.checkOut ||
-    booking.tripJackRequest?.hInfo?.ops?.[0]?.checkOutTime ||
-    booking.rateGainResponse?.hotelInfo?.checkOutTime ||
-    booking.rateGainRequest?.hotelInfo?.checkOutTime ||
-    "12:00";
-
   let metaDateValue = booking.createdAt
     ? `${formatDate(booking.createdAt)}, ${formatTime(booking.createdAt)}`
     : "N/A";
@@ -165,20 +143,6 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
             name: `${pax.ti || ""} ${pax.fN || ""} ${pax.lN || ""}`.trim().toUpperCase(),
             type: String(pax.pt || "ADULT").toUpperCase(),
             docInfo: pax.pNum ? `Passport: ${pax.pNum}` : "N/A"
-          });
-        });
-      }
-    });
-  } else if (booking.rateGainRequest?.BookReservation?.RoomSelection) {
-    booking.rateGainRequest.BookReservation.RoomSelection.forEach((room: any, rIndex: number) => {
-      if (room.Guest) {
-        room.Guest.forEach((pax: any, pIndex: number) => {
-          passengers.push({
-            roomIndex: rIndex + 1,
-            guestIndex: pIndex + 1,
-            name: `${pax.FirstName || ""} ${pax.LastName || ""}`.trim().toUpperCase(),
-            type: pax.Age ? "CHILD" : "ADULT",
-            docInfo: "N/A"
           });
         });
       }
@@ -421,18 +385,18 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
               </tr>
               <tr>
                 <td style={{ padding: "12px 16px", fontSize: "13px", borderBottom: "1px solid #e2e8f0", backgroundColor: "#f9fafb", fontWeight: 600 }}>
-                  Check-In
+                  Check-In Date
                 </td>
                 <td style={{ padding: "12px 16px", fontSize: "13px", borderBottom: "1px solid #e2e8f0" }}>
-                  <strong>{formatDate(booking.checkIn)}</strong>, {checkInTimeStr} (Standard policies apply)
+                  <strong>{formatDate(booking.checkIn)}</strong> (Standard policies apply)
                 </td>
               </tr>
               <tr>
                 <td style={{ padding: "12px 16px", fontSize: "13px", backgroundColor: "#f9fafb", fontWeight: 600 }}>
-                  Check-Out
+                  Check-Out Date
                 </td>
                 <td style={{ padding: "12px 16px", fontSize: "13px" }}>
-                  <strong>{formatDate(booking.checkOut)}</strong>, {checkOutTimeStr}
+                  <strong>{formatDate(booking.checkOut)}</strong>
                 </td>
               </tr>
             </table>
@@ -529,12 +493,6 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
                       <th style={{ padding: "10px 16px", fontSize: "11px", fontWeight: 700, textAlign: "left", textTransform: "uppercase" }}>
                         Full Name
                       </th>
-                      <th style={{ padding: "10px 16px", fontSize: "11px", fontWeight: 700, textAlign: "left", textTransform: "uppercase" }}>
-                        Email
-                      </th>
-                      <th style={{ padding: "10px 16px", fontSize: "11px", fontWeight: 700, textAlign: "left", textTransform: "uppercase" }}>
-                        Phone
-                      </th>
                       <th style={{ padding: "10px 16px", fontSize: "11px", fontWeight: 700, textAlign: "center", textTransform: "uppercase", width: "15%" }}>
                         Type
                       </th>
@@ -548,12 +506,6 @@ export const HotelEmailTemplate: React.FC<HotelEmailTemplateProps> = ({
                         </td>
                         <td style={{ padding: "10px 16px", fontSize: "13px", fontWeight: 600, borderBottom: idx < passengers.length - 1 ? "1px solid #e2e8f0" : "none" }}>
                           {p.name}
-                        </td>
-                        <td style={{ padding: "10px 16px", fontSize: "13px", color: "#6b7280", borderBottom: idx < passengers.length - 1 ? "1px solid #e2e8f0" : "none" }}>
-                          {idx === 0 ? clientEmail : "-"}
-                        </td>
-                        <td style={{ padding: "10px 16px", fontSize: "13px", color: "#6b7280", borderBottom: idx < passengers.length - 1 ? "1px solid #e2e8f0" : "none" }}>
-                          {idx === 0 ? clientPhone : "-"}
                         </td>
                         <td style={{ padding: "10px 16px", fontSize: "13px", textAlign: "center", color: "#6b7280", borderBottom: idx < passengers.length - 1 ? "1px solid #e2e8f0" : "none" }}>
                           {p.type}
