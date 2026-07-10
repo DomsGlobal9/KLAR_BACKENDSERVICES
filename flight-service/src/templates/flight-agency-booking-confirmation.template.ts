@@ -237,7 +237,7 @@ export const flightAgencyBookingConfirmationTemplate = `
             </div>
         </div>
 
-        <!-- Traveller Details - Moved here for easy verification -->
+        <!-- Traveller Details -->
         <div class="section">
             <div class="section-title">Traveller Details</div>
             {{#each travellers}}
@@ -245,6 +245,25 @@ export const flightAgencyBookingConfirmationTemplate = `
                     <div class="name">{{this.title}} {{this.firstName}} {{this.lastName}}</div>
                     <div class="detail">Type: {{this.paxType}}</div>
                     <div class="detail">Date of Birth: {{formatDate this.dateOfBirth}}</div>
+                    
+                    <!-- Passport Details -->
+                    {{#ifCond this.passportNumber '&&' this.passportNumber}}
+                    <div class="detail" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e0e0;">
+                        <strong style="display: block; margin-bottom: 4px;">Passport Details</strong>
+                        <div style="font-size: 13px; color: #666; line-height: 1.6;">
+                            <div><strong>Number:</strong> {{this.passportNumber}}</div>
+                            {{#if this.passportNationality}}
+                                <div><strong>Nationality:</strong> {{this.passportNationality}}</div>
+                            {{/if}}
+                            {{#if this.passportIssueDate}}
+                                <div><strong>Issue Date:</strong> {{formatDate this.passportIssueDate}}</div>
+                            {{/if}}
+                            {{#if this.passportExpiryDate}}
+                                <div><strong>Expiry Date:</strong> {{formatDate this.passportExpiryDate}}</div>
+                            {{/if}}
+                        </div>
+                    </div>
+                    {{/ifCond}}
                     
                     {{#if this.pnrDetails}}
                         <div class="detail">
@@ -284,6 +303,41 @@ export const flightAgencyBookingConfirmationTemplate = `
                 </div>
             {{/each}}
         </div>
+
+        <!-- GST Details - Agency Copy -->
+        {{#ifCond gstInfo '&&' gstInfo.gstNumber}}
+        <div class="section">
+            <div class="section-title">GST Details</div>
+            <div class="info-grid">
+                <div class="info-item" style="grid-column: 1 / -1;">
+                    <strong>GST Number</strong>
+                    <span>{{gstInfo.gstNumber}}</span>
+                </div>
+                <div class="info-item" style="grid-column: 1 / -1;">
+                    <strong>Registered Name</strong>
+                    <span>{{gstInfo.registeredName}}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Email</strong>
+                    <span>{{gstInfo.email}}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Mobile</strong>
+                    <span>{{gstInfo.mobile}}</span>
+                </div>
+                <div class="info-item" style="grid-column: 1 / -1;">
+                    <strong>Address</strong>
+                    <span>{{gstInfo.address}}</span>
+                </div>
+                {{#if gstInfo.isSez}}
+                <div class="info-item" style="grid-column: 1 / -1;">
+                    <strong>SEZ</strong>
+                    <span>Yes</span>
+                </div>
+                {{/if}}
+            </div>
+        </div>
+        {{/ifCond}}
 
         <!-- Flight Details -->
         <div class="section">

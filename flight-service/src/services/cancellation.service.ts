@@ -1,6 +1,9 @@
 import axios from "axios";
 import { TRIPJACK_URLS, tripjackConfig } from "../config";
 import { BookingRepository } from "../repositories/bookingLocal.repository";
+import { envConfig } from "../config/env.config";
+import { cancellationRequestTemplate } from "../templates/flight-client-cancellation.template";
+import { cancellationRequestAgencyTemplate } from "../templates/flight-agency-cancellation.template";
 
 class CancellationService {
 
@@ -40,7 +43,7 @@ class CancellationService {
                 data: JSON.stringify(apiError, null, 2),
                 message: error.message
             });
-            
+
             throw {
                 success: false,
                 httpStatus: error.response?.status || 500,
@@ -68,6 +71,10 @@ class CancellationService {
                     status: "CANCEL_REQUESTED",
                 });
             }
+
+            const ourDbBookingData = await this.bookingRepo.getBookingById(payload.bookingId);
+
+            await this.sendCancellationRequestEmail(ourDbBookingData);
 
             return response;
 
@@ -121,6 +128,81 @@ class CancellationService {
             throw error;
         }
     }
+
+    // ##################
+    // PRIVATE Functions
+    // ##################
+    private async sendCancellationRequestEmail(booking: any) {
+        try {
+            if (!booking) return;
+
+            const travellerEmail = booking?.email || "";
+            const agentEmail = booking?.userInfo?.email || "";
+
+            const templateData = {
+                bookingId: booking?.bookingId || '',
+                status: 'CANCELLATION REQUESTED',
+                totalPrice: booking?.totalPrice || 0,
+                markupPrice: booking?.markupPrice || 0,
+                tripjackPrice: booking?.tripjackPrice || 0,
+                travellers: booking?.travellers || [],
+                email: booking?.email || '',
+                phone: booking?.phone || '',
+                gstInfo: booking?.gstInfo || null,
+                emergencyContact: booking?.emergencyContact || null,
+                userInfo: booking?.userInfo || {},
+                cancellationDate: new Date().toISOString(),
+            };
+
+            const clientTemplate = Handlebars.compile(cancellationRequestTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            const agencyTemplate = Handlebars.compile(cancellationRequestAgencyTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            if (travellerEmail) {
+                await this.sendEmail(
+                    travellerEmail,
+                    `Flight Cancellation Request - ${booking?.bookingId}`,
+                    clientTemplate(templateData)
+                );
+                console.log(`✅ [Cancellation] Email sent to traveller: ${travellerEmail}`);
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                await this.sendEmail(
+                    agentEmail,
+                    `Flight Cancellation Request - ${booking?.bookingId} (Agency Copy)`,
+                    agencyTemplate(templateData)
+                );
+                console.log(`✅ [Cancellation] Email sent to agent: ${agentEmail}`);
+            }
+
+        } catch (error) {
+            console.error(`[Cancellation] Email failed for ${booking?.bookingId}:`, error);
+        }
+    }
+
+    private async sendEmail(
+        to: string,
+        subject: string,
+        html: string
+    ) {
+        try {
+            await axios.post(`${envConfig.EMAIL_SERVICE}/send`, {
+                to,
+                subject,
+                html
+            });
+        } catch (error: any) {
+            // Email send failed silently
+        }
+    }
+
 }
 
 export default new CancellationService();
