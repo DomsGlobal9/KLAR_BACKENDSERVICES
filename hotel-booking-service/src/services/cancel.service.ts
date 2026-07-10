@@ -46,14 +46,9 @@ async function pollTripJackCancellationStatus(
         if (!booking) return;
 
         if (finalStatus === "CANCELLED") {
-          if (process.env.ENABLE_AUTO_REFUNDS === "false") {
-            console.log(`[TripJack Cancel Poll] Auto-refund disabled. Marking ${bookingId} as CANCELLED. Pending manual CRM refund.`);
-            await hotelBookingRepository.updateOne({ _id: booking._id }, { status: BookingStatus.CANCELLED });
-          } else {
-            // refundCancelledBooking moves the booking to CANCELLED once the
-            // money is provably back with the traveller.
-            await refundService.settleCancellation(booking, cancelChargesInfo);
-          }
+          // refundCancelledBooking moves the booking to CANCELLED once the
+          // money is provably back with the traveller.
+          await refundService.settleCancellation(booking, cancelChargesInfo);
         } else {
           // The supplier rejected the cancellation — the stay still stands.
           console.warn(
@@ -487,15 +482,10 @@ class CancelService {
           );
 
           if (updated) {
-            if (process.env.ENABLE_AUTO_REFUNDS === "false") {
-              console.log(`✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; auto-refund disabled, marking CANCELLED.`);
-              await hotelBookingRepository.updateOne({ _id: updated._id }, { status: BookingStatus.CANCELLED });
-            } else {
-              console.log(
-                `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,
-              );
-              await refundService.settleCancellation(updated, cancelChargesInfo);
-            }
+            console.log(
+              `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,
+            );
+            await refundService.settleCancellation(updated, cancelChargesInfo);
           }
         }
       }
