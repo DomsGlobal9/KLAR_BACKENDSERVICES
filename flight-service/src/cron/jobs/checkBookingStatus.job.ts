@@ -134,10 +134,10 @@ const checkAndUpdateBookingStatus = async (
      * Log DB vs API status
      */
     console.log(`
-BookingId: ${booking.bookingId}
-DB Status : ${booking.status}
-API Status: ${latestStatus}
-`);
+        BookingId: ${booking.bookingId}
+        DB Status : ${booking.status}
+        API Status: ${latestStatus}
+    `);
 
     /**
      * Status unchanged

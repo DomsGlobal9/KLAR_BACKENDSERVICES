@@ -35,6 +35,70 @@ class BookingService {
         }
     }
 
+    constructor() {
+        this.registerHandlebarsHelpers();
+    }
+
+    private registerHandlebarsHelpers() {
+        Handlebars.registerHelper('formatDate', function (dateString: string) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        });
+
+        Handlebars.registerHelper('formatTime', function (dateString: string) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        });
+
+        Handlebars.registerHelper('formatPrice', function (price: number) {
+            if (!price) return '₹0';
+            return `₹${price.toFixed(2)}`;
+        });
+
+        Handlebars.registerHelper('getAirlineName', function (airlineInfo: any) {
+            return airlineInfo?.AirlineName || 'N/A';
+        });
+
+        Handlebars.registerHelper('hasPassport', function (traveller: any) {
+            return traveller && traveller.passportNumber && traveller.passportNumber.trim() !== '';
+        });
+
+        Handlebars.registerHelper('hasGst', function (gstInfo: any) {
+            return gstInfo && gstInfo.gstNumber && gstInfo.gstNumber.trim() !== '';
+        });
+
+        Handlebars.registerHelper('defaultIfEmpty', function (value: any, defaultValue: string) {
+            return value && value.toString().trim() !== '' ? value : defaultValue;
+        });
+
+        Handlebars.registerHelper('ifCond', function (this: any, v1: any, operator: string, v2: any, options: any) {
+            switch (operator) {
+                case '==': return (v1 == v2) ? options.fn(this) : options.inverse(this);
+                case '===': return (v1 === v2) ? options.fn(this) : options.inverse(this);
+                case '!=': return (v1 != v2) ? options.fn(this) : options.inverse(this);
+                case '!==': return (v1 !== v2) ? options.fn(this) : options.inverse(this);
+                case '<': return (v1 < v2) ? options.fn(this) : options.inverse(this);
+                case '<=': return (v1 <= v2) ? options.fn(this) : options.inverse(this);
+                case '>': return (v1 > v2) ? options.fn(this) : options.inverse(this);
+                case '>=': return (v1 >= v2) ? options.fn(this) : options.inverse(this);
+                case '&&': return (v1 && v2) ? options.fn(this) : options.inverse(this);
+                case '||': return (v1 || v2) ? options.fn(this) : options.inverse(this);
+                default: return options.inverse(this);
+            }
+        });
+    }
+
     private async sendBookingEmails(bookingId: string) {
         try {
             const booking = await this.bookingRepo.getBookingById(bookingId);
@@ -49,14 +113,12 @@ class BookingService {
 
             await this.bookingRepo.updateBookingStatus(bookingId, tripjackData?.order?.status);
 
-            // Get emails
             const travellerEmail = tripjackData?.order?.DeliveryInformation?.Emails?.[0] ||
                 tripjackData?.order?.contactInfo?.emails?.[0] ||
                 booking?.email || "";
 
             const agentEmail = dbData?.userInfo?.email || "";
 
-            // Prepare data for template
             const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
             const segments = [];
             for (const trip of tripInfo) {
@@ -84,8 +146,29 @@ class BookingService {
                 seatInfo: t.SSR_Seat_Information || {},
                 mealInfo: t.SSR_Meal_Information || {},
                 baggageInfo: t.SSR_Baggage_Information || {},
-                pnrDetails: t.pnrDetails || {}
+                pnrDetails: t.pnrDetails || {},
+                passportNumber: t.PassportNumber || '',
+                passportNationality: t.PassportNationality || '',
+                passportIssueDate: t.PassportIssueDate || '',
+                passportExpiryDate: t.PassportExpiryDate || '',
             }));
+
+            const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
+            const formattedGstInfo = gstInfo ? {
+                gstNumber: gstInfo.GSTNumber || gstInfo.gstNumber || '',
+                registeredName: gstInfo.RegisteredName || gstInfo.registeredName || '',
+                email: gstInfo.email || '',
+                mobile: gstInfo.mobile || '',
+                address: gstInfo.address || '',
+                isSez: gstInfo.isez || gstInfo.isSez || false
+            } : null;
+
+            const emergencyContact = tripjackData?.order?.EmergencyContactInformation || {};
+            const formattedEmergencyContact = {
+                name: emergencyContact.EmergencyContactName || '',
+                email: emergencyContact.Emails?.[0] || '',
+                phone: emergencyContact.Contacts?.[0] || ''
+            };
 
             const templateData = {
                 bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
@@ -97,46 +180,16 @@ class BookingService {
                 tripjackPrice: booking?.tripjackPrice || 0,
                 travellers: formattedTravellers,
                 segments: segments,
-                emergencyContact: tripjackData?.order?.EmergencyContactInformation || {},
+                emergencyContact: formattedEmergencyContact,
                 travellerEmail: booking?.email || '',
                 agentEmail: dbData?.userInfo?.email || '',
                 isMultiCity: segments.length > 1,
                 isRoundTrip: segments.length === 2,
-                isOneWay: segments.length === 1
+                isOneWay: segments.length === 1,
+                gstInfo: formattedGstInfo,
+                order: tripjackData?.order || {},
             };
 
-            // Register helpers globally
-            Handlebars.registerHelper('formatDate', function (dateString: string) {
-                if (!dateString) return 'N/A';
-                return new Date(dateString).toLocaleString('en-IN', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            });
-
-            Handlebars.registerHelper('formatTime', function (dateString: string) {
-                if (!dateString) return 'N/A';
-                return new Date(dateString).toLocaleString('en-IN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            });
-
-            Handlebars.registerHelper('formatPrice', function (price: number) {
-                if (!price) return '₹0';
-                return `₹${price.toFixed(2)}`;
-            });
-
-            Handlebars.registerHelper('getAirlineName', function (airlineInfo: any) {
-                return airlineInfo?.AirlineName || 'N/A';
-            });
-
-            // Compile templates
             const clientTemplate = Handlebars.compile(flightBookingConfirmationTemplate, {
                 strict: false,
                 assumeObjects: true
@@ -147,7 +200,6 @@ class BookingService {
                 assumeObjects: true
             });
 
-            // Send emails
             if (travellerEmail) {
                 await this.sendEmail(
                     travellerEmail,
@@ -693,7 +745,6 @@ class BookingService {
         const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
         const segments = [];
 
-        // Extract all segments from all trips
         for (const trip of tripInfo) {
             const segmentInfo = trip.SegmentInformation || [];
             for (const segment of segmentInfo) {
@@ -711,7 +762,6 @@ class BookingService {
             }
         }
 
-        // Extract traveller information
         const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
         const formattedTravellers = travellers.map((traveller: any) => ({
             title: traveller.Title || '',
@@ -722,8 +772,22 @@ class BookingService {
             seatInfo: traveller.SSR_Seat_Information || {},
             mealInfo: traveller.SSR_Meal_Information || {},
             baggageInfo: traveller.SSR_Baggage_Information || {},
-            pnrDetails: traveller.pnrDetails || {}
+            pnrDetails: traveller.pnrDetails || {},
+            passportNumber: traveller.PassportNumber || '',
+            passportNationality: traveller.PassportNationality || '',
+            passportIssueDate: traveller.PassportIssueDate || '',
+            passportExpiryDate: traveller.PassportExpiryDate || '',
         }));
+
+        const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
+        const formattedGstInfo = gstInfo ? {
+            gstNumber: gstInfo.GSTNumber || gstInfo.gstNumber || '',
+            registeredName: gstInfo.RegisteredName || gstInfo.registeredName || '',
+            email: gstInfo.email || '',
+            mobile: gstInfo.mobile || '',
+            address: gstInfo.address || '',
+            isSez: gstInfo.isez || gstInfo.isSez || false
+        } : null;
 
         return {
             bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
@@ -742,7 +806,9 @@ class BookingService {
             userInfo: dbData?.userInfo || {},
             isMultiCity: segments.length > 1,
             isRoundTrip: segments.length === 2,
-            isOneWay: segments.length === 1
+            isOneWay: segments.length === 1,
+            gstInfo: formattedGstInfo,
+            order: tripjackData?.order || {},
         };
     }
 }
