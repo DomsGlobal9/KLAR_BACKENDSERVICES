@@ -18,9 +18,6 @@ export const internalServiceAuth = (
 ): Response | void => {
     const expected = process.env.INTERNAL_SERVICE_KEY;
 
-    console.log(`[internalServiceAuth] Request path: ${req.path}`);
-    console.log(`[internalServiceAuth] Request method: ${req.method}`);
-
     if (!expected) {
         console.error(
             "[internalServiceAuth] INTERNAL_SERVICE_KEY is not configured. Rejecting internal request."
@@ -33,17 +30,12 @@ export const internalServiceAuth = (
 
     const provided = req.headers["x-internal-key"];
 
-    console.log(`[internalServiceAuth] Expected key: ${expected.substring(0, 4)}...`);
-    
-
     if (typeof provided !== "string" || provided !== expected) {
-        console.warn("[internalServiceAuth] Invalid internal service key provided");
         return res.status(401).json({
             success: false,
             message: "Invalid internal service key.",
         });
     }
 
-    console.log("[internalServiceAuth] Internal service authentication successful");
     next();
 };
