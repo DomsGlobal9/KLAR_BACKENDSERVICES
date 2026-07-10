@@ -3,6 +3,7 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingStatus, BookingProvider } from "../models/Booking.model";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { refundService } from "./refund.service";
+import { refundService } from "./refund.service";
 
 async function pollTripJackCancellationStatus(
   bookingId: string,
@@ -16,6 +17,7 @@ async function pollTripJackCancellationStatus(
   const poll = async (): Promise<void> => {
     if (Date.now() >= deadline) {
       console.log(
+        `[TripJack Cancel Poll] Deadline reached for booking: ${bookingId}. The status cron will keep trying.`,
         `[TripJack Cancel Poll] Deadline reached for booking: ${bookingId}. The status cron will keep trying.`,
       );
       return;
@@ -59,6 +61,7 @@ async function pollTripJackCancellationStatus(
       if (finalStatus === "CANCELLATION_PENDING") {
         if (Object.keys(query).length > 0) {
           await hotelBookingRepository.findOneAndUpdate(query, {
+            status: BookingStatus.CANCELLATION_PENDING,
             status: BookingStatus.CANCELLATION_PENDING,
             tripJackResponse: details,
           });
@@ -247,8 +250,13 @@ class CancelService {
           // breakdown now (the penalty depends on *when* we asked), then let the
           // poll flip it to CANCELLED once TripJack actually confirms — which is
           // also when the traveller's money goes back.
+          // An ack is not a cancellation. Record the intent and the charge
+          // breakdown now (the penalty depends on *when* we asked), then let the
+          // poll flip it to CANCELLED once TripJack actually confirms — which is
+          // also when the traveller's money goes back.
           if (Object.keys(query).length > 0) {
             await hotelBookingRepository.findOneAndUpdate(query, {
+              status: BookingStatus.CANCELLATION_PENDING,
               status: BookingStatus.CANCELLATION_PENDING,
               tripJackResponse: tjResponse?.body,
               cancelCharge:
@@ -260,9 +268,11 @@ class CancelService {
             });
             console.log(
               `✅ [TripJack] Cancellation acknowledged; booking marked CANCELLATION_PENDING: ${targetId}`,
+              `✅ [TripJack] Cancellation acknowledged; booking marked CANCELLATION_PENDING: ${targetId}`,
             );
           }
 
+          // Trigger asynchronous background polling to verify terminal status.
           // Trigger asynchronous background polling to verify terminal status.
           pollTripJackCancellationStatus(targetId, query, cancelChargesInfo);
         }
@@ -272,7 +282,11 @@ class CancelService {
           statusCode: 200,
           description: isSuccessAck
             ? "Cancellation requested. Your refund will be processed once the hotel confirms."
+            ? "Cancellation requested. Your refund will be processed once the hotel confirms."
             : "Cancellation failed",
+          // The supplier has only acknowledged the request; the poll confirms it.
+          isFullyCancelled: false,
+          tjStatus: isSuccessAck ? "CANCELLATION_PENDING" : "FAILED",
           // The supplier has only acknowledged the request; the poll confirms it.
           isFullyCancelled: false,
           tjStatus: isSuccessAck ? "CANCELLATION_PENDING" : "FAILED",
@@ -446,9 +460,13 @@ class CancelService {
           // RateGain confirms the cancellation synchronously, so record the
           // breakdown and settle the traveller's refund in the same pass.
           // refundCancelledBooking is what finally moves it to CANCELLED.
+          // RateGain confirms the cancellation synchronously, so record the
+          // breakdown and settle the traveller's refund in the same pass.
+          // refundCancelledBooking is what finally moves it to CANCELLED.
           const updated = await hotelBookingRepository.findOneAndUpdate(
             query,
             {
+              status: BookingStatus.CANCELLATION_PENDING,
               status: BookingStatus.CANCELLATION_PENDING,
               cancelCharge:
                 cancelChargesInfo?.applicableCharge !== undefined

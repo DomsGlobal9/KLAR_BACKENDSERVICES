@@ -14,7 +14,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.toLowerCase(),
+      guestEmail: email.trim().toLowerCase(),
       clientType: "GUEST"
     });
     res.json({
@@ -102,7 +102,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.guestEmail = email;
+        query.guestEmail = email.toLowerCase();
       } else {
         return res.status(403).json({
           status: false,
@@ -182,9 +182,21 @@ export const getBookingDetails = async (req: any, res: Response) => {
       delete body.agentId;
     }
 
+    // Anonymous callers reach this by knowing the booking id (the guest
+    // confirmation link). That is enough to see the stay, not enough to see who
+    // booked it — strip the identity fields.
+    const body: any = { ...booking };
+    if (!req.user) {
+      delete body.guestEmail;
+      delete body.userInfo;
+      delete body.userId;
+      delete body.agentId;
+    }
+
     res.json({
       status: true,
       statusCode: 200,
+      body,
       body,
     });
   } catch (error: any) {
