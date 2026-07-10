@@ -20,11 +20,11 @@ const REFUND_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours
 export class ReconciliationWorker {
   public static start() {
     console.log(
-      "[ReconciliationWorker] Starting background cron job (runs every 15 minutes)...",
+      "[ReconciliationWorker] Starting background cron job (runs every 2 minutes)...",
     );
 
-    // Run every 15 minutes
-    cron.schedule("*/15 * * * *", async () => {
+    // Run every 2 minutes
+    cron.schedule("*/2 * * * *", async () => {
       console.log("[ReconciliationWorker] Sweeping for stuck bookings...");
       try {
         // CANCELLATION_PENDING is deliberately excluded: those bookings are
