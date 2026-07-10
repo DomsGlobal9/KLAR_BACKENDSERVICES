@@ -3,6 +3,7 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingStatus, BookingProvider } from "../models/Booking.model";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { refundService } from "./refund.service";
+import { refundService } from "./refund.service";
 
 async function pollTripJackCancellationStatus(
   bookingId: string,
@@ -16,6 +17,7 @@ async function pollTripJackCancellationStatus(
   const poll = async (): Promise<void> => {
     if (Date.now() >= deadline) {
       console.log(
+        `[TripJack Cancel Poll] Deadline reached for booking: ${bookingId}. The status cron will keep trying.`,
         `[TripJack Cancel Poll] Deadline reached for booking: ${bookingId}. The status cron will keep trying.`,
       );
       return;
@@ -44,14 +46,9 @@ async function pollTripJackCancellationStatus(
         if (!booking) return;
 
         if (finalStatus === "CANCELLED") {
-          if (process.env.ENABLE_AUTO_REFUNDS === "false") {
-            console.log(`[TripJack Cancel Poll] Auto-refund disabled. Marking ${bookingId} as CANCELLED. Pending manual CRM refund.`);
-            await hotelBookingRepository.updateOne({ _id: booking._id }, { status: BookingStatus.CANCELLED });
-          } else {
-            // refundCancelledBooking moves the booking to CANCELLED once the
-            // money is provably back with the traveller.
-            await refundService.settleCancellation(booking, cancelChargesInfo);
-          }
+          // refundCancelledBooking moves the booking to CANCELLED once the
+          // money is provably back with the traveller.
+          await refundService.settleCancellation(booking, cancelChargesInfo);
         } else {
           // The supplier rejected the cancellation — the stay still stands.
           console.warn(
@@ -64,6 +61,7 @@ async function pollTripJackCancellationStatus(
       if (finalStatus === "CANCELLATION_PENDING") {
         if (Object.keys(query).length > 0) {
           await hotelBookingRepository.findOneAndUpdate(query, {
+            status: BookingStatus.CANCELLATION_PENDING,
             status: BookingStatus.CANCELLATION_PENDING,
             tripJackResponse: details,
           });
@@ -252,8 +250,13 @@ class CancelService {
           // breakdown now (the penalty depends on *when* we asked), then let the
           // poll flip it to CANCELLED once TripJack actually confirms — which is
           // also when the traveller's money goes back.
+          // An ack is not a cancellation. Record the intent and the charge
+          // breakdown now (the penalty depends on *when* we asked), then let the
+          // poll flip it to CANCELLED once TripJack actually confirms — which is
+          // also when the traveller's money goes back.
           if (Object.keys(query).length > 0) {
             await hotelBookingRepository.findOneAndUpdate(query, {
+              status: BookingStatus.CANCELLATION_PENDING,
               status: BookingStatus.CANCELLATION_PENDING,
               tripJackResponse: tjResponse?.body,
               cancelCharge:
@@ -265,9 +268,11 @@ class CancelService {
             });
             console.log(
               `✅ [TripJack] Cancellation acknowledged; booking marked CANCELLATION_PENDING: ${targetId}`,
+              `✅ [TripJack] Cancellation acknowledged; booking marked CANCELLATION_PENDING: ${targetId}`,
             );
           }
 
+          // Trigger asynchronous background polling to verify terminal status.
           // Trigger asynchronous background polling to verify terminal status.
           pollTripJackCancellationStatus(targetId, query, cancelChargesInfo);
         }
@@ -277,7 +282,11 @@ class CancelService {
           statusCode: 200,
           description: isSuccessAck
             ? "Cancellation requested. Your refund will be processed once the hotel confirms."
+            ? "Cancellation requested. Your refund will be processed once the hotel confirms."
             : "Cancellation failed",
+          // The supplier has only acknowledged the request; the poll confirms it.
+          isFullyCancelled: false,
+          tjStatus: isSuccessAck ? "CANCELLATION_PENDING" : "FAILED",
           // The supplier has only acknowledged the request; the poll confirms it.
           isFullyCancelled: false,
           tjStatus: isSuccessAck ? "CANCELLATION_PENDING" : "FAILED",
@@ -451,9 +460,13 @@ class CancelService {
           // RateGain confirms the cancellation synchronously, so record the
           // breakdown and settle the traveller's refund in the same pass.
           // refundCancelledBooking is what finally moves it to CANCELLED.
+          // RateGain confirms the cancellation synchronously, so record the
+          // breakdown and settle the traveller's refund in the same pass.
+          // refundCancelledBooking is what finally moves it to CANCELLED.
           const updated = await hotelBookingRepository.findOneAndUpdate(
             query,
             {
+              status: BookingStatus.CANCELLATION_PENDING,
               status: BookingStatus.CANCELLATION_PENDING,
               cancelCharge:
                 cancelChargesInfo?.applicableCharge !== undefined
@@ -469,15 +482,10 @@ class CancelService {
           );
 
           if (updated) {
-            if (process.env.ENABLE_AUTO_REFUNDS === "false") {
-              console.log(`✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; auto-refund disabled, marking CANCELLED.`);
-              await hotelBookingRepository.updateOne({ _id: updated._id }, { status: BookingStatus.CANCELLED });
-            } else {
-              console.log(
-                `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,
-              );
-              await refundService.settleCancellation(updated, cancelChargesInfo);
-            }
+            console.log(
+              `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,
+            );
+            await refundService.settleCancellation(updated, cancelChargesInfo);
           }
         }
       }
@@ -720,12 +728,101 @@ class CancelService {
       };
     }
 
-    // RateGain Logic (not supported yet)
+    // ─── RateGain cancellation-charge preview (best-effort) ───
+    // RG has no single canonical policy shape, so we read whatever policy the
+    // booking captured and compute the applicable penalty by today's date. When
+    // the data is missing/ambiguous we return applicableCharge: null, which the
+    // refund resolver treats as "unknown" and safely parks for manual review —
+    // it never guesses a refund number.
+    const totalAmount = booking.totalAmount || 0;
+    const currency = (booking.currencyCode || "INR").toUpperCase();
+
+    // Hard non-refundable signal in the stored rate → full penalty.
+    const rateComments = (booking.rateComments || "").toString();
+    if (/NON[-\s]?REFUNDABLE/i.test(rateComments)) {
+      return {
+        status: true,
+        statusCode: 200,
+        description: "Non-refundable rate — full cancellation charge applies.",
+        totalAmount,
+        applicableCharge: totalAmount,
+        refundAmount: 0,
+        currency,
+        cancellation: { isRefundable: false, penalties: [] },
+      };
+    }
+
+    // Gather policy entries from wherever the booking stored them.
+    const rg: any = booking.rateGainResponse || {};
+    const rawPolicies: any[] =
+      booking.cancellationDetails?.penalties ||
+      rg?.body?.booking?.hotel?.rooms?.[0]?.rates?.[0]?.cancellationPolicies ||
+      rg?.body?.booking?.cancellationPolicies ||
+      booking.rateGainRequest?.BookReservation?.RoomSelection?.[0]
+        ?.cancellationPolicies ||
+      [];
+
+    if (!Array.isArray(rawPolicies) || rawPolicies.length === 0) {
+      return {
+        status: true,
+        statusCode: 200,
+        description:
+          "Cancellation policy not found. Charges will be confirmed manually.",
+        totalAmount,
+        applicableCharge: null,
+        refundAmount: null,
+        currency,
+        policy: null,
+      };
+    }
+
+    const now = new Date();
+    const norm = rawPolicies
+      .map((p: any) => ({
+        from: p.from || p.fromDate || p.FromDate || p.toDate || null,
+        to: p.to || p.toDate || p.ToDate || null,
+        amount: Number(p.amount ?? p.Amount ?? p.charge ?? p.penalty ?? 0) || 0,
+      }))
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.from || 0).getTime() - new Date(b.from || 0).getTime(),
+      );
+
+    let applicableCharge = 0;
+    let matched = false;
+    for (const p of norm) {
+      const from = p.from ? new Date(p.from) : null;
+      const to = p.to ? new Date(p.to) : null;
+      if (from && to) {
+        if (now >= from && now <= to) {
+          applicableCharge = p.amount;
+          matched = true;
+          break;
+        }
+      } else if (from && now >= from) {
+        applicableCharge = p.amount;
+        matched = true;
+      }
+    }
+    if (!matched && norm.length > 0) {
+      // Past all windows → the last (highest) penalty is the conservative choice.
+      applicableCharge = norm[norm.length - 1].amount;
+    }
+
+    const refundAmount = Math.max(0, totalAmount - applicableCharge);
     return {
-      status: false,
-      statusCode: 400,
-      description:
-        "Previewing cancellation charges for RateGain is currently unsupported.",
+      status: true,
+      statusCode: 200,
+      description: "Calculated cancellation charges from booking policy (RateGain).",
+      totalAmount,
+      applicableCharge,
+      refundAmount,
+      currency,
+      cancellation: {
+        isRefundable: applicableCharge < totalAmount,
+        penalties: norm,
+      },
+      calculationTime: now.toISOString(),
     };
   }
 }
