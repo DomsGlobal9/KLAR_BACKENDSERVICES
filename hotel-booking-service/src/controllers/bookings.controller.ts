@@ -14,7 +14,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.toLowerCase(),
+      guestEmail: email.trim().toLowerCase(),
       clientType: "GUEST"
     });
     res.json({
@@ -77,10 +77,11 @@ export const getBookings = async (req: any, res: Response) => {
           });
         }
         if (email) {
+          // A signed-up B2C user also owns the GUEST bookings they made on the
+          // same email before registering. guestEmail is stored lowercased.
           query.$or = [
             { userId: agentId },
             { guestEmail: email.toLowerCase() },
-            { guestEmail: email }
           ];
           query.clientType = { $in: ['B2C', 'GUEST'] };
         } else {
@@ -95,7 +96,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.guestEmail = email;
+        query.guestEmail = email.toLowerCase();
       } else {
         return res.status(403).json({
           status: false,
@@ -164,10 +165,21 @@ export const getBookingDetails = async (req: any, res: Response) => {
       });
     }
 
+    // Anonymous callers reach this by knowing the booking id (the guest
+    // confirmation link). That is enough to see the stay, not enough to see who
+    // booked it — strip the identity fields.
+    const body: any = { ...booking };
+    if (!req.user) {
+      delete body.guestEmail;
+      delete body.userInfo;
+      delete body.userId;
+      delete body.agentId;
+    }
+
     res.json({
       status: true,
       statusCode: 200,
-      body: booking,
+      body,
     });
   } catch (error: any) {
     console.error("Get Booking Details Error:", error.message);

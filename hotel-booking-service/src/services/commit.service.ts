@@ -8,8 +8,9 @@ import { BookingEventLogger } from "../models/BookingEvent";
 import { RedisLockUtil } from "./RedisLockUtil";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { notificationService } from "./notification.service";
+import { refundService } from "./refund.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
-import { PricingUtil } from "../utils/pricing.util";
+import { PricingUtil, round2 } from "../utils/pricing.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
 
@@ -43,10 +44,22 @@ async function pollTripJackBookingStatus(
     );
     try {
       const details = await tripJackProvider.getBookingDetails(tjBookingId);
-      await hotelBookingRepository.findByIdAndUpdate(dbBookingId, {
-        status: BookingStatus.MANUAL_REVIEW,
-        tripJackResponse: details,
-      });
+      // Only park it if the status cron hasn't already resolved the booking —
+      // otherwise we'd drag a CONFIRMED booking back into MANUAL_REVIEW.
+      await hotelBookingRepository.findOneAndUpdate(
+        {
+          _id: dbBookingId,
+          status: {
+            $nin: [
+              BookingStatus.CONFIRMED,
+              BookingStatus.HELD,
+              BookingStatus.CANCELLED,
+              BookingStatus.FAILED,
+            ],
+          },
+        },
+        { status: BookingStatus.MANUAL_REVIEW, tripJackResponse: details },
+      );
       await BookingEventLogger.log(
         tjBookingId,
         dbBookingId,
@@ -68,14 +81,15 @@ async function pollTripJackBookingStatus(
     const tjStatus: string = details?.order?.status || "";
 
     const isSystemPending = details?.isSystemPending === true;
-    // A status is only truly terminal if the system is no longer pending
+    // A success status is only truly terminal if the system is no longer pending.
+    // Failure/cancellation statuses are always terminal.
     const isTerminal =
-      !isSystemPending &&
-      (TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus));
+      (!isSystemPending && TJ_SUCCESS_STATUSES.has(tjStatus)) ||
+      TJ_FAILED_STATUSES.has(tjStatus);
 
     if (
-      isSystemPending ||
-      (!isTerminal && (TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus))
+      !isTerminal &&
+      (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
     ) {
       const backoffDelay = POLL_INTERVAL_MS;
       console.log(
@@ -92,25 +106,38 @@ async function pollTripJackBookingStatus(
       // TJ bookingId which cancel needs.
       const hotelConfirmationNumber =
         details?.hotelConfirmationNumber || undefined;
-      const updated = await hotelBookingRepository.findByIdAndUpdate(
+      // Conditional transition: if the status cron resolved this booking first,
+      // `updated` is null and we skip the (duplicate) confirmation email.
+      const updated = await hotelBookingRepository.transitionStatus(
         dbBookingId,
+        newStatus,
         {
-          status: newStatus,
           tripJackResponse: details,
           ...(hotelConfirmationNumber ? { hotelConfirmationNumber } : {}),
         },
-        { new: true },
       );
-      if (updated) notificationService.sendBookingConfirmation(updated);
+      if (updated && newStatus === BookingStatus.CONFIRMED) {
+        notificationService.sendBookingConfirmation(updated);
+      }
       return;
     }
 
     if (TJ_FAILED_STATUSES.has(tjStatus)) {
       await hotelBookingRepository.findByIdAndUpdate(dbBookingId, {
-        status: BookingStatus.FAILED,
         tripJackResponse: details,
       });
-      // In Phase 3: the reconciliation worker will catch FAILED statuses and issue Wallet Refunds
+
+      // TripJack rejected the booking outright. Return the money now rather
+      // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
+      // picks wallet vs Razorpay from the record and only closes the booking
+      // out to FAILED once the refund lands.
+      const booking = await hotelBookingRepository.findOne({ _id: dbBookingId });
+      if (booking) {
+        await refundService.refundFailedBooking(
+          booking,
+          `TripJack returned a terminal status of ${tjStatus}.`,
+        );
+      }
       return;
     }
 
@@ -295,9 +322,8 @@ class CommitService {
           `✅ [Klar] Final Calculated B2B Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`,
         );
       } else {
-        if (finalPrice > netPrice) {
-          markup = finalPrice - netPrice;
-        }
+        finalPrice = round2(Number(finalPrice));
+        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         console.log(
           `✅ [Klar] B2C Booking Price: ₹${finalPrice}, Markup: ₹${markup}`,
         );
@@ -357,9 +383,12 @@ class CommitService {
         );
       }
 
-      // Build lean rooms array — one entry per room, no raw blobs
+      // Build lean rooms array — one entry per room, no raw blobs.
+      // Split the price the customer actually paid (finalPrice), matching the
+      // RateGain path; splitting netPrice made room prices sum to less than
+      // totalAmount on the voucher.
       const numRooms = (payload.roomTravellerInfo || []).length || 1;
-      const pricePerRoom = Number((netPrice / numRooms).toFixed(2));
+      const pricePerRoom = round2(finalPrice / numRooms);
       const rooms = (payload.roomTravellerInfo || [{}]).map((room: any) => ({
         roomType: payload.roomName || payload.roomType || "Standard Room",
         boardType: payload.boardType || "",
@@ -379,9 +408,9 @@ class CommitService {
         checkOut: payload.checkOut
           ? new Date(payload.checkOut)
           : new Date(Date.now() + 86400000),
-        totalAmount: finalPrice,
-        netAmount: netPrice,
-        markupAmount: markup,
+        totalAmount: round2(finalPrice),
+        netAmount: round2(netPrice),
+        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.fN || ""} ${primaryGuest.lN || ""}`.trim()
           : "",
@@ -404,9 +433,21 @@ class CommitService {
         clientType,
       });
 
-      pollTripJackBookingStatus(
+      if (saved) {
+        notificationService.sendBookingStatusEmail(saved, saved.status);
+      }
+
+      // Fire-and-forget: the response must not wait on TripJack's 180s async
+      // window. An unattached rejection here would take the process down, and
+      // the 2-minute status cron is the safety net if this poll dies.
+      void pollTripJackBookingStatus(
         tjResponse.bookingId || bookingId,
         saved._id.toString(),
+      ).catch((pollErr: any) =>
+        console.error(
+          `[TripJack] Background poll crashed for ${tjResponse.bookingId || bookingId}:`,
+          pollErr?.message,
+        ),
       );
 
       return {
@@ -501,7 +542,7 @@ class CommitService {
           payload.additionalMarkup || payload.BookReservation?.additionalMarkup,
           payload.couponCode || payload.BookReservation?.couponCode,
         );
-        finalPrice = Math.round(pricing.total * 100) / 100;
+        finalPrice = pricing.total;
         markup = pricing.markup;
       } else {
         const requestedSellingRate = Number(
@@ -510,8 +551,9 @@ class CommitService {
             payload.BookReservation?.SellingRate ||
             netPrice,
         );
-        finalPrice = requestedSellingRate;
-        markup = finalPrice - netPrice;
+        finalPrice = round2(requestedSellingRate);
+        // A selling rate below net is a loss, not a negative markup.
+        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         console.log(
           `⏸️ [RateGain] B2C booking — Calculated SellingRate is ₹${finalPrice}`,
         );
@@ -679,9 +721,9 @@ class CommitService {
         status: isConfirmed ? BookingStatus.CONFIRMED : BookingStatus.MANUAL_REVIEW,
         checkIn: new Date(payload.BookReservation?.checkin),
         checkOut: new Date(payload.BookReservation?.checkout),
-        totalAmount: finalPrice,
-        netAmount: netPrice,
-        markupAmount: markup,
+        totalAmount: round2(finalPrice),
+        netAmount: round2(netPrice),
+        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.FirstName || ""} ${primaryGuest.LastName || ""}`.trim()
           : "",
@@ -727,9 +769,8 @@ class CommitService {
         clientType,
       });
 
-      // Only email a confirmation voucher for a genuinely confirmed booking.
-      if (isConfirmed) {
-        notificationService.sendBookingConfirmation(saved);
+      if (saved) {
+        notificationService.sendBookingStatusEmail(saved, saved.status);
       }
 
       return rgResponse;

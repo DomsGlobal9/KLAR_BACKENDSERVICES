@@ -1,6 +1,6 @@
 import axios from "axios";
 import { IBooking } from "../models/Booking.model";
-import { generateHotelVoucherHTML } from "../templates/hotelConfirmationTemplate";
+import { bookingTemplateService } from "./booking-template.service";
 
 /**
  * Service to handle external notifications (Email, etc.)
@@ -13,16 +13,25 @@ class NotificationService {
    * Send booking confirmation email via email-service
    */
   async sendBookingConfirmation(booking: IBooking) {
+    return this.sendBookingStatusEmail(booking, "CONFIRMED");
+  }
+
+  /**
+   * Send booking status update email to guest (and/or agent)
+   */
+  async sendBookingStatusEmail(booking: IBooking, status: string) {
     try {
+      const rawStatus = String(status || "").toUpperCase();
       console.log(
-        `[NotificationService] Preparing confirmation for booking: ${booking.confirmationNumber}`,
+        `[NotificationService] Preparing ${rawStatus} email for booking: ${booking.confirmationNumber}`,
       );
 
-      const recipients = new Set<string>();
+      const guestRecipients = new Set<string>();
+      const agentRecipients = new Set<string>();
 
-      // 1. Add Registered Agent Email
-      if (booking.agentName && booking.agentName.includes("@")) {
-        recipients.add(booking.agentName.trim());
+      // 1. Extract Guest Emails from booking guest fields
+      if (booking.guestEmail && booking.guestEmail.includes("@")) {
+        guestRecipients.add(booking.guestEmail.trim());
       }
 
       // 2. Extract Guest Emails from TripJack Payload
@@ -32,7 +41,7 @@ class NotificationService {
         Array.isArray(tjRequest.deliveryInfo.emails)
       ) {
         tjRequest.deliveryInfo.emails.forEach((email: string) => {
-          if (email && email.includes("@")) recipients.add(email.trim());
+          if (email && email.includes("@")) guestRecipients.add(email.trim());
         });
       }
 
@@ -45,51 +54,104 @@ class NotificationService {
           if (Array.isArray(room.Guest)) {
             room.Guest.forEach((guest: any) => {
               if (guest.Email && guest.Email.includes("@")) {
-                recipients.add(guest.Email.trim());
+                guestRecipients.add(guest.Email.trim());
               }
             });
           }
         });
       }
 
-      const recipientList = Array.from(recipients);
+      // 4. Split Agent vs Client
+      if (booking.clientType === "B2B") {
+        if (booking.agentName && booking.agentName.includes("@")) {
+          agentRecipients.add(booking.agentName.trim());
+        }
+        if (booking.userInfo?.email && booking.userInfo.email.includes("@")) {
+          agentRecipients.add(booking.userInfo.email.trim());
+        }
+        // Exclude agent from guest list to prevent duplication
+        agentRecipients.forEach((email) => guestRecipients.delete(email));
+      } else {
+        if (booking.agentName && booking.agentName.includes("@")) {
+          guestRecipients.add(booking.agentName.trim());
+        }
+        if (booking.userInfo?.email && booking.userInfo.email.includes("@")) {
+          guestRecipients.add(booking.userInfo.email.trim());
+        }
+      }
 
-      if (recipientList.length === 0) {
+      const guestList = Array.from(guestRecipients);
+      const agentList = Array.from(agentRecipients);
+
+      if (guestList.length === 0 && agentList.length === 0) {
         console.warn(
           `[NotificationService] No valid recipient emails found for booking ${booking.confirmationNumber}.`,
         );
         return;
       }
 
-      console.log(
-        `[NotificationService] Sending confirmation to: ${recipientList.join(", ")}`,
-      );
+      let subject = `Hotel Booking Update - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
+      if (rawStatus === "CONFIRMED") {
+        subject = `Hotel Booking Confirmed - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
+      } else if (rawStatus === "CANCELLED" || rawStatus === "CANCELLATION_PENDING") {
+        subject = `Hotel Booking Cancelled - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
+      } else if (rawStatus === "PENDING" || rawStatus === "SUPPLIER_PENDING" || rawStatus === "MANUAL_REVIEW") {
+        subject = `Hotel Booking Under Process - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
+      } else if (rawStatus === "FAILED") {
+        subject = `Hotel Booking Failed & Refund Initiated - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
+      } else if (rawStatus === "HELD") {
+        subject = `Hotel Booking On Hold - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
+      }
 
-      const htmlContent = generateHotelVoucherHTML(booking);
+      // Send to Guests (Client copy)
+      if (guestList.length > 0) {
+        console.log(
+          `[NotificationService] Sending client template to: ${guestList.join(", ")}`,
+        );
+        const htmlContent = bookingTemplateService.compileReactHtml("client", booking, status);
+        const payload = {
+          to: guestList,
+          subject,
+          html: htmlContent,
+        };
 
-      const payload = {
-        to: recipientList,
-        subject: `Hotel Booking Confirmation - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`,
-        html: htmlContent,
-      };
+        const response = await axios.post(
+          `${this.emailServiceUrl}/email/send`,
+          payload,
+        );
+        console.log(
+          `[NotificationService] Email service response (Client Copy):`,
+          response.data,
+        );
+      }
 
-      const response = await axios.post(
-        `${this.emailServiceUrl}/email/send`,
-        payload,
-      );
-      console.log(
-        `[NotificationService] Email service response:`,
-        response.data,
-      );
-      return response.data;
+      // Send to Agent (Agent copy)
+      if (agentList.length > 0) {
+        console.log(
+          `[NotificationService] Sending agent template to: ${agentList.join(", ")}`,
+        );
+        const htmlContent = bookingTemplateService.compileReactHtml("agent", booking, status);
+        const payload = {
+          to: agentList,
+          subject: `${subject} (Agent Copy)`,
+          html: htmlContent,
+        };
+
+        const response = await axios.post(
+          `${this.emailServiceUrl}/email/send`,
+          payload,
+        );
+        console.log(
+          `[NotificationService] Email service response (Agent Copy):`,
+          response.data,
+        );
+      }
     } catch (error: any) {
-      console.error(`[NotificationService] Error sending booking confirmation:`);
+      console.error(`[NotificationService] Error sending booking status email:`);
       console.error(`Message:`, error.message);
       if (error.response) {
         console.error(`Response Status:`, error.response.status);
         console.error(`Response Data:`, error.response.data);
-      } else {
-        console.error(`Code:`, error.code);
       }
     }
   }
