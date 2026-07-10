@@ -56,7 +56,7 @@ const VisaApplicationSchema = new Schema({
     // Employment Fields
     employmentStatus: { 
         type: String, 
-        enum: ['Employed', 'Self Employed'], 
+        enum: ['Employed', 'Self-employed'], 
         required: false 
     },
     applicantName: { type: String, required: false },
