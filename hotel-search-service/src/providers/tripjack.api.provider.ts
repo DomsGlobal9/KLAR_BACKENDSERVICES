@@ -1,6 +1,5 @@
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
-import { NationalityModel } from "../models/Nationality.model";
 import { HotelModel } from "../models/Hotel.model";
 import {
   calculateEnrichedPricing,
@@ -10,37 +9,38 @@ import {
   round2,
 } from "../utils/pricing.util";
 import { getMarkupRules } from "../utils/auth";
+import { toTjNationality } from "../utils/nationality";
+import { LruCache } from "../utils/lruCache";
 
-// Fallback map if DB is empty
-const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
-  IN: "106",
-  US: "232",
-  GB: "235",
-  AE: "231",
-  SG: "200",
-  MY: "131",
-  AU: "14",
-  CA: "40",
-  DE: "83",
-  FR: "76",
-  JP: "112",
-  CN: "45",
-  NZ: "157",
-  ZA: "204",
-};
+/** Full supplier request/response bodies. Multi-megabyte and pretty-printed — opt-in only. */
+const DEBUG_PAYLOADS = process.env.HOTEL_DEBUG_PAYLOADS === "true";
 
-async function toTjNationality(iso: string): Promise<string> {
-  try {
-    if (!iso) return "106";
-    const code = iso.toUpperCase();
-    const found = await NationalityModel.findOne({ code })
-      .select("countryId")
-      .lean();
-    if (found) return found.countryId;
-  } catch (err) {
-    console.warn("[TripJack] Nationality DB lookup failed, using fallback.");
-  }
-  return ISO_TO_TJ_COUNTRY_ID[iso?.toUpperCase()] ?? "106";
+/**
+ * A hotel's static detail (name, images, room descriptions, policies) changes on
+ * the order of weeks, but the detail page fetches it on every view. Caching it
+ * takes a supplier round-trip out of the page load for every hotel a user
+ * revisits or that two users open in the same window.
+ */
+const STATIC_DETAIL_TTL_MS = Number(
+  process.env.TJ_STATIC_DETAIL_TTL_MS || 6 * 60 * 60 * 1000,
+);
+const staticDetailCache = new LruCache<any>(250, STATIC_DETAIL_TTL_MS);
+
+/** Pricing is live inventory and can never be cached. Bound it well under the client's 60s default. */
+const PRICING_TIMEOUT_MS = Number(process.env.TJ_PRICING_TIMEOUT_MS || 20_000);
+const STATIC_DETAIL_TIMEOUT_MS = 8_000;
+
+async function fetchStaticDetail(hid: string): Promise<any> {
+  const cached = staticDetailCache.get(hid);
+  if (cached) return cached;
+
+  const res = await tripJackClient.post(
+    "/hms/v3/hotel/static-detail",
+    { hid },
+    { timeout: STATIC_DETAIL_TIMEOUT_MS },
+  );
+  if (res.data) staticDetailCache.set(hid, res.data);
+  return res.data;
 }
 
 export class TripJackApiProvider {
@@ -87,14 +87,28 @@ export class TripJackApiProvider {
     const hidValue = rawId;
     const numericHid = /^\d+$/.test(hidValue) ? Number(hidValue) : hidValue;
 
-    // ── Fetch markup rules & night count ONCE per request ─────────────────
+    // ── Everything the pricing call doesn't depend on runs alongside it ──────
+    // These used to be three serial round-trips (auth service, then Mongo, then
+    // Mongo again) in front of the slowest call on the page.
     const token = payload.token || null;
-    const markupRules = await getMarkupRules(token);
     const nights = calculateNightsFromDates(
       payload.checkIn || payload.checkin,
       payload.checkOut || payload.checkout,
     );
 
+    let localHotel: any = null;
+    let staticData: any = null;
+
+    const markupRulesPromise = getMarkupRules(token);
+    const localHotelPromise = HotelModel.findOne({ tjHotelId: hidValue })
+      .lean()
+      .then((doc) => (localHotel = doc))
+      .catch((err) => {
+        console.warn(`[TripJack] Local hotel lookup failed: ${err.message}`);
+        return null;
+      });
+
+    // Only the nationality id blocks the pricing payload.
     const tjPayload: any = {
       correlationId,
       hid: numericHid,
@@ -121,22 +135,20 @@ export class TripJackApiProvider {
       ),
     };
 
-    let localHotel: any = null;
-    let staticData: any = null;
     let staticDetailPromise: Promise<void> | null = null;
 
     try {
-      console.log(
-        `[TripJack] Requesting Static Detail and Pricing for ${rawId}. Payload:`,
-        JSON.stringify(tjPayload, null, 2),
-      );
+      console.log(`[TripJack] Requesting pricing + static detail for ${rawId}`);
+      if (DEBUG_PAYLOADS) {
+        console.log(
+          `[TripJack] Pricing payload:`,
+          JSON.stringify(tjPayload, null, 2),
+        );
+      }
 
-      localHotel = await HotelModel.findOne({ tjHotelId: hidValue }).lean();
-
-      staticDetailPromise = tripJackClient
-        .post("/hms/v3/hotel/static-detail", { hid: hidValue })
-        .then((res) => {
-          staticData = res.data;
+      staticDetailPromise = fetchStaticDetail(hidValue)
+        .then((data) => {
+          staticData = data;
         })
         .catch((err) => {
           console.warn(
@@ -149,29 +161,41 @@ export class TripJackApiProvider {
       const pricingRes = await tripJackClient.post(
         "/hms/v3/hotel/pricing",
         tjPayload,
+        { timeout: PRICING_TIMEOUT_MS },
       );
       console.log(
         `[TripJack] Pricing API resolved in ${Date.now() - pricingStartTime}ms`,
       );
 
+      const [markupRules] = await Promise.all([
+        markupRulesPromise,
+        localHotelPromise,
+      ]);
+
       if (!staticData) {
+        // The DB copy already carries name/address/images/rating, so when we have
+        // it the page can render without static-detail instead of stalling on it.
+        const budgetMs = localHotel ? 1_200 : 3_000;
         await Promise.race([
           staticDetailPromise,
-          new Promise((resolve) => setTimeout(resolve, 5000)),
+          new Promise((resolve) => setTimeout(resolve, budgetMs)),
         ]);
       }
 
       const pricingData = pricingRes.data;
 
-      console.log(
-        `[DEBUG] TripJack Pricing Data for ${rawId}:`,
-        JSON.stringify(pricingData, null, 1),
-      );
-      if (staticData)
+      if (DEBUG_PAYLOADS) {
         console.log(
-          `[DEBUG] TripJack Static Data for ${rawId}:`,
-          JSON.stringify(staticData, null, 1),
+          `[DEBUG] TripJack Pricing Data for ${rawId}:`,
+          JSON.stringify(pricingData, null, 1),
         );
+        if (staticData) {
+          console.log(
+            `[DEBUG] TripJack Static Data for ${rawId}:`,
+            JSON.stringify(staticData, null, 1),
+          );
+        }
+      }
       const reviewHash: string = pricingData.reviewHash || "";
 
       const hotelName: string =
@@ -269,11 +293,12 @@ export class TripJackApiProvider {
                     (r as any).images.length > 0,
                 ) as any;
                 if (roomWithImages) {
-                  if (roomStatic) {
-                    roomStatic.images = roomWithImages.images;
-                  } else {
-                    roomStatic = roomWithImages;
-                  }
+                  // Copy rather than assign into roomStatic: it belongs to the
+                  // cached static-detail document shared by every request for
+                  // this hotel.
+                  roomStatic = roomStatic
+                    ? { ...roomStatic, images: roomWithImages.images }
+                    : roomWithImages;
                 } else if (!roomStatic && matchingRooms.length > 0) {
                   roomStatic = matchingRooms[0] as any;
                 }
@@ -483,6 +508,9 @@ export class TripJackApiProvider {
         error.response?.data?.options?.length === 0
       ) {
         console.log(`[TripJack] Hotel ${rawId} is sold out for these dates.`);
+        // The sold-out response is built from localHotel, which may still be in
+        // flight if pricing failed before the join above.
+        await localHotelPromise;
         try {
           if (staticDetailPromise && !staticData) {
             await Promise.race([

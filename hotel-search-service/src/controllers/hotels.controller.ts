@@ -30,6 +30,9 @@ export const getHotelSuggestions = async (
   try {
     const query = req.query.q as string;
     const data = await hotelsService.getHotelSuggestions(query);
+    // Suggestions are identical for every user, so let the browser and any CDN
+    // in front of us absorb the repeats instead of re-hitting this service.
+    res.set("Cache-Control", "public, max-age=300");
     res.status(200).json({
       status: true,
       body: data,

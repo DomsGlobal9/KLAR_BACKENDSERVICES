@@ -31,11 +31,20 @@ export interface HotelSupplierAdapter {
    */
   ownsPropertyId(propertyId: string): boolean;
 
-  /** Fan out a unified search request to this supplier. */
+  /**
+   * Fan out a unified search request to this supplier.
+   *
+   * `total` is a supplier-specific upper bound, not a count of bookable hotels:
+   * TripJack reports how many property ids fell inside the search radius, most
+   * of which have no availability. Never surface it to a user, and never sum it
+   * across suppliers — deduplication merges the overlap.
+   *
+   * `hasMore` is the authoritative "is there another page" signal.
+   */
   search(
     req: UnifiedSearchRequest,
     clientType: "B2B" | "B2C",
-  ): Promise<{ hotels: UnifiedHotel[]; total: number }>;
+  ): Promise<{ hotels: UnifiedHotel[]; total: number; hasMore: boolean }>;
 
   /** Room/rate-level product details for a specific property. */
   getProducts(payload: any): Promise<any>;
