@@ -81,14 +81,15 @@ async function pollTripJackBookingStatus(
     const tjStatus: string = details?.order?.status || "";
 
     const isSystemPending = details?.isSystemPending === true;
-    // A success status is terminal. Failure/cancellation statuses are always terminal.
+    // A success status is only truly terminal if the system is no longer pending.
+    // Failure/cancellation statuses are always terminal.
     const isTerminal =
-      TJ_SUCCESS_STATUSES.has(tjStatus) ||
+      (!isSystemPending && TJ_SUCCESS_STATUSES.has(tjStatus)) ||
       TJ_FAILED_STATUSES.has(tjStatus);
 
     if (
       !isTerminal &&
-      (TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
+      (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
     ) {
       const backoffDelay = POLL_INTERVAL_MS;
       console.log(
@@ -580,9 +581,7 @@ class CommitService {
       }
 
       // PHASE 4: Provider Booking
-      const rgPayload = payload.BookReservation 
-        ? { ...payload } 
-        : { ...(payload.bookingPayload || payload) };
+      const rgPayload = { ...(payload.bookingPayload || payload) };
 
       // Override RoomTypeCode and allocationDetails with the validated values from freshPrecheck
       const validatedRooms = freshPrecheck.originalResponse?.body?.preCheckResponse?.rooms || [];
@@ -632,19 +631,9 @@ class CommitService {
         rgPayload.BookReservation.BookingRate = supplierBookingRate;
         if (rgSellingRate !== undefined)
           rgPayload.BookReservation.SellingRate = rgSellingRate;
-
-        // INJECT FRESH ROOM SELECTION KEY
-        if (freshPrecheck.optionId && rgPayload.BookReservation.RoomSelection?.[0]) {
-          rgPayload.BookReservation.RoomSelection[0].RoomSelectionKey = freshPrecheck.optionId;
-        }
       } else {
         rgPayload.BookingRate = supplierBookingRate;
         if (rgSellingRate !== undefined) rgPayload.SellingRate = rgSellingRate;
-
-        // INJECT FRESH ROOM SELECTION KEY
-        if (freshPrecheck.optionId && rgPayload.RoomSelection?.[0]) {
-          rgPayload.RoomSelection[0].RoomSelectionKey = freshPrecheck.optionId;
-        }
       }
 
       const rgResponse = await rateGainProvider.commit(rgPayload);
