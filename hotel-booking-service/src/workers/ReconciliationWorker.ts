@@ -25,6 +25,11 @@ export class ReconciliationWorker {
 
     // Run every 2 minutes
     cron.schedule("*/2 * * * *", async () => {
+      if (process.env.ENABLE_AUTO_REFUNDS === "false") {
+        console.log("[ReconciliationWorker] Auto-refunds are disabled (ENABLE_AUTO_REFUNDS=false). Skipping sweep.");
+        return;
+      }
+      
       console.log("[ReconciliationWorker] Sweeping for stuck bookings...");
       try {
         // CANCELLATION_PENDING is deliberately excluded: those bookings are

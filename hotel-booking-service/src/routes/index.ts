@@ -5,6 +5,7 @@ import {
   cancelController,
   getCancelChargesController,
 } from "../controllers/cancel.controller";
+import { processManualRefund } from "../controllers/refund.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
 import { getPricingSummaryController } from "../controllers/pricing.controller";
@@ -66,6 +67,7 @@ router.post("/commit", optionalAuthenticateJWT, commitController);
 router.post("/confirm", optionalAuthenticateJWT, confirmController);
 router.post("/cancel", optionalAuthenticateJWT, cancelController);
 router.get("/cancel/charges", optionalAuthenticateJWT, getCancelChargesController);
+router.post("/refund/manual/:bookingId", authenticateJWT, processManualRefund);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);
