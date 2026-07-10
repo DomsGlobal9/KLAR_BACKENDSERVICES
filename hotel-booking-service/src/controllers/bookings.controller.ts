@@ -14,7 +14,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.toLowerCase(),
+      guestEmail: email.trim().toLowerCase(),
       clientType: "GUEST"
     });
     res.json({
@@ -41,10 +41,10 @@ export const getBookings = async (req: any, res: Response) => {
     const email = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
-
+    
     const clientType = req.query.clientType as string;
     const query: any = {};
-
+    
     if (!clientType) {
       return res.status(403).json({
         status: false,
@@ -53,7 +53,7 @@ export const getBookings = async (req: any, res: Response) => {
         body: null,
       });
     }
-
+    
     query.clientType = clientType;
 
     if (!isAdmin) {
@@ -76,7 +76,17 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.userId = agentId;
+        if (email) {
+          // A signed-up B2C user also owns the GUEST bookings they made on the
+          // same email before registering. guestEmail is stored lowercased.
+          query.$or = [
+            { userId: agentId },
+            { guestEmail: email.toLowerCase() },
+          ];
+          query.clientType = { $in: ['B2C', 'GUEST'] };
+        } else {
+          query.userId = agentId;
+        }
       } else if (clientType === 'GUEST') {
         if (!email) {
           return res.status(403).json({
@@ -86,7 +96,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.guestEmail = email;
+        query.guestEmail = email.toLowerCase();
       } else {
         return res.status(403).json({
           status: false,
@@ -138,9 +148,9 @@ export const getBookingDetails = async (req: any, res: Response) => {
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
-    const isOwner =
-      booking.agentId === userId ||
-      booking.userId === userId ||
+    const isOwner = 
+      booking.agentId === userId || 
+      booking.userId === userId || 
       (booking as any).userInfo?.id === userId ||
       (userEmail && booking.guestEmail?.toLowerCase() === userEmail);
 
@@ -166,21 +176,9 @@ export const getBookingDetails = async (req: any, res: Response) => {
       delete body.agentId;
     }
 
-    // Anonymous callers reach this by knowing the booking id (the guest
-    // confirmation link). That is enough to see the stay, not enough to see who
-    // booked it — strip the identity fields.
-    const body: any = { ...booking };
-    if (!req.user) {
-      delete body.guestEmail;
-      delete body.userInfo;
-      delete body.userId;
-      delete body.agentId;
-    }
-
     res.json({
       status: true,
       statusCode: 200,
-      body,
       body,
     });
   } catch (error: any) {

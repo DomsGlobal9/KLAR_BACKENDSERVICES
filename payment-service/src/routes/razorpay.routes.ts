@@ -11,7 +11,6 @@ import {
     testWebhookController
 } from '../controllers/razorpay.controller';
 import { internalServiceAuth } from '../middlewares/internalService.middleware';
-import { internalServiceAuth } from '../middlewares/internalService.middleware';
 
 const router = express.Router();
 

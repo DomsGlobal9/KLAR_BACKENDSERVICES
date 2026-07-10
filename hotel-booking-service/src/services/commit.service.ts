@@ -9,7 +9,6 @@ import { RedisLockUtil } from "./RedisLockUtil";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { notificationService } from "./notification.service";
 import { refundService } from "./refund.service";
-import { refundService } from "./refund.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
 import { PricingUtil, round2 } from "../utils/pricing.util";
 
@@ -61,22 +60,6 @@ async function pollTripJackBookingStatus(
         },
         { status: BookingStatus.MANUAL_REVIEW, tripJackResponse: details },
       );
-      // Only park it if the status cron hasn't already resolved the booking —
-      // otherwise we'd drag a CONFIRMED booking back into MANUAL_REVIEW.
-      await hotelBookingRepository.findOneAndUpdate(
-        {
-          _id: dbBookingId,
-          status: {
-            $nin: [
-              BookingStatus.CONFIRMED,
-              BookingStatus.HELD,
-              BookingStatus.CANCELLED,
-              BookingStatus.FAILED,
-            ],
-          },
-        },
-        { status: BookingStatus.MANUAL_REVIEW, tripJackResponse: details },
-      );
       await BookingEventLogger.log(
         tjBookingId,
         dbBookingId,
@@ -100,17 +83,11 @@ async function pollTripJackBookingStatus(
     const isSystemPending = details?.isSystemPending === true;
     // A success status is only truly terminal if the system is no longer pending.
     // Failure/cancellation statuses are always terminal.
-    // A success status is only truly terminal if the system is no longer pending.
-    // Failure/cancellation statuses are always terminal.
     const isTerminal =
-      (!isSystemPending && TJ_SUCCESS_STATUSES.has(tjStatus)) ||
-      TJ_FAILED_STATUSES.has(tjStatus);
       (!isSystemPending && TJ_SUCCESS_STATUSES.has(tjStatus)) ||
       TJ_FAILED_STATUSES.has(tjStatus);
 
     if (
-      !isTerminal &&
-      (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
       !isTerminal &&
       (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
     ) {
@@ -132,20 +109,13 @@ async function pollTripJackBookingStatus(
       // Conditional transition: if the status cron resolved this booking first,
       // `updated` is null and we skip the (duplicate) confirmation email.
       const updated = await hotelBookingRepository.transitionStatus(
-      // Conditional transition: if the status cron resolved this booking first,
-      // `updated` is null and we skip the (duplicate) confirmation email.
-      const updated = await hotelBookingRepository.transitionStatus(
         dbBookingId,
-        newStatus,
         newStatus,
         {
           tripJackResponse: details,
           ...(hotelConfirmationNumber ? { hotelConfirmationNumber } : {}),
         },
       );
-      if (updated && newStatus === BookingStatus.CONFIRMED) {
-        notificationService.sendBookingConfirmation(updated);
-      }
       if (updated && newStatus === BookingStatus.CONFIRMED) {
         notificationService.sendBookingConfirmation(updated);
       }
@@ -156,18 +126,6 @@ async function pollTripJackBookingStatus(
       await hotelBookingRepository.findByIdAndUpdate(dbBookingId, {
         tripJackResponse: details,
       });
-
-      // TripJack rejected the booking outright. Return the money now rather
-      // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
-      // picks wallet vs Razorpay from the record and only closes the booking
-      // out to FAILED once the refund lands.
-      const booking = await hotelBookingRepository.findOne({ _id: dbBookingId });
-      if (booking) {
-        await refundService.refundFailedBooking(
-          booking,
-          `TripJack returned a terminal status of ${tjStatus}.`,
-        );
-      }
 
       // TripJack rejected the booking outright. Return the money now rather
       // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
@@ -234,39 +192,13 @@ class CommitService {
       payload.type === "HOTEL" ||
       (!payload.BookReservation && payload.bookingId);
 
-    // Idempotency: a client-supplied key makes a retry (flaky mobile network,
-    // double-submit, the 180s TripJack async window outlasting the Redis lock)
-    // return the ORIGINAL booking instead of creating a second one. The unique
-    // index on Booking.idempotencyKey is the real guarantee; this is the fast path.
-    const idempotencyKey = payload.idempotencyKey;
-    if (idempotencyKey) {
-      const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
-      if (existing) {
-        console.log(
-          `[Commit] Idempotent replay for key ${idempotencyKey} -> ${existing.confirmationNumber}`,
-        );
-        return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
-      }
-    }
-
     // Lock key specific to this unique booking attempt (combining hotel + dates + user or optionId)
     // A generic key like "lock_booking_agent1" prevents concurrent duplicates
-    const lockKey = `commit_lock_${agentId || "guest"}_${idempotencyKey || payload.optionId || payload.bookingId || tjBookingId}`;
+    const lockKey = `commit_lock_${agentId || "guest"}_${payload.optionId || payload.bookingId || tjBookingId}`;
 
-    try {
-      return await RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
-        if (isTripJack) {
-          return this.#commitTripJack(
-            payload,
-            agentId,
-            agentName,
-            token,
-            clientType,
-            requestId,
-            userInfo,
-          );
-        }
-        return this.#commitRateGain(
+    return RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
+      if (isTripJack) {
+        return this.#commitTripJack(
           payload,
           agentId,
           agentName,
@@ -275,18 +207,17 @@ class CommitService {
           requestId,
           userInfo,
         );
-      });
-    } catch (err: any) {
-      // A concurrent request with the same idempotency key won the unique-index
-      // race: return its booking rather than surfacing a raw duplicate-key error.
-      if (idempotencyKey && (err?.code === 11000 || /E11000/.test(String(err?.message)))) {
-        const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
-        if (existing) {
-          return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
-        }
       }
-      throw err;
-    }
+      return this.#commitRateGain(
+        payload,
+        agentId,
+        agentName,
+        token,
+        clientType,
+        requestId,
+        userInfo,
+      );
+    });
   }
 
   async #commitTripJack(
@@ -393,8 +324,6 @@ class CommitService {
       } else {
         finalPrice = round2(Number(finalPrice));
         markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
-        finalPrice = round2(Number(finalPrice));
-        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         console.log(
           `✅ [Klar] B2C Booking Price: ₹${finalPrice}, Markup: ₹${markup}`,
         );
@@ -423,33 +352,7 @@ class CommitService {
           );
         }
       } else {
-        // B2C/GUEST: the browser cannot be trusted to say a payment happened.
-        // Verify the Razorpay payment SERVER-SIDE before booking. It must be
-        // genuinely captured AND cover both the quoted selling price and the net
-        // we will owe the supplier (so a tampered-low price can never book).
-        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
-        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
-        const pay = await PaymentUtil.verifyRazorpayPayment({
-          paymentId: payload.razorpayPaymentId,
-          orderId: payload.razorpayOrderId,
-          expectedAmount: requiredAmount,
-          platform: "B2C",
-        });
-        if (!pay.verified) {
-          await BookingEventLogger.log(bookingId, requestId, "PAYMENT_UNVERIFIED", {
-            reason: pay.reason,
-            requiredAmount,
-          });
-          throw new StructuredError(
-            "PAYMENT_UNVERIFIED",
-            "We could not verify your payment. If any amount was debited it will be refunded automatically.",
-            { reason: pay.reason },
-          );
-        }
-        await BookingEventLogger.log(bookingId, requestId, "PAYMENT_VERIFIED", {
-          capturedAmount: pay.capturedAmount,
-          requiredAmount,
-        });
+        // B2C Flow - Payment is already processed by Payment Gateway
         paymentProcessed = true;
       }
 
@@ -484,12 +387,7 @@ class CommitService {
       // Split the price the customer actually paid (finalPrice), matching the
       // RateGain path; splitting netPrice made room prices sum to less than
       // totalAmount on the voucher.
-      // Build lean rooms array — one entry per room, no raw blobs.
-      // Split the price the customer actually paid (finalPrice), matching the
-      // RateGain path; splitting netPrice made room prices sum to less than
-      // totalAmount on the voucher.
       const numRooms = (payload.roomTravellerInfo || []).length || 1;
-      const pricePerRoom = round2(finalPrice / numRooms);
       const pricePerRoom = round2(finalPrice / numRooms);
       const rooms = (payload.roomTravellerInfo || [{}]).map((room: any) => ({
         roomType: payload.roomName || payload.roomType || "Standard Room",
@@ -513,9 +411,6 @@ class CommitService {
         totalAmount: round2(finalPrice),
         netAmount: round2(netPrice),
         markupAmount: round2(markup),
-        totalAmount: round2(finalPrice),
-        netAmount: round2(netPrice),
-        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.fN || ""} ${primaryGuest.lN || ""}`.trim()
           : "",
@@ -534,7 +429,6 @@ class CommitService {
         tripJackRequest: tjPayload, // Cache the compiled outbound request payload
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
-        idempotencyKey: payload.idempotencyKey,
         userInfo,
         clientType,
       });
@@ -547,21 +441,8 @@ class CommitService {
       // window. An unattached rejection here would take the process down, and
       // the 2-minute status cron is the safety net if this poll dies.
       void pollTripJackBookingStatus(
-      if (saved) {
-        notificationService.sendBookingStatusEmail(saved, saved.status);
-      }
-
-      // Fire-and-forget: the response must not wait on TripJack's 180s async
-      // window. An unattached rejection here would take the process down, and
-      // the 2-minute status cron is the safety net if this poll dies.
-      void pollTripJackBookingStatus(
         tjResponse.bookingId || bookingId,
         saved._id.toString(),
-      ).catch((pollErr: any) =>
-        console.error(
-          `[TripJack] Background poll crashed for ${tjResponse.bookingId || bookingId}:`,
-          pollErr?.message,
-        ),
       ).catch((pollErr: any) =>
         console.error(
           `[TripJack] Background poll crashed for ${tjResponse.bookingId || bookingId}:`,
@@ -662,18 +543,14 @@ class CommitService {
           payload.couponCode || payload.BookReservation?.couponCode,
         );
         finalPrice = pricing.total;
-        finalPrice = pricing.total;
         markup = pricing.markup;
       } else {
         const requestedSellingRate = Number(
           payload.sellingRate ||
-          payload.BookReservation?.sellingRate ||
-          payload.BookReservation?.SellingRate ||
-          netPrice,
+            payload.BookReservation?.sellingRate ||
+            payload.BookReservation?.SellingRate ||
+            netPrice,
         );
-        finalPrice = round2(requestedSellingRate);
-        // A selling rate below net is a loss, not a negative markup.
-        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         finalPrice = round2(requestedSellingRate);
         // A selling rate below net is a loss, not a negative markup.
         markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
@@ -699,32 +576,7 @@ class CommitService {
           amount: finalPrice,
         });
       } else {
-        // B2C/GUEST: verify the Razorpay payment SERVER-SIDE before booking (see
-        // the TripJack path for the rationale). Must cover the selling price AND
-        // the net we owe RateGain.
-        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
-        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
-        const pay = await PaymentUtil.verifyRazorpayPayment({
-          paymentId: payload.razorpayPaymentId,
-          orderId: payload.razorpayOrderId,
-          expectedAmount: requiredAmount,
-          platform: "B2C",
-        });
-        if (!pay.verified) {
-          await BookingEventLogger.log(demandId, requestId, "PAYMENT_UNVERIFIED", {
-            reason: pay.reason,
-            requiredAmount,
-          });
-          throw new StructuredError(
-            "PAYMENT_UNVERIFIED",
-            "We could not verify your payment. If any amount was debited it will be refunded automatically.",
-            { reason: pay.reason },
-          );
-        }
-        await BookingEventLogger.log(demandId, requestId, "PAYMENT_VERIFIED", {
-          capturedAmount: pay.capturedAmount,
-          requiredAmount,
-        });
+        // B2C Flow - Payment is already processed by Payment Gateway
         paymentProcessed = true;
       }
 
@@ -757,9 +609,9 @@ class CommitService {
 
       const b2cSellingRate = Number(
         payload.sellingRate ||
-        payload.BookReservation?.sellingRate ||
-        payload.BookReservation?.SellingRate ||
-        netPrice,
+          payload.BookReservation?.sellingRate ||
+          payload.BookReservation?.SellingRate ||
+          netPrice,
       );
 
       const roundedNetPrice = Number(netPrice.toFixed(2));
@@ -872,9 +724,6 @@ class CommitService {
         totalAmount: round2(finalPrice),
         netAmount: round2(netPrice),
         markupAmount: round2(markup),
-        totalAmount: round2(finalPrice),
-        netAmount: round2(netPrice),
-        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.FirstName || ""} ${primaryGuest.LastName || ""}`.trim()
           : "",
@@ -916,13 +765,10 @@ class CommitService {
           undefined,
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
-        idempotencyKey: payload.idempotencyKey,
         userInfo,
         clientType,
       });
 
-      if (saved) {
-        notificationService.sendBookingStatusEmail(saved, saved.status);
       if (saved) {
         notificationService.sendBookingStatusEmail(saved, saved.status);
       }
