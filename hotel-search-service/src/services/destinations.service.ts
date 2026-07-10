@@ -1,4 +1,5 @@
 import { RGDestinationModel } from "../models/RGDestination.model";
+import { isMongoReady } from "../utils/mongoReady";
 
 class DestinationsService {
   async getDestinations() {
@@ -33,6 +34,13 @@ class DestinationsService {
   }
 
   async getPopularDestinations() {
+    // Without this, a disconnected Mongo buffers the query for 10s before
+    // rejecting, stalling the dropdown's empty state on every page load.
+    if (!isMongoReady()) {
+      console.warn("[Destinations] MongoDB not connected — returning no popular destinations.");
+      return { status: true, body: [] };
+    }
+
     try {
       const popularNames = [
         "Jaipur",

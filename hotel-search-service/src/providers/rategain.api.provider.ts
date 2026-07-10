@@ -6,6 +6,9 @@ import {
 import { getMarkupRules } from "../utils/auth";
 import { HotelModel } from "../models/Hotel.model";
 
+/** Full supplier request/response bodies. Multi-megabyte and pretty-printed — opt-in only. */
+const DEBUG_PAYLOADS = process.env.HOTEL_DEBUG_PAYLOADS === "true";
+
 export class RateGainApiProvider {
   async getDestinations() {
     try {
@@ -115,6 +118,15 @@ export class RateGainApiProvider {
     // Start markup fetch in parallel — doesn't block the RateGain API call
     const markupRulesPromise = getMarkupRules(token);
 
+    // Same for the static-data lookup: it enriches the response but nothing in
+    // the RateGain call depends on it, so it must not sit behind it.
+    const staticHotelPromise = HotelModel.findOne({ tjHotelId: propertyId })
+      .lean()
+      .catch((err) => {
+        console.warn("[RateGain] Failed to fetch static data from DB:", err);
+        return null;
+      });
+
     const rateGainPayload: any = {
       propertyID: propertyId,
       PropertyCode: payload.PropertyCode || payload.propertyCode,
@@ -160,9 +172,12 @@ export class RateGainApiProvider {
     }
 
     try {
-      console.log(
-        `[RateGain] Requesting Products: ${JSON.stringify(rateGainPayload, null, 2)}`,
-      );
+      console.log(`[RateGain] Requesting products for property ${propertyId}`);
+      if (DEBUG_PAYLOADS) {
+        console.log(
+          `[RateGain] Products payload: ${JSON.stringify(rateGainPayload, null, 2)}`,
+        );
+      }
       const res = await rateGainClient.post(
         "/api/SmartDistribution/getproducts",
         rateGainPayload,
@@ -270,26 +285,19 @@ export class RateGainApiProvider {
 
         let finalData = enrichDeep(rawData);
 
-        try {
-          const staticHotel = await HotelModel.findOne({
-            tjHotelId: propertyId,
-          }).lean();
-
-          if (staticHotel) {
-            finalData = {
-              ...finalData,
-              images: staticHotel.images || [],
-              name: staticHotel.name,
-              address: staticHotel.address,
-              city: staticHotel.cityName,
-              starRating: staticHotel.starRating,
-              latitude: staticHotel.location?.coordinates?.[1],
-              longitude: staticHotel.location?.coordinates?.[0],
-              description: staticHotel.accMultiDesc || staticHotel.accTypeDesc || "",
-            };
-          }
-        } catch (dbErr) {
-          console.warn("[RateGain] Failed to fetch static data from DB:", dbErr);
+        const staticHotel = await staticHotelPromise;
+        if (staticHotel) {
+          finalData = {
+            ...finalData,
+            images: staticHotel.images || [],
+            name: staticHotel.name,
+            address: staticHotel.address,
+            city: staticHotel.cityName,
+            starRating: staticHotel.starRating,
+            latitude: staticHotel.location?.coordinates?.[1],
+            longitude: staticHotel.location?.coordinates?.[0],
+            description: staticHotel.accMultiDesc || staticHotel.accTypeDesc || "",
+          };
         }
 
         return {

@@ -1,8 +1,10 @@
 import { Request } from "express";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import axios from "axios";
 import { env } from "../config/env";
 import { MarkupRule } from "./pricing.util";
+import { LruCache } from "./lruCache";
 
 export function getClientType(req: Request): "B2B" | "B2C" {
   try {
@@ -49,6 +51,23 @@ export function extractToken(req: Request): string | null {
 }
 
 /**
+ * Every hotel search and every hotel-detail request needs the caller's markup
+ * rules before it can price anything, so this call sits at the head of both
+ * critical paths. An agent's markup changes on the order of days, so a short
+ * memoisation removes an auth-service round-trip from each of them.
+ */
+const MARKUP_TTL_MS = Number(process.env.MARKUP_CACHE_TTL_MS || 60_000);
+const MARKUP_TIMEOUT_MS = Number(process.env.MARKUP_TIMEOUT_MS || 3_000);
+/** Failures are remembered only briefly, so an auth-service blip can't strip an agent's markup for a full minute. */
+const MARKUP_FAILURE_TTL_MS = 5_000;
+
+const markupCache = new LruCache<MarkupRule[]>(500, MARKUP_TTL_MS);
+const markupFailureCache = new LruCache<true>(500, MARKUP_FAILURE_TTL_MS);
+
+const tokenKey = (token: string) =>
+  crypto.createHash("sha1").update(token).digest("hex");
+
+/**
  * Fetches the agent's markup rules from the auth service.
  * Returns an empty array if the token is null/undefined, on network error, or on any failure.
  * Never throws.
@@ -60,23 +79,37 @@ export async function getMarkupRules(
     return [];
   }
 
+  const key = tokenKey(token);
+
+  const cached = markupCache.get(key);
+  if (cached) return cached;
+
+  // The auth service is down or slow; don't make every request in flight wait
+  // out the timeout again.
+  if (markupFailureCache.get(key)) return [];
+
   try {
     const response = await axios.get(
       `${env.authServiceUrl}/user/markup/my-markup`,
       {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: MARKUP_TIMEOUT_MS,
       },
     );
 
     if (response.data?.success) {
-      return Array.isArray(response.data.data)
+      const rules: MarkupRule[] = Array.isArray(response.data.data)
         ? response.data.data
         : response.data.data?.services || [];
+      markupCache.set(key, rules);
+      return rules;
     }
 
+    markupCache.set(key, []);
     return [];
   } catch (err: any) {
     console.warn("[auth] getMarkupRules failed:", err?.message ?? err);
+    markupFailureCache.set(key, true);
     return [];
   }
 }

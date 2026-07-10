@@ -8,6 +8,8 @@ import app from "./app";
 import { connectDB } from "./config/db";
 import { syncRGDestinations } from "./sync/rgDestinationSync";
 import { syncTJHotels } from "./sync/tjHotelSync";
+import { startSearchTokenMaintenance } from "./sync/hotelSearchTokensBackfill";
+import { buildSuggestionIndex } from "./services/suggestionIndex";
 
 const PORT = process.env.PORT || 5012;
 
@@ -15,7 +17,10 @@ async function start() {
   // Connect to MongoDB first
   await connectDB();
 
-
+  // Parse the 8MB city dataset and build the autocomplete index now, while we
+  // are still single-user. Deferring it to the first keystroke would cost that
+  // user ~1s and block the event loop for every concurrent request.
+  buildSuggestionIndex();
 
   // Seed default popular areas
   try {
@@ -24,6 +29,11 @@ async function start() {
   } catch (err: any) {
     console.error("❌ Failed to seed default popular areas:", err.message);
   }
+
+  // Ensures the autocomplete index exists and tops up any hotel missing tokens —
+  // whether it predates the field or arrived through a sync that skipped it.
+  // Throttled, resumable, and a no-op once the collection is complete.
+  startSearchTokenMaintenance();
 
   if (process.env.ENABLE_AUTO_SYNC === "true") {
     console.log(

@@ -4,41 +4,7 @@ import { resolveForTJ } from "../services/destinationResolver";
 import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 import { HotelModel } from "../models/Hotel.model";
-
-import { NationalityModel } from "../models/Nationality.model";
-
-const ISO_TO_TJ_COUNTRY_ID: Record<string, string> = {
-  IN: "106",
-  US: "232",
-  GB: "235",
-  AE: "231",
-  SG: "200",
-  MY: "131",
-  AU: "14",
-  CA: "40",
-  DE: "83",
-  FR: "76",
-  JP: "112",
-  CN: "45",
-  NZ: "157",
-  ZA: "204",
-};
-
-async function toTjNationality(isoCode: string): Promise<string> {
-  try {
-    if (!isoCode) return "106";
-    const code = isoCode.toUpperCase();
-    const found = await NationalityModel.findOne({ code })
-      .select("countryId")
-      .lean();
-    if (found) return found.countryId;
-  } catch (err) {
-    console.warn(
-      "[TripJack Search] Nationality DB lookup failed, using fallback.",
-    );
-  }
-  return ISO_TO_TJ_COUNTRY_ID[isoCode?.toUpperCase()] ?? "106";
-}
+import { toTjNationality } from "../utils/nationality";
 
 // ─── TripJack Circuit Breaker ────────────────────────────────────────────────
 let tjCircuitOpenUntil = 0;
@@ -52,11 +18,11 @@ function tripTJCircuit() {
 
 export async function searchTJ(
   req: UnifiedSearchRequest,
-): Promise<{ hotels: UnifiedHotel[]; total: number }> {
-  if (isTJCircuitOpen()) return { hotels: [], total: 0 };
+): Promise<{ hotels: UnifiedHotel[]; total: number; hasMore: boolean }> {
+  if (isTJCircuitOpen()) return { hotels: [], total: 0, hasMore: false };
 
   const hids = await resolveForTJ(req.destination, req._geoCenter);
-  if (!hids.length) return { hotels: [], total: 0 };
+  if (!hids.length) return { hotels: [], total: 0, hasMore: false };
   const correlationId = uuidv4();
   const page = req.pageNo || 1;
 
@@ -227,7 +193,11 @@ export async function searchTJ(
 
     return {
       hotels: mapped,
+      // Candidate ids in radius — an upper bound, not a hotel count. Goa resolves
+      // ~6,179 ids and yields ~20 bookable hotels.
       total: hids.length,
+      // More pages exist only while unprocessed id chunks remain.
+      hasMore: endId < hids.length,
     };
   } catch (error: any) {
     console.error("[TripJack Adapter] Search Error:", error.message);

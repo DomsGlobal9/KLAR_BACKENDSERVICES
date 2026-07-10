@@ -5,7 +5,7 @@ import { rateGainProvider } from "../providers/rategain.provider";
 export async function searchRG(
   req: UnifiedSearchRequest,
   clientType: "B2B" | "B2C" = "B2C",
-): Promise<{ hotels: UnifiedHotel[]; total: number }> {
+): Promise<{ hotels: UnifiedHotel[]; total: number; hasMore: boolean }> {
   let destCode = (req.destinationCode || "").toString().trim() || null;
   const isDirectRG = req.destination?.startsWith("RG:");
 
@@ -49,7 +49,7 @@ export async function searchRG(
   }
 
   if (!payload.propertyId && !payload.Geofilter && !payload.destinationCode) {
-    return { hotels: [], total: 0 };
+    return { hotels: [], total: 0, hasMore: false };
   }
 
   try {
@@ -60,6 +60,10 @@ export async function searchRG(
     const pageNo = req.pageNo || 1;
     const batchSize = 1;
     const apiPageStart = (pageNo - 1) * batchSize + 1;
+    // RateGain returns a fixed 20 properties per page. If that ever changes,
+    // hasMore is off by at most one page — the client also stops as soon as a
+    // page adds no new hotels.
+    const RG_PAGE_SIZE = 20;
 
     console.log(
       `[RateGain] Requesting pages [${apiPageStart}] for search Page ${pageNo}`,
@@ -144,9 +148,13 @@ export async function searchRG(
       console.error(`[RateGain] API Error:`, err.message);
     }
 
+    // Unlike TripJack's, RateGain's totalRecord is a real count of matching
+    // properties, so the page position tells us whether more remain.
+    const consumed = apiPageStart * RG_PAGE_SIZE;
     return {
       hotels: allHotels, // preserve RateGain's relevance/distance order
       total: Math.max(allHotels.length, maxTotal),
+      hasMore: allHotels.length > 0 && consumed < maxTotal,
     };
   } catch (error: any) {
     console.error("[RateGain Adapter] Global Search Error:", error.message);
