@@ -14,7 +14,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       });
     }
     const count = await hotelBookingRepository.countDocuments({
-      guestEmail: email.toLowerCase(),
+      guestEmail: email.trim().toLowerCase(),
       clientType: "GUEST"
     });
     res.json({
@@ -86,7 +86,7 @@ export const getBookings = async (req: any, res: Response) => {
             body: null,
           });
         }
-        query.guestEmail = email;
+        query.guestEmail = email.toLowerCase();
       } else {
         return res.status(403).json({
           status: false,

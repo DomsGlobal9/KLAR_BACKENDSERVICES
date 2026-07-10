@@ -105,7 +105,7 @@ class CancelService {
         try {
           const p = JSON.parse(bAny.tripJackResponse);
           tjInfo = p?.itemInfos?.HOTEL || p?.body?.itemInfos?.HOTEL;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       let rgIn = bAny.rateGainResponse?.body?.checkInTime;
@@ -113,7 +113,7 @@ class CancelService {
         try {
           const p = JSON.parse(bAny.rateGainResponse);
           rgIn = p?.body?.checkInTime || p?.checkInTime;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (tjInfo?.hInfo) {
@@ -139,7 +139,7 @@ class CancelService {
             ? dbIn.beginTime
             : dbIn || inTime;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     let hours = 0;
     let minutes = 0;
@@ -442,11 +442,11 @@ class CancelService {
           const query: any = isObjectId
             ? { _id: targetId }
             : {
-                $or: [
-                  { confirmationNumber: targetId },
-                  { reservationId: targetId },
-                ],
-              };
+              $or: [
+                { confirmationNumber: targetId },
+                { reservationId: targetId },
+              ],
+            };
 
           // RateGain confirms the cancellation synchronously, so record the
           // breakdown and settle the traveller's refund in the same pass.
@@ -515,8 +515,8 @@ class CancelService {
     const query: any = isObjectId
       ? { _id: targetId }
       : {
-          $or: [{ confirmationNumber: targetId }, { reservationId: targetId }],
-        };
+        $or: [{ confirmationNumber: targetId }, { reservationId: targetId }],
+      };
 
     const booking = await hotelBookingRepository.findOne(query, true);
     if (!booking) {
