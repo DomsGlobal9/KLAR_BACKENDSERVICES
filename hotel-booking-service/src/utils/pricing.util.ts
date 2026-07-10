@@ -1,6 +1,6 @@
 import { MarkupRule } from "./wallet.util";
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ---------------------------------------------------------------------------
 // PLATFORM (super-admin) markup — MUST mirror hotel-search-service config.
@@ -46,12 +46,20 @@ export class PricingUtil {
     const secretCode = process.env.SECRET_SYSTEM_COUPON || "disabled-node-env";
     if (couponCode === secretCode) {
       const adjustedPrice = netPrice * 0.65; // 35% Adjustment
-      return { total: adjustedPrice, markup: 0, adminMarkup: 0, net: netPrice };
+      return {
+        total: round2(adjustedPrice),
+        markup: 0,
+        adminMarkup: 0,
+        net: netPrice,
+      };
     }
 
-    const rule = rules.find(
-      (r) => r.serviceType === "HOTELS" || r.serviceType === "HOTEL",
-    );
+    // serviceType casing is not guaranteed by the markup API — normalize before matching,
+    // otherwise a rule stored as "Hotels" silently yields a zero admin markup.
+    const rule = rules.find((r) => {
+      const type = (r.serviceType || "").toUpperCase();
+      return type === "HOTELS" || type === "HOTEL";
+    });
 
     let adminMarkup = 0;
     if (rule) {
@@ -63,14 +71,14 @@ export class PricingUtil {
     }
 
     const additional = Number(additionalMarkup) || 0;
-    const totalMarkup = adminMarkup + additional;
-    const total = netPrice + totalMarkup;
+    const totalMarkup = round2(adminMarkup + additional);
+    const total = round2(netPrice + totalMarkup);
 
     return {
       total,
       markup: totalMarkup,
-      adminMarkup,
-      net: netPrice,
+      adminMarkup: round2(adminMarkup),
+      net: round2(netPrice),
     };
   }
 }

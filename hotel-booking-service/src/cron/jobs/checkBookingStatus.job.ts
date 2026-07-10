@@ -1,10 +1,20 @@
 import cron from "node-cron";
 import { CRON_TIME } from "../../config/cron.config";
 import { bookingsService } from "../../services/bookings.service";
-import { BookingStatus, BookingProvider } from "../../models/Booking.model";
+import { BookingStatus } from "../../models/Booking.model";
 import { hotelBookingRepository } from "../../repositories/hotelBooking.repository";
 
 let isRunning = false;
+
+/**
+ * Bookings older than this are left to the ReconciliationWorker / ops rather
+ * than re-polled forever. Without a bound, a single permanently-stuck record
+ * would hit the supplier every 2 minutes for the life of the service.
+ */
+const MAX_BOOKING_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** Cap the work per tick so a backlog can't starve the 2-minute schedule. */
+const MAX_BOOKINGS_PER_RUN = 100;
 
 /**
  * Initialize Booking Status Cron
@@ -28,7 +38,9 @@ const executeBookingStatusCron = async () => {
 
   try {
     /**
-     * Get all bookings in a non-terminal state
+     * Get all bookings in a non-terminal state.
+     * HELD stays in the sweep: a TripJack hold can still expire or be
+     * cancelled upstream, and only the supplier knows when.
      */
     const bookings = await hotelBookingRepository.find(
       {
@@ -39,10 +51,11 @@ const executeBookingStatusCron = async () => {
             BookingStatus.FAILED,
           ],
         },
+        createdAt: { $gt: new Date(Date.now() - MAX_BOOKING_AGE_MS) },
       },
-      null,
+      { createdAt: 1 },
       undefined,
-      undefined,
+      MAX_BOOKINGS_PER_RUN,
       true,
     );
 
@@ -75,19 +88,14 @@ const processBookings = async (bookings: any[]) => {
 
 /**
  * Process Single Booking
- * We use the existing getBookingById method which already auto-syncs status
+ *
+ * syncBookingStatus persists any transition and — unlike the old path through
+ * getBookingById — sends the confirmation voucher when a TripJack booking
+ * resolves to CONFIRMED after the in-request poll window has closed.
  */
 const processSingleBooking = async (booking: any) => {
   try {
-    const idToSync =
-      booking.confirmationNumber ||
-      booking.reservationId ||
-      booking._id.toString();
-
-    // This existing method will fetch the booking and auto-sync it from TripJack
-    await bookingsService.getBookingById(idToSync);
-
-    console.log(`Successfully checked booking status for: ${idToSync}`);
+    await bookingsService.syncBookingStatus(booking);
   } catch (error: any) {
     console.error(
       `Booking status check failed for ID: ${booking._id}`,

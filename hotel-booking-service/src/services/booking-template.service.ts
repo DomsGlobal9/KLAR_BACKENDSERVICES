@@ -1,6 +1,9 @@
 import fs from "fs";
 import path from "path";
 import puppeteer from "puppeteer";
+import React from "react";
+import ReactDOMServer from "react-dom/server";
+import { HotelEmailTemplate } from "../templates/HotelEmailTemplates";
 
 export class BookingTemplateService {
   /**
@@ -310,6 +313,33 @@ export class BookingTemplateService {
     } finally {
       await browser.close();
     }
+  }
+
+  public compileReactHtml(target: "client" | "agent", booking: any, status: string): string {
+    // Read the local logo file and convert it into a Base64 string data URI
+    const logoAbsolutePath = path.join(
+      process.cwd(),
+      "src",
+      "assets",
+      "images",
+      "klar-travels-logo.png",
+    );
+    let logoDataUri = "";
+    if (fs.existsSync(logoAbsolutePath)) {
+      const logoBase64 = fs.readFileSync(logoAbsolutePath, {
+        encoding: "base64",
+      });
+      logoDataUri = `data:image/png;base64,${logoBase64}`;
+    }
+
+    const element = React.createElement(HotelEmailTemplate, {
+      booking,
+      status,
+      target,
+      logoDataUri: logoDataUri || undefined
+    });
+
+    return ReactDOMServer.renderToStaticMarkup(element);
   }
 }
 

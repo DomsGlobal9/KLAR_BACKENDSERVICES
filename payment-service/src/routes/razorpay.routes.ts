@@ -7,10 +7,18 @@ import {
     getRazorpayPaymentStatusController,
     getRazorpayOrderDetailsController,
     razorpayWebhookController,
+    refundRazorpayPaymentController,
     testWebhookController
 } from '../controllers/razorpay.controller';
+import { internalServiceAuth } from '../middlewares/internalService.middleware';
 
 const router = express.Router();
+
+/**
+ * Refund a captured payment. Called by booking services, not by the browser.
+ * POST /api/razorpay/internal/refund
+ */
+router.post('/internal/refund', internalServiceAuth, refundRazorpayPaymentController);
 
 /**
  * Create a new Razorpay order

@@ -93,6 +93,32 @@ export class WalletController {
         }
     }
 
+    /**
+     * Credit an arbitrary user's wallet on behalf of another Klar service.
+     *
+     * Unlike `creditWallet`, the target user comes from the request body rather
+     * than a JWT — background jobs (e.g. the hotel reconciliation worker) have
+     * to refund the agent who owns a booking, not the token holder. Guarded by
+     * `internalServiceAuth`.
+     */
+    static async internalCreditWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+        try {
+            const { userId } = req.body;
+
+            if (!userId || !Types.ObjectId.isValid(userId)) {
+                throw new BadRequestError("A valid userId is required");
+            }
+
+            // creditWallet reads the target from req.user; the shared-secret
+            // middleware has already established that the caller is trusted.
+            req.user = { ...(req.user ?? {}), userId } as typeof req.user;
+
+            return await WalletController.creditWallet(req, res, next);
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async creditWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
             if (!req.user) {
