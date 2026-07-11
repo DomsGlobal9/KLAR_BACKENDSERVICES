@@ -375,15 +375,15 @@ export const flightBookingConfirmationTemplate = `
                 <div class="info-grid">
                     <div class="info-item">
                         <strong>Name</strong>
-                        <span>{{emergencyContact.EmergencyContactName}}</span>
+                        <span>{{emergencyContact.name}}</span>
                     </div>
                     <div class="info-item">
                         <strong>Email</strong>
-                        <span>{{emergencyContact.Emails.[0]}}</span>
+                        <span>{{emergencyContact.email}}</span>
                     </div>
                     <div class="info-item">
                         <strong>Phone</strong>
-                        <span>{{emergencyContact.Contacts.[0]}}</span>
+                        <span>{{emergencyContact.phone}}</span>
                     </div>
                 </div>
             </div>

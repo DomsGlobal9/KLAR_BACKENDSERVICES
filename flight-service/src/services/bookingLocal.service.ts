@@ -13,6 +13,8 @@ import { FrontendBookingPayload } from "../types/booking.types";
 import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
+import { cancellationRequestTemplate } from "../templates/flight-client-cancellation.template";
+import { cancellationRequestAgencyTemplate } from "../templates/flight-agency-cancellation.template";
 
 
 class BookingService {
@@ -99,7 +101,7 @@ class BookingService {
         });
     }
 
-    private async sendBookingEmails(bookingId: string) {
+    public async sendBookingEmails(bookingId: string) {
         try {
             const booking = await this.bookingRepo.getBookingById(bookingId);
             if (!booking) return;
@@ -218,6 +220,98 @@ class BookingService {
 
         } catch (error) {
             console.error(`Email failed for ${bookingId}:`, error);
+        }
+    }
+
+    public async sendCancellationEmails(bookingId: string) {
+        try {
+            const booking = await this.bookingRepo.getBookingById(bookingId);
+            if (!booking) return;
+
+            const [tripjackData, dbData] = await Promise.all([
+                TripjackBookingService.getBookingDetails(bookingId),
+                this.getBookingDetails(bookingId),
+            ]);
+
+            if (!tripjackData) return;
+
+            const travellerEmail = tripjackData?.order?.DeliveryInformation?.Emails?.[0] ||
+                tripjackData?.order?.contactInfo?.emails?.[0] ||
+                booking?.email || "";
+
+            const agentEmail = dbData?.userInfo?.email || "";
+
+            const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
+            const formattedTravellers = travellers.map((t: any) => ({
+                title: t.Title || '',
+                firstName: t.FirstName || '',
+                lastName: t.LastName || '',
+                paxType: t.PaxType || '',
+                dob: t.DateOfBirth || '',
+                passportNumber: t.PassportNumber || '',
+                passportNationality: t.PassportNationality || '',
+                passportIssueDate: t.PassportIssueDate || '',
+                passportExpiryDate: t.PassportExpiryDate || '',
+            }));
+
+            const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
+            const formattedGstInfo = gstInfo ? {
+                gstNumber: gstInfo.GSTNumber || gstInfo.gstNumber || '',
+                registeredName: gstInfo.RegisteredName || gstInfo.registeredName || '',
+                email: gstInfo.email || '',
+                mobile: gstInfo.mobile || '',
+                address: gstInfo.address || '',
+                isSez: gstInfo.isez || gstInfo.isSez || false
+            } : null;
+
+            const templateData = {
+                bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
+                bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
+                status: tripjackData?.order?.status || 'CANCELLED',
+                totalPrice: booking?.totalPrice || 0,
+                markupPrice: booking?.markupPrice || 0,
+                tripjackPrice: booking?.tripjackPrice || 0,
+                travellers: formattedTravellers,
+                travellerEmail: booking?.email || '',
+                agentEmail: dbData?.userInfo?.email || '',
+                email: booking?.email || '',
+                phone: booking?.phone || '',
+                gstInfo: formattedGstInfo,
+                userInfo: dbData?.userInfo || {},
+                order: tripjackData?.order || {},
+                cancellationDate: new Date().toISOString(),
+            };
+
+            const clientTemplate = Handlebars.compile(cancellationRequestTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            const agencyTemplate = Handlebars.compile(cancellationRequestAgencyTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            if (travellerEmail) {
+                await this.sendEmail(
+                    travellerEmail,
+                    `Flight Cancellation Confirmation - ${bookingId}`,
+                    clientTemplate(templateData)
+                );
+                console.log(`✅ Cancellation email sent to traveller: ${travellerEmail}`);
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                await this.sendEmail(
+                    agentEmail,
+                    `Flight Cancellation Confirmation - ${bookingId} (Agency Copy)`,
+                    agencyTemplate(templateData)
+                );
+                console.log(`✅ Cancellation email sent to agent: ${agentEmail}`);
+            }
+
+        } catch (error) {
+            console.error(`Cancellation email failed for ${bookingId}:`, error);
         }
     }
 

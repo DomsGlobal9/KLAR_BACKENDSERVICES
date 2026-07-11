@@ -4,8 +4,11 @@ import { TRIPJACK_URLS } from "../config";
 import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
 import RedisCacheService from "../cache/redisCache.service";
 import { v4 as uuidv4 } from "uuid";
+import { FlightReviewDataService } from "./flightReviewData.service";
 
 class ReviewService {
+
+    private reviewService = new FlightReviewDataService();
 
     async reviewFare(priceIds: string[]) {
         const sessionId = uuidv4();
@@ -27,10 +30,18 @@ class ReviewService {
 
             const rawData = response.data;
             const mappedData = TripjackFieldMapper.map(rawData);
-
+            
+            
             await RedisCacheService.set(sessionId, {
                 raw: mappedData,
             }, 1800);
+            
+            const finalReviewResult = {
+                mappedData,
+                sessionId
+            };
+            this.reviewService.storeReviewData(finalReviewResult as any);
+            
 
             return {
                 mappedData,
