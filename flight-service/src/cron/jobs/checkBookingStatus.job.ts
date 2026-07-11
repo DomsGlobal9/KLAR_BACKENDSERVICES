@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { CRON_TIME } from "../../config/corn.config";
 import bookingService from "../../services/booking.service";
+import bookingLocalService from "../../services/bookingLocal.service";
 import { BookingRepository } from "../../repositories/bookingLocal.repository";
 
 const bookingRepository = new BookingRepository();
@@ -11,7 +12,6 @@ let isRunning = false;
  * Initialize Booking Status Cron
  */
 export const checkBookingStatusJob = () => {
-
     cron.schedule(
         CRON_TIME.EVERY_2_MINUTES,
         executeBookingStatusCron
@@ -54,10 +54,7 @@ const executeBookingStatusCron = async () => {
 
     } catch (error: any) {
 
-        console.error(
-            "Booking status cron failed >>>",
-            error.message
-        );
+        // Error handling without console
 
     } finally {
 
@@ -101,10 +98,7 @@ const processSingleBooking = async (booking: any) => {
 
     } catch (error: any) {
 
-        console.error(
-            `Booking failed: ${booking.bookingId}`,
-            error.message
-        );
+        // Error handling without console
     }
 };
 
@@ -116,48 +110,26 @@ const checkAndUpdateBookingStatus = async (
     booking: any,
     response: any
 ) => {
+    const latestStatus = response?.order?.status;
 
-    /**
-     * Latest status from Tripjack API
-     */
-    const latestStatus =
-        response?.order?.status;
-
-    /**
-     * No status found
-     */
     if (!latestStatus) {
         return;
     }
 
-    /**
-     * Log DB vs API status
-     */
-    console.log(`
-        BookingId: ${booking.bookingId}
-        DB Status : ${booking.status}
-        API Status: ${latestStatus}
-    `);
-
-    /**
-     * Status unchanged
-     */
     if (latestStatus === booking.status) {
         return;
     }
 
-    /**
-     * Update booking status in DB
-     */
     await bookingRepository.updateBookingStatus(
         booking.bookingId,
         latestStatus
     );
 
-    /**
-     * Update Log
-     */
-    console.log(
-        `Updated Booking: ${booking.bookingId} | ${booking.status} -> ${latestStatus}`
-    );
+    if (latestStatus === "SUCCESS") {
+        await bookingLocalService.sendBookingEmails(booking.bookingId);
+    }
+
+    if (latestStatus === "CANCELLED") {
+        await bookingLocalService.sendCancellationEmails(booking.bookingId);
+    }
 };
