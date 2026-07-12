@@ -15,20 +15,14 @@ const TravellerSchema = new Schema(
     {
         travellerId: { type: String, required: true },
         
-        
         title: String,
         paxType: { type: String, enum: ["ADULT", "CHILD", "INFANT"] },
         firstName: String,
         lastName: String,
         dob: String,
-        gender: { type: String, enum: ["MALE", "FEMALE", "OTHER"] },
-
-        idType: String,
-        idNumber: String,
 
         passportNumber: String,
         passportNationality: String,
-        passportIssuingCountry: String,
         passportIssueDate: String,
         passportExpiryDate: String,
 
@@ -94,15 +88,24 @@ const BookingSchema = new Schema<BookingDocument>(
                 "REISSUED",
                 "CANCEL_REQUESTED",  
                 "CONFIRMED"          
-                "REISSUED",
-                "CANCEL_REQUESTED",  
-                "CONFIRMED"          
             ],
             default: "INITIATED"
         },
+
         amendmentId: { type: String },
-        pnr: { type: String },
-        flightInfo: { type: Schema.Types.Mixed }
+
+        refundProcessed: {
+            type: Boolean,
+            default: false
+        },
+        refundPrice: {
+            type: String,
+            default: '0'
+        },
+        refundDate: {
+            type: Date,
+        },
+
     },
     { timestamps: true }
 );

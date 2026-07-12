@@ -6,12 +6,8 @@ import { BookingRepository } from "../../repositories/bookingLocal.repository";
 import CancellationService from "../../services/cancellation.service";
 import { cancellationPriceService } from "../../services/cancellationRefund.service";
 import { BookingModel } from "../../model/bookingLocal.model";
-import CancellationService from "../../services/cancellation.service";
-import { cancellationPriceService } from "../../services/cancellationRefund.service";
-import { BookingModel } from "../../model/bookingLocal.model";
 
 const bookingRepository = new BookingRepository();
-
 
 
 let isRunning = false;
@@ -134,7 +130,6 @@ const checkAndUpdateBookingStatus = async (
     );
 
     if (latestStatus === "SUCCESS") {
-        bookingLocalService.sendBookingEmails(booking.bookingId);
         bookingLocalService.sendBookingEmails(booking.bookingId);
     }
 
