@@ -15,7 +15,6 @@ const TravellerSchema = new Schema(
     {
         travellerId: { type: String, required: true },
         
-        
         title: String,
         paxType: { type: String, enum: ["ADULT", "CHILD", "INFANT"] },
         firstName: String,
@@ -86,9 +85,6 @@ const BookingSchema = new Schema<BookingDocument>(
                 "REJECTED",
                 "NO_SHOW",
                 "VOIDED",
-                "REISSUED",
-                "CANCEL_REQUESTED",  
-                "CONFIRMED"          
                 "REISSUED",
                 "CANCEL_REQUESTED",  
                 "CONFIRMED"          

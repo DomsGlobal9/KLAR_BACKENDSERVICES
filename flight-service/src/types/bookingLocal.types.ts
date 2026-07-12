@@ -97,6 +97,10 @@ export interface Booking {
     refundPrice?: string;
     refundDate?: Date;
 
+    refundProcessed?: boolean;
+    refundPrice?: string;
+    refundDate?: Date;
+
     createdAt?: Date;
     updatedAt?: Date;
 }
