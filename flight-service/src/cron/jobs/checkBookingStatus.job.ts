@@ -6,8 +6,12 @@ import { BookingRepository } from "../../repositories/bookingLocal.repository";
 import CancellationService from "../../services/cancellation.service";
 import { cancellationPriceService } from "../../services/cancellationRefund.service";
 import { BookingModel } from "../../model/bookingLocal.model";
+import CancellationService from "../../services/cancellation.service";
+import { cancellationPriceService } from "../../services/cancellationRefund.service";
+import { BookingModel } from "../../model/bookingLocal.model";
 
 const bookingRepository = new BookingRepository();
+
 
 
 let isRunning = false;
@@ -131,6 +135,7 @@ const checkAndUpdateBookingStatus = async (
 
     if (latestStatus === "SUCCESS") {
         bookingLocalService.sendBookingEmails(booking.bookingId);
+        bookingLocalService.sendBookingEmails(booking.bookingId);
     }
 
     if (latestStatus === "CANCELLED") {
@@ -138,42 +143,40 @@ const checkAndUpdateBookingStatus = async (
 
         const bookingData = await bookingRepository.getBookingById(booking.bookingId);
 
-        if (bookingData?.refundProcessed === false) {
-            const amendmentResponse = await CancellationService.status(bookingData?.amendmentId as string);
-            const amendmentStatus = amendmentResponse?.data?.amendmentStatus;
+        const amendmentResponse = await CancellationService.status(bookingData?.amendmentId as string);
+        const amendmentStatus = amendmentResponse?.data?.amendmentStatus;
 
-            if (amendmentStatus === "SUCCESS") {
-                if (bookingData?.userInfo?.clientType === 'b2b') {
-                    try {
-                        const userId = bookingData?.userInfo?.id;
-                        const refundAmount = amendmentResponse?.data?.refundableAmount;
+        if (amendmentStatus === "SUCCESS") {
+            if (bookingData?.userInfo?.clientType === 'b2b') {
+                try {
+                    const userId = bookingData?.userInfo?.id;
+                    const refundAmount = amendmentResponse?.data?.refundableAmount;
 
-                        if (userId && refundAmount > 0) {
+                    if (userId && refundAmount > 0) {
 
-                            await cancellationPriceService.creditWallet(
-                                userId,
-                                refundAmount,
-                                'REFUND',
-                                'WALLET',
-                                'BOOKING',
-                                booking.bookingId,
-                                `Refund for cancelled booking ${booking.bookingId}`
-                            );
+                        await cancellationPriceService.creditWallet(
+                            userId,
+                            refundAmount,
+                            'REFUND',
+                            'WALLET',
+                            'BOOKING',
+                            booking.bookingId,
+                            `Refund for cancelled booking ${booking.bookingId}`
+                        );
 
-                            await BookingModel.updateOne(
-                                { bookingId: booking.bookingId },
-                                {
-                                    refundProcessed: true,
-                                    refundPrice: refundAmount.toString(),
-                                    refundDate: new Date()
-                                }
-                            );
+                        await BookingModel.updateOne(
+                            { bookingId: booking.bookingId },
+                            {
+                                refundProcessed: true,
+                                refundPrice: refundAmount.toString(),
+                                refundDate: new Date()
+                            }
+                        );
 
-                            console.log(`✅ Wallet credited: ₹${refundAmount} for booking ${booking.bookingId}`);
-                        }
-                    } catch (error: any) {
-                        console.error(`❌ Failed to credit wallet for booking ${booking.bookingId}:`, error.message);
+                        console.log(`✅ Wallet credited: ₹${refundAmount} for booking ${booking.bookingId}`);
                     }
+                } catch (error: any) {
+                    console.error(`❌ Failed to credit wallet for booking ${booking.bookingId}:`, error.message);
                 }
             }
         }
