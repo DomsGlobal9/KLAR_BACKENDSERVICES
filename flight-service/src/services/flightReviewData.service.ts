@@ -15,7 +15,6 @@ export class FlightReviewDataService {
     async storeReviewData(data: Partial<IFlightReview>): Promise<IFlightReview> {
         try {
 
-            console.log("[FLIGHT FAIR REVIEW SERVICE] Fare review we got: \n", JSON.stringify(data, null, 2));
             const bookingId = data?.mappedData?.bookingId;
             if (bookingId) {
                 const existingBooking = await this.repository.getReviewDataByBookingId(bookingId);
