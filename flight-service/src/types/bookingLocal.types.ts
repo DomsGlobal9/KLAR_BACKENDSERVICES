@@ -82,12 +82,16 @@ export interface Booking {
     | "NO_SHOW"
     | "VOIDED"
     | "REISSUED"
-    | "CANCEL_REQUESTED"  
+    | "CANCEL_REQUESTED"
     | "CONFIRMED";
-    
+
     amendmentId?: string;
     pnr?: string;
     flightInfo?: any;
+
+    refundProcessed?: boolean;
+    refundPrice?: string;
+    refundDate?: Date;
 
     createdAt?: Date;
     updatedAt?: Date;

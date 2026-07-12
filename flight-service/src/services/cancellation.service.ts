@@ -89,6 +89,50 @@ class CancellationService {
         }
     }
 
+    // async status(amendmentId: string) {
+    //     const { baseUrl, headers, endpoints } = this.getConfig();
+
+    //     try {
+    //         const response = await axios.post(
+    //             `${baseUrl}${endpoints.AMENDMENT_DETAILS}`,
+    //             { amendmentId },
+    //             { headers }
+    //         );
+
+    //         const status = response.data?.status;
+    //         const bookingId = response.data?.bookingId;
+
+    //         if (status === "SUCCESS") {
+    //             await this.bookingRepo.updateBookingStatus(
+    //                 bookingId,
+    //                 "CANCELLED"
+    //             );
+    //         }
+
+    //         if (status === "REJECTED") {
+    //             await this.bookingRepo.updateBookingStatus(
+    //                 bookingId,
+    //                 "CONFIRMED"
+    //             );
+    //         }
+
+    //         return response;
+
+    //     } catch (error: any) {
+    //         console.error("Amendment Status ERROR >>>", {
+    //             status: error.response?.status,
+    //             data: JSON.stringify(error.response?.data, null, 2),
+    //             message: error.message
+    //         });
+
+    //         throw error;
+    //     }
+    // }
+
+    // ##################
+    // PRIVATE Functions
+    // ##################
+
     async status(amendmentId: string) {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
@@ -99,21 +143,18 @@ class CancellationService {
                 { headers }
             );
 
-            const status = response.data?.status;
+            const amendmentStatus = response.data?.amendmentStatus;
             const bookingId = response.data?.bookingId;
 
-            if (status === "SUCCESS") {
+            if (amendmentStatus === "SUCCESS") {
                 await this.bookingRepo.updateBookingStatus(
                     bookingId,
                     "CANCELLED"
                 );
+                console.log(`✅ Amendment ${amendmentId} completed successfully - Booking ${bookingId} cancelled`);
             }
-
-            if (status === "REJECTED") {
-                await this.bookingRepo.updateBookingStatus(
-                    bookingId,
-                    "CONFIRMED"
-                );
+            else {
+                console.log(`⏳ Amendment ${amendmentId} status: ${amendmentStatus} - No database change`);
             }
 
             return response;
@@ -129,9 +170,6 @@ class CancellationService {
         }
     }
 
-    // ##################
-    // PRIVATE Functions
-    // ##################
     private async sendCancellationRequestEmail(booking: any) {
         try {
             if (!booking) return;
@@ -202,6 +240,8 @@ class CancellationService {
             // Email send failed silently
         }
     }
+
+
 
 }
 
