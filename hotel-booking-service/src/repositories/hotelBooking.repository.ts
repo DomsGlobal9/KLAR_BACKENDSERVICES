@@ -73,6 +73,17 @@ export class HotelBookingRepository {
   }
 
   /**
+   * Update one
+   */
+  async updateOne(
+    query: FilterQuery<IBooking>,
+    update: UpdateQuery<IBooking>,
+    options?: any,
+  ): Promise<any> {
+    return await BookingModel.updateOne(query, update, options);
+  }
+
+  /**
    * Apply `update` only if the booking is not already in `targetStatus`.
    * Returns the updated document when THIS caller performed the transition,
    * and null when another worker (in-request poll / cron / reconciliation)

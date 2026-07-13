@@ -574,7 +574,7 @@ class SearchService {
 
             if (printData == "true" || printData == true) {
                 
-                const normalizedWithAllFares = MultiCityNormalizer.transformWithAllFares(rawResponse.data);
+                const normalizedWithAllFares = MultiCityNormalizer.transformWithAllFares(rawResponse.data, payload);
 
                 let result: any;
 
@@ -644,8 +644,8 @@ class SearchService {
                             itineraries = itineraries.filter((itinerary: any) => {
                                 let allLegsMatch = true;
                                 for (const legIdx of legsToFilter) {
-                                    if (legIdx < itinerary.legs.length) {
-                                        const legMatch = MultiCityFlightFilter.applyFilters([itinerary.legs[legIdx]], filters).length > 0;
+                                    if (legIdx < itinerary.segments.length) {
+                                        const legMatch = MultiCityFlightFilter.applyFilters([itinerary.segments[legIdx]], filters).length > 0;
                                         if (!legMatch) {
                                             allLegsMatch = false;
                                             break;
@@ -709,14 +709,14 @@ class SearchService {
             }
 
             const normalizedResult =
-                MultiCityNormalizer.normalize(rawResponse.data);
+                MultiCityNormalizer.normalize(rawResponse.data, payload);
 
             let normalized = normalizedResult.flights;
 
             const airlineStats = normalizedResult.airlineStats;
 
             const isDomestic = normalized.length > 0 && 'flights' in normalized[0];
-            const isInternational = normalized.length > 0 && 'legs' in normalized[0];
+            const isInternational = normalized.length > 0 && 'segments' in normalized[0];
 
             let originalCounts: Array<{ legIndex: number; count: number }> = [];
 
@@ -740,12 +740,12 @@ class SearchService {
                         const filteredItineraries = normalized.filter((itinerary: any) => {
                             let allLegsMatch = true;
                             const legsToFilter = applyToLegs === 'all'
-                                ? itinerary.legs.map((_: any, idx: number) => idx)
+                                ? itinerary.segments.map((_: any, idx: number) => idx)
                                 : applyToLegs || [];
 
                             for (const legIdx of legsToFilter) {
-                                if (legIdx < itinerary.legs.length) {
-                                    const legMatch = MultiCityFlightFilter.applyFilters([itinerary.legs[legIdx]], filters).length > 0;
+                                if (legIdx < itinerary.segments.length) {
+                                    const legMatch = MultiCityFlightFilter.applyFilters([itinerary.segments[legIdx]], filters).length > 0;
                                     if (!legMatch) {
                                         allLegsMatch = false;
                                         break;
@@ -876,8 +876,8 @@ class SearchService {
                             }
                         }
 
-                        if (itinerary.legs && itinerary.legs.length > 0) {
-                            for (const leg of itinerary.legs) {
+                        if (itinerary.segments && itinerary.segments.length > 0) {
+                            for (const leg of itinerary.segments) {
                                 if (originalCombo && originalCombo.totalPriceList) {
                                     leg.availableFares = itinerary.availableFares;
                                     leg.refundable = itinerary.refundable;
@@ -966,9 +966,18 @@ class SearchService {
             const response: any = {
                 sessionId,
                 isInternational: !!rawResponse.data?.searchResult?.conditions?.pcs,
-                flights: normalized,
                 airlineStats
             };
+
+            if (isDomestic) {
+                response.type = 'domestic';
+                response.legs = normalized;
+            } else if (isInternational) {
+                response.type = 'international';
+                response.itineraries = normalized;
+            } else {
+                response.flights = normalized;
+            }
 
             if (stats) {
                 response.stats = stats;

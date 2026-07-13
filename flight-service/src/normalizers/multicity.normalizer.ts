@@ -5,7 +5,7 @@ type AnyObj = Record<string, any>;
 
 export class MultiCityNormalizer extends BaseFlightNormalizer {
 
-    static normalize(searchResult: AnyObj) {
+    static normalize(searchResult: AnyObj, payload?: any) {
         const tripInfos = searchResult?.searchResult?.tripInfos;
         if (!tripInfos) {
             return {
@@ -18,7 +18,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         const hasLegs = Object.keys(tripInfos).some(key => !isNaN(Number(key)));
 
         if (hasCombo && !hasLegs) {
-            return this.normalizeComboStructure(tripInfos.COMBO);
+            return this.normalizeComboStructure(tripInfos.COMBO, payload);
         }
 
         return this.normalizeDomesticStructure(tripInfos);
@@ -28,7 +28,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
      * Transform with all fares (for PDF generation)
      * Includes all fare options for each flight
      */
-    static transformWithAllFares(searchResult: AnyObj) {
+    static transformWithAllFares(searchResult: AnyObj, payload?: any) {
         const tripInfos = searchResult?.searchResult?.tripInfos;
         if (!tripInfos) {
             return {
@@ -41,7 +41,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         const hasLegs = Object.keys(tripInfos).some(key => !isNaN(Number(key)));
 
         if (hasCombo && !hasLegs) {
-            return this.transformComboWithAllFares(tripInfos.COMBO);
+            return this.transformComboWithAllFares(tripInfos.COMBO, payload);
         }
 
         return this.transformDomesticWithAllFares(tripInfos);
@@ -84,36 +84,22 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         };
     }
 
-    private static normalizeComboStructure(comboFlights: any[]) {
+    private static normalizeComboStructure(comboFlights: any[], payload?: any) {
         const result: any[] = [];
 
         comboFlights.forEach((combo: any) => {
             const segments = combo.sI || [];
-            const legs: Map<number, any[]> = new Map();
-
-            let currentLeg = 0;
-
-            for (let i = 0; i < segments.length; i++) {
-                const segment = segments[i];
-                if (!legs.has(currentLeg)) {
-                    legs.set(currentLeg, []);
-                }
-                legs.get(currentLeg)!.push(segment);
-
-                if (segment.isRs === true) {
-                    currentLeg++;
-                }
-            }
+            const legs = this.splitSegmentsIntoLegs(segments, payload);
 
             const itinerary: any = {
                 itineraryKey: this.getFlightKey(segments),
                 totalPrice: this.getCheapestFare(combo.totalPriceList)?.fd?.ADULT?.fC?.TF || 0,
-                legs: []
+                segments: []
             };
 
             legs.forEach((legSegments, legIndex) => {
                 const legFlight = this.mapSegmentsToLeg(legSegments, combo.totalPriceList, legIndex);
-                itinerary.legs.push(legFlight);
+                itinerary.segments.push(legFlight);
             });
 
             result.push(itinerary);
@@ -123,7 +109,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         const airlineMap: Record<string, { name: string; code: string; count: number }> = {};
 
         result.forEach((itinerary: any) => {
-            itinerary.legs?.forEach((leg: any) => {
+            itinerary.segments?.forEach((leg: any) => {
                 if (!leg?.airline) return;
 
                 const airlineName = leg.airline;
@@ -157,26 +143,12 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
     /**
      * Transform international multicity (combo) with all fares
      */
-    private static transformComboWithAllFares(comboFlights: any[]) {
+    private static transformComboWithAllFares(comboFlights: any[], payload?: any) {
         const result: any[] = [];
 
         comboFlights.forEach((combo: any) => {
             const segments = combo.sI || [];
-            const legs: Map<number, any[]> = new Map();
-
-            let currentLeg = 0;
-
-            for (let i = 0; i < segments.length; i++) {
-                const segment = segments[i];
-                if (!legs.has(currentLeg)) {
-                    legs.set(currentLeg, []);
-                }
-                legs.get(currentLeg)!.push(segment);
-
-                if (segment.isRs === true) {
-                    currentLeg++;
-                }
-            }
+            const legs = this.splitSegmentsIntoLegs(segments, payload);
 
 
             const allFares = (combo.totalPriceList || []).map((fare: any) => ({
@@ -209,7 +181,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
                         max: Math.max(...allFares.map((f: any) => f.totalPrice))
                     }
                 },
-                legs: []
+                segments: []
             };
 
             legs.forEach((legSegments, legIndex) => {
@@ -220,7 +192,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
                     cheapestFare,
                     allFares
                 );
-                itinerary.legs.push(legFlight);
+                itinerary.segments.push(legFlight);
             });
 
             result.push(itinerary);
@@ -265,7 +237,12 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             duration: this.formatDuration(
                 segments.reduce((sum: number, seg: any) => sum + (seg.duration || 0), 0)
             ),
-            price: cheapestFare?.fd?.ADULT?.fC?.TF ?? 0
+            durationMinutes: segments.reduce((sum: number, seg: any) => sum + (seg.duration || 0), 0),
+            price: cheapestFare?.fd?.ADULT?.fC?.TF ?? 0,
+            origin: first?.da?.code,
+            destination: last?.aa?.code,
+            departureTime: first?.dt,
+            arrivalTime: last?.at
         };
     }
 
@@ -313,6 +290,11 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             duration: this.formatDuration(
                 segments.reduce((sum: number, seg: any) => sum + (seg.duration || 0), 0)
             ),
+            durationMinutes: segments.reduce((sum: number, seg: any) => sum + (seg.duration || 0), 0),
+            origin: first?.da?.code,
+            destination: last?.aa?.code,
+            departureTime: first?.dt,
+            arrivalTime: last?.at,
             cheapestFare: {
                 price: cheapestFare?.fd?.ADULT?.fC?.TF || 0,
                 cabinClass: cheapestFare?.fd?.ADULT?.cc || "UNKNOWN",
@@ -484,5 +466,37 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
                 flights: count
             }))
             .sort((a, b) => b.flights - a.flights);
+    }
+
+    private static splitSegmentsIntoLegs(segments: any[], payload?: any): Map<number, any[]> {
+        const legs: Map<number, any[]> = new Map();
+        let currentLeg = 0;
+
+        const routeInfos = payload?.routeInfos;
+        const targetDestinations = Array.isArray(routeInfos)
+            ? routeInfos.map((r: any) => r.toCityOrAirport?.code?.toUpperCase()).filter(Boolean)
+            : [];
+
+        for (let i = 0; i < segments.length; i++) {
+            const segment = segments[i];
+            if (!legs.has(currentLeg)) {
+                legs.set(currentLeg, []);
+            }
+            legs.get(currentLeg)!.push(segment);
+
+            if (targetDestinations.length > 0) {
+                const segmentDest = segment.aa?.code?.toUpperCase();
+                const targetDest = targetDestinations[currentLeg];
+
+                if (segmentDest === targetDest && currentLeg < targetDestinations.length - 1) {
+                    currentLeg++;
+                }
+            } else {
+                if (segment.isRs === true) {
+                    currentLeg++;
+                }
+            }
+        }
+        return legs;
     }
 }
