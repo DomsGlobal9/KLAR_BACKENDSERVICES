@@ -16,11 +16,11 @@ export const optionalAuthenticateJWT = (
     const authHeader = req.headers.authorization;
     let token: string | null = null;
 
+    // Header-only: a JWT in the query string (?token=) leaks into logs, history
+    // and Referer headers, so it is deliberately not read here.
     if (authHeader) {
       const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
       token = bearerMatch ? bearerMatch[1] : authHeader;
-    } else if (req.query?.token && typeof req.query.token === "string") {
-      token = req.query.token;
     }
 
     if (!token) {
@@ -32,8 +32,12 @@ export const optionalAuthenticateJWT = (
     const decoded = jwt.verify(token, env.jwtSecret);
     req.user = decoded;
     next();
-  } catch (error) {
-    // Invalid/expired token — treat as guest, proceed anyway
+  } catch (error: any) {
+    // Invalid/expired token — treat as guest and proceed, but log it so a broken
+    // session (e.g. a B2B user silently downgraded to guest) is not invisible.
+    console.warn(
+      `[optionalAuth] Ignoring invalid/expired token, continuing as guest: ${error?.message || error}`,
+    );
     next();
   }
 };
