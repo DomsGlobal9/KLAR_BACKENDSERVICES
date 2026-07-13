@@ -66,15 +66,17 @@ export const confirmController = async (req: Request, res: Response) => {
       body: result,
     });
   } catch (error: any) {
+    // Log the raw upstream error server-side; return a sanitized message.
     console.error(
       "[ConfirmController] Error:",
       error.response?.data || error.message,
     );
-    res.status(error.response?.status || 500).json({
+    res.status(500).json({
       status: false,
-      statusCode: error.response?.status || 500,
-      description: error.response?.data?.description || error.message,
-      body: error.response?.data,
+      statusCode: 500,
+      description:
+        "We could not confirm this booking right now. Please try again or contact support.",
+      body: null,
     });
   }
 };

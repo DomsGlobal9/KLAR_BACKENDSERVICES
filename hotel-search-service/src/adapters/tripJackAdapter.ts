@@ -70,9 +70,17 @@ export async function searchTJ(
 
       fetchPromises.push(
         tripJackClient
-          .post("/hms/v3/hotel/listing", payload, { timeout: 15000 })
+          .post("/hms/v3/hotel/listing", payload, {
+            timeout: 15000,
+            signal: req._abortSignal ?? undefined,
+          })
           .then((res) => res.data?.hotels || [])
           .catch((err) => {
+            // Deliberate cancellation once the partial-return window elapsed —
+            // not a supplier fault, so don't log noise or trip the breaker.
+            if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") {
+              return [];
+            }
             const status = err.response?.status;
             console.error(
               `[TripJack] Chunk Fetch Error (status ${status}):`,

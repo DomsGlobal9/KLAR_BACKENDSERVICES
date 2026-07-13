@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import routes from "./routes";
 import { errorHandler } from "./middlewares/error.middleware";
+import { searchRateLimiter } from "./middlewares/rateLimit.middleware";
 
 const app = express();
 
@@ -59,7 +60,7 @@ app.get("/", (_req, res) => {
   });
 });
 
-app.use("/api/search", routes);
+app.use("/api/search", searchRateLimiter, routes);
 // app.use("/", routes);
 app.use(errorHandler);
 

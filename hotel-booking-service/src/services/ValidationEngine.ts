@@ -57,14 +57,27 @@ export class ValidationEngine {
           .replace(/[^a-z0-9]/gi, "")
           .toLowerCase();
 
-        // Allow partial match (e.g. "Standard Room" in "Standard Room Double")
+        // Allow partial match (e.g. "Standard Room" in "Standard Room Double").
+        // A genuine mismatch means the supplier remapped us to a different room at
+        // book time — block it so the customer is never charged for a room they
+        // did not choose. STRICT_ROOM_VALIDATION=false downgrades this to a warning.
         if (
+          normExpected &&
+          normFresh &&
           !normFresh.includes(normExpected) &&
           !normExpected.includes(normFresh)
         ) {
-          console.warn(
-            `[ValidationEngine] Room name mismatch. Expected: ${expectedResult.roomType}, Fresh: ${freshResult.roomType}`,
-          );
+          if (process.env.STRICT_ROOM_VALIDATION === "false") {
+            console.warn(
+              `[ValidationEngine] Room name mismatch (non-strict). Expected: ${expectedResult.roomType}, Fresh: ${freshResult.roomType}`,
+            );
+          } else {
+            throw new StructuredError(
+              "ROOM_CHANGED",
+              "The room offered by the hotel no longer matches your selection. Please review and book again.",
+              { expected: expectedResult.roomType, fresh: freshResult.roomType },
+            );
+          }
         }
       }
 
@@ -75,10 +88,24 @@ export class ValidationEngine {
         const normFresh = freshResult.mealPlan
           .replace(/[^a-z0-9]/gi, "")
           .toLowerCase();
-        if (normExpected !== normFresh && !normFresh.includes(normExpected)) {
-          console.warn(
-            `[ValidationEngine] Meal plan mismatch. Expected: ${expectedResult.mealPlan}, Fresh: ${freshResult.mealPlan}`,
-          );
+        if (
+          normExpected &&
+          normFresh &&
+          normExpected !== normFresh &&
+          !normFresh.includes(normExpected) &&
+          !normExpected.includes(normFresh)
+        ) {
+          if (process.env.STRICT_ROOM_VALIDATION === "false") {
+            console.warn(
+              `[ValidationEngine] Meal plan mismatch (non-strict). Expected: ${expectedResult.mealPlan}, Fresh: ${freshResult.mealPlan}`,
+            );
+          } else {
+            throw new StructuredError(
+              "MEAL_PLAN_CHANGED",
+              "The meal plan offered by the hotel no longer matches your selection. Please review and book again.",
+              { expected: expectedResult.mealPlan, fresh: freshResult.mealPlan },
+            );
+          }
         }
       }
 

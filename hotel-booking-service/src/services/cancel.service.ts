@@ -720,12 +720,101 @@ class CancelService {
       };
     }
 
-    // RateGain Logic (not supported yet)
+    // ─── RateGain cancellation-charge preview (best-effort) ───
+    // RG has no single canonical policy shape, so we read whatever policy the
+    // booking captured and compute the applicable penalty by today's date. When
+    // the data is missing/ambiguous we return applicableCharge: null, which the
+    // refund resolver treats as "unknown" and safely parks for manual review —
+    // it never guesses a refund number.
+    const totalAmount = booking.totalAmount || 0;
+    const currency = (booking.currencyCode || "INR").toUpperCase();
+
+    // Hard non-refundable signal in the stored rate → full penalty.
+    const rateComments = (booking.rateComments || "").toString();
+    if (/NON[-\s]?REFUNDABLE/i.test(rateComments)) {
+      return {
+        status: true,
+        statusCode: 200,
+        description: "Non-refundable rate — full cancellation charge applies.",
+        totalAmount,
+        applicableCharge: totalAmount,
+        refundAmount: 0,
+        currency,
+        cancellation: { isRefundable: false, penalties: [] },
+      };
+    }
+
+    // Gather policy entries from wherever the booking stored them.
+    const rg: any = booking.rateGainResponse || {};
+    const rawPolicies: any[] =
+      booking.cancellationDetails?.penalties ||
+      rg?.body?.booking?.hotel?.rooms?.[0]?.rates?.[0]?.cancellationPolicies ||
+      rg?.body?.booking?.cancellationPolicies ||
+      booking.rateGainRequest?.BookReservation?.RoomSelection?.[0]
+        ?.cancellationPolicies ||
+      [];
+
+    if (!Array.isArray(rawPolicies) || rawPolicies.length === 0) {
+      return {
+        status: true,
+        statusCode: 200,
+        description:
+          "Cancellation policy not found. Charges will be confirmed manually.",
+        totalAmount,
+        applicableCharge: null,
+        refundAmount: null,
+        currency,
+        policy: null,
+      };
+    }
+
+    const now = new Date();
+    const norm = rawPolicies
+      .map((p: any) => ({
+        from: p.from || p.fromDate || p.FromDate || p.toDate || null,
+        to: p.to || p.toDate || p.ToDate || null,
+        amount: Number(p.amount ?? p.Amount ?? p.charge ?? p.penalty ?? 0) || 0,
+      }))
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.from || 0).getTime() - new Date(b.from || 0).getTime(),
+      );
+
+    let applicableCharge = 0;
+    let matched = false;
+    for (const p of norm) {
+      const from = p.from ? new Date(p.from) : null;
+      const to = p.to ? new Date(p.to) : null;
+      if (from && to) {
+        if (now >= from && now <= to) {
+          applicableCharge = p.amount;
+          matched = true;
+          break;
+        }
+      } else if (from && now >= from) {
+        applicableCharge = p.amount;
+        matched = true;
+      }
+    }
+    if (!matched && norm.length > 0) {
+      // Past all windows → the last (highest) penalty is the conservative choice.
+      applicableCharge = norm[norm.length - 1].amount;
+    }
+
+    const refundAmount = Math.max(0, totalAmount - applicableCharge);
     return {
-      status: false,
-      statusCode: 400,
-      description:
-        "Previewing cancellation charges for RateGain is currently unsupported.",
+      status: true,
+      statusCode: 200,
+      description: "Calculated cancellation charges from booking policy (RateGain).",
+      totalAmount,
+      applicableCharge,
+      refundAmount,
+      currency,
+      cancellation: {
+        isRefundable: applicableCharge < totalAmount,
+        penalties: norm,
+      },
+      calculationTime: now.toISOString(),
     };
   }
 }

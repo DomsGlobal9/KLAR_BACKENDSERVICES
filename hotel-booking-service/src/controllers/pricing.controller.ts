@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PricingUtil } from "../utils/pricing.util";
 import { WalletUtil } from "../utils/wallet.util";
+import { convertToINR } from "../utils/fx.util";
 import { precheckService } from "../services/precheck.service";
 
 export const getPricingSummaryController = async (
@@ -90,23 +91,26 @@ export const getPricingSummaryController = async (
       }
     } else {
       // ─── RateGain / Fallback: sum room prices sent by frontend ──────────
-      // Mock FX conversion — replace with a real FX service
-      const FX_RATES: { [key: string]: number } = {
-        INR: 1,
-        USD: 83,
-        EUR: 90,
-        GBP: 105,
-        AED: 22,
-        THB: 2.3,
-      };
-      const toINR = (amount: number, currency: string = "INR") =>
-        amount * (FX_RATES[currency.toUpperCase()] || 1);
-
-      for (const room of rooms) {
-        providerNetPrice +=
-          room.netPriceInINR !== undefined
-            ? Number(room.netPriceInINR)
-            : toINR(Number(room.price || 0), hotelCurrency || "INR");
+      // Live FX via fx.util (cached, env-overridable). A missing rate throws
+      // rather than silently converting 1:1, so we never mis-price a foreign
+      // stay — we return a clear error and let the user retry.
+      try {
+        for (const room of rooms) {
+          if (room.netPriceInINR !== undefined) {
+            providerNetPrice += Number(room.netPriceInINR);
+          } else {
+            providerNetPrice += await convertToINR(
+              Number(room.price || 0),
+              hotelCurrency || "INR",
+            );
+          }
+        }
+      } catch (fxErr: any) {
+        return res.status(502).json({
+          success: false,
+          message:
+            "Currency conversion is temporarily unavailable. Please try again shortly.",
+        });
       }
     }
 

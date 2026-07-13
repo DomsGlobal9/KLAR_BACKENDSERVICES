@@ -13,6 +13,14 @@ import {
   getPropertyTypeLabel,
 } from "./facets.service";
 
+// Short-TTL in-memory cache for identical anonymous (token-less) searches, so
+// repeated B2C searches for the same destination/dates don't re-hit the paid
+// supplier APIs on every keystroke/refresh. B2B (token) searches are never
+// cached because pricing depends on the agent's markup rules.
+const searchCache = new Map<string, { at: number; data: any }>();
+const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || 60_000);
+const SEARCH_CACHE_MAX_ENTRIES = 500;
+
 export class HotelsService {
   /**
    * Unified Search Entry Point
@@ -61,6 +69,21 @@ export class HotelsService {
         inventoryCount: 0,
         facets: emptyFacets(),
       };
+    }
+
+    // Serve identical anonymous searches from the short-TTL cache to spare the
+    // paid supplier APIs. Keyed on the whole request (minus the geo center we
+    // resolve below). B2B (token) requests are never cached.
+    const cacheable = !token;
+    const cacheKey = cacheable
+      ? JSON.stringify({ ...searchPayload, _geoCenter: undefined, __ct: clientType })
+      : "";
+    if (cacheable) {
+      const cached = searchCache.get(cacheKey);
+      if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
+        console.log(`[Search] cache hit for "${searchPayload.destination}"`);
+        return cached.data;
+      }
     }
 
     const isDirectSearch = supplierRegistry.isDirectSearch(searchPayload.destination);
@@ -154,6 +177,13 @@ export class HotelsService {
         );
     }
 
+    // One AbortController for this search. Its signal is threaded into every
+    // supplier's underlying axios call; once we decide to return (all settled or
+    // the partial-return window elapsed) we abort it, so a slow supplier's HTTP
+    // request is actively cancelled instead of orphaned until its own timeout.
+    const abortController = new AbortController();
+    searchPayload._abortSignal = abortController.signal;
+
     const allTasks = enabledSuppliers.map((supplier) =>
       supplier
         .search(searchPayload, clientType)
@@ -178,15 +208,18 @@ export class HotelsService {
     // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases and provides a stable UI.
     const PARTIAL_RETURN_TIMEOUT_MS = 15000;
 
+    let partialTimer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       Promise.allSettled(allTasks),
-      new Promise<void>((resolve) =>
-        setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS),
-      ),
+      new Promise<void>((resolve) => {
+        partialTimer = setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS);
+      }),
     ]);
-
-    // If any provider is still pending after timeout, we return whatever arrived.
-    // (The pending promises continue in background but we don't await them further.)
+    // Clear the timer (harmless if it already fired) and actively cancel any
+    // supplier request still in flight. Already-settled requests are unaffected;
+    // the losing supplier's socket is released now instead of lingering.
+    if (partialTimer) clearTimeout(partialTimer);
+    abortController.abort();
 
     // 4. Deduplication Logic (MMT-style efficient dedup)
     const totalReceivedCount = finalResults.length;
@@ -498,7 +531,7 @@ Has more pages:            ${hasMore}
       };
     });
 
-    return {
+    const response = {
       results: optimizedResults,
       body: optimizedResults, // Fallback for some frontend components
       hotels: optimizedResults,
@@ -513,6 +546,17 @@ Has more pages:            ${hasMore}
       inventoryCount,
       facets,
     };
+
+    if (cacheable) {
+      // Bound the cache: drop the oldest entry when full (Map preserves insertion order).
+      if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey !== undefined) searchCache.delete(oldestKey);
+      }
+      searchCache.set(cacheKey, { at: Date.now(), data: response });
+    }
+
+    return response;
   }
 
   /**

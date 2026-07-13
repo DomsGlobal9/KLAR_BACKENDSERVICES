@@ -13,10 +13,16 @@ export const searchHotels = async (
     const data = await hotelsService.searchHotels(req.body, clientType, token);
     res.status(200).json(data);
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    // Log the real upstream error server-side; never leak supplier status codes
+    // or raw supplier messages to the client.
+    console.error(
+      "[Search] hotel search failed:",
+      error.response?.data || error.message,
+    );
+    res.status(500).json({
       status: false,
-      statusCode: error.response?.status || 500,
-      description: error.response?.data?.description || error.message,
+      statusCode: 500,
+      description: "Hotel search is temporarily unavailable. Please try again.",
       body: [],
     });
   }

@@ -26,7 +26,7 @@ export class RateGainApiProvider {
     }
   }
 
-  async getBestProperties(payload: any) {
+  async getBestProperties(payload: any, signal?: AbortSignal | null) {
     const rateGainPayload: any = {
       destinationCode: payload.destinationCode || payload.destCode,
       checkin: payload.checkin || payload.checkIn,
@@ -80,9 +80,15 @@ export class RateGainApiProvider {
       const res = await rateGainClient.post(
         "/api/SmartDistribution/bestproperties",
         rateGainPayload,
+        { signal: signal ?? undefined },
       );
       return res.data;
     } catch (error: any) {
+      // Deliberate cancellation once the partial-return window elapsed — surface
+      // it quietly so the orchestrator's catch drops it without logging noise.
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
+        throw error;
+      }
       console.error(
         "[RateGain] BestProperties Error:",
         error.response?.status,

@@ -265,7 +265,11 @@ class BookingsService {
   async getBookingById(id: string) {
     try {
       const query: any = {
-        $or: [{ confirmationNumber: id }, { reservationId: id }],
+        $or: [
+          { confirmationNumber: id },
+          { reservationId: id },
+          { publicToken: id },
+        ],
       };
 
       if (id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -281,6 +285,7 @@ class BookingsService {
       if (booking) {
         return {
           _id: booking._id,
+          publicToken: booking.publicToken,
           confirmationNumber: booking.confirmationNumber || booking.reservationId || 'PENDING',
           reservationId: booking.reservationId,
           propertyId: booking.propertyId || 'UNKNOWN',

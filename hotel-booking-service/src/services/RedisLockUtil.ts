@@ -11,8 +11,16 @@ redisClient.on("connect", () => {
   console.log("✅ [Redis] Connected to server successfully!");
 });
 
-redisClient.on("error", (err) => {
-  // Intentionally suppressed to prevent ECONNRESET spam in terminal
+// Rate-limited error logging: a Redis outage silently disabling the booking lock
+// used to be invisible. Log at most once every 30s so a real outage is visible
+// without spamming the terminal with ECONNRESET.
+let lastRedisErrorLog = 0;
+redisClient.on("error", (err: any) => {
+  const now = Date.now();
+  if (now - lastRedisErrorLog > 30_000) {
+    lastRedisErrorLog = now;
+    console.error(`[Redis] connection error: ${err?.message || err}`);
+  }
 });
 
 export class RedisLockUtil {
@@ -41,8 +49,16 @@ export class RedisLockUtil {
       return result === "OK";
     } catch (error: any) {
       console.error(`[RedisLock] Failed to attempt lock for ${lockKey}`, error.message);
-      // Bypass lock if Redis is unreachable to avoid blocking bookings
-      return true;
+      // FAIL CLOSED by default: without the lock we cannot guarantee that a
+      // concurrent/retried request won't create a duplicate booking (and double
+      // supplier charge). Rejecting a booking is far cheaper than double-booking.
+      // The DB-level unique index on idempotencyKey is the backstop; set
+      // LOCK_FAIL_OPEN=true only if you knowingly accept the duplicate risk.
+      if (process.env.LOCK_FAIL_OPEN === "true") return true;
+      throw new StructuredError(
+        "LOCK_UNAVAILABLE",
+        "Booking service is momentarily busy. Please try again in a few seconds.",
+      );
     }
   }
 

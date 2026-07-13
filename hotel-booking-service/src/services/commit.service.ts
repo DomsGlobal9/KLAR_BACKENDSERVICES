@@ -10,6 +10,7 @@ import { hotelBookingRepository } from "../repositories/hotelBooking.repository"
 import { notificationService } from "./notification.service";
 import { refundService } from "./refund.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
+import { PaymentUtil } from "../utils/payment.util";
 import { PricingUtil, round2 } from "../utils/pricing.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
@@ -192,13 +193,39 @@ class CommitService {
       payload.type === "HOTEL" ||
       (!payload.BookReservation && payload.bookingId);
 
+    // Idempotency: a client-supplied key makes a retry (flaky mobile network,
+    // double-submit, the 180s TripJack async window outlasting the Redis lock)
+    // return the ORIGINAL booking instead of creating a second one. The unique
+    // index on Booking.idempotencyKey is the real guarantee; this is the fast path.
+    const idempotencyKey = payload.idempotencyKey;
+    if (idempotencyKey) {
+      const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
+      if (existing) {
+        console.log(
+          `[Commit] Idempotent replay for key ${idempotencyKey} -> ${existing.confirmationNumber}`,
+        );
+        return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
+      }
+    }
+
     // Lock key specific to this unique booking attempt (combining hotel + dates + user or optionId)
     // A generic key like "lock_booking_agent1" prevents concurrent duplicates
-    const lockKey = `commit_lock_${agentId || "guest"}_${payload.optionId || payload.bookingId || tjBookingId}`;
+    const lockKey = `commit_lock_${agentId || "guest"}_${idempotencyKey || payload.optionId || payload.bookingId || tjBookingId}`;
 
-    return RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
-      if (isTripJack) {
-        return this.#commitTripJack(
+    try {
+      return await RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
+        if (isTripJack) {
+          return this.#commitTripJack(
+            payload,
+            agentId,
+            agentName,
+            token,
+            clientType,
+            requestId,
+            userInfo,
+          );
+        }
+        return this.#commitRateGain(
           payload,
           agentId,
           agentName,
@@ -207,17 +234,18 @@ class CommitService {
           requestId,
           userInfo,
         );
+      });
+    } catch (err: any) {
+      // A concurrent request with the same idempotency key won the unique-index
+      // race: return its booking rather than surfacing a raw duplicate-key error.
+      if (idempotencyKey && (err?.code === 11000 || /E11000/.test(String(err?.message)))) {
+        const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
+        if (existing) {
+          return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
+        }
       }
-      return this.#commitRateGain(
-        payload,
-        agentId,
-        agentName,
-        token,
-        clientType,
-        requestId,
-        userInfo,
-      );
-    });
+      throw err;
+    }
   }
 
   async #commitTripJack(
@@ -352,7 +380,33 @@ class CommitService {
           );
         }
       } else {
-        // B2C Flow - Payment is already processed by Payment Gateway
+        // B2C/GUEST: the browser cannot be trusted to say a payment happened.
+        // Verify the Razorpay payment SERVER-SIDE before booking. It must be
+        // genuinely captured AND cover both the quoted selling price and the net
+        // we will owe the supplier (so a tampered-low price can never book).
+        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
+        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        const pay = await PaymentUtil.verifyRazorpayPayment({
+          paymentId: payload.razorpayPaymentId,
+          orderId: payload.razorpayOrderId,
+          expectedAmount: requiredAmount,
+          platform: "B2C",
+        });
+        if (!pay.verified) {
+          await BookingEventLogger.log(bookingId, requestId, "PAYMENT_UNVERIFIED", {
+            reason: pay.reason,
+            requiredAmount,
+          });
+          throw new StructuredError(
+            "PAYMENT_UNVERIFIED",
+            "We could not verify your payment. If any amount was debited it will be refunded automatically.",
+            { reason: pay.reason },
+          );
+        }
+        await BookingEventLogger.log(bookingId, requestId, "PAYMENT_VERIFIED", {
+          capturedAmount: pay.capturedAmount,
+          requiredAmount,
+        });
         paymentProcessed = true;
       }
 
@@ -429,6 +483,7 @@ class CommitService {
         tripJackRequest: tjPayload, // Cache the compiled outbound request payload
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        idempotencyKey: payload.idempotencyKey,
         userInfo,
         clientType,
       });
@@ -576,7 +631,32 @@ class CommitService {
           amount: finalPrice,
         });
       } else {
-        // B2C Flow - Payment is already processed by Payment Gateway
+        // B2C/GUEST: verify the Razorpay payment SERVER-SIDE before booking (see
+        // the TripJack path for the rationale). Must cover the selling price AND
+        // the net we owe RateGain.
+        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
+        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        const pay = await PaymentUtil.verifyRazorpayPayment({
+          paymentId: payload.razorpayPaymentId,
+          orderId: payload.razorpayOrderId,
+          expectedAmount: requiredAmount,
+          platform: "B2C",
+        });
+        if (!pay.verified) {
+          await BookingEventLogger.log(demandId, requestId, "PAYMENT_UNVERIFIED", {
+            reason: pay.reason,
+            requiredAmount,
+          });
+          throw new StructuredError(
+            "PAYMENT_UNVERIFIED",
+            "We could not verify your payment. If any amount was debited it will be refunded automatically.",
+            { reason: pay.reason },
+          );
+        }
+        await BookingEventLogger.log(demandId, requestId, "PAYMENT_VERIFIED", {
+          capturedAmount: pay.capturedAmount,
+          requiredAmount,
+        });
         paymentProcessed = true;
       }
 
@@ -765,6 +845,7 @@ class CommitService {
           undefined,
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        idempotencyKey: payload.idempotencyKey,
         userInfo,
         clientType,
       });

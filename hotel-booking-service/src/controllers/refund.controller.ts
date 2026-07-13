@@ -7,14 +7,21 @@ import { BookingStatus, RefundStatus } from "../models/Booking.model";
  * Controller to manually trigger a refund for an already cancelled booking.
  * Used by the CRM when ENABLE_AUTO_REFUNDS=false is set.
  */
-export const processManualRefund = async (req: Request, res: Response): Promise<void> => {
+export const processManualRefund = async (req: any, res: Response): Promise<void> => {
   try {
     const { bookingId } = req.params;
-    
+
     if (!bookingId) {
       res.status(400).json({ status: false, message: "bookingId parameter is required" });
       return;
     }
+
+    // Manual refunds are a CRM/admin action, not a self-service one. Only admins
+    // (or the booking's own owner) may trigger a refund on a booking.
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
+    const userId = req.user?.userId || req.user?.id;
+    const userEmail = req.user?.email?.toLowerCase();
 
     const isObjectId = /^[a-fA-F0-9]{24}$/.test(String(bookingId));
     const query: any = isObjectId
@@ -33,6 +40,21 @@ export const processManualRefund = async (req: Request, res: Response): Promise<
       return;
     }
 
+    const isOwner =
+      !!userId &&
+      (booking.agentId === userId ||
+        booking.userId === userId ||
+        booking.userInfo?.id === userId);
+    const isGuestOwner =
+      !!userEmail && booking.guestEmail?.toLowerCase() === userEmail;
+    if (!isAdmin && !isOwner && !isGuestOwner) {
+      res.status(403).json({
+        status: false,
+        message: "Access denied. Admin or booking owner required.",
+      });
+      return;
+    }
+
     if (booking.status !== BookingStatus.CANCELLED && booking.status !== BookingStatus.CANCELLATION_PENDING) {
       res.status(400).json({ 
         status: false, 
@@ -41,7 +63,10 @@ export const processManualRefund = async (req: Request, res: Response): Promise<
       return;
     }
 
-    if (booking.refundData?.status === RefundStatus.COMPLETED) {
+    // Field is `refund` (IRefund), not `refundData`. The atomic claim() in
+    // refundService is the real double-refund guard; this is the friendly
+    // early-out so the CRM gets a clear message instead of a silent no-op.
+    if (booking.refund?.status === RefundStatus.COMPLETED) {
       res.status(400).json({ status: false, message: "Refund has already been processed for this booking." });
       return;
     }

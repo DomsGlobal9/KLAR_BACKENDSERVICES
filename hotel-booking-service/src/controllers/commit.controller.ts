@@ -97,6 +97,13 @@ export const commitController = async (req: any, res: Response) => {
       );
     }
 
+    // Idempotency key (header preferred, body fallback) so a retried commit
+    // returns the original booking instead of creating a duplicate.
+    finalPayload.idempotencyKey =
+      (req.headers["idempotency-key"] as string) ||
+      req.body.idempotencyKey ||
+      finalPayload.idempotencyKey;
+
     console.log(
       `[FORENSIC] Commit Booking [${requestId}]: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`,
     );
@@ -140,20 +147,16 @@ export const commitController = async (req: any, res: Response) => {
       });
     }
 
-    const errorData = error.response?.data || error.data;
-    const errorMessage =
-      errorData?.errors?.[0]?.message ||
-      errorData?.error?.message ||
-      errorData?.description ||
-      error.message ||
-      "Failed to commit booking";
-
+    // Raw upstream/supplier errors are logged above but never returned to the
+    // client (avoids leaking supplier identity/messages). User-safe failures go
+    // through StructuredError above; everything else is a generic message.
     res.status(error.response?.status || error.status || 500).json({
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: errorMessage,
-        details: errorData || null,
+        message:
+          "We could not complete your booking. If any amount was debited it will be refunded automatically. Please try again or contact support.",
+        details: null,
       },
       requestId,
       timestamp: new Date().toISOString(),
