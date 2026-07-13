@@ -1,4 +1,4 @@
-import { HotelModel } from "../models/Hotel.model";
+import { HotelModel, buildSearchTokens } from "../models/Hotel.model";
 import { isMongoReady } from "../utils/mongoReady";
 
 /**
@@ -25,57 +25,27 @@ const PENDING = { searchTokens: null };
 /** Force the multikey index: it seeks straight to the pending rows. */
 const HINT = { searchTokens: 1 };
 
+/** Hotels whose name or city carries a character outside plain ASCII. */
+const NON_ASCII = { $regex: "[^\\x00-\\x7F]" };
+
 /**
- * $regexFindAll splits on the same [a-z0-9]+ boundary as buildSearchTokens(),
- * so backfilled documents and freshly synced ones tokenize identically.
+ * Tokenize in Node, through buildSearchTokens(), rather than in an aggregation
+ * pipeline.
  *
- * A hotel with neither a name nor a city would otherwise get an empty array,
- * which indexes as null — leaving it in the pending set forever. Falling back to
- * its id guarantees every repaired row leaves that set, so the loop terminates.
+ * The pipeline used to re-implement the split as `$regexFindAll: "[a-z0-9]+"`.
+ * That is not what buildSearchTokens does — it strips diacritics first — and
+ * aggregation cannot do Unicode normalisation at all, so the two could never be
+ * made to agree. One tokenizer, called from both places, is the only way this
+ * stays true.
+ *
+ * A hotel with neither a name nor a city would get an empty array, which indexes
+ * as null and leaves the row in the pending set forever. Falling back to its id
+ * guarantees every repaired row leaves that set, so the loop terminates.
  */
-const TOKENIZE_PIPELINE = [
-  {
-    $set: {
-      searchTokens: {
-        $let: {
-          vars: {
-            words: {
-              $setUnion: [
-                [],
-                {
-                  $map: {
-                    input: {
-                      $regexFindAll: {
-                        input: {
-                          $toLower: {
-                            $concat: [
-                              { $ifNull: ["$name", ""] },
-                              " ",
-                              { $ifNull: ["$cityName", ""] },
-                            ],
-                          },
-                        },
-                        regex: "[a-z0-9]+",
-                      },
-                    },
-                    in: "$$this.match",
-                  },
-                },
-              ],
-            },
-          },
-          in: {
-            $cond: [
-              { $gt: [{ $size: "$$words" }, 0] },
-              "$$words",
-              [{ $toLower: { $ifNull: ["$tjHotelId", "unknown"] } }],
-            ],
-          },
-        },
-      },
-    },
-  },
-];
+function tokensFor(doc: { name?: string; cityName?: string; tjHotelId?: string }): string[] {
+  const tokens = buildSearchTokens(doc.name ?? "", doc.cityName ?? "");
+  return tokens.length ? tokens : [(doc.tjHotelId ?? "unknown").toLowerCase()];
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -127,14 +97,16 @@ export async function runSearchTokenMaintenance(
     // already-tokenized hotel — measured at 47s per batch against 98ms here.
     // Each repaired row leaves the pending set, so successive batches advance.
     const batch = await HotelModel.find(PENDING)
-      .select("_id")
+      .select("_id name cityName tjHotelId")
       .hint(HINT)
       .limit(batchSize)
       .lean();
     if (!batch.length) break;
 
-    const ids = batch.map((d: any) => d._id);
-    const result = await HotelModel.collection.updateMany({ _id: { $in: ids } }, TOKENIZE_PIPELINE);
+    const ops = batch.map((d: any) => ({
+      updateOne: { filter: { _id: d._id }, update: { $set: { searchTokens: tokensFor(d) } } },
+    }));
+    const result = await HotelModel.collection.bulkWrite(ops, { ordered: false });
     repaired += result.modifiedCount;
 
     if (result.modifiedCount === 0) {
@@ -150,6 +122,63 @@ export async function runSearchTokenMaintenance(
 
   console.log(
     `[Tokens] Repaired ${repaired} hotels in ${((Date.now() - startedAt) / 1000).toFixed(1)}s.`,
+  );
+  return repaired;
+}
+
+/**
+ * Re-tokenize hotels whose name or city contains an accented character.
+ *
+ * These rows already have `searchTokens`, so the pending-set pass above skips
+ * them — but the tokens are wrong. The old tokenizer treated every accent as a
+ * word separator, shredding "Hôtel Zürich" into h / tel / z / rich, which no
+ * query could ever match. Only the fixed tokenizer can tell.
+ *
+ * This is a full-collection filter, not an index seek, so it is a deliberate
+ * one-off run from `npm run backfill:tokens` rather than a boot hook. Idempotent:
+ * a second run rewrites nothing, because bulkWrite skips identical documents.
+ */
+export async function repairUnicodeTokens(batchSize = 1000): Promise<number> {
+  if (!isMongoReady()) {
+    console.warn("⚠️  [Tokens] Unicode repair skipped: MongoDB is not connected.");
+    return 0;
+  }
+
+  console.log("[Tokens] Scanning for hotels with accented names...");
+  const startedAt = Date.now();
+
+  const cursor = HotelModel.find({ $or: [{ name: NON_ASCII }, { cityName: NON_ASCII }] })
+    .select("_id name cityName tjHotelId searchTokens")
+    .lean()
+    .cursor();
+
+  let repaired = 0;
+  let scanned = 0;
+  let ops: any[] = [];
+
+  const flush = async () => {
+    if (!ops.length) return;
+    const result = await HotelModel.collection.bulkWrite(ops, { ordered: false });
+    repaired += result.modifiedCount;
+    ops = [];
+  };
+
+  for await (const doc of cursor as any) {
+    scanned++;
+    const tokens = tokensFor(doc);
+    const current: string[] = doc.searchTokens ?? [];
+    const unchanged =
+      current.length === tokens.length && tokens.every((t, i) => current[i] === t);
+    if (unchanged) continue;
+
+    ops.push({ updateOne: { filter: { _id: doc._id }, update: { $set: { searchTokens: tokens } } } });
+    if (ops.length >= batchSize) await flush();
+  }
+  await flush();
+
+  console.log(
+    `[Tokens] Unicode repair: ${repaired} of ${scanned} accented hotels rewritten ` +
+      `in ${((Date.now() - startedAt) / 1000).toFixed(1)}s.`,
   );
   return repaired;
 }

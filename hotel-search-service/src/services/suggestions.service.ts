@@ -10,6 +10,7 @@
  *      Goa Velha and a homonym in the Philippines.
  */
 import { LruCache } from "../utils/lruCache";
+import { boundedEditDistance } from "../utils/text";
 import { isMongoReady, withTimeout } from "../utils/mongoReady";
 import { resolveCityAlias } from "../data/cityAliases";
 import {
@@ -370,49 +371,255 @@ function buildDestinations(
 }
 
 /**
- * Hotel name matches, resolved through the `searchTokens` multikey index.
+ * A hotel row, exactly the fields ranking needs.
  *
- * The previous implementation used an unanchored case-insensitive regex, which
- * forced a collection scan across ~1.6M documents on every keystroke. Anchoring
- * each token at `^` lets MongoDB walk the index instead.
+ * `searchTokens` covers the hotel name *and* its city, which is what lets
+ * "taj mumbai" find the Taj Mahal Palace. Ranking re-derives the name's own
+ * tokens so it can tell a name match from a city match.
  */
-async function queryHotels(tokenSets: string[][]): Promise<Suggestion[]> {
-  const { HotelModel } = require("../models/Hotel.model");
+interface HotelRow {
+  tjHotelId: string;
+  name: string;
+  cityName?: string;
+  starRating?: number;
+}
 
-  const escape = (t: string) => t.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+/**
+ * A one-character prefix ("t") spans hundreds of thousands of index keys and
+ * cannot say anything useful about a hotel. Destinations still autocomplete at
+ * two characters — they are matched in memory, where breadth is free.
+ */
+const HOTEL_MIN_TOKEN_LENGTH = 3;
+
+/**
+ * The pool that ranking chooses from.
+ *
+ * MongoDB has no way to sort by relevance here, so `limit(MAX_HOTELS)` at the
+ * database returned the first six rows in *index order* — token alphabetically,
+ * then insertion order. "taj" surfaced the six oldest hotels with a token
+ * starting "taj", and the Taj Mahal Palace appeared only by luck. Pulling a
+ * bounded pool and ordering it here costs one extra page of documents and is
+ * what makes the first row the one the traveller meant.
+ */
+const HOTEL_CANDIDATE_LIMIT = 200;
+
+/** Typo recovery reaches wider, because the exact prefix already found nothing. */
+const FUZZY_CANDIDATE_LIMIT = 300;
+/** "raddison" → "rad", which still reaches "Radisson". Typos after the third
+ *  character are recoverable; one in the first three is not, exactly as for cities. */
+const FUZZY_PREFIX_LENGTH = 3;
+const FUZZY_MIN_QUERY_LENGTH = 4;
+
+/**
+ * Match quality, lowest wins. A hotel matched only through its *city* token
+ * never earns a row: "mumbai" is a destination query, and answering it with six
+ * arbitrary Mumbai properties under a "Hotels" heading is noise.
+ */
+const HOTEL_EXACT = 0;
+const HOTEL_NAME_PREFIX = 1;
+const HOTEL_ALL_TOKENS_IN_NAME = 2;
+const HOTEL_NAME_AND_CITY = 3;
+
+interface RankedHotel {
+  row: HotelRow;
+  tier: number;
+  /** Query tokens matching a name token outright, not merely prefixing it.
+   *  Separates "Taj Mahal Palace" (token "taj") from "Tajpur Lodge". */
+  exactTokenHits: number;
+  /** Edit distance, for the fuzzy pass only. Zero everywhere else. */
+  distance: number;
+}
+
+function scoreHotel(
+  nameLower: string,
+  nameTokens: string[],
+  queryLower: string,
+  queryTokens: string[],
+): { tier: number; exactTokenHits: number } | null {
+  if (nameLower === queryLower) return { tier: HOTEL_EXACT, exactTokenHits: queryTokens.length };
+
+  // The prefix must land on a word boundary. Without that test "taj" scores
+  // "Tajpur Lodge" as a name prefix and floats it above "The Taj Mahal Palace",
+  // which only ever matches at token level.
+  if (nameLower.startsWith(queryLower) && !/[a-z0-9]/.test(nameLower[queryLower.length] ?? "")) {
+    return { tier: HOTEL_NAME_PREFIX, exactTokenHits: queryTokens.length };
+  }
+
+  // Note: this must be a token-prefix test, not a whole-name prefix test. Hotel
+  // names lead with "The", "Hotel", "ITC" far more often than city names do, so
+  // "taj" has to reach the Taj inside "The Taj Mahal Palace".
+  let hitsName = 0;
+  let exactTokenHits = 0;
+  for (const qt of queryTokens) {
+    if (nameTokens.some((nt) => nt === qt)) {
+      hitsName++;
+      exactTokenHits++;
+    } else if (nameTokens.some((nt) => nt.startsWith(qt))) {
+      hitsName++;
+    }
+  }
+
+  if (hitsName === 0) return null; // city-only match
+  const tier = hitsName === queryTokens.length ? HOTEL_ALL_TOKENS_IN_NAME : HOTEL_NAME_AND_CITY;
+  return { tier, exactTokenHits };
+}
+
+/** Better first. Ties broken toward the property a traveller is likelier to mean. */
+function compareRanked(a: RankedHotel, b: RankedHotel): number {
+  if (a.tier !== b.tier) return a.tier - b.tier;
+  if (a.distance !== b.distance) return a.distance - b.distance;
+  if (a.exactTokenHits !== b.exactTokenHits) return b.exactTokenHits - a.exactTokenHits;
+
+  const aStars = a.row.starRating ?? 0;
+  const bStars = b.row.starRating ?? 0;
+  if (aStars !== bStars) return bStars - aStars;
+
+  // A shorter name is the more canonical one ("Taj Mahal Palace" over
+  // "Taj Mahal Palace Annexe Wing"). Name is the final, deterministic tiebreak.
+  if (a.row.name.length !== b.row.name.length) return a.row.name.length - b.row.name.length;
+  return a.row.name.localeCompare(b.row.name);
+}
+
+const escapeRegex = (t: string) => t.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+
+/**
+ * Anchoring each token at `^` lets MongoDB walk the `searchTokens` multikey
+ * index. The original `{ name: /taj/i }` could only be answered by scanning all
+ * ~1.6M documents.
+ */
+async function fetchHotelRows(tokenSets: string[][], limit: number): Promise<HotelRow[]> {
+  const { HotelModel } = require("../models/Hotel.model");
 
   // Every token must prefix-match some token of the hotel. Suppliers store their
   // own spelling of a city ("mysore"), which need not be the canonical one
   // ("mysuru"), so an aliased query searches for both.
   const clause = (tokens: string[]) => {
-    const parts = tokens.map((t) => ({ searchTokens: { $regex: `^${escape(t)}` } }));
+    const parts = tokens.map((t) => ({ searchTokens: { $regex: `^${escapeRegex(t)}` } }));
     return parts.length === 1 ? parts[0] : { $and: parts };
   };
 
   const filter = tokenSets.length === 1 ? clause(tokenSets[0]) : { $or: tokenSets.map(clause) };
 
-  const hotels = await HotelModel.find(filter)
-    .select("tjHotelId name cityName")
-    .limit(MAX_HOTELS)
+  return HotelModel.find(filter)
+    .select("tjHotelId name cityName starRating")
+    .limit(limit)
     .maxTimeMS(DB_BUDGET_MS)
     .lean();
+}
 
-  return hotels.map((h: any) => {
-    const hotelId = h.tjHotelId.startsWith("TJ:") ? h.tjHotelId : `TJ:${h.tjHotelId}`;
-    const city = titleCase(h.cityName ?? "");
-    return {
-      id: hotelId,
-      hotelId,
-      destCode: "",
-      destName: h.name,
-      label: `${h.name}, ${city}`,
-      name: h.name,
-      type: "hotel" as const,
-      source: "TJ" as const,
-      city,
-      subtitle: `Hotel in ${city}`,
-    };
-  });
+function rankStrict(rows: HotelRow[], tokenSets: string[][]): RankedHotel[] {
+  const ranked: RankedHotel[] = [];
+
+  for (const row of rows) {
+    const nameLower = normalize(row.name ?? "");
+    const nameTokens = tokenize(row.name ?? "");
+
+    // An aliased query carries two spellings ("mysuru", "mysore"). A hotel need
+    // only match one of them; keep whichever scores best.
+    let best: { tier: number; exactTokenHits: number } | null = null;
+    for (const queryTokens of tokenSets) {
+      const scored = scoreHotel(nameLower, nameTokens, queryTokens.join(" "), queryTokens);
+      if (!scored) continue;
+      const better =
+        !best ||
+        scored.tier < best.tier ||
+        (scored.tier === best.tier && scored.exactTokenHits > best.exactTokenHits);
+      if (better) best = scored;
+    }
+
+    if (best) ranked.push({ row, tier: best.tier, exactTokenHits: best.exactTokenHits, distance: 0 });
+  }
+
+  return ranked.sort(compareRanked);
+}
+
+/** One edit allowed for short words, two once there is room for a real typo. */
+function editBudget(token: string): number {
+  return token.length >= 7 ? 2 : 1;
+}
+
+/**
+ * "raddison" → Radisson, "tak mahal" → Taj Mahal.
+ *
+ * Runs only when exact prefix matching found nothing, so the extra round trip
+ * never touches the common path. Every query token must land — within its edit
+ * budget — on some *name* token; a query token that only reaches a city token is
+ * ignored, exactly as in the strict pass. A hotel keeps a row only when all of
+ * its query tokens are accounted for, and its distance is the total of them, so
+ * the single-typo match ranks above the double.
+ */
+function rankFuzzy(rows: HotelRow[], queryTokens: string[]): RankedHotel[] {
+  const budgets = queryTokens.map(editBudget);
+  const ranked: RankedHotel[] = [];
+
+  for (const row of rows) {
+    const nameTokens = tokenize(row.name ?? "");
+    if (!nameTokens.length) continue;
+
+    let total = 0;
+    let matchedAll = true;
+    for (let i = 0; i < queryTokens.length; i++) {
+      const qt = queryTokens[i];
+      const budget = budgets[i];
+      let best = budget + 1;
+      for (const nt of nameTokens) {
+        // A correct prefix is a zero-cost match: "taj" is not a typo of "taj".
+        if (nt.startsWith(qt)) {
+          best = 0;
+          break;
+        }
+        const d = boundedEditDistance(qt, nt, budget);
+        if (d < best) best = d;
+      }
+      if (best > budget) {
+        matchedAll = false;
+        break;
+      }
+      total += best;
+    }
+
+    if (matchedAll) ranked.push({ row, tier: HOTEL_NAME_AND_CITY + 1, exactTokenHits: 0, distance: total });
+  }
+
+  return ranked.sort(compareRanked);
+}
+
+function toSuggestion(row: HotelRow): Suggestion {
+  const hotelId = row.tjHotelId.startsWith("TJ:") ? row.tjHotelId : `TJ:${row.tjHotelId}`;
+  const city = titleCase(row.cityName ?? "");
+  return {
+    id: hotelId,
+    hotelId,
+    destCode: "",
+    destName: row.name,
+    label: city ? `${row.name}, ${city}` : row.name,
+    name: row.name,
+    type: "hotel",
+    source: "TJ",
+    city,
+    subtitle: city ? `Hotel in ${city}` : "Hotel",
+  };
+}
+
+async function queryHotels(tokenSets: string[][]): Promise<Suggestion[]> {
+  const rows = await fetchHotelRows(tokenSets, HOTEL_CANDIDATE_LIMIT);
+  let ranked = rankStrict(rows, tokenSets);
+
+  if (!ranked.length) {
+    // Anchor the recovery on the query's longest token, not its first. The typo
+    // can sit anywhere ("tak mahal"), and the longest token is both the most
+    // likely to be spelled right and the most selective to fetch on. One extra
+    // query, only ever on a query the strict pass could not answer at all.
+    const queryTokens = tokenSets[0];
+    const anchor = queryTokens.reduce((a, b) => (b.length > a.length ? b : a));
+    if (anchor.length >= FUZZY_MIN_QUERY_LENGTH) {
+      const prefix = [[anchor.slice(0, FUZZY_PREFIX_LENGTH)]];
+      const candidates = await fetchHotelRows(prefix, FUZZY_CANDIDATE_LIMIT);
+      ranked = rankFuzzy(candidates, queryTokens);
+    }
+  }
+
+  return ranked.slice(0, MAX_HOTELS).map((r) => toSuggestion(r.row));
 }
 
 type HotelLookup = {
@@ -421,15 +628,20 @@ type HotelLookup = {
   reason?: "disconnected" | "slow";
 };
 
-/** Never throws, never outlives DB_BUDGET_MS. Reports why it degraded, if it did. */
+/** Never throws, never outlives its budget. Reports why it degraded, if it did. */
 async function matchHotels(tokenSets: string[][]): Promise<HotelLookup> {
-  const sets = tokenSets.filter((s) => s.length);
+  // Drop tokens too short to index usefully, then any set left empty by that.
+  const sets = tokenSets
+    .map((s) => s.filter((t) => t.length >= HOTEL_MIN_TOKEN_LENGTH))
+    .filter((s) => s.length);
   if (!sets.length) return { hotels: [], degraded: false };
   if (!isMongoReady()) return { hotels: [], degraded: true, reason: "disconnected" };
 
+  // Two budgets' worth of ceiling: the fuzzy fallback issues a second query, and
+  // only ever on a query the first one could not answer at all.
   const { value, timedOut } = await withTimeout<Suggestion[]>(
     queryHotels(sets),
-    DB_BUDGET_MS,
+    DB_BUDGET_MS * 2,
     [],
     `hotel lookup "${sets[0].join(" ")}"`,
   );
