@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { tokenizeText } from "../utils/text";
 
 /**
  * Lowercased word tokens drawn from the hotel name and its city, used by
@@ -6,17 +7,17 @@ import mongoose, { Schema, Document, Model } from "mongoose";
  * the previous `{ name: /taj/i }` could only be answered by scanning all
  * ~1.6M documents.
  *
+ * Tokenizing goes through utils/text so that this and the query side strip
+ * diacritics the same way. They used to disagree, which made every hotel with an
+ * accent in its name unreachable — even by its own exact spelling.
+ *
  * Any code that writes a hotel must set this. `bulkWrite` — the only write path
  * today, in tjHotelSync — bypasses Mongoose middleware, so a schema hook would
  * not fire and cannot be relied on. Rows that slip through are repaired by
  * runSearchTokenMaintenance() on the next boot.
  */
 export function buildSearchTokens(name: string, cityName: string): string[] {
-  const tokens = `${name ?? ""} ${cityName ?? ""}`
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  return Array.from(new Set(tokens));
+  return Array.from(new Set(tokenizeText(`${name ?? ""} ${cityName ?? ""}`)));
 }
 
 export interface IHotelData {

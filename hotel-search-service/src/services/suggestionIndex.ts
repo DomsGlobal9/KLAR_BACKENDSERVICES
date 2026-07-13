@@ -10,6 +10,7 @@
  * the query's first two characters — a few thousand entries at worst.
  */
 import { City, State, Country } from "country-state-city";
+import { boundedEditDistance, normalizeText, tokenizeText } from "../utils/text";
 
 /**
  * Deliberately carries no coordinates.
@@ -55,19 +56,14 @@ function bucketKey(token: string): string {
   return token.length >= 2 ? token.slice(0, 2) : token;
 }
 
-export function normalize(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // strip diacritics: Goascoran
-    .trim();
-}
-
-export function tokenize(value: string): string[] {
-  return normalize(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-}
+/**
+ * Re-exported so existing callers keep working. The definitions live in
+ * utils/text because Hotel.model must tokenize identically and cannot import
+ * this module (it would pull the whole country-state-city dataset into the
+ * model layer).
+ */
+export const normalize = normalizeText;
+export const tokenize = tokenizeText;
 
 function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   const existing = map.get(key);
@@ -224,44 +220,6 @@ export function scoreName(
 
 /** India-first ranking. Override per-deployment without touching this file. */
 export const HOME_COUNTRY = process.env.HOME_COUNTRY_CODE || "IN";
-
-/**
- * Damerau-Levenshtein (optimal string alignment): counts a swap of adjacent
- * letters as one edit, not two. Typing "delih" for "Delhi" is one transposition;
- * plain Levenshtein scores it 2 and lets "Delph" win on distance.
- *
- * Bails out as soon as the best possible score exceeds `max`.
- */
-function boundedEditDistance(a: string, b: string, max: number): number {
-  if (Math.abs(a.length - b.length) > max) return max + 1;
-
-  let twoAgo: number[] = [];
-  let prev = Array.from({ length: a.length + 1 }, (_, i) => i);
-  let curr = new Array<number>(a.length + 1);
-
-  for (let i = 1; i <= b.length; i++) {
-    curr[0] = i;
-    let rowMin = curr[0];
-
-    for (let j = 1; j <= a.length; j++) {
-      const cost = b[i - 1] === a[j - 1] ? 0 : 1;
-      let best = Math.min(prev[j - 1] + cost, curr[j - 1] + 1, prev[j] + 1);
-
-      if (i > 1 && j > 1 && b[i - 1] === a[j - 2] && b[i - 2] === a[j - 1]) {
-        best = Math.min(best, twoAgo[j - 2] + 1); // adjacent transposition
-      }
-
-      curr[j] = best;
-      if (best < rowMin) rowMin = best;
-    }
-
-    if (rowMin > max) return max + 1;
-    twoAgo = prev;
-    prev = curr;
-    curr = new Array<number>(a.length + 1);
-  }
-  return prev[a.length];
-}
 
 /**
  * Typo tolerance, scanning only cities sharing the query's first letter.
