@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import crypto from "crypto";
 
 export enum BookingStatus {
   CONFIRMED = "CONFIRMED",
@@ -96,6 +97,10 @@ export interface IBooking extends Document {
   // ─── Identifiers ───────────────────────────────
   confirmationNumber: string; // Provider's booking ID (TG-XXXXX). Used for supplier cancel.
   hotelConfirmationNumber?: string; // Real hotel/PMS confirmation number (display only)
+  /** Client-supplied dedupe key; unique so retries can't create a second booking. */
+  idempotencyKey?: string;
+  /** Unguessable token for anonymous guest access (confirmation links) — not the _id. */
+  publicToken?: string;
   reservationId: string;
   propertyId: string;
   provider: BookingProvider;
@@ -214,6 +219,16 @@ const bookingSchema = new Schema<IBooking>(
       unique: true,
     },
     hotelConfirmationNumber: { type: String },
+    // Sparse+unique: bookings made before this field existed (null) don't collide,
+    // but any two commits sharing a key can never both create a booking.
+    idempotencyKey: { type: String, index: { unique: true, sparse: true } },
+    // Random 128-bit token minted per booking; anonymous guests use THIS in
+    // confirmation links, never the semi-predictable Mongo _id.
+    publicToken: {
+      type: String,
+      default: () => crypto.randomBytes(16).toString("hex"),
+      index: true,
+    },
     reservationId: { type: String, required: true },
     propertyId: { type: String, required: true },
 

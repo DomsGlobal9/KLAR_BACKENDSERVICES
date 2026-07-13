@@ -89,13 +89,21 @@ export const cancelController = async (req: any, res: Response) => {
       "Cancel Controller Error:",
       error.response?.data || error.message,
     );
-    const rateGainError = error.response?.data;
-    res.status(error.response?.status || 500).json({
+    // Supplier/axios errors are logged above but never leaked to the client.
+    if (error.response) {
+      return res.status(500).json({
+        status: false,
+        statusCode: 500,
+        description:
+          "We could not process the cancellation right now. Please try again or contact support.",
+        body: null,
+      });
+    }
+    res.status(error.statusCode || 500).json({
       status: false,
-      statusCode: error.response?.status || 500,
-      description:
-        rateGainError?.description || error.message || "Internal Server Error",
-      body: rateGainError || null,
+      statusCode: error.statusCode || 500,
+      description: error.message || "Internal Server Error",
+      body: null,
     });
   }
 };

@@ -179,6 +179,69 @@ export const getRazorpayPaymentStatusService = async (paymentId: string, platfor
     return payment;
 };
 
+/**
+ * Server-side payment verification for the booking services.
+ *
+ * A committed booking must never trust a client-supplied razorpayPaymentId. This
+ * fetches the payment straight from Razorpay and confirms it is genuinely
+ * captured, belongs to the expected order, and covers the expected amount.
+ * Amounts are in rupees; Razorpay reports paise, so we divide by 100.
+ */
+export const verifyPaymentForBookingService = async (params: {
+  paymentId: string;
+  orderId?: string;
+  expectedAmount?: number;
+  platform?: 'B2B' | 'B2C';
+}): Promise<{
+  verified: boolean;
+  reason?: string;
+  status: string;
+  capturedAmount: number;
+  currency: string;
+  razorpayOrderId: string;
+}> => {
+  const { paymentId, orderId, expectedAmount } = params;
+
+  let platform = params.platform;
+  if (!platform) {
+    const order = await getOrderByRazorpayPaymentId(paymentId);
+    platform = order?.platform || 'B2C';
+  }
+
+  const razorpay = getRazorpayInstance(platform);
+  const paymentResponse = await razorpay.payments.fetch(paymentId);
+  const payment = paymentResponse as unknown as IRazorpayPaymentResponse;
+
+  const capturedAmount = (Number(payment.amount) || 0) / 100; // paise -> rupees
+  const isCaptured = payment.status === 'captured' || payment.captured === true;
+
+  let verified = true;
+  let reason: string | undefined;
+
+  if (!isCaptured) {
+    verified = false;
+    reason = `Payment not captured (status: ${payment.status}).`;
+  } else if (orderId && payment.order_id && payment.order_id !== orderId) {
+    verified = false;
+    reason = 'Payment does not belong to the expected order.';
+  } else if (
+    expectedAmount !== undefined &&
+    capturedAmount + 0.01 < Number(expectedAmount)
+  ) {
+    verified = false;
+    reason = `Captured amount (${capturedAmount}) is below the expected amount (${expectedAmount}).`;
+  }
+
+  return {
+    verified,
+    reason,
+    status: payment.status,
+    capturedAmount,
+    currency: payment.currency,
+    razorpayOrderId: payment.order_id,
+  };
+};
+
 export const getRazorpayOrderDetailsService = async (razorpayOrderId: string, platform?: 'B2B' | 'B2C'): Promise<IRazorpayOrderResponse> => {
     if (!platform) {
         const order = await getOrderByRazorpayOrderId(razorpayOrderId);

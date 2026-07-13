@@ -132,6 +132,18 @@ export const getBookingDetails = async (req: any, res: Response) => {
       });
     }
 
+    // Anonymous access is a capability URL: only the unguessable publicToken
+    // grants it — never the semi-predictable _id, confirmation number or
+    // reservation id. Logged-in owners are handled by the ownership check below.
+    if (!req.user && booking.publicToken && booking.publicToken !== id) {
+      return res.status(403).json({
+        status: false,
+        statusCode: 403,
+        description: "Access denied.",
+        body: null,
+      });
+    }
+
     // Ownership Check
     const userId = req.user?.userId || req.user?.id;
     const userEmail = req.user?.email?.toLowerCase();

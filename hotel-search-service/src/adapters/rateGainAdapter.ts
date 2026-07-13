@@ -79,7 +79,7 @@ export async function searchRG(
         `[RateGain] Requesting Page ${apiPageStart} with ${payload.Geofilter ? "Geofilter" : "destCode: " + payload.destinationCode}`,
       );
 
-      let res = await rateGainProvider.getBestProperties(searchPayload);
+      let res = await rateGainProvider.getBestProperties(searchPayload, req._abortSignal);
       let isSuccess =
         res.status === true ||
         res.status === "Success" ||
@@ -102,7 +102,7 @@ export async function searchRG(
             destinationCode: destCode,
             pageNo: apiPageStart,
           };
-          res = await rateGainProvider.getBestProperties(searchPayload);
+          res = await rateGainProvider.getBestProperties(searchPayload, req._abortSignal);
           isSuccess =
             res.status === true ||
             res.status === "Success" ||

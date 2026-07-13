@@ -84,10 +84,18 @@ export function calculateEnrichedPricing(
       r.serviceType.toUpperCase() === "HOTEL",
   );
 
+  // Percentage-markup base. Default GROSS (tax-inclusive total) to preserve the
+  // existing agent pricing exactly. Set HOTEL_MARKUP_ON=NET to mark up only the
+  // net room rate — i.e. stop marking up government taxes, as most OTAs do.
+  const markupBase =
+    (process.env.HOTEL_MARKUP_ON || "GROSS").toUpperCase() === "NET"
+      ? basePrice
+      : totalPrice;
+
   let markupAmount = 0;
   if (rule) {
     if (rule.percentageMarkup > 0) {
-      markupAmount = (totalPrice * rule.percentageMarkup) / 100;
+      markupAmount = (markupBase * rule.percentageMarkup) / 100;
     } else if (rule.fixedMarkup > 0) {
       markupAmount = rule.fixedMarkup;
     }
@@ -97,7 +105,9 @@ export function calculateEnrichedPricing(
   const supplierTotalPrice = totalPrice;
   const finalTotalPrice = totalPrice + markupAmount;
   const safeNights = nights >= 1 ? nights : 1;
-  const perNightPrice = basePrice / safeNights;
+  // Per-night is derived from the FINAL price the customer pays so that
+  // perNightPrice * nights reconciles with finalTotalPrice (no "×nights ≠ total").
+  const perNightPrice = finalTotalPrice / safeNights;
 
   // --- taxesIncluded ---
   const taxesIncluded =
@@ -221,12 +231,7 @@ export function deriveRefundable(opts: {
     };
   }
 
-  // 2. Hard non-refundable signal in rate comments (RateGain)
-  if (/NON[-\s]?REFUNDABLE/i.test(comments)) {
-    return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
-  }
-
-  // 3. Derive from cancellation policies (RateGain): a 0-amount window => refundable
+  // 2. Derive from cancellation policies (RateGain): a 0-amount window => refundable
   if (policies.length > 0) {
     if (freeWindow) {
       return {
@@ -237,6 +242,11 @@ export function deriveRefundable(opts: {
       };
     }
     // Every policy charges a penalty from the start => non-refundable
+    return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
+  }
+
+  // 3. Hard non-refundable signal in rate comments (RateGain)
+  if (/NON[-\s]?REFUNDABLE/i.test(comments)) {
     return { isRefundable: false, freeCancellationUntil: null, label: "Non-Refundable", unknown: false };
   }
 

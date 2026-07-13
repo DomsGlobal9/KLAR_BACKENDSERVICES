@@ -3,7 +3,10 @@ import { env } from "../config/env";
 
 export const tripJackClient = axios.create({
   baseURL: env.tripJack.baseUrl,
-  timeout: 60000,
+  // Aligned with the 15s partial-return window in hotels.service: a supplier
+  // call that outlives the window is abandoned there, and this stops the
+  // underlying request from lingering long after. Configurable via env.
+  timeout: Number(process.env.TJ_SEARCH_TIMEOUT_MS || 20000),
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",

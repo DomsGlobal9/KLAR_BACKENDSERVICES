@@ -28,12 +28,12 @@ export const listController = async (req: any, res: Response) => {
     );
     res.json(data);
   } catch (error: any) {
-    console.error("List Controller Error:", error.message);
+    // Log the stack server-side; never return it to the client.
+    console.error("List Controller Error:", error.message, error.stack);
     res.status(500).json({
       status: false,
       statusCode: 500,
-      description: error.message || "Internal Server Error",
-      stack: error.stack,
+      description: "Failed to fetch bookings.",
       body: null,
     });
   }
