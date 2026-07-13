@@ -39,8 +39,6 @@ export const getBookings = async (req: any, res: Response) => {
   try {
     const agentId = req.user?.userId || req.user?.id || req.user?._id;
     const email = req.user?.email;
-    const email = req.user?.email;
-    const email = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
@@ -48,155 +46,150 @@ export const getBookings = async (req: any, res: Response) => {
     const query: any = {};
 
     if (!clientType) {
-      const clientType = req.query.clientType as string;
-      const query: any = {};
+      return res.status(403).json({
+        status: false,
+        statusCode: 403,
+        description: "clientType is required",
+        body: null,
+      });
+    }
 
-      if (!clientType) {
-        return res.status(403).json({
-          status: false,
-          statusCode: 403,
-          description: "clientType is required",
-          description: "clientType is required",
-          body: null,
-        });
-      }
+    query.clientType = clientType;
 
-      query.clientType = clientType;
-
-      if (!isAdmin) {
-        if (clientType === 'B2B') {
-          if (!agentId) {
-            return res.status(403).json({
-              status: false,
-              statusCode: 403,
-              description: "Access denied. Valid user context required.",
-              body: null,
-            });
-          }
-          query.agentId = agentId;
-        } else if (clientType === 'B2C') {
-          if (!agentId) {
-            return res.status(403).json({
-              status: false,
-              statusCode: 403,
-              description: "Access denied. Valid user context required.",
-              body: null,
-            });
-          }
-          query.userId = agentId;
-        } else if (clientType === 'GUEST') {
-          if (!email) {
-            return res.status(403).json({
-              status: false,
-              statusCode: 403,
-              description: "Access denied. Valid guest context required.",
-              body: null,
-            });
-          }
-          query.guestEmail = email;
-        } else {
+    if (!isAdmin) {
+      if (clientType === 'B2B') {
+        if (!agentId) {
           return res.status(403).json({
             status: false,
             statusCode: 403,
-            description: "Invalid clientType",
+            description: "Access denied. Valid user context required.",
             body: null,
           });
         }
-      }
-
-      const bookings = await bookingsService.getAllBookings(query);
-      res.json({
-        status: true,
-        statusCode: 200,
-        body: bookings,
-      });
-    } catch (error: any) {
-      console.error("Get Bookings Error:", error.message);
-      res.status(500).json({
-        status: false,
-        statusCode: 500,
-        description: error.message || "Failed to fetch bookings",
-        body: null,
-      });
-    }
-  };
-
-  export const getBookingDetails = async (req: any, res: Response) => {
-    try {
-      const id = req.params.id as string;
-      const booking = await bookingsService.getBookingById(id);
-      console.log(
-        "27 bookigs.controller.ts getBookingDetails booking",
-        JSON.stringify(booking),
-      );
-
-      if (!booking) {
-        return res.status(404).json({
-          status: false,
-          statusCode: 404,
-          description: "Booking not found",
-          body: null,
-        });
-      }
-
-      // Ownership Check
-      const userId = req.user?.userId || req.user?.id;
-      const userEmail = req.user?.email?.toLowerCase();
-      const roles = req.user?.roles || [];
-      const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
-
-      const isOwner =
-        booking.agentId === userId ||
-        booking.userId === userId ||
-        (booking as any).userInfo?.id === userId ||
-        (userEmail && booking.guestEmail?.toLowerCase() === userEmail);
-
-      // If a user is logged in but doesn't own it, deny access.
-      // If no user is logged in (req.user is undefined), allow access since they must know the exact secure ID.
-      if (!isAdmin && !isOwner && req.user) {
+        query.agentId = agentId;
+      } else if (clientType === 'B2C') {
+        if (!agentId) {
+          return res.status(403).json({
+            status: false,
+            statusCode: 403,
+            description: "Access denied. Valid user context required.",
+            body: null,
+          });
+        }
+        query.userId = agentId;
+      } else if (clientType === 'GUEST') {
+        if (!email) {
+          return res.status(403).json({
+            status: false,
+            statusCode: 403,
+            description: "Access denied. Valid guest context required.",
+            body: null,
+          });
+        }
+        query.guestEmail = email;
+      } else {
         return res.status(403).json({
           status: false,
           statusCode: 403,
-          description: "Access denied. You do not own this booking.",
+          description: "Invalid clientType",
           body: null,
         });
       }
+    }
 
-      // Anonymous callers reach this by knowing the booking id (the guest
-      // confirmation link). That is enough to see the stay, not enough to see who
-      // booked it — strip the identity fields.
-      const body: any = { ...booking };
-      if (!req.user) {
-        delete body.guestEmail;
-        delete body.userInfo;
-        delete body.userId;
-        delete body.agentId;
-      }
+    const bookings = await bookingsService.getAllBookings(query);
+    res.json({
+      status: true,
+      statusCode: 200,
+      body: bookings,
+    });
+  } catch (error: any) {
+    console.error("Get Bookings Error:", error.message);
+    res.status(500).json({
+      status: false,
+      statusCode: 500,
+      description: error.message || "Failed to fetch bookings",
+      body: null,
+    });
+  }
+};
 
-      // Anonymous callers reach this by knowing the booking id (the guest
-      // confirmation link). That is enough to see the stay, not enough to see who
-      // booked it — strip the identity fields.
-      const body: any = { ...booking };
-      if (!req.user) {
-        delete body.guestEmail;
-        delete body.userInfo;
-        delete body.userId;
-        delete body.agentId;
-      }
+export const getBookingDetails = async (req: any, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const booking = await bookingsService.getBookingById(id);
+    console.log(
+      "27 bookigs.controller.ts getBookingDetails booking",
+      JSON.stringify(booking),
+    );
 
-      res.json({
-        status: true,
-        statusCode: 200,
-        body,
-        body,
-      });
-    } catch (error: any) {
-      console.error("Get Booking Details Error:", error.message);
-      res.status(500).json({
+    if (!booking) {
+      return res.status(404).json({
         status: false,
-        statusCode: 500,
-        description: error.message || "Failed to fetch booking details",
+        statusCode: 404,
+        description: "Booking not found",
         body: null,
       });
     }
-  };
+
+    // Ownership Check
+    const userId = req.user?.userId || req.user?.id;
+    const userEmail = req.user?.email?.toLowerCase();
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
+
+    const isOwner =
+      booking.agentId === userId ||
+      booking.userId === userId ||
+      (booking as any).userInfo?.id === userId ||
+      (userEmail && booking.guestEmail?.toLowerCase() === userEmail);
+
+    // If a user is logged in but doesn't own it, deny access.
+    // If no user is logged in (req.user is undefined), allow access since they must know the exact secure ID.
+    if (!isAdmin && !isOwner && req.user) {
+      return res.status(403).json({
+        status: false,
+        statusCode: 403,
+        description: "Access denied. You do not own this booking.",
+        body: null,
+      });
+    }
+
+    // Anonymous callers reach this by knowing the booking id (the guest
+    // confirmation link). That is enough to see the stay, not enough to see who
+    // booked it — strip the identity fields.
+    const body: any = { ...booking };
+    if (!req.user) {
+      delete body.guestEmail;
+      delete body.userInfo;
+      delete body.userId;
+      delete body.agentId;
+    }
+
+    // Anonymous callers reach this by knowing the booking id (the guest
+    // confirmation link). That is enough to see the stay, not enough to see who
+    // booked it — strip the identity fields.
+    const body: any = { ...booking };
+    if (!req.user) {
+      delete body.guestEmail;
+      delete body.userInfo;
+      delete body.userId;
+      delete body.agentId;
+    }
+
+    res.json({
+      status: true,
+      statusCode: 200,
+      body,
+      body,
+    });
+  } catch (error: any) {
+    console.error("Get Booking Details Error:", error.message);
+    res.status(500).json({
+      status: false,
+      statusCode: 500,
+      description: error.message || "Failed to fetch booking details",
+      body: null,
+    });
+  }
+};

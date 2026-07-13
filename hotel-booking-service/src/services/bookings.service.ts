@@ -32,10 +32,7 @@ class BookingsService {
    * Get all bookings from the database filtered by user ID.
    */
   async getAllBookings(filter: any = {}) {
-  async getAllBookings(filter: any = {}) {
-  async getAllBookings(filter: any = {}) {
     try {
-      const query = { ...filter };
       const query = { ...filter };
       const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
 
