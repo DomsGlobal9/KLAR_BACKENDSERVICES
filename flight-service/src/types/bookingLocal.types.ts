@@ -77,10 +77,14 @@ export interface Booking {
     | "NO_SHOW"
     | "VOIDED"
     | "REISSUED"
-    | "CANCEL_REQUESTED"  
+    | "CANCEL_REQUESTED"
     | "CONFIRMED";
-    
+
     amendmentId?: string;
+
+    refundProcessed?: boolean;
+    refundPrice?: string;
+    refundDate?: Date;
 
     createdAt?: Date;
     updatedAt?: Date;

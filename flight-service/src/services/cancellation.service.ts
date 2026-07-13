@@ -1,6 +1,9 @@
 import axios from "axios";
 import { TRIPJACK_URLS, tripjackConfig } from "../config";
 import { BookingRepository } from "../repositories/bookingLocal.repository";
+import { envConfig } from "../config/env.config";
+import { cancellationRequestTemplate } from "../templates/flight-client-cancellation.template";
+import { cancellationRequestAgencyTemplate } from "../templates/flight-agency-cancellation.template";
 
 class CancellationService {
 
@@ -40,7 +43,7 @@ class CancellationService {
                 data: JSON.stringify(apiError, null, 2),
                 message: error.message
             });
-            
+
             throw {
                 success: false,
                 httpStatus: error.response?.status || 500,
@@ -69,6 +72,10 @@ class CancellationService {
                 });
             }
 
+            const ourDbBookingData = await this.bookingRepo.getBookingById(payload.bookingId);
+
+            await this.sendCancellationRequestEmail(ourDbBookingData);
+
             return response;
 
         } catch (error: any) {
@@ -82,6 +89,50 @@ class CancellationService {
         }
     }
 
+    // async status(amendmentId: string) {
+    //     const { baseUrl, headers, endpoints } = this.getConfig();
+
+    //     try {
+    //         const response = await axios.post(
+    //             `${baseUrl}${endpoints.AMENDMENT_DETAILS}`,
+    //             { amendmentId },
+    //             { headers }
+    //         );
+
+    //         const status = response.data?.status;
+    //         const bookingId = response.data?.bookingId;
+
+    //         if (status === "SUCCESS") {
+    //             await this.bookingRepo.updateBookingStatus(
+    //                 bookingId,
+    //                 "CANCELLED"
+    //             );
+    //         }
+
+    //         if (status === "REJECTED") {
+    //             await this.bookingRepo.updateBookingStatus(
+    //                 bookingId,
+    //                 "CONFIRMED"
+    //             );
+    //         }
+
+    //         return response;
+
+    //     } catch (error: any) {
+    //         console.error("Amendment Status ERROR >>>", {
+    //             status: error.response?.status,
+    //             data: JSON.stringify(error.response?.data, null, 2),
+    //             message: error.message
+    //         });
+
+    //         throw error;
+    //     }
+    // }
+
+    // ##################
+    // PRIVATE Functions
+    // ##################
+
     async status(amendmentId: string) {
         const { baseUrl, headers, endpoints } = this.getConfig();
 
@@ -92,21 +143,18 @@ class CancellationService {
                 { headers }
             );
 
-            const status = response.data?.status;
+            const amendmentStatus = response.data?.amendmentStatus;
             const bookingId = response.data?.bookingId;
 
-            if (status === "SUCCESS") {
+            if (amendmentStatus === "SUCCESS") {
                 await this.bookingRepo.updateBookingStatus(
                     bookingId,
                     "CANCELLED"
                 );
+                console.log(`✅ Amendment ${amendmentId} completed successfully - Booking ${bookingId} cancelled`);
             }
-
-            if (status === "REJECTED") {
-                await this.bookingRepo.updateBookingStatus(
-                    bookingId,
-                    "CONFIRMED"
-                );
+            else {
+                console.log(`⏳ Amendment ${amendmentId} status: ${amendmentStatus} - No database change`);
             }
 
             return response;
@@ -121,6 +169,80 @@ class CancellationService {
             throw error;
         }
     }
+
+    private async sendCancellationRequestEmail(booking: any) {
+        try {
+            if (!booking) return;
+
+            const travellerEmail = booking?.email || "";
+            const agentEmail = booking?.userInfo?.email || "";
+
+            const templateData = {
+                bookingId: booking?.bookingId || '',
+                status: 'CANCELLATION REQUESTED',
+                totalPrice: booking?.totalPrice || 0,
+                markupPrice: booking?.markupPrice || 0,
+                tripjackPrice: booking?.tripjackPrice || 0,
+                travellers: booking?.travellers || [],
+                email: booking?.email || '',
+                phone: booking?.phone || '',
+                gstInfo: booking?.gstInfo || null,
+                emergencyContact: booking?.emergencyContact || null,
+                userInfo: booking?.userInfo || {},
+                cancellationDate: new Date().toISOString(),
+            };
+
+            const clientTemplate = Handlebars.compile(cancellationRequestTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            const agencyTemplate = Handlebars.compile(cancellationRequestAgencyTemplate, {
+                strict: false,
+                assumeObjects: true
+            });
+
+            if (travellerEmail) {
+                await this.sendEmail(
+                    travellerEmail,
+                    `Flight Cancellation Request - ${booking?.bookingId}`,
+                    clientTemplate(templateData)
+                );
+                console.log(`✅ [Cancellation] Email sent to traveller: ${travellerEmail}`);
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                await this.sendEmail(
+                    agentEmail,
+                    `Flight Cancellation Request - ${booking?.bookingId} (Agency Copy)`,
+                    agencyTemplate(templateData)
+                );
+                console.log(`✅ [Cancellation] Email sent to agent: ${agentEmail}`);
+            }
+
+        } catch (error) {
+            console.error(`[Cancellation] Email failed for ${booking?.bookingId}:`, error);
+        }
+    }
+
+    private async sendEmail(
+        to: string,
+        subject: string,
+        html: string
+    ) {
+        try {
+            await axios.post(`${envConfig.EMAIL_SERVICE}/send`, {
+                to,
+                subject,
+                html
+            });
+        } catch (error: any) {
+            // Email send failed silently
+        }
+    }
+
+
+
 }
 
 export default new CancellationService();

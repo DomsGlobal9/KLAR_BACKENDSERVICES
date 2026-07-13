@@ -1,9 +1,14 @@
 import cron from "node-cron";
 import { CRON_TIME } from "../../config/corn.config";
 import bookingService from "../../services/booking.service";
+import bookingLocalService from "../../services/bookingLocal.service";
 import { BookingRepository } from "../../repositories/bookingLocal.repository";
+import CancellationService from "../../services/cancellation.service";
+import { cancellationPriceService } from "../../services/cancellationRefund.service";
+import { BookingModel } from "../../model/bookingLocal.model";
 
 const bookingRepository = new BookingRepository();
+
 
 let isRunning = false;
 
@@ -11,7 +16,6 @@ let isRunning = false;
  * Initialize Booking Status Cron
  */
 export const checkBookingStatusJob = () => {
-
     cron.schedule(
         CRON_TIME.EVERY_2_MINUTES,
         executeBookingStatusCron
@@ -54,10 +58,7 @@ const executeBookingStatusCron = async () => {
 
     } catch (error: any) {
 
-        console.error(
-            "Booking status cron failed >>>",
-            error.message
-        );
+        // Error handling without console
 
     } finally {
 
@@ -101,10 +102,7 @@ const processSingleBooking = async (booking: any) => {
 
     } catch (error: any) {
 
-        console.error(
-            `Booking failed: ${booking.bookingId}`,
-            error.message
-        );
+        // Error handling without console
     }
 };
 
@@ -116,48 +114,66 @@ const checkAndUpdateBookingStatus = async (
     booking: any,
     response: any
 ) => {
+    const latestStatus = response?.order?.status;
 
-    /**
-     * Latest status from Tripjack API
-     */
-    const latestStatus =
-        response?.order?.status;
-
-    /**
-     * No status found
-     */
     if (!latestStatus) {
         return;
     }
 
-    /**
-     * Log DB vs API status
-     */
-    console.log(`
-BookingId: ${booking.bookingId}
-DB Status : ${booking.status}
-API Status: ${latestStatus}
-`);
-
-    /**
-     * Status unchanged
-     */
     if (latestStatus === booking.status) {
         return;
     }
 
-    /**
-     * Update booking status in DB
-     */
     await bookingRepository.updateBookingStatus(
         booking.bookingId,
         latestStatus
     );
 
-    /**
-     * Update Log
-     */
-    console.log(
-        `Updated Booking: ${booking.bookingId} | ${booking.status} -> ${latestStatus}`
-    );
+    if (latestStatus === "SUCCESS") {
+        bookingLocalService.sendBookingEmails(booking.bookingId);
+    }
+
+    if (latestStatus === "CANCELLED") {
+        bookingLocalService.sendCancellationEmails(booking.bookingId);
+
+        const bookingData = await bookingRepository.getBookingById(booking.bookingId);
+
+        const amendmentResponse = await CancellationService.status(bookingData?.amendmentId as string);
+        const amendmentStatus = amendmentResponse?.data?.amendmentStatus;
+
+        if (amendmentStatus === "SUCCESS") {
+            if (bookingData?.userInfo?.clientType === 'b2b') {
+                try {
+                    const userId = bookingData?.userInfo?.id;
+                    const refundAmount = amendmentResponse?.data?.refundableAmount;
+
+                    if (userId && refundAmount > 0) {
+
+                        await cancellationPriceService.creditWallet(
+                            userId,
+                            refundAmount,
+                            'REFUND',
+                            'WALLET',
+                            'BOOKING',
+                            booking.bookingId,
+                            `Refund for cancelled booking ${booking.bookingId}`
+                        );
+
+                        await BookingModel.updateOne(
+                            { bookingId: booking.bookingId },
+                            {
+                                refundProcessed: true,
+                                refundPrice: refundAmount.toString(),
+                                refundDate: new Date()
+                            }
+                        );
+
+                        console.log(`✅ Wallet credited: ₹${refundAmount} for booking ${booking.bookingId}`);
+                    }
+                } catch (error: any) {
+                    console.error(`❌ Failed to credit wallet for booking ${booking.bookingId}:`, error.message);
+                }
+            }
+        }
+    }
 };
