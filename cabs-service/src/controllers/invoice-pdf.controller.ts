@@ -5,8 +5,8 @@ import { invoicePdfService } from "../services/invoice-pdf.service";
 export const getClientInvoicePdf = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { bookingId } = req.params;
-        const bookingData = await orderService.getBookingDetails(bookingId);
-        
+        const bookingData = await orderService.getBookingDetails(bookingId as string);
+
         const html = invoicePdfService.compileInvoiceHtml("client-invoice-template.html", bookingData);
         const pdfBuffer = await invoicePdfService.generatePdfBuffer(html);
 
