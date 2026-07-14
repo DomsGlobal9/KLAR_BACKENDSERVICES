@@ -346,6 +346,7 @@ class BookingLocalController {
             }
 
             if (!isB2CSource && userData.clientType === 'b2c') {
+                /* BYPASSED B2C PAYMENT CHECK FOR TESTING
                 if (!orderId) {
                     return res.status(400).json({
                         success: false,
@@ -364,9 +365,11 @@ class BookingLocalController {
                         }
                     });
                 }
+                */
             }
 
             if (!isB2CSource && userData.clientType === 'b2b') {
+                /* BYPASSED WALLET CHECK
                 const balanceCheck = await this.WalletBalanceCheck(bookingId, totalPrice);
 
                 if (
@@ -395,6 +398,7 @@ class BookingLocalController {
                         }
                     });
                 }
+                */
             }
 
             const result = await BookingService.updateAndTriggerBooking({
@@ -414,18 +418,22 @@ class BookingLocalController {
             }
 
             if (!isB2CSource && userData.clientType === 'b2c') {
+                /* BYPASSED B2C WALLET DEDUCTION FOR TESTING
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice,
                     process.env.USER_ID
                 );
+                */
             }
 
             if (!isB2CSource && userData.clientType === 'b2b') {
+                /* BYPASSED WALLET DEDUCTION
                 await this.deductWalletBalance(
                     bookingId,
                     totalPrice
                 );
+                */
             }
 
             return res.status(200).json({

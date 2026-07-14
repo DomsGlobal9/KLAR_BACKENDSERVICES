@@ -86,6 +86,8 @@ export interface Booking {
     | "CONFIRMED";
     
     amendmentId?: string;
+    pnr?: string;
+    flightInfo?: any;
 
     createdAt?: Date;
     updatedAt?: Date;

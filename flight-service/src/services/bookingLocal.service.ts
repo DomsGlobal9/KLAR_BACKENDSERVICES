@@ -459,9 +459,19 @@ class BookingService {
         const response = await TripjackBookingService.book(mapped);
 
         if (response?.data?.status?.success === true) {
+            const pnr = response.data.order?.pnr || response.data.pnr || "";
+            const flightInfo = response.data.order || response.data || null;
+            
+            await this.bookingRepo.updatePrices(bookingId, {
+                status: "SUCCESS",
+                pnr: pnr,
+                flightInfo: flightInfo
+            });
+
             this.sendBookingEmails(bookingId);
             return response.data;
         } else {
+            await this.bookingRepo.updatePrices(bookingId, { status: "FAILED" });
             return null;
         }
     }

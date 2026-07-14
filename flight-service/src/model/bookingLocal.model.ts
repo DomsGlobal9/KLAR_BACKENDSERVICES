@@ -95,8 +95,9 @@ const BookingSchema = new Schema<BookingDocument>(
             ],
             default: "INITIATED"
         },
-
-        amendmentId: { type: String }
+        amendmentId: { type: String },
+        pnr: { type: String },
+        flightInfo: { type: Schema.Types.Mixed }
     },
     { timestamps: true }
 );
