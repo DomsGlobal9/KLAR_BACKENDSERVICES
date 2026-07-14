@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 import { Booking } from "../types/bookingLocal.types";
 
+
 export interface BookingDocument extends Booking, Document { }
 
 const SSRSchema = new Schema(
@@ -14,7 +15,7 @@ const SSRSchema = new Schema(
 const TravellerSchema = new Schema(
     {
         travellerId: { type: String, required: true },
-        
+
         title: String,
         paxType: { type: String, enum: ["ADULT", "CHILD", "INFANT"] },
         firstName: String,
@@ -85,27 +86,13 @@ const BookingSchema = new Schema<BookingDocument>(
                 "REJECTED",
                 "NO_SHOW",
                 "VOIDED",
-                "REISSUED",
-                "CANCEL_REQUESTED",  
-                "CONFIRMED"          
+                "REISSUED"
             ],
             default: "INITIATED"
         },
-
         amendmentId: { type: String },
-
-        refundProcessed: {
-            type: Boolean,
-            default: false
-        },
-        refundPrice: {
-            type: String,
-            default: '0'
-        },
-        refundDate: {
-            type: Date,
-        },
-
+        pnr: { type: String },
+        flightInfo: { type: Schema.Types.Mixed }
     },
     { timestamps: true }
 );
