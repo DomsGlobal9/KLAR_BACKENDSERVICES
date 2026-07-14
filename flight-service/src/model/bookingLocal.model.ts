@@ -100,21 +100,9 @@ const BookingSchema = new Schema<BookingDocument>(
             ],
             default: "INITIATED"
         },
-
         amendmentId: { type: String },
-
-        refundProcessed: {
-            type: Boolean,
-            default: false
-        },
-        refundPrice: {
-            type: String,
-            default: '0'
-        },
-        refundDate: {
-            type: Date,
-        },
-
+        pnr: { type: String },
+        flightInfo: { type: Schema.Types.Mixed }
     },
     { timestamps: true }
 );
