@@ -3,6 +3,9 @@ import { env } from "./config/env";
 import mongoose from "mongoose";
 import dns from "node:dns/promises";
 import { initializeCronJobs } from "./cron";
+// Populate the cab supplier registry (TripJack) at boot.
+import "./suppliers";
+import { ReconciliationWorker } from "./workers/ReconciliationWorker";
 
 dns.setServers(["1.1.1.1", "1.0.0.1"]);
 
@@ -15,6 +18,7 @@ async function bootstrap() {
             await mongoose.connect(env.mongoUri);
             console.log("✅ MongoDB Connected.");
             initializeCronJobs();
+            ReconciliationWorker.start();
         } else {
             console.warn("⚠️ MONGODB_URI is not set. Persistence is disabled.");
         }

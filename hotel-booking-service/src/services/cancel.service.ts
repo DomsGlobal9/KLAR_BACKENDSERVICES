@@ -3,6 +3,7 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingStatus, BookingProvider } from "../models/Booking.model";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { refundService } from "./refund.service";
+import { notificationService } from "./notification.service";
 
 async function pollTripJackCancellationStatus(
   bookingId: string,
@@ -46,7 +47,10 @@ async function pollTripJackCancellationStatus(
         if (finalStatus === "CANCELLED") {
           if (process.env.ENABLE_AUTO_REFUNDS === "false") {
             console.log(`[TripJack Cancel Poll] Auto-refund disabled. Marking ${bookingId} as CANCELLED. Pending manual CRM refund.`);
-            await hotelBookingRepository.updateOne({ _id: booking._id }, { status: BookingStatus.CANCELLED });
+            const updatedBooking = await hotelBookingRepository.findOneAndUpdate({ _id: booking._id }, { status: BookingStatus.CANCELLED }, { new: true });
+            if (updatedBooking) {
+              notificationService.sendBookingStatusEmail(updatedBooking, BookingStatus.CANCELLED);
+            }
           } else {
             // refundCancelledBooking moves the booking to CANCELLED once the
             // money is provably back with the traveller.
@@ -105,7 +109,7 @@ class CancelService {
         try {
           const p = JSON.parse(bAny.tripJackResponse);
           tjInfo = p?.itemInfos?.HOTEL || p?.body?.itemInfos?.HOTEL;
-        } catch (e) { }
+        } catch (e) {}
       }
 
       let rgIn = bAny.rateGainResponse?.body?.checkInTime;
@@ -113,7 +117,7 @@ class CancelService {
         try {
           const p = JSON.parse(bAny.rateGainResponse);
           rgIn = p?.body?.checkInTime || p?.checkInTime;
-        } catch (e) { }
+        } catch (e) {}
       }
 
       if (tjInfo?.hInfo) {
@@ -139,7 +143,7 @@ class CancelService {
             ? dbIn.beginTime
             : dbIn || inTime;
       }
-    } catch (e) { }
+    } catch (e) {}
 
     let hours = 0;
     let minutes = 0;
@@ -442,11 +446,11 @@ class CancelService {
           const query: any = isObjectId
             ? { _id: targetId }
             : {
-              $or: [
-                { confirmationNumber: targetId },
-                { reservationId: targetId },
-              ],
-            };
+                $or: [
+                  { confirmationNumber: targetId },
+                  { reservationId: targetId },
+                ],
+              };
 
           // RateGain confirms the cancellation synchronously, so record the
           // breakdown and settle the traveller's refund in the same pass.
@@ -471,7 +475,10 @@ class CancelService {
           if (updated) {
             if (process.env.ENABLE_AUTO_REFUNDS === "false") {
               console.log(`✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; auto-refund disabled, marking CANCELLED.`);
-              await hotelBookingRepository.updateOne({ _id: updated._id }, { status: BookingStatus.CANCELLED });
+              const finalUpdated = await hotelBookingRepository.findOneAndUpdate({ _id: updated._id }, { status: BookingStatus.CANCELLED }, { new: true });
+              if (finalUpdated) {
+                notificationService.sendBookingStatusEmail(finalUpdated, BookingStatus.CANCELLED);
+              }
             } else {
               console.log(
                 `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,
@@ -515,8 +522,8 @@ class CancelService {
     const query: any = isObjectId
       ? { _id: targetId }
       : {
-        $or: [{ confirmationNumber: targetId }, { reservationId: targetId }],
-      };
+          $or: [{ confirmationNumber: targetId }, { reservationId: targetId }],
+        };
 
     const booking = await hotelBookingRepository.findOne(query, true);
     if (!booking) {

@@ -32,7 +32,7 @@ export class RateGainAdapter implements SupplierAdapter {
       }
 
       const roomType =
-        option.RoomTypeCode || option.RoomName || preCheckRoom?.name || "";
+        preCheckRoom?.name || option.RoomName || option.RoomTypeCode || "";
       const mealPlan = option.BoardName || option.boardName || "";
       const cancellationPolicy = JSON.stringify(
         option.CancellationPolicy ||
