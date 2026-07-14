@@ -138,12 +138,10 @@ class BookingsService {
       const isSystemPending = tjDetails?.isSystemPending === true;
 
       let newStatus: BookingStatus = booking.status;
-      if (!isSystemPending) {
-        if (orderStatus === "SUCCESS" || rsta === "S") {
-          newStatus = BookingStatus.CONFIRMED;
-        } else if (orderStatus === "ON_HOLD" || rsta === "O") {
-          newStatus = BookingStatus.HELD;
-        }
+      if (orderStatus === "SUCCESS" || rsta === "S") {
+        newStatus = BookingStatus.CONFIRMED;
+      } else if (orderStatus === "ON_HOLD" || rsta === "O") {
+        newStatus = BookingStatus.HELD;
       }
 
       if (

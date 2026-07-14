@@ -116,10 +116,10 @@ class InvoicePdfService {
     public async generatePdfBuffer(htmlContent: string): Promise<Buffer> {
         const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
         const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+        await page.setContent(htmlContent, { waitUntil: "networkidle0" as any });
         const pdf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" } });
         await browser.close();
-        return pdf;
+        return Buffer.from(pdf);
     }
 }
 

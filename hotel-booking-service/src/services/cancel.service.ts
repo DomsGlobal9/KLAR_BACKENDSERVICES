@@ -3,6 +3,7 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { BookingStatus, BookingProvider } from "../models/Booking.model";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { refundService } from "./refund.service";
+import { notificationService } from "./notification.service";
 
 async function pollTripJackCancellationStatus(
   bookingId: string,
@@ -46,7 +47,10 @@ async function pollTripJackCancellationStatus(
         if (finalStatus === "CANCELLED") {
           if (process.env.ENABLE_AUTO_REFUNDS === "false") {
             console.log(`[TripJack Cancel Poll] Auto-refund disabled. Marking ${bookingId} as CANCELLED. Pending manual CRM refund.`);
-            await hotelBookingRepository.findOneAndUpdate({ _id: booking._id }, { status: BookingStatus.CANCELLED });
+            const updatedBooking = await hotelBookingRepository.findOneAndUpdate({ _id: booking._id }, { status: BookingStatus.CANCELLED }, { new: true });
+            if (updatedBooking) {
+              notificationService.sendBookingStatusEmail(updatedBooking, BookingStatus.CANCELLED);
+            }
           } else {
             // refundCancelledBooking moves the booking to CANCELLED once the
             // money is provably back with the traveller.
@@ -471,7 +475,10 @@ class CancelService {
           if (updated) {
             if (process.env.ENABLE_AUTO_REFUNDS === "false") {
               console.log(`✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; auto-refund disabled, marking CANCELLED.`);
-              await hotelBookingRepository.findOneAndUpdate({ _id: updated._id }, { status: BookingStatus.CANCELLED });
+              const finalUpdated = await hotelBookingRepository.findOneAndUpdate({ _id: updated._id }, { status: BookingStatus.CANCELLED }, { new: true });
+              if (finalUpdated) {
+                notificationService.sendBookingStatusEmail(finalUpdated, BookingStatus.CANCELLED);
+              }
             } else {
               console.log(
                 `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,

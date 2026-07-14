@@ -28,8 +28,8 @@ export class RateGainApiProvider {
         ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
         ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        propertyID: rawPropertyId,
-        PropertyId: rawPropertyId,
+        propertyID: booking.PropertyCode || rawPropertyId,
+        PropertyId: booking.PropertyCode || rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
         BrandCode:
           booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
@@ -166,8 +166,8 @@ export class RateGainApiProvider {
         ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
         ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        propertyID: rawPropertyId,
-        PropertyId: rawPropertyId,
+        propertyID: booking.PropertyCode || rawPropertyId,
+        PropertyId: booking.PropertyCode || rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
         BrandCode:
           booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
@@ -181,8 +181,11 @@ export class RateGainApiProvider {
         CheckOutDate: booking.checkout || booking.checkOut,
         checkInDate: booking.checkin || booking.checkIn,
         checkOutDate: booking.checkout || booking.checkOut,
-        CountryCode: booking.CountryCode || "US",
-        Currency: booking.Currency || booking.CurrencyCode || "USD",
+        // Must match the PreCheck context (IN/INR) — the RoomSelectionKey is bound
+        // to the country/currency it was issued under. A US default here against an
+        // IN-issued key triggers RateGain errorCode 2004 "Room selection key is invalid".
+        CountryCode: booking.CountryCode || "IN",
+        Currency: booking.Currency || booking.CurrencyCode || "INR",
         DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
         ReservationDate: booking.ReservationDate || now,
         TimeStamp: booking.TimeStamp || now,
