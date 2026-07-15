@@ -1,5 +1,5 @@
 import axios from "axios";
-import { HotelModel } from "../models/Hotel.model";
+import { HotelModel, buildSearchTokens } from "../models/Hotel.model";
 import { tripJackClient } from "../clients/tripjack.client";
 import { env } from "../config/env";
 import fs from "fs/promises";
@@ -7,7 +7,7 @@ import path from "path";
 
 import { NationalityModel } from "../models/Nationality.model";
 
-const TJ_STATIC_BASE_URL = "https://apitest.tripjack.com";
+const TJ_STATIC_BASE_URL = "https://api.tripjack.com";
 
 const tripJackStaticClient = axios.create({
   baseURL: TJ_STATIC_BASE_URL,
@@ -44,29 +44,67 @@ async function loadProgress() {
   }
 }
 
+/**
+ * Removes the resume token so the next run starts from the first page.
+ *
+ * Without this a completed sync leaves its last token behind, and every later
+ * run resumes from there — permanently skipping every hotel before that point.
+ * A weekly refresh then never refreshes the bulk of the catalogue.
+ */
+async function clearProgress() {
+  try {
+    await fs.unlink(PROGRESS_FILE);
+    console.log("[Sync] Progress file cleared — the next run starts from the beginning.");
+  } catch (err: any) {
+    if (err.code !== "ENOENT") {
+      console.error(`[Sync] Failed to clear progress file: ${err.message}`);
+    }
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export async function syncTJHotels() {
   console.log("[Sync] Initializing TripJack Hotels Sync...");
 
-  const progress = await loadProgress();
+  // A periodic refresh must revisit every hotel, otherwise prices, names and
+  // withdrawals before the resume point go stale forever. Set FULL_RESYNC=true
+  // for the scheduled run; leave it unset so a crashed run can pick up where it
+  // stopped.
+  const fullResync = process.env.FULL_RESYNC === "true";
+  if (fullResync) {
+    console.log("[Sync] FULL_RESYNC=true — ignoring any saved progress.");
+    await clearProgress();
+  }
+
+  const progress = fullResync ? null : await loadProgress();
   let nextToken: string | undefined = progress?.token;
   let totalCount = progress?.totalSynced || 0;
   let pageCount = 0;
   let hasNext = true;
 
   if (nextToken) {
+    const ageDays = progress?.updatedAt
+      ? (Date.now() - new Date(progress.updatedAt).getTime()) / DAY_MS
+      : null;
+
     console.log(
-      `[Sync] Resuming from last token (Total already synced: ${totalCount})`,
+      `[Sync] Resuming from saved token (${totalCount} hotels already synced` +
+        (ageDays === null ? "" : `, saved ${ageDays.toFixed(1)} days ago`) +
+        ").",
     );
-  } else {
-    // Only skip if no token AND we have a lot of hotels (optional, but keep it safe)
-    const dbCount = await HotelModel.countDocuments();
-    if (dbCount > 1000000) {
-      // If we have 1M+ hotels and no token, maybe we are done?
-      console.log(
-        `[Sync] DB already has ${dbCount} hotels. Skipping initial sync.`,
+
+    if (ageDays !== null && ageDays > 1) {
+      console.warn(
+        `⚠️  [Sync] This token is ${ageDays.toFixed(1)} days old. Hotels before it will NOT be ` +
+          `refreshed. Run with FULL_RESYNC=true for a complete refresh.`,
       );
-      // return; // Uncomment if we want to skip. User said "enable", so we'll proceed.
     }
+  } else {
+    // estimatedDocumentCount reads collection metadata; countDocuments() would
+    // scan all ~1.5M documents just to print this line.
+    const dbCount = await HotelModel.estimatedDocumentCount();
+    console.log(`[Sync] Starting from the first page. DB currently holds ${dbCount} hotels.`);
   }
 
   const startTime = Date.now();
@@ -144,6 +182,7 @@ export async function syncTJHotels() {
                 $set: {
                   name: hotel.name || "",
                   cityName,
+                  searchTokens: buildSearchTokens(hotel.name || "", cityName),
                   countryName:
                     hotel.address?.country?.name || hotel.countryName || "",
                   starRating:
@@ -224,12 +263,16 @@ export async function syncTJHotels() {
     // Wait for final writes
     await Promise.all(pendingWrites);
 
-    if (nextToken) await saveProgress(nextToken, totalCount);
+    // The loop only exits when TripJack runs out of pages, so reaching here means
+    // the catalogue was walked end to end. Drop the resume token: keeping it would
+    // make the next run skip everything before it.
+    await clearProgress();
 
     console.log(
       `[Sync] Success! Finished syncing. Total hotels in DB: ${totalCount}`,
     );
   } catch (error: any) {
+    // A crash mid-walk is exactly when the token earns its keep.
     console.error(`[Sync] CRITICAL FAILURE:`, error.message);
     if (nextToken) await saveProgress(nextToken, totalCount);
   }

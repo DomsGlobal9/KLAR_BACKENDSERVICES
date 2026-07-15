@@ -107,10 +107,8 @@ class BookingLocalController {
         }
     };
 
-
     private deductWalletBalance = async (bookingId: string, totalPrice: string, userId?: string): Promise<any> => {
         try {
-
             const token = this.currentToken;
 
             if (!token) {
@@ -128,9 +126,6 @@ class BookingLocalController {
             );
 
             return response.data;
-
-
-
         } catch (error: any) {
             throw new Error(
                 error.response?.data?.message ||
@@ -167,9 +162,7 @@ class BookingLocalController {
             );
 
             const walletBalanceCheckResponse = response.data;
-
             return walletBalanceCheckResponse;
-
         } catch (error: any) {
             return {
                 success: false,
@@ -198,7 +191,6 @@ class BookingLocalController {
             }
 
             return response.data.data;
-
         } catch (error: any) {
             return {
                 status: 400,
@@ -225,7 +217,6 @@ class BookingLocalController {
                     role: 'guest'
                 };
             } else {
-
                 const token = this.extractToken(req);
 
                 if (!token) {
@@ -296,7 +287,6 @@ class BookingLocalController {
                 message: "Booking updated successfully",
                 data: result
             });
-
         } catch (error: any) {
             return res.status(400).json({
                 success: false,
@@ -443,7 +433,6 @@ class BookingLocalController {
                 message: "Booking updated & TripJack triggered",
                 data: result
             });
-
         } catch (error: any) {
             if (error.response?.data) {
                 return res.status(error.response.status || 400).json({
@@ -473,7 +462,6 @@ class BookingLocalController {
                 }
 
                 const bookings = await BookingService.getBookingsByEmail(email as string);
-
                 const reversedBookings = bookings.reverse();
 
                 return res.status(200).json({
@@ -506,7 +494,6 @@ class BookingLocalController {
                 success: true,
                 data: bookings,
             });
-
         } catch (error: any) {
             return res.status(400).json({
                 success: false,
@@ -579,7 +566,6 @@ class BookingLocalController {
                 success: true,
                 data: booking,
             });
-
         } catch (error: any) {
             return res.status(400).json({
                 success: false,
@@ -616,11 +602,39 @@ class BookingLocalController {
                     email
                 }
             });
-
         } catch (error: any) {
             return res.status(400).json({
                 success: false,
                 message: error.message || "Failed to check booking existence"
+            });
+        }
+    };
+
+    // =======
+    // TESTING
+    // =======
+
+    public testProcessAftermath = async (req: Request, res: Response) => {
+        try {
+            const bookingId = req.params.bookingId || req.query.bookingId || req.body.bookingId;
+
+            if (!bookingId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "bookingId is required"
+                });
+            }
+
+            console.log(`🧪 [API] Testing processBookingAftermath for: ${bookingId}`);
+
+            const result = await BookingService.processBookingAftermathById(bookingId);
+
+            res.status(result.success ? 200 : 500).json(result);
+        } catch (error: any) {
+            console.error(`❌ [API] Test error:`, error.message);
+            res.status(500).json({
+                success: false,
+                error: error.message
             });
         }
     };

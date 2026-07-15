@@ -15,11 +15,12 @@ export const authenticateJWT = (
     const authHeader = req.headers.authorization;
     let token = null;
 
+    // Only accept the token from the Authorization header. A JWT in the query
+    // string (?token=) leaks into access logs, browser history and Referer
+    // headers, so it is deliberately not read here.
     if (authHeader) {
       const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
       token = bearerMatch ? bearerMatch[1] : authHeader;
-    } else if (req.query?.token && typeof req.query.token === "string") {
-      token = req.query.token;
     }
 
     if (!token) {

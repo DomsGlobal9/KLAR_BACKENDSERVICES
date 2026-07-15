@@ -27,14 +27,19 @@ export class TripJackAdapter implements SupplierAdapter {
       );
       const occupancy = option.ris?.[0]?.adt || option.occupancy || 2;
 
+      // The v3 review response (`hInfo.ops[0]`) exposes `tp` as an all-in total:
+      // base + taxes + management fees. It carries no tax breakdown, so `taxes`
+      // stays 0 and `price` alone must account for the whole amount.
+      //
+      // ValidationEngine compares `price + taxes` against what the agent saw, so
+      // reporting a non-zero `taxes` here on top of an all-in `tp` would
+      // double-count the tax and reject valid bookings as PRICE_CHANGED.
       const rawPrice = Number(
-        option.tp || option.pricing?.totalPrice || option.totalPrice || 0,
+        option.tp ?? option.pricing?.totalPrice ?? option.totalPrice ?? 0,
       );
-      const taxes = Number(
-        option.tf || option.pricing?.totalTax || option.totalTax || 0,
-      );
-      // Raw amount to pay the supplier (EXCLUDES platform markup) = existing price+taxes total
-      const supplierNet = Math.round((rawPrice + taxes) * 100) / 100;
+      const taxes = 0;
+      // Raw amount to pay the supplier (EXCLUDES platform markup).
+      const supplierNet = Math.round(rawPrice * 100) / 100;
       // Platform (super-admin) markup baked into the net we validate/charge ("api price")
       const price = applyPlatformMarkup(rawPrice);
       const currency = "INR";

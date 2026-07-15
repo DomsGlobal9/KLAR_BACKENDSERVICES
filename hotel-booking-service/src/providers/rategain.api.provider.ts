@@ -24,18 +24,44 @@ export class RateGainApiProvider {
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
+        ...(booking.GuaranteeMethod ? { GuaranteeMethod: booking.GuaranteeMethod } : {}),
+        ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
+        ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        propertyID: rawPropertyId,
-        PropertyId: rawPropertyId,
+        propertyID: booking.PropertyCode || rawPropertyId,
+        PropertyId: booking.PropertyCode || rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
-        BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+        BrandCode:
+          booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+            ? booking.BrandCode
+            : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+              ? booking.brandCode
+              : "TkEvQQ==",
         checkin: booking.checkin || booking.checkIn,
         checkout: booking.checkout || booking.checkOut,
+        CheckInDate: booking.checkin || booking.checkIn,
+        CheckOutDate: booking.checkout || booking.checkOut,
+        checkInDate: booking.checkin || booking.checkIn,
+        checkOutDate: booking.checkout || booking.checkOut,
         CountryCode: booking.CountryCode || "IN",
         Currency: booking.Currency || booking.CurrencyCode || "INR",
+        DemandBookingId: booking.DemandBookingId || `demand-precheck-${Date.now()}`,
+        ReservationDate: booking.ReservationDate || new Date().toISOString(),
+        TimeStamp: booking.TimeStamp || new Date().toISOString(),
         EchoToken:
           booking.EchoToken || booking.Echotoken || `echo-${Date.now()}`,
         Session: booking.Session || "",
+        BookingRate:
+          booking.BookingRate !== undefined
+            ? booking.BookingRate
+            : booking.SellingRate !== undefined
+              ? booking.SellingRate
+              : booking.sellingRate,
+        ...(booking.SellingRate !== undefined && booking.SellingRate !== null
+          ? { SellingRate: Number(Number(booking.SellingRate).toFixed(2)) }
+          : booking.sellingRate !== undefined && booking.sellingRate !== null
+            ? { SellingRate: Number(Number(booking.sellingRate).toFixed(2)) }
+            : {}),
         RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
           const mappedRs: any = {
             RoomTypeCode: rs.RoomTypeCode || "Standard",
@@ -136,22 +162,30 @@ export class RateGainApiProvider {
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
-        // GuaranteeMethod and GuaranteeType intentionally omitted —
-        // SDS uses a line-of-credit model; sending these fields causes RateGain
-        // to return ConfirmationFailed. Payment is handled via wallet deduction.
+        ...(booking.GuaranteeMethod ? { GuaranteeMethod: booking.GuaranteeMethod } : {}),
+        ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
+        ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
-        propertyID: rawPropertyId,
-        PropertyId: rawPropertyId,
+        propertyID: booking.PropertyCode || rawPropertyId,
+        PropertyId: booking.PropertyCode || rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
-        BrandCode: booking.BrandCode || booking.brandCode || "N/A",
+        BrandCode:
+          booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+            ? booking.BrandCode
+            : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+              ? booking.brandCode
+              : "TkEvQQ==",
         checkin: booking.checkin || booking.checkIn,
         checkout: booking.checkout || booking.checkOut,
         CheckInDate: booking.checkin || booking.checkIn,
         CheckOutDate: booking.checkout || booking.checkOut,
         checkInDate: booking.checkin || booking.checkIn,
         checkOutDate: booking.checkout || booking.checkOut,
-        CountryCode: booking.CountryCode || "US",
-        Currency: booking.Currency || booking.CurrencyCode || "USD",
+        // Must match the PreCheck context (IN/INR) — the RoomSelectionKey is bound
+        // to the country/currency it was issued under. A US default here against an
+        // IN-issued key triggers RateGain errorCode 2004 "Room selection key is invalid".
+        CountryCode: booking.CountryCode || "IN",
+        Currency: booking.Currency || booking.CurrencyCode || "INR",
         DemandBookingId: booking.DemandBookingId || `demand-${Date.now()}`,
         ReservationDate: booking.ReservationDate || now,
         TimeStamp: booking.TimeStamp || now,
@@ -164,6 +198,13 @@ export class RateGainApiProvider {
             : booking.SellingRate !== undefined
               ? booking.SellingRate
               : booking.sellingRate,
+        // Spec v1.5.3: B2C Net + Commission model requires SellingRate (the MSP
+        // from precheck). Only sent when provided (B2C); omitted for B2B.
+        ...(booking.SellingRate !== undefined && booking.SellingRate !== null
+          ? { SellingRate: Number(Number(booking.SellingRate).toFixed(2)) }
+          : booking.sellingRate !== undefined && booking.sellingRate !== null
+            ? { SellingRate: Number(Number(booking.sellingRate).toFixed(2)) }
+            : {}),
         RoomSelection: (booking.RoomSelection || []).map((rs: any) => {
           const mappedRs: any = {
             RoomTypeCode: rs.RoomTypeCode || "Standard",
@@ -304,6 +345,39 @@ export class RateGainApiProvider {
         error.response?.data ? JSON.stringify(error.response.data) : error.message,
         "Payload Sent:",
         JSON.stringify(unwrappedPayload, null, 2)
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /api/SmartDistribution/GetReservation
+   * Fetch the current status of an existing reservation by confirmationNumber / reservationId.
+   * Used by the status-sync path to resolve MANUAL_REVIEW bookings.
+   */
+  async getReservationDetails(confirmationNumber: string, reservationId?: string, propertyId?: string, brandCode?: string) {
+    const payload = {
+      ConfirmationNumber: confirmationNumber,
+      ...(reservationId ? { ReservationId: reservationId } : {}),
+      ...(propertyId ? { PropertyId: propertyId.replace(/^RG:/, "") } : {}),
+      ...(brandCode ? { BrandCode: brandCode } : {}),
+      EchoToken: `echo-${Date.now()}`,
+      TimeStamp: new Date().toISOString(),
+    };
+
+    try {
+      console.log(`[RateGain] GetReservation request: ${JSON.stringify(payload)}`);
+      const response = await rateGainClient.post(
+        "/api/SmartDistribution/GetReservation",
+        payload,
+      );
+      console.log(`[RateGain] GetReservation response (status=${response.status}): ${JSON.stringify(response.data)}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(
+        "[RateGain] GetReservation Error:",
+        error.response?.status,
+        error.response?.data ? JSON.stringify(error.response.data) : error.message,
       );
       throw error;
     }

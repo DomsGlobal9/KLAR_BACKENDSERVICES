@@ -73,3 +73,10 @@ coverage/
 *.pid
 *.seed
 *.tgz
+
+# =========================
+# Custom / Local Tools
+# =========================
+.claude/
+.claude
+hotel-booking-service/test-db.js

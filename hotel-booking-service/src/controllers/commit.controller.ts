@@ -10,7 +10,10 @@ export const commitController = async (req: any, res: Response) => {
     const agentId = req.user?.userId || req.user?.id || req.user?._id || null;
     const agentName = req.user?.email || null; // Fallback to email if name isn't in token
     const token = req.headers.authorization?.split(" ")[1] || "";
-    const clientType = req.user?.clientType || "B2C";
+    let clientType = req.headers["x-client-type"] || req.body.clientType || req.user?.clientType || "B2C";
+    if (!agentId && clientType === "B2C") {
+      clientType = "GUEST";
+    }
 
     let finalPayload = req.body;
 
@@ -94,6 +97,13 @@ export const commitController = async (req: any, res: Response) => {
       );
     }
 
+    // Idempotency key (header preferred, body fallback) so a retried commit
+    // returns the original booking instead of creating a duplicate.
+    finalPayload.idempotencyKey =
+      (req.headers["idempotency-key"] as string) ||
+      req.body.idempotencyKey ||
+      finalPayload.idempotencyKey;
+
     console.log(
       `[FORENSIC] Commit Booking [${requestId}]: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`,
     );
@@ -137,20 +147,16 @@ export const commitController = async (req: any, res: Response) => {
       });
     }
 
-    const errorData = error.response?.data || error.data;
-    const errorMessage =
-      errorData?.errors?.[0]?.message ||
-      errorData?.error?.message ||
-      errorData?.description ||
-      error.message ||
-      "Failed to commit booking";
-
+    // Raw upstream/supplier errors are logged above but never returned to the
+    // client (avoids leaking supplier identity/messages). User-safe failures go
+    // through StructuredError above; everything else is a generic message.
     res.status(error.response?.status || error.status || 500).json({
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: errorMessage,
-        details: errorData || null,
+        message:
+          "We could not complete your booking. If any amount was debited it will be refunded automatically. Please try again or contact support.",
+        details: null,
       },
       requestId,
       timestamp: new Date().toISOString(),

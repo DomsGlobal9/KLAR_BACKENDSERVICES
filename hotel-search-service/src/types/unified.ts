@@ -1,6 +1,7 @@
 export interface UnifiedFilters {
   starRatings?: number[];
   priceRange?: [number, number];
+  priceRanges?: Array<[number, number]>;
   mealTypes?: string[];
   propertyTypes?: string[];
   amenities?: string[];
@@ -21,6 +22,7 @@ export interface UnifiedSearchRequest {
   countryCode?: string; // default US
   pageNo?: number; // 1-indexed pagination
   _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
+  _abortSignal?: AbortSignal | null; // internal: cancels supplier calls once the partial-return window elapses
   providers?: string[];
   filters?: UnifiedFilters;
   sortBy?: string;

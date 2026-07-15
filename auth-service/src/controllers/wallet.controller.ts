@@ -93,6 +93,183 @@ export class WalletController {
         }
     }
 
+    /**
+     * Credit an arbitrary user's wallet on behalf of another Klar service.
+     *
+     * Unlike `creditWallet`, the target user comes from the request body rather
+     * than a JWT — background jobs (e.g. the hotel reconciliation worker) have
+     * to refund the agent who owns a booking, not the token holder. Guarded by
+     * `internalServiceAuth`.
+     */
+    static async internalCreditWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+        try {
+
+            console.log(`[AUTH SERVICE - internalCreditWallet] Request got here`);
+            const { userId, amount, type, paymentMethod, referenceType, referenceId, description } = req.body;
+
+            console.log(`[AUTH SERVICE - internalCreditWallet] ${{ userId, amount, type, paymentMethod, referenceType, referenceId, description }}`);
+
+            if (!userId || !Types.ObjectId.isValid(userId)) {
+                throw new BadRequestError("A valid userId is required");
+            }
+
+            if (!amount || typeof amount !== "number" || amount <= 0) {
+                throw new BadRequestError("Amount must be a positive number");
+            }
+
+            if (!type || !["TOP_UP", "REFUND"].includes(type)) {
+                throw new BadRequestError("Type must be 'TOP_UP' or 'REFUND'");
+            }
+
+            if (!paymentMethod) {
+                throw new BadRequestError("Payment method is required");
+            }
+
+            const targetUserId = new Types.ObjectId(userId);
+            const wallet = await WalletService.getWallet(targetUserId);
+
+            if (!wallet || wallet.balance == null) {
+                throw new BadRequestError("Wallet balance is not available");
+            }
+
+            const authService = AuthService.getInstance();
+            const userData = await authService.getCurrentUser(userId);
+            const createdByValue = userData?.createdBy;
+            let parentWallet = null;
+            let parentWalletId = null;
+            let lastTransaction = null;
+
+            if (createdByValue && createdByValue !== '' && Types.ObjectId.isValid(createdByValue)) {
+                const parentUserId = new Types.ObjectId(createdByValue);
+                parentWallet = await WalletService.getWallet(parentUserId);
+                if (parentWallet) {
+                    parentWalletId = parentWallet._id;
+                }
+            } else {
+                const transaction = await WalletService.credit(
+                    wallet._id,
+                    targetUserId,
+                    amount,
+                    {
+                        type,
+                        paymentMethod,
+                        referenceType: referenceType || null,
+                        referenceId: referenceId || null,
+                        description: description || `Wallet ${type.toLowerCase()}`,
+                    }
+                );
+
+                const updatedWallet = await WalletService.getWallet(targetUserId);
+
+                return res.status(201).json({
+                    success: true,
+                    message: "Wallet credited successfully",
+                    data: {
+                        transaction: {
+                            id: transaction._id,
+                            type: transaction.type,
+                            direction: transaction.direction,
+                            amount: transaction.amount,
+                            status: transaction.status,
+                        },
+                        newBalance: updatedWallet?.balance,
+                    },
+                });
+            }
+
+            if (wallet.balance < 0 && parentWallet) {
+                const amountToClearNegative = Math.abs(wallet.balance);
+                let amountToCreditParent = 0;
+                let amountToCreditChild = amount;
+
+                if (amount <= amountToClearNegative) {
+                    amountToCreditParent = amount;
+                    amountToCreditChild = 0;
+                } else {
+                    amountToCreditParent = amountToClearNegative;
+                    amountToCreditChild = amount - amountToClearNegative;
+                }
+
+                if (amountToCreditParent > 0) {
+                    const parentTransaction = await WalletService.credit(
+                        parentWalletId!,
+                        parentWallet!.userId,
+                        amountToCreditParent,
+                        {
+                            type: 'TOP_UP',
+                            paymentMethod,
+                            referenceType: referenceType || null,
+                            referenceId: referenceId || null,
+                            description: `Parent wallet credit for child debt (${description || 'Wallet top-up'})`,
+                        }
+                    );
+                    lastTransaction = parentTransaction;
+                }
+
+                if (amountToCreditChild > 0) {
+                    const childTransaction = await WalletService.credit(
+                        wallet._id,
+                        targetUserId,
+                        amountToCreditChild,
+                        {
+                            type,
+                            paymentMethod,
+                            referenceType: referenceType || null,
+                            referenceId: referenceId || null,
+                            description: description || `Wallet ${type.toLowerCase()}`,
+                        }
+                    );
+                    lastTransaction = childTransaction;
+                }
+
+            } else if (parentWallet) {
+                const transaction = await WalletService.credit(
+                    wallet._id,
+                    targetUserId,
+                    amount,
+                    {
+                        type,
+                        paymentMethod,
+                        referenceType: referenceType || null,
+                        referenceId: referenceId || null,
+                        description: description || `Wallet ${type.toLowerCase()}`,
+                    }
+                );
+                lastTransaction = transaction;
+            }
+
+            const updatedWallet = await WalletService.getWallet(targetUserId);
+
+            let updatedParentBalance = null;
+            if (parentWallet) {
+                const updatedParent = await WalletService.getWallet(parentWallet.userId);
+                updatedParentBalance = updatedParent?.balance;
+            }
+
+            res.status(201).json({
+                success: true,
+                message: "Wallet credited successfully",
+                data: {
+                    childWallet: {
+                        newBalance: updatedWallet?.balance,
+                    },
+                    parentWallet: parentWallet ? {
+                        newBalance: updatedParentBalance,
+                    } : null,
+                    transaction: lastTransaction ? {
+                        id: lastTransaction._id,
+                        type: lastTransaction.type,
+                        direction: lastTransaction.direction,
+                        amount: lastTransaction.amount,
+                        status: lastTransaction.status,
+                    } : null,
+                },
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async creditWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
             if (!req.user) {

@@ -23,6 +23,15 @@ export const env = {
   },
 
   authServiceUrl: process.env.AUTH_SERVICE_URL || "http://localhost:5010",
+  paymentServiceUrl:
+    process.env.PAYMENT_SERVICE_URL || "http://localhost:5014/api/pay",
+
+  /**
+   * Shared secret for service-to-service calls (agent wallet credit, Razorpay
+   * refund). Background jobs have no user JWT, so refunds are unavailable
+   * without this and stuck bookings stay in MANUAL_REVIEW for ops.
+   */
+  internalServiceKey: process.env.INTERNAL_SERVICE_KEY || "",
 };
 
 if (!env.rateGain.baseUrl) {
@@ -33,4 +42,9 @@ if (!env.rateGain.apiKey) {
 }
 if (!env.tripJack.apiKey) {
   console.warn("⚠️  TRIPJACK_API_KEY is not set. TripJack bookings will fail.");
+}
+if (!env.internalServiceKey) {
+  console.warn(
+    "⚠️  INTERNAL_SERVICE_KEY is not set. Automatic refunds are disabled; unresolved bookings will be parked in MANUAL_REVIEW.",
+  );
 }

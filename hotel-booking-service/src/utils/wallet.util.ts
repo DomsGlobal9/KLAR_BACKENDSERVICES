@@ -112,6 +112,49 @@ export class WalletUtil {
   }
 
   /**
+   * Credit an agent's wallet from a background job.
+   *
+   * `refundBalance` credits whoever owns the JWT it is given, which is correct
+   * inside a request but useless to a cron: the worker must credit the agent
+   * who owns the stuck booking. This hits the shared-secret internal route,
+   * which takes the target userId explicitly.
+   *
+   * Throws on failure so callers never record a refund that did not happen.
+   */
+  static async refundToAgentWallet(
+    agentUserId: string,
+    amount: number,
+    referenceId: string,
+    description: string,
+  ): Promise<void> {
+    if (!env.internalServiceKey) {
+      throw new Error(
+        "INTERNAL_SERVICE_KEY is not configured; cannot issue a wallet refund.",
+      );
+    }
+
+    const response = await axios.post(
+      `${env.authServiceUrl}/user/wallet/internal/credit`,
+      {
+        userId: agentUserId,
+        amount,
+        type: "REFUND",
+        paymentMethod: "WALLET",
+        referenceType: "HOTEL_BOOKING_REFUND",
+        referenceId,
+        description,
+      },
+      { headers: { "x-internal-key": env.internalServiceKey } },
+    );
+
+    if (!response.data?.success) {
+      throw new Error(
+        response.data?.message || "Wallet refund was rejected by auth-service",
+      );
+    }
+  }
+
+  /**
    * Fetches the markup rules for the agent.
    */
   static async getMarkupRules(token: string): Promise<MarkupRule[]> {

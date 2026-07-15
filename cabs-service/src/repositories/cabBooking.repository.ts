@@ -2,6 +2,13 @@ import { CabBookingModel, CabBookingStatus, ICabBooking } from "../models/CabBoo
 
 export class CabBookingRepository {
     /**
+     * Generic finder used by the reconciliation worker to sweep stuck bookings.
+     */
+    async find(filter: Record<string, unknown>): Promise<ICabBooking[]> {
+        return await CabBookingModel.find(filter);
+    }
+
+    /**
      * Create a new cab booking
      */
     async createBooking(bookingData: Partial<ICabBooking>): Promise<ICabBooking> {
@@ -16,10 +23,16 @@ export class CabBookingRepository {
     }
 
     /**
-     * Get bookings by userId
+     * Get bookings for an actor id. B2C/GUEST bookings are stored under `userId`,
+     * B2B under `agentId`, so match either to return an agent's or a customer's
+     * bookings from the same id.
      */
     async getBookingsByUserId(userId: string): Promise<ICabBooking[]> {
-        return await CabBookingModel.find({ userId }).sort({ createdAt: -1 }).lean();
+        return await CabBookingModel.find({
+            $or: [{ userId }, { agentId: userId }],
+        })
+            .sort({ createdAt: -1 })
+            .lean();
     }
 
     /**

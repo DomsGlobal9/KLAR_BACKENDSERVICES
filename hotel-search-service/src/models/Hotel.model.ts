@@ -1,9 +1,30 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
+import { tokenizeText } from "../utils/text";
+
+/**
+ * Lowercased word tokens drawn from the hotel name and its city, used by
+ * autocomplete. Querying `{ searchTokens: /^taj/ }` walks a multikey index;
+ * the previous `{ name: /taj/i }` could only be answered by scanning all
+ * ~1.6M documents.
+ *
+ * Tokenizing goes through utils/text so that this and the query side strip
+ * diacritics the same way. They used to disagree, which made every hotel with an
+ * accent in its name unreachable — even by its own exact spelling.
+ *
+ * Any code that writes a hotel must set this. `bulkWrite` — the only write path
+ * today, in tjHotelSync — bypasses Mongoose middleware, so a schema hook would
+ * not fire and cannot be relied on. Rows that slip through are repaired by
+ * runSearchTokenMaintenance() on the next boot.
+ */
+export function buildSearchTokens(name: string, cityName: string): string[] {
+  return Array.from(new Set(tokenizeText(`${name ?? ""} ${cityName ?? ""}`)));
+}
 
 export interface IHotelData {
   tjHotelId: string;
   name: string;
   cityName: string;
+  searchTokens?: string[];
   countryName: string;
   starRating: number;
   address: string;
@@ -30,6 +51,7 @@ const hotelSchema = new Schema<IHotel>(
     },
     name: { type: String, required: true },
     cityName: { type: String, required: true, index: true },
+    searchTokens: { type: [String], default: [] },
     countryName: { type: String, default: "" },
     starRating: { type: Number, default: 0 },
     address: { type: String, default: "" },
@@ -60,6 +82,9 @@ hotelSchema.index({ location: "2dsphere" });
 
 // Text index for fuzzy city search
 hotelSchema.index({ cityName: "text", name: "text" });
+
+// Multikey index backing the autocomplete prefix lookup.
+hotelSchema.index({ searchTokens: 1 });
 
 export const HotelModel: Model<IHotel> =
   mongoose.models.Hotel || mongoose.model<IHotel>("Hotel", hotelSchema);

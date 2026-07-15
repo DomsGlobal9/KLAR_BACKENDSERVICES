@@ -13,10 +13,16 @@ export const searchHotels = async (
     const data = await hotelsService.searchHotels(req.body, clientType, token);
     res.status(200).json(data);
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    // Log the real upstream error server-side; never leak supplier status codes
+    // or raw supplier messages to the client.
+    console.error(
+      "[Search] hotel search failed:",
+      error.response?.data || error.message,
+    );
+    res.status(500).json({
       status: false,
-      statusCode: error.response?.status || 500,
-      description: error.response?.data?.description || error.message,
+      statusCode: 500,
+      description: "Hotel search is temporarily unavailable. Please try again.",
       body: [],
     });
   }
@@ -30,6 +36,9 @@ export const getHotelSuggestions = async (
   try {
     const query = req.query.q as string;
     const data = await hotelsService.getHotelSuggestions(query);
+    // Suggestions are identical for every user, so let the browser and any CDN
+    // in front of us absorb the repeats instead of re-hitting this service.
+    res.set("Cache-Control", "public, max-age=300");
     res.status(200).json({
       status: true,
       body: data,

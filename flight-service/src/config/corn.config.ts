@@ -5,7 +5,9 @@ export const cronConfig = {
 };
 
 export const CRON_TIME = {
-    EVERY_MINUTE: "* * * * *",
+    EVERY_30_SECONDS: "*/30 * * * * *",
+    
+    EVERY_1_MINUTE: "* * * * *",
 
     EVERY_2_MINUTES: "*/2 * * * *",
 

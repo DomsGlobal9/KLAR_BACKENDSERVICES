@@ -1,10 +1,25 @@
-import { searchRG } from "../adapters/rateGainAdapter";
-import { searchTJ } from "../adapters/tripJackAdapter";
+import { supplierRegistry } from "../suppliers";
 import { resolveCityToCoords, resolveGeoCenter } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { getMarkupRules } from "../utils/auth";
 import { calculateNights, calculateEnrichedPricing, round2 } from "../utils/pricing.util";
+import { getSuggestions } from "./suggestions.service";
+import {
+  accumulateFacets,
+  buildFacetKey,
+  emptyFacets,
+  getMealTypes,
+  getPropertyTypeLabel,
+} from "./facets.service";
+
+// Short-TTL in-memory cache for identical anonymous (token-less) searches, so
+// repeated B2C searches for the same destination/dates don't re-hit the paid
+// supplier APIs on every keystroke/refresh. B2B (token) searches are never
+// cached because pricing depends on the agent's markup rules.
+const searchCache = new Map<string, { at: number; data: any }>();
+const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || 60_000);
+const SEARCH_CACHE_MAX_ENTRIES = 500;
 
 export class HotelsService {
   /**
@@ -25,11 +40,53 @@ export class HotelsService {
       `[DEBUG] searchHotels triggered for "${searchPayload.destination}". Mode: ${mode}, ClientType: ${clientType}`,
     );
 
-    const isDirectTJ =
-      searchPayload.destination.startsWith("TJ:") ||
-      /^\d{8,15}$/.test(searchPayload.destination.trim());
-    const isDirectRG = searchPayload.destination.startsWith("RG:");
-    const isDirectSearch = isDirectTJ || isDirectRG;
+    // Guard against clearly-invalid input BEFORE hitting suppliers: avoids a wasted
+    // supplier round-trip on bad dates and prevents a crash in the adapters' rooms.map()
+    // when `rooms` is missing/empty. Valid searches are unaffected.
+    const ci = new Date(searchPayload.checkin);
+    const co = new Date(searchPayload.checkout);
+    const roomsOk =
+      Array.isArray(searchPayload.rooms) &&
+      searchPayload.rooms.length > 0 &&
+      searchPayload.rooms.every((r) => Number(r.adults) >= 1);
+    if (
+      !searchPayload.checkin ||
+      !searchPayload.checkout ||
+      isNaN(ci.getTime()) ||
+      isNaN(co.getTime()) ||
+      ci.getTime() >= co.getTime() ||
+      !roomsOk
+    ) {
+      console.warn(
+        `[Search] Rejected invalid input — checkin=${searchPayload.checkin}, checkout=${searchPayload.checkout}, rooms=${JSON.stringify(searchPayload.rooms)}. Returning empty result set.`,
+      );
+      return {
+        results: [],
+        body: [],
+        hotels: [],
+        total: 0,
+        hasMore: false,
+        inventoryCount: 0,
+        facets: emptyFacets(),
+      };
+    }
+
+    // Serve identical anonymous searches from the short-TTL cache to spare the
+    // paid supplier APIs. Keyed on the whole request (minus the geo center we
+    // resolve below). B2B (token) requests are never cached.
+    const cacheable = !token;
+    const cacheKey = cacheable
+      ? JSON.stringify({ ...searchPayload, _geoCenter: undefined, __ct: clientType })
+      : "";
+    if (cacheable) {
+      const cached = searchCache.get(cacheKey);
+      if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
+        console.log(`[Search] cache hit for "${searchPayload.destination}"`);
+        return cached.data;
+      }
+    }
+
+    const isDirectSearch = supplierRegistry.isDirectSearch(searchPayload.destination);
 
     if (isDirectSearch) {
       console.log(
@@ -40,18 +97,43 @@ export class HotelsService {
     // 1. Resolve Location (Once) - Skip if direct search
     let geoCenter = null;
     if (!isDirectSearch) {
-      if (searchPayload.destinationCode && searchPayload.destinationCode.startsWith("GEO:")) {
-        const coords = searchPayload.destinationCode.replace("GEO:", "").split(",");
-        if (coords.length === 2) {
-          const lat = parseFloat(coords[0]);
-          const lng = parseFloat(coords[1]);
-          if (!isNaN(lat) && !isNaN(lng)) {
-            // Resolve geoCenter dynamically (snaps to official city center if close, e.g. Dubai)
+      const hasDestinationText =
+        !!searchPayload.destination && searchPayload.destination.trim().length > 2;
+
+      // Text resolution is authoritative: OpenCage + GeoCache place a city at its
+      // real centre with a radius covering its true extent. Prefer it whenever we
+      // have a name to resolve, and only fall back to a GEO token when we don't.
+      if (hasDestinationText) {
+        geoCenter = await resolveCityToCoords(searchPayload.destination);
+      }
+
+      if (searchPayload.destinationCode?.startsWith("GEO:")) {
+        const [latRaw, lngRaw] = searchPayload.destinationCode.slice(4).split(",");
+        const lat = parseFloat(latRaw);
+        const lng = parseFloat(lngRaw);
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+          if (geoCenter) {
+            // Nothing generates GEO tokens any more. The ones that still arrive come
+            // from cached "recent searches" and bookmarked ?destCode= links, and were
+            // built from country-state-city coordinates that can sit tens of km off
+            // (Mysuru: 27km out, snapping to a 5km rural radius → zero hotels).
+            // The name resolved, so the token has nothing to add.
+            const drift = getDistanceKm(lat, lng, geoCenter.lat, geoCenter.lng);
+            console.warn(
+              `[GEO] Ignoring legacy GEO token [${lat},${lng}] (${drift.toFixed(0)}km from ` +
+                `text-resolved "${searchPayload.destination}") — text resolution wins.`,
+            );
+          } else {
+            // No usable destination name — the token is all we have.
             geoCenter = await resolveGeoCenter(lat, lng);
-            console.log(`[GEO] Instant resolution from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km (resolved)`);
+            console.log(
+              `[GEO] Resolved from GEO token: Lat=${geoCenter.lat}, Lng=${geoCenter.lng}, Radius=${geoCenter.radiusKm}km`,
+            );
           }
         }
       }
+
       if (!geoCenter) {
         geoCenter = await resolveCityToCoords(searchPayload.destination);
       }
@@ -69,140 +151,145 @@ export class HotelsService {
     }
 
     const finalResults: UnifiedHotel[] = [];
-    let rgTotal = 0;
-    let tjTotal = 0;
-    let rgCount = 0;
-    let tjCount = 0;
+    const providerStats: Record<string, { count: number; total: number; hasMore: boolean }> = {};
 
-    // 2. Define Providers based on Mode
-    const providers: { name: string; task: Promise<void> }[] = [];
+    // 2. Fan out to every supplier enabled for this mode/destination/providers-filter.
+    //    Adding a new supplier = register() it in suppliers/index.ts; nothing below
+    //    this line ever needs to change.
     const requestedProviders = searchPayload.providers;
+    const eligibleSuppliers = supplierRegistry.getModeAndDirectEligible(
+      mode,
+      searchPayload.destination,
+    );
+    const enabledSuppliers = supplierRegistry.getEnabled({
+      mode,
+      destination: searchPayload.destination,
+      requestedCodes: requestedProviders,
+    });
 
-    if (
-      (mode === "UNIFIED" || mode === "RG_ONLY") &&
-      (!isDirectSearch || isDirectRG)
-    ) {
-      const isRgAllowed =
-        !requestedProviders ||
-        requestedProviders.length === 0 ||
-        requestedProviders.includes("RG");
-      if (isRgAllowed) {
-        providers.push({
-          name: "RG",
-          task: searchRG(searchPayload, clientType)
-            .then((res) => {
-              rgCount = res.hotels.length;
-              rgTotal = res.total;
-              finalResults.push(...res.hotels);
-              console.log(
-                `[OK] RG finished in ${Date.now() - totalStartTime}ms (${rgCount} hotels)`,
-              );
-            })
-            .catch((err) => {
-              console.error(`[ERR] RG failed: ${err.message}`);
-            }),
-        });
-      } else {
-        console.log(
-          `[SKIP] RG skipped because providers filter is active and does not include RG`,
+    if (requestedProviders && requestedProviders.length > 0) {
+      eligibleSuppliers
+        .filter((s) => !requestedProviders.includes(s.code))
+        .forEach((s) =>
+          console.log(
+            `[SKIP] ${s.code} skipped because providers filter is active and does not include ${s.code}`,
+          ),
         );
-      }
     }
 
-    if (
-      (mode === "UNIFIED" || mode === "TJ_ONLY") &&
-      (!isDirectSearch || isDirectTJ)
-    ) {
-      const isTjAllowed =
-        !requestedProviders ||
-        requestedProviders.length === 0 ||
-        requestedProviders.includes("TJ");
-      if (isTjAllowed) {
-        providers.push({
-          name: "TJ",
-          task: searchTJ(searchPayload)
-            .then((res) => {
-              tjCount = res.hotels.length;
-              tjTotal = res.total;
-              finalResults.push(...res.hotels);
-              console.log(
-                `[OK] TJ finished in ${Date.now() - totalStartTime}ms (${tjCount} hotels)`,
-              );
-            })
-            .catch((err) => {
-              console.error(`[ERR] TJ failed: ${err.message}`);
-            }),
-        });
-      } else {
-        console.log(
-          `[SKIP] TJ skipped because providers filter is active and does not include TJ`,
-        );
-      }
-    }
+    // One AbortController for this search. Its signal is threaded into every
+    // supplier's underlying axios call; once we decide to return (all settled or
+    // the partial-return window elapsed) we abort it, so a slow supplier's HTTP
+    // request is actively cancelled instead of orphaned until its own timeout.
+    const abortController = new AbortController();
+    searchPayload._abortSignal = abortController.signal;
+
+    const allTasks = enabledSuppliers.map((supplier) =>
+      supplier
+        .search(searchPayload, clientType)
+        .then((res) => {
+          providerStats[supplier.code] = {
+            count: res.hotels.length,
+            total: res.total,
+            hasMore: res.hasMore,
+          };
+          finalResults.push(...res.hotels);
+          console.log(
+            `[OK] ${supplier.code} finished in ${Date.now() - totalStartTime}ms (${res.hotels.length} hotels)`,
+          );
+        })
+        .catch((err) => {
+          console.error(`[ERR] ${supplier.code} failed: ${err.message}`);
+        }),
+    );
 
     // 3. Orchestration: High-Performance Concurrent Collection
     // Wait for all providers, but cap at 15 seconds for partial-result return (MMT-style).
     // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases and provides a stable UI.
-    const allTasks = providers.map((p) => p.task);
     const PARTIAL_RETURN_TIMEOUT_MS = 15000;
 
+    let partialTimer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       Promise.allSettled(allTasks),
-      new Promise<void>((resolve) =>
-        setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS),
-      ),
+      new Promise<void>((resolve) => {
+        partialTimer = setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS);
+      }),
     ]);
-
-    // If any provider is still pending after timeout, we return whatever arrived.
-    // (The pending promises continue in background but we don't await them further.)
+    // Clear the timer (harmless if it already fired) and actively cancel any
+    // supplier request still in flight. Already-settled requests are unaffected;
+    // the losing supplier's socket is released now instead of lingering.
+    if (partialTimer) clearTimeout(partialTimer);
+    abortController.abort();
 
     // 4. Deduplication Logic (MMT-style efficient dedup)
     const totalReceivedCount = finalResults.length;
     const { items: deduplicatedResults, meta: dedupMeta } =
       deduplicateHotels(finalResults);
 
-    // Calculate reported total (rough estimate)
-    // Senior Dev: If we are on Page 1 and have fewer than 10 results but provider says more,
-    // we should still respect the provider's total for pagination to work,
-    // but only if the provider actually returned something.
-    const totalToUI = Math.max(rgTotal + tjTotal, deduplicatedResults.length);
+    // Whether any supplier still has pages left. This — not a summed total — is
+    // what tells the client to keep loading.
+    const hasMore = Object.values(providerStats).some((s) => s.hasMore);
+
+    // How many properties we know of in this destination — the "6,179 properties
+    // in Goa" figure, not the subset bookable on these dates.
+    //
+    // Deliberately the largest supplier's count, never the sum: the same hotel is
+    // listed by TripJack and RateGain both (which is why deduplicateHotels exists),
+    // so adding 6,179 + 384 counts an unknown overlap twice and yields a number
+    // that is not a count of anything. Zero when the destination came back empty,
+    // so a search with no results can never claim to have properties.
+    const providerTotals = Object.values(providerStats).map((s) => s.total);
+    const inventoryCount = deduplicatedResults.length
+      ? Math.max(...providerTotals, deduplicatedResults.length)
+      : 0;
+
+    // Sum kept purely for the diagnostic log line below.
+    const sumProviderTotals = providerTotals.reduce((sum, t) => sum + t, 0);
+    const totalToUI = Math.max(sumProviderTotals, deduplicatedResults.length);
 
     const totalDuration = Date.now() - totalStartTime;
 
-    const tjLog =
-      (mode === "UNIFIED" || mode === "TJ_ONLY") &&
-      (!isDirectSearch || isDirectTJ)
-        ? `${tjCount} (Total: ${tjTotal})`
-        : "[SKIPPED]";
-    const rgLog =
-      (mode === "UNIFIED" || mode === "RG_ONLY") &&
-      (!isDirectSearch || isDirectRG)
-        ? `${rgCount} (Total: ${rgTotal})`
-        : "[SKIPPED]";
+    // Per-supplier status lines — automatically includes any future registered supplier.
+    const statusLines = supplierRegistry
+      .all()
+      .map((s) => {
+        const wasQueried = enabledSuppliers.includes(s);
+        const stat = providerStats[s.code];
+        const line = wasQueried && stat ? `${stat.count} (Total: ${stat.total})` : "[SKIPPED]";
+        return `${s.code} Status: ${line}`;
+      })
+      .join("\n");
 
     console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏨 FINAL SEARCH SUMMARY (Senior OTA Logic)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TJ Status: ${tjLog}
-RG Status: ${rgLog}
+${statusLines}
 ----------------------------------------------------
 Total Combined Unique:     ${deduplicatedResults.length}
 Items Merged (Cheaper Wins): ${dedupMeta.duplicatedCount}
 Search Duration:           ${totalDuration}ms
 ----------------------------------------------------
-Reported Total to UI:      ${totalToUI}
+Summed provider totals:    ${totalToUI} (double-counts supplier overlap — never shown)
+Destination inventory:     ${inventoryCount} (properties known in this area)
+Has more pages:            ${hasMore}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         `);
 
     let finalOutputHotels = deduplicatedResults;
     if (geoCenter) {
+      // Exact api-derived radius (same as TJ $near and RG Geofilter), no rounding.
       const allowedRadiusKm = geoCenter.radiusKm || 20;
 
       finalOutputHotels = deduplicatedResults.filter((hotel) => {
         const lat = Number(hotel.latitude);
         const lng = Number(hotel.longitude);
-        if (!lat || !lng) return true; // Keep if coordinates are missing/invalid to avoid false positives
+        // Keep if coordinates are genuinely missing/invalid (NaN) or the [0,0]
+        // "no-coords" sentinel — to avoid false negatives. A real hotel on the
+        // equator (lat 0) or prime meridian (lng 0) is still distance-checked.
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+          return true;
+        }
 
         const dist = getDistanceKm(geoCenter.lat, geoCenter.lng, lat, lng);
         return dist <= allowedRadiusKm;
@@ -212,8 +299,16 @@ Reported Total to UI:      ${totalToUI}
       );
     }
 
-    // 1. Compute facets on the unfiltered/geofenced list
-    const facets = computeFacets(finalOutputHotels, markupRules, nights);
+    // 1. Fold this page into the search's running facets and return the
+    //    cumulative counts. Built from the unfiltered/geofenced list so that
+    //    applying a filter never zeroes out the options the user didn't pick.
+    const facetKey = buildFacetKey(searchPayload, clientType, markupRules);
+    const facets = accumulateFacets(
+      facetKey,
+      finalOutputHotels,
+      markupRules,
+      nights,
+    );
 
     // 2. Apply filters (if provided)
     let filteredResults = finalOutputHotels;
@@ -238,7 +333,24 @@ Reported Total to UI:      ${totalToUI}
       }
 
       // Price range (against marked-up price)
-      if (filters.priceRange && filters.priceRange[1] > 0) {
+      if (filters.priceRanges && filters.priceRanges.length > 0) {
+        filteredResults = filteredResults.filter((h) => {
+          const enriched = calculateEnrichedPricing(
+            {
+              basePrice: h.basePrice ?? h.price,
+              totalPrice: h.price,
+              taxes: h.taxAmount ?? 0,
+              mf: 0,
+              mft: 0,
+              currency: h.currency,
+            },
+            markupRules,
+            nights
+          );
+          const price = enriched.finalTotalPrice;
+          return filters.priceRanges!.some(([minP, maxP]) => price >= minP && price <= maxP);
+        });
+      } else if (filters.priceRange && filters.priceRange[1] > 0) {
         const [minP, maxP] = filters.priceRange;
         filteredResults = filteredResults.filter((h) => {
           const enriched = calculateEnrichedPricing(
@@ -381,10 +493,33 @@ Reported Total to UI:      ${totalToUI}
         markupRules,
         nights,
       );
+      // The cross-provider "compare" price must include markup too, otherwise the
+      // alternative-deal price shown next to the (marked-up) main price is unfair/wrong.
+      const altDeal = rest.altDeal
+        ? {
+            ...rest.altDeal,
+            price: round2(
+              calculateEnrichedPricing(
+                {
+                  basePrice: rest.altDeal.price,
+                  totalPrice: rest.altDeal.price,
+                  taxes: 0,
+                  mf: 0,
+                  mft: 0,
+                  currency: hotel.currency,
+                },
+                markupRules,
+                nights,
+              ).finalTotalPrice,
+            ),
+          }
+        : rest.altDeal;
+
       return {
         ...rest,
         // price now INCLUDES markup; basePrice stays the net room cost
         price: round2(enriched.finalTotalPrice),
+        altDeal,
         pricing: {
           ...(rest.pricing || {}),
           markupAmount: round2(enriched.markupAmount),
@@ -396,153 +531,41 @@ Reported Total to UI:      ${totalToUI}
       };
     });
 
-    return {
+    const response = {
       results: optimizedResults,
       body: optimizedResults, // Fallback for some frontend components
       hotels: optimizedResults,
-      total: Math.max(rgTotal + tjTotal, filteredResults.length),
+      // Hotels on this page. The client accumulates across pages and uses
+      // `hasMore` to decide whether to ask for another one. Reporting a summed
+      // provider total here made the UI claim "1 Property" for a search that
+      // returned none, and made infinite scroll fetch forever.
+      total: optimizedResults.length,
+      hasMore,
+      // Properties we hold for this destination, for "Showing 40 of 6,179".
+      // Display only — never drives paging.
+      inventoryCount,
       facets,
     };
+
+    if (cacheable) {
+      // Bound the cache: drop the oldest entry when full (Map preserves insertion order).
+      if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey !== undefined) searchCache.delete(oldestKey);
+      }
+      searchCache.set(cacheKey, { at: Date.now(), data: response });
+    }
+
+    return response;
   }
 
+  /**
+   * Destination + hotel autocomplete. The implementation lives in
+   * suggestions.service so the static city index and the LRU cache can be
+   * shared and warmed independently of this class.
+   */
   async getHotelSuggestions(query: string) {
-    const { HotelModel } = require("../models/Hotel.model");
-    const { City } = require("country-state-city");
-
-    if (!query || query.trim().length < 2) {
-      return [];
-    }
-
-    // Normalize common spelling mistakes like "anaya" instead of "ananya"
-    let normalizedQuery = query.trim();
-    if (/anaya/i.test(normalizedQuery)) {
-      normalizedQuery = normalizedQuery.replace(/anaya/gi, "ananya");
-    }
-
-    const qLower = normalizedQuery.toLowerCase();
-    const escapedQuery = normalizedQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-    const prefixRegex = new RegExp("^" + escapedQuery, "i");
-    const containsRegex = new RegExp(escapedQuery, "i");
-
-    // 1. Fetch cities from local country-state-city package
-    const allCities = City.getAllCities();
-    const qWords = qLower.split(/\s+/).filter(Boolean);
-    const cityMatches: Array<{ city: any; score: number }> = [];
-
-    for (const city of allCities) {
-      const cityNameLower = city.name.toLowerCase();
-      let matchesAll = true;
-      for (const word of qWords) {
-        if (!cityNameLower.includes(word)) {
-          matchesAll = false;
-          break;
-        }
-      }
-      
-      if (matchesAll) {
-        const score = cityNameLower.startsWith(qLower) ? 1 : (cityNameLower.includes(qLower) ? 2 : 3);
-        cityMatches.push({ city, score });
-      }
-    }
-
-    // Fuzzy matching fallback if exact matches are lacking
-    if (cityMatches.length < 3) {
-      const { fuzzyFindCities } = require("../utils/fuzzy");
-      const fuzzyResults = fuzzyFindCities(normalizedQuery, allCities);
-      
-      for (const fuzzyCity of fuzzyResults) {
-        const alreadyMatched = cityMatches.some(
-          (m) =>
-            m.city.name.toLowerCase() === fuzzyCity.name.toLowerCase() &&
-            m.city.countryCode === fuzzyCity.countryCode
-        );
-        if (!alreadyMatched) {
-          cityMatches.push({ city: fuzzyCity, score: 4 });
-        }
-      }
-    }
-
-    // Sort by:
-    // 1. Country priority (India 'IN' first)
-    // 2. Prefix/Fuzzy match score (starts-with/exact match first, fuzzy last)
-    // 3. Shorter name length first (more precise matches)
-    cityMatches.sort((a, b) => {
-      const aIsIN = a.city.countryCode === "IN" ? 1 : 0;
-      const bIsIN = b.city.countryCode === "IN" ? 1 : 0;
-      if (aIsIN !== bIsIN) return bIsIN - aIsIN; // India first
-      if (a.score !== b.score) return a.score - b.score;
-      return a.city.name.length - b.city.name.length;
-    });
-
-    const { State, Country } = require("country-state-city");
-
-    const mappedCities = cityMatches.slice(0, 10).map((m) => {
-      const c = m.city;
-      const countryObj = Country.getCountryByCode(c.countryCode);
-      const countryName = countryObj ? countryObj.name : c.countryCode;
-
-      const stateObj = State.getStateByCodeAndCountry(c.stateCode, c.countryCode);
-      const stateName = stateObj ? stateObj.name : c.stateCode;
-
-      const statePart = stateName ? `${stateName}, ` : "";
-      const label = `${c.name}, ${statePart}${countryName}`;
-      const geoId = `GEO:${c.latitude},${c.longitude}`;
-      return {
-        id: geoId,
-        destCode: geoId,
-        destName: label,
-        label: label,
-        type: "city",
-        source: "GEO",
-      };
-    });
-
-    // 2. Fetch hotels from database
-    let hotels = await HotelModel.find({
-      $or: [{ name: prefixRegex }, { cityName: prefixRegex }],
-    })
-      .limit(15)
-      .lean();
-
-    if (hotels.length < 8) {
-      const extraHotels = await HotelModel.find({
-        $or: [{ name: containsRegex }, { cityName: containsRegex }],
-        _id: { $nin: hotels.map((h: any) => h._id) },
-      })
-        .limit(15 - hotels.length)
-        .lean();
-      hotels = [...hotels, ...extraHotels];
-    }
-
-    const suggestions = [
-      ...mappedCities,
-      ...hotels.map((h: any) => {
-        const hotelId = h.tjHotelId.startsWith("TJ:")
-          ? h.tjHotelId
-          : `TJ:${h.tjHotelId}`;
-        return {
-          id: hotelId,
-          hotelId: hotelId,
-          label: `${h.name}, ${h.cityName}`,
-          name: h.name,
-          type: "hotel",
-          source: "TJ",
-          city: h.cityName,
-        };
-      }),
-    ];
-
-    // Deduplicate suggestions by name
-    const uniqueSuggestions = Array.from(
-      new Map(
-        suggestions.map((item) => {
-          const dedupeKey = item.label.toLowerCase().trim();
-          return [dedupeKey, item];
-        }),
-      ).values(),
-    );
-
-    return uniqueSuggestions;
+    return getSuggestions(query);
   }
 }
 
@@ -565,197 +588,4 @@ function getDistanceKm(
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
-}
-
-const PROPERTY_TYPE_KEYWORDS: Record<string, string> = {
-  resort: "Resort",
-  hotel: "Hotel",
-  apartment: "Apartment",
-  villa: "Villa",
-  hostel: "Hostel",
-  guesthouse: "Guesthouse",
-  "b&b": "B&B",
-  motel: "Motel",
-  lodge: "Lodge",
-  camp: "Camp",
-  tent: "Tent",
-  cabin: "Cabin",
-  cottage: "Cottage",
-  palace: "Hotel",
-};
-
-function getPropertyTypeLabel(hotel: any): string {
-  const explicit = hotel.accTypeDesc || hotel.accMultiDesc;
-  if (explicit && typeof explicit === "string" && explicit.trim().length > 2) {
-    const clean = explicit.trim();
-    for (const [key, label] of Object.entries(PROPERTY_TYPE_KEYWORDS)) {
-      if (clean.toLowerCase().includes(key)) return label;
-    }
-    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
-  }
-
-  const specificSources = [
-    hotel.accTypeDesc,
-    hotel.accMultiDesc,
-    hotel.name || "",
-    ...(hotel.amenities || []),
-  ];
-
-  const specificEntries = Object.entries(PROPERTY_TYPE_KEYWORDS).filter(
-    ([key]) => key !== "hotel",
-  );
-
-  for (const src of specificSources) {
-    const text = Array.isArray(src) ? src.join(" ") : String(src || "");
-    const lower = text.toLowerCase();
-    for (const [key, label] of specificEntries) {
-      if (lower.includes(key)) return label;
-    }
-  }
-
-  if (hotel.hotelSegment && typeof hotel.hotelSegment === "string") {
-    const cleanSeg = hotel.hotelSegment.trim();
-    if (cleanSeg.toLowerCase() !== "hotel") {
-      for (const [key, label] of Object.entries(PROPERTY_TYPE_KEYWORDS)) {
-        if (cleanSeg.toLowerCase().includes(key)) return label;
-      }
-      return cleanSeg;
-    }
-  }
-
-  return "Hotel";
-}
-
-function getMealTypes(hotel: any): string[] {
-  const types = new Set<string>();
-  const boardSources = [
-    hotel.mealBasis,
-    hotel.boardName,
-    hotel.boardCode,
-    ...(hotel.hotelBoards || []),
-  ].filter(Boolean);
-
-  boardSources.forEach((b) => {
-    const titleCase = b
-      .trim()
-      .split(" ")
-      .map(
-        (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
-      )
-      .join(" ");
-    types.add(titleCase);
-  });
-  return Array.from(types);
-}
-
-function computeFacets(hotels: any[], markupRules: any[], nights: number) {
-  const starRatingCounts: Record<number, number> = {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-  };
-  const propertyTypeCounts: Record<string, number> = {};
-  const mealTypeCounts: Record<string, number> = {};
-  const amenityCounts: Record<string, number> = {};
-  const providerCounts: Record<string, number> = { TJ: 0, RG: 0 };
-  const locationCounts: Record<string, number> = {};
-
-  let minPrice = Infinity;
-  let maxPrice = -Infinity;
-
-  hotels.forEach((hotel) => {
-    // 1. Star Rating
-    const star = Math.round(Number(hotel.starRating || hotel.rating || 0));
-    if (star >= 1 && star <= 5) {
-      starRatingCounts[star] = (starRatingCounts[star] || 0) + 1;
-    }
-
-    // 2. Property Type
-    const propType = getPropertyTypeLabel(hotel);
-    if (propType) {
-      propertyTypeCounts[propType] = (propertyTypeCounts[propType] || 0) + 1;
-    }
-
-    // 3. Meal Type
-    const meals = getMealTypes(hotel);
-    meals.forEach((m) => {
-      mealTypeCounts[m] = (mealTypeCounts[m] || 0) + 1;
-    });
-
-    // 4. Amenities
-    const amenities = hotel.amenities || [];
-    amenities.forEach((a: string) => {
-      const normalized = a
-        .trim()
-        .split(/\s+/)
-        .map(
-          (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
-        )
-        .join(" ");
-      if (normalized) {
-        amenityCounts[normalized] = (amenityCounts[normalized] || 0) + 1;
-      }
-    });
-
-    // 5. Providers
-    if (hotel.source === "TJ" || hotel.source === "RG") {
-      providerCounts[hotel.source] = (providerCounts[hotel.source] || 0) + 1;
-    }
-
-    // 6. Prices
-    const enriched = calculateEnrichedPricing(
-      {
-        basePrice: hotel.basePrice ?? hotel.price,
-        totalPrice: hotel.price,
-        taxes: hotel.taxAmount ?? 0,
-        mf: 0,
-        mft: 0,
-        currency: hotel.currency,
-      },
-      markupRules,
-      nights,
-    );
-    const markedUpPrice = enriched.finalTotalPrice;
-    if (markedUpPrice < minPrice) minPrice = markedUpPrice;
-    if (markedUpPrice > maxPrice) maxPrice = markedUpPrice;
-
-    // 7. Top Locations
-    if (hotel.address) {
-      const addressParts = hotel.address
-        .split(",")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-      if (addressParts.length > 1) {
-        const locality = addressParts[addressParts.length - 2];
-        if (locality && locality.length > 2 && !/\d/.test(locality)) {
-          const normalizedLoc = locality
-            .split(/\s+/)
-            .map(
-              (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
-            )
-            .join(" ");
-          locationCounts[normalizedLoc] =
-            (locationCounts[normalizedLoc] || 0) + 1;
-        }
-      }
-    }
-  });
-
-  const topLocations = Object.entries(locationCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([name, count]) => ({ name, count }));
-
-  return {
-    starRatingCounts,
-    propertyTypeCounts,
-    mealTypeCounts,
-    amenityCounts,
-    providerCounts,
-    minPrice: minPrice === Infinity ? 0 : minPrice,
-    maxPrice: maxPrice === -Infinity ? 0 : maxPrice,
-    topLocations,
-  };
 }

@@ -32,7 +32,7 @@ export class RateGainAdapter implements SupplierAdapter {
       }
 
       const roomType =
-        option.RoomTypeCode || option.RoomName || preCheckRoom?.name || "";
+        preCheckRoom?.name || option.RoomName || option.RoomTypeCode || "";
       const mealPlan = option.BoardName || option.boardName || "";
       const cancellationPolicy = JSON.stringify(
         option.CancellationPolicy ||
@@ -105,6 +105,16 @@ export class RateGainAdapter implements SupplierAdapter {
       // Platform (super-admin) markup baked into the net we validate/charge ("api price")
       const price = applyPlatformMarkup(supplierBase);
 
+      // RateGain MSP (min selling price) for the B2C Net+Commission model (spec v1.5.3).
+      const rawSellingRate = Number(
+        option.sellingRate ??
+          rgRes?.body?.preCheckResponse?.sellingRate ??
+          rgRes?.body?.sellingRate ??
+          0,
+      );
+      const sellingRate =
+        rawSellingRate > 0 ? Math.round(rawSellingRate * 100) / 100 : undefined;
+
 
       const currency =
         rgRes?.body?.CurrencyCode ||
@@ -139,6 +149,7 @@ export class RateGainAdapter implements SupplierAdapter {
         price,
         taxes,
         supplierNet,
+        sellingRate,
         currency,
         phone,
         rateComments,

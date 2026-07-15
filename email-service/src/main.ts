@@ -1,8 +1,14 @@
 import app from "./app";
 import { envConfig } from "./config/env.config";
+import RedisConfig from "./config/redis.config";
 
 const PORT = envConfig.PORT;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Email Service running on port ${PORT}`);
-});
+async function startServer() {
+    RedisConfig.getInstance();
+    app.listen(PORT, () => {
+        console.log(`🚀 Email Service running on port ${PORT}`);
+    });
+}
+
+startServer();

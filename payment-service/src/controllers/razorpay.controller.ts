@@ -6,7 +6,9 @@ import {
     syncRazorpayOrderStatusService,
     getRazorpayPaymentStatusService,
     getRazorpayOrderDetailsService,
-    razorpayWebhookService
+    razorpayWebhookService,
+    refundRazorpayPaymentService,
+    verifyPaymentForBookingService
 } from '../services/razorpay.service';
 
 import {
@@ -144,6 +146,83 @@ export const getRazorpayPaymentStatusController = async (req: Request, res: Resp
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch payment status',
+        });
+    }
+};
+
+/**
+ * Refund a captured Razorpay payment. Service-to-service only.
+ *
+ * Callers are responsible for not asking twice: Razorpay will happily issue a
+ * second refund against the same payment. The booking services claim a refund
+ * on their own record before calling this.
+ */
+export const refundRazorpayPaymentController = async (req: Request, res: Response) => {
+    try {
+        const { paymentId, amount, notes, platform } = req.body;
+
+        const error = validatePaymentIdParam(paymentId);
+        if (error) {
+            return res.status(400).json({ success: false, message: error });
+        }
+
+        if (amount !== undefined && (typeof amount !== 'number' || amount <= 0)) {
+            return res.status(400).json({
+                success: false,
+                message: 'amount must be a positive number when provided'
+            });
+        }
+
+        if (platform !== undefined && !['B2B', 'B2C'].includes(platform)) {
+            return res.status(400).json({
+                success: false,
+                message: "platform must be 'B2B' or 'B2C' when provided"
+            });
+        }
+
+        const refund = await refundRazorpayPaymentService(paymentId, amount, notes, platform);
+
+        return res.status(200).json({
+            success: true,
+            data: refund,
+        });
+    } catch (error: any) {
+        console.error('Refund Razorpay payment controller error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error?.error?.description || error.message || 'Failed to refund payment',
+        });
+    }
+};
+
+/**
+ * Verify a captured payment for a booking service. Service-to-service only
+ * (guarded by internalServiceAuth). Returns whether the payment is genuinely
+ * captured, belongs to the expected order, and covers the expected amount.
+ */
+export const verifyPaymentInternalController = async (req: Request, res: Response) => {
+    try {
+        const { paymentId, orderId, expectedAmount, platform } = req.body;
+
+        const error = validatePaymentIdParam(paymentId);
+        if (error) {
+            return res.status(400).json({ success: false, message: error });
+        }
+        if (expectedAmount !== undefined && (typeof expectedAmount !== 'number' || expectedAmount < 0)) {
+            return res.status(400).json({ success: false, message: 'expectedAmount must be a non-negative number when provided' });
+        }
+        if (platform !== undefined && !['B2B', 'B2C'].includes(platform)) {
+            return res.status(400).json({ success: false, message: "platform must be 'B2B' or 'B2C' when provided" });
+        }
+
+        const result = await verifyPaymentForBookingService({ paymentId, orderId, expectedAmount, platform });
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+        console.error('Verify payment (internal) controller error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to verify payment',
         });
     }
 };

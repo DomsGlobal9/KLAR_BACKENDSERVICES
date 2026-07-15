@@ -8,14 +8,22 @@ import { BookingEventLogger } from "../models/BookingEvent";
 import { RedisLockUtil } from "./RedisLockUtil";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
 import { notificationService } from "./notification.service";
+import { refundService } from "./refund.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
-import { PricingUtil } from "../utils/pricing.util";
+import { PaymentUtil } from "../utils/payment.util";
+import { PricingUtil, round2 } from "../utils/pricing.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
 
-const POLL_TIMEOUT_MS = 60000; // Stop after 60 seconds (finite exponential)
-const TJ_SUCCESS_STATUSES = new Set(["SUCCESS", "CONFIRMED", "ON_HOLD"]);
+// TripJack Book is ASYNC: confirmation can take up to 180s. Per the v3 spec we
+// poll Booking Details every 5s until a terminal status or the 180s window elapses.
+const POLL_INTERVAL_MS = 5000; // spec: poll every 5 seconds
+const MAX_POLL_ATTEMPTS = 36; // 36 × 5s = 180s (TripJack's async confirmation window)
+// Terminal-success: SUCCESS, ON_HOLD (per spec Booking Status table). "CONFIRMED" kept defensively.
+const TJ_SUCCESS_STATUSES = new Set(["SUCCESS", "ON_HOLD", "CONFIRMED"]);
+// Terminal-failure: ABORTED, FAILED (no charge). CANCELLED handled by cancel flow.
 const TJ_FAILED_STATUSES = new Set(["ABORTED", "FAILED", "CANCELLED"]);
+// Non-terminal pending states we keep polling through.
 const TJ_PENDING_STATUSES = new Set([
   "PAYMENT_SUCCESS",
   "PAYMENT_PENDING",
@@ -29,7 +37,7 @@ async function pollTripJackBookingStatus(
   dbBookingId: string,
   attempt: number = 1,
 ): Promise<void> {
-  const maxAttempts = 5; // e.g. 5s, 10s, 20s, 30s -> Total ~65s
+  const maxAttempts = MAX_POLL_ATTEMPTS; // 36 × 5s = 180s (TripJack async window)
 
   if (attempt > maxAttempts) {
     console.log(
@@ -37,10 +45,22 @@ async function pollTripJackBookingStatus(
     );
     try {
       const details = await tripJackProvider.getBookingDetails(tjBookingId);
-      await hotelBookingRepository.findByIdAndUpdate(dbBookingId, {
-        status: BookingStatus.MANUAL_REVIEW,
-        tripJackResponse: details,
-      });
+      // Only park it if the status cron hasn't already resolved the booking —
+      // otherwise we'd drag a CONFIRMED booking back into MANUAL_REVIEW.
+      await hotelBookingRepository.findOneAndUpdate(
+        {
+          _id: dbBookingId,
+          status: {
+            $nin: [
+              BookingStatus.CONFIRMED,
+              BookingStatus.HELD,
+              BookingStatus.CANCELLED,
+              BookingStatus.FAILED,
+            ],
+          },
+        },
+        { status: BookingStatus.MANUAL_REVIEW, tripJackResponse: details },
+      );
       await BookingEventLogger.log(
         tjBookingId,
         dbBookingId,
@@ -62,14 +82,16 @@ async function pollTripJackBookingStatus(
     const tjStatus: string = details?.order?.status || "";
 
     const isSystemPending = details?.isSystemPending === true;
+    // A success status is terminal. Failure/cancellation statuses are always terminal.
     const isTerminal =
-      TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus);
+      TJ_SUCCESS_STATUSES.has(tjStatus) ||
+      TJ_FAILED_STATUSES.has(tjStatus);
 
     if (
       !isTerminal &&
-      (isSystemPending || TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
+      (TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
     ) {
-      const backoffDelay = Math.min(5000 * Math.pow(2, attempt - 1), 30000);
+      const backoffDelay = POLL_INTERVAL_MS;
       console.log(
         `[TripJack] Status ${tjStatus || "UNKNOWN"}. Polling attempt ${attempt}/${maxAttempts}. Waiting ${backoffDelay}ms...`,
       );
@@ -80,30 +102,51 @@ async function pollTripJackBookingStatus(
     if (apiSuccess && TJ_SUCCESS_STATUSES.has(tjStatus)) {
       const newStatus =
         tjStatus === "ON_HOLD" ? BookingStatus.HELD : BookingStatus.CONFIRMED;
-      const updated = await hotelBookingRepository.findByIdAndUpdate(
+      // Real hotel/PMS confirmation number (display); confirmationNumber stays the
+      // TJ bookingId which cancel needs.
+      const hotelConfirmationNumber =
+        details?.hotelConfirmationNumber || undefined;
+      // Conditional transition: if the status cron resolved this booking first,
+      // `updated` is null and we skip the (duplicate) confirmation email.
+      const updated = await hotelBookingRepository.transitionStatus(
         dbBookingId,
-        { status: newStatus, tripJackResponse: details },
-        { new: true },
+        newStatus,
+        {
+          tripJackResponse: details,
+          ...(hotelConfirmationNumber ? { hotelConfirmationNumber } : {}),
+        },
       );
-      if (updated) notificationService.sendBookingConfirmation(updated);
+      if (updated && newStatus === BookingStatus.CONFIRMED) {
+        notificationService.sendBookingConfirmation(updated);
+      }
       return;
     }
 
     if (TJ_FAILED_STATUSES.has(tjStatus)) {
       await hotelBookingRepository.findByIdAndUpdate(dbBookingId, {
-        status: BookingStatus.FAILED,
         tripJackResponse: details,
       });
-      // In Phase 3: the reconciliation worker will catch FAILED statuses and issue Wallet Refunds
+
+      // TripJack rejected the booking outright. Return the money now rather
+      // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
+      // picks wallet vs Razorpay from the record and only closes the booking
+      // out to FAILED once the refund lands.
+      const booking = await hotelBookingRepository.findOne({ _id: dbBookingId });
+      if (booking) {
+        await refundService.refundFailedBooking(
+          booking,
+          `TripJack returned a terminal status of ${tjStatus}.`,
+        );
+      }
       return;
     }
 
     // Unrecognized status, backoff and retry
-    const backoffDelay = Math.min(5000 * Math.pow(2, attempt - 1), 30000);
+    const backoffDelay = POLL_INTERVAL_MS;
     await new Promise((resolve) => setTimeout(resolve, backoffDelay));
     return pollTripJackBookingStatus(tjBookingId, dbBookingId, attempt + 1);
   } catch (err: any) {
-    const backoffDelay = Math.min(5000 * Math.pow(2, attempt - 1), 30000);
+    const backoffDelay = POLL_INTERVAL_MS;
     await new Promise((resolve) => setTimeout(resolve, backoffDelay));
     return pollTripJackBookingStatus(tjBookingId, dbBookingId, attempt + 1);
   }
@@ -149,13 +192,39 @@ class CommitService {
       payload.type === "HOTEL" ||
       (!payload.BookReservation && payload.bookingId);
 
+    // Idempotency: a client-supplied key makes a retry (flaky mobile network,
+    // double-submit, the 180s TripJack async window outlasting the Redis lock)
+    // return the ORIGINAL booking instead of creating a second one. The unique
+    // index on Booking.idempotencyKey is the real guarantee; this is the fast path.
+    const idempotencyKey = payload.idempotencyKey;
+    if (idempotencyKey) {
+      const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
+      if (existing) {
+        console.log(
+          `[Commit] Idempotent replay for key ${idempotencyKey} -> ${existing.confirmationNumber}`,
+        );
+        return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
+      }
+    }
+
     // Lock key specific to this unique booking attempt (combining hotel + dates + user or optionId)
     // A generic key like "lock_booking_agent1" prevents concurrent duplicates
-    const lockKey = `commit_lock_${agentId || "guest"}_${payload.optionId || payload.bookingId || tjBookingId}`;
+    const lockKey = `commit_lock_${agentId || "guest"}_${idempotencyKey || payload.optionId || payload.bookingId || tjBookingId}`;
 
-    return RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
-      if (isTripJack) {
-        return this.#commitTripJack(
+    try {
+      return await RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
+        if (isTripJack) {
+          return this.#commitTripJack(
+            payload,
+            agentId,
+            agentName,
+            token,
+            clientType,
+            requestId,
+            userInfo,
+          );
+        }
+        return this.#commitRateGain(
           payload,
           agentId,
           agentName,
@@ -164,17 +233,18 @@ class CommitService {
           requestId,
           userInfo,
         );
+      });
+    } catch (err: any) {
+      // A concurrent request with the same idempotency key won the unique-index
+      // race: return its booking rather than surfacing a raw duplicate-key error.
+      if (idempotencyKey && (err?.code === 11000 || /E11000/.test(String(err?.message)))) {
+        const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
+        if (existing) {
+          return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
+        }
       }
-      return this.#commitRateGain(
-        payload,
-        agentId,
-        agentName,
-        token,
-        clientType,
-        requestId,
-        userInfo,
-      );
-    });
+      throw err;
+    }
   }
 
   async #commitTripJack(
@@ -279,9 +349,8 @@ class CommitService {
           `✅ [Klar] Final Calculated B2B Price: ₹${finalPrice} (Admin + Additional Markup: ₹${markup})`,
         );
       } else {
-        if (finalPrice > netPrice) {
-          markup = finalPrice - netPrice;
-        }
+        finalPrice = round2(Number(finalPrice));
+        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         console.log(
           `✅ [Klar] B2C Booking Price: ₹${finalPrice}, Markup: ₹${markup}`,
         );
@@ -310,7 +379,33 @@ class CommitService {
           );
         }
       } else {
-        // B2C Flow - Payment is already processed by Payment Gateway
+        // B2C/GUEST: the browser cannot be trusted to say a payment happened.
+        // Verify the Razorpay payment SERVER-SIDE before booking. It must be
+        // genuinely captured AND cover both the quoted selling price and the net
+        // we will owe the supplier (so a tampered-low price can never book).
+        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
+        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        const pay = await PaymentUtil.verifyRazorpayPayment({
+          paymentId: payload.razorpayPaymentId,
+          orderId: payload.razorpayOrderId,
+          expectedAmount: requiredAmount,
+          platform: "B2C",
+        });
+        if (!pay.verified) {
+          await BookingEventLogger.log(bookingId, requestId, "PAYMENT_UNVERIFIED", {
+            reason: pay.reason,
+            requiredAmount,
+          });
+          throw new StructuredError(
+            "PAYMENT_UNVERIFIED",
+            "We could not verify your payment. If any amount was debited it will be refunded automatically.",
+            { reason: pay.reason },
+          );
+        }
+        await BookingEventLogger.log(bookingId, requestId, "PAYMENT_VERIFIED", {
+          capturedAmount: pay.capturedAmount,
+          requiredAmount,
+        });
         paymentProcessed = true;
       }
 
@@ -341,9 +436,12 @@ class CommitService {
         );
       }
 
-      // Build lean rooms array — one entry per room, no raw blobs
+      // Build lean rooms array — one entry per room, no raw blobs.
+      // Split the price the customer actually paid (finalPrice), matching the
+      // RateGain path; splitting netPrice made room prices sum to less than
+      // totalAmount on the voucher.
       const numRooms = (payload.roomTravellerInfo || []).length || 1;
-      const pricePerRoom = Number((netPrice / numRooms).toFixed(2));
+      const pricePerRoom = round2(finalPrice / numRooms);
       const rooms = (payload.roomTravellerInfo || [{}]).map((room: any) => ({
         roomType: payload.roomName || payload.roomType || "Standard Room",
         boardType: payload.boardType || "",
@@ -363,16 +461,17 @@ class CommitService {
         checkOut: payload.checkOut
           ? new Date(payload.checkOut)
           : new Date(Date.now() + 86400000),
-        totalAmount: finalPrice,
-        netAmount: netPrice,
-        markupAmount: markup,
+        totalAmount: round2(finalPrice),
+        netAmount: round2(netPrice),
+        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.fN || ""} ${primaryGuest.lN || ""}`.trim()
           : "",
         guestEmail: payload.deliveryInfo?.emails?.[0] || "",
         guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
-        agentId: agentId || undefined,
-        agentName: agentName || undefined,
+        agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
+        userId: (clientType === "B2C" || clientType === "GUEST") ? (agentId || undefined) : undefined,
+        agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
         rooms,
         hotelName: payload.hotelName,
         hotelImage: extractHotelImage(payload.hotelImage),
@@ -383,12 +482,26 @@ class CommitService {
         tripJackRequest: tjPayload, // Cache the compiled outbound request payload
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        idempotencyKey: payload.idempotencyKey,
         userInfo,
+        clientType,
       });
 
-      pollTripJackBookingStatus(
+      if (saved) {
+        notificationService.sendBookingStatusEmail(saved, saved.status);
+      }
+
+      // Fire-and-forget: the response must not wait on TripJack's 180s async
+      // window. An unattached rejection here would take the process down, and
+      // the 2-minute status cron is the safety net if this poll dies.
+      void pollTripJackBookingStatus(
         tjResponse.bookingId || bookingId,
         saved._id.toString(),
+      ).catch((pollErr: any) =>
+        console.error(
+          `[TripJack] Background poll crashed for ${tjResponse.bookingId || bookingId}:`,
+          pollErr?.message,
+        ),
       );
 
       return {
@@ -483,7 +596,7 @@ class CommitService {
           payload.additionalMarkup || payload.BookReservation?.additionalMarkup,
           payload.couponCode || payload.BookReservation?.couponCode,
         );
-        finalPrice = Math.round(pricing.total * 100) / 100;
+        finalPrice = pricing.total;
         markup = pricing.markup;
       } else {
         const requestedSellingRate = Number(
@@ -492,8 +605,9 @@ class CommitService {
             payload.BookReservation?.SellingRate ||
             netPrice,
         );
-        finalPrice = requestedSellingRate;
-        markup = finalPrice - netPrice;
+        finalPrice = round2(requestedSellingRate);
+        // A selling rate below net is a loss, not a negative markup.
+        markup = finalPrice > netPrice ? round2(finalPrice - netPrice) : 0;
         console.log(
           `⏸️ [RateGain] B2C booking — Calculated SellingRate is ₹${finalPrice}`,
         );
@@ -516,12 +630,39 @@ class CommitService {
           amount: finalPrice,
         });
       } else {
-        // B2C Flow - Payment is already processed by Payment Gateway
+        // B2C/GUEST: verify the Razorpay payment SERVER-SIDE before booking (see
+        // the TripJack path for the rationale). Must cover the selling price AND
+        // the net we owe RateGain.
+        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
+        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        const pay = await PaymentUtil.verifyRazorpayPayment({
+          paymentId: payload.razorpayPaymentId,
+          orderId: payload.razorpayOrderId,
+          expectedAmount: requiredAmount,
+          platform: "B2C",
+        });
+        if (!pay.verified) {
+          await BookingEventLogger.log(demandId, requestId, "PAYMENT_UNVERIFIED", {
+            reason: pay.reason,
+            requiredAmount,
+          });
+          throw new StructuredError(
+            "PAYMENT_UNVERIFIED",
+            "We could not verify your payment. If any amount was debited it will be refunded automatically.",
+            { reason: pay.reason },
+          );
+        }
+        await BookingEventLogger.log(demandId, requestId, "PAYMENT_VERIFIED", {
+          capturedAmount: pay.capturedAmount,
+          requiredAmount,
+        });
         paymentProcessed = true;
       }
 
       // PHASE 4: Provider Booking
-      const rgPayload = { ...(payload.bookingPayload || payload) };
+      const rgPayload = payload.BookReservation 
+        ? { ...payload } 
+        : { ...(payload.bookingPayload || payload) };
 
       // Override RoomTypeCode and allocationDetails with the validated values from freshPrecheck
       const validatedRooms = freshPrecheck.originalResponse?.body?.preCheckResponse?.rooms || [];
@@ -529,14 +670,20 @@ class CommitService {
         const selections = rgPayload.BookReservation?.RoomSelection || rgPayload.RoomSelection || [];
         selections.forEach((rs: any, idx: number) => {
           const validatedRoom = validatedRooms[idx] || validatedRooms[0];
+          const validatedRate = validatedRoom?.rates?.[0];
           const validatedRoomCode = validatedRoom?.RoomCode;
-          const validatedAllocation = validatedRoom?.rates?.[0]?.allocationDetails || validatedRoom?.allocationDetails;
-          
+          const validatedAllocation = validatedRate?.allocationDetails || validatedRoom?.allocationDetails;
+          // Spec: Book must use the EXACT rate identifier confirmed in precheck.
+          const validatedKey = validatedRate?.rateKey || validatedRate?.RoomSelectionKey;
+
           if (validatedRoomCode) {
             rs.RoomTypeCode = validatedRoomCode;
           }
           if (validatedAllocation) {
             rs.allocationDetails = validatedAllocation;
+          }
+          if (validatedKey) {
+            rs.RoomSelectionKey = validatedKey;
           }
         });
       }
@@ -549,31 +696,44 @@ class CommitService {
       );
 
       const roundedNetPrice = Number(netPrice.toFixed(2));
-      const roundedSellingRate = clientType === "B2C" ? Number(b2cSellingRate.toFixed(2)) : roundedNetPrice;
       // Pay the supplier the RAW net (EXCLUDES platform markup); fall back to netPrice if unavailable.
       const supplierBookingRate = Number(
         (freshPrecheck.supplierNet ?? netPrice).toFixed(2),
       );
+      // Spec v1.5.3: B2C Net+Commission model requires SellingRate (the MSP from
+      // precheck). Prefer the precheck MSP; fall back to the requested selling rate.
+      const b2cMsp = (freshPrecheck as any).sellingRate;
+      const rgSellingRate =
+        clientType === "B2C"
+          ? Number((b2cMsp ?? b2cSellingRate).toFixed(2))
+          : undefined;
 
       if (rgPayload.BookReservation) {
         rgPayload.BookReservation.BookingRate = supplierBookingRate;
-        delete rgPayload.BookReservation.GuaranteeMethod;
-        delete rgPayload.BookReservation.GuaranteeType;
+        if (rgSellingRate !== undefined)
+          rgPayload.BookReservation.SellingRate = rgSellingRate;
+
+        // INJECT FRESH ROOM SELECTION KEY
+        if (freshPrecheck.optionId && rgPayload.BookReservation.RoomSelection?.[0]) {
+          rgPayload.BookReservation.RoomSelection[0].RoomSelectionKey = freshPrecheck.optionId;
+        }
       } else {
         rgPayload.BookingRate = supplierBookingRate;
-        delete rgPayload.GuaranteeMethod;
-        delete rgPayload.GuaranteeType;
+        if (rgSellingRate !== undefined) rgPayload.SellingRate = rgSellingRate;
+
+        // INJECT FRESH ROOM SELECTION KEY
+        if (freshPrecheck.optionId && rgPayload.RoomSelection?.[0]) {
+          rgPayload.RoomSelection[0].RoomSelectionKey = freshPrecheck.optionId;
+        }
       }
 
       const rgResponse = await rateGainProvider.commit(rgPayload);
 
-      // RateGain returns status:true + statusCode:200 + a confirmationNumber even when
-      // booking.status is "ConfirmationFailed" — that string is RateGain's internal
-      // pending/processing state, NOT an actual failure. A real failure has no
-      // confirmationNumber and outer status:false. We treat it as success if:
-      //   1. Outer status is truthy AND statusCode is 200, OR
-      //   2. A confirmationNumber or reservationId is present
+      // Per RateGain Smart Distribution spec, a CommitReservation is CONFIRMED only
+      // when body.booking.status === "Confirmed". Any other value is NOT a
+      // confirmation and must never be surfaced to the customer as one.
       const rgBooking = rgResponse.body?.booking;
+      const rgStatus = (rgBooking?.status || "").toString();
       const hasConfirmation = !!(
         rgBooking?.confirmationNumber || rgBooking?.reservationId
       );
@@ -581,16 +741,24 @@ class CommitService {
         rgResponse.status !== "false" &&
         rgResponse.status !== false &&
         (rgResponse.statusCode === 200 || rgResponse.statusCode === undefined);
-      const isHardFailure =
-        rgBooking?.status === "Failed" || rgBooking?.status === "Cancelled";
 
-      const isRgSuccess = (outerSuccess || hasConfirmation) && !isHardFailure;
+      // Authoritative: only "Confirmed" (case-insensitive) counts as confirmed.
+      const isConfirmed = /^confirmed$/i.test(rgStatus.trim());
+      // Explicit terminal rejection from RateGain.
+      const isHardFailure = /^(failed|cancelled|rejected)$/i.test(rgStatus.trim());
+      // RateGain accepted the request (gave a ref or an OK envelope) and didn't hard-fail.
+      // Confirmed → save CONFIRMED; accepted-but-not-confirmed (e.g. "ConfirmationFailed",
+      // processing) → save MANUAL_REVIEW for reconciliation, WITHOUT faking a confirmation.
+      const isAccepted = (outerSuccess || hasConfirmation) && !isHardFailure;
 
       await BookingEventLogger.log(demandId, requestId, "SUPPLIER_COMMIT", {
-        success: isRgSuccess,
+        success: isConfirmed,
+        accepted: isAccepted,
+        rgStatus,
       });
 
-      if (!isRgSuccess) {
+      // Genuine, unrecoverable rejection → refund (B2B) + throw, no record saved.
+      if (!isAccepted) {
         if (clientType === "B2B") {
           await WalletUtil.refundBalance(
             token!,
@@ -601,11 +769,15 @@ class CommitService {
         }
         const errorMessage =
           rgResponse.message ||
-          (rgResponse.body?.booking?.status
-            ? `RateGain Booking Status: ${rgResponse.body.booking.status}`
-            : null) ||
+          (rgStatus ? `RateGain Booking Status: ${rgStatus}` : null) ||
           "RateGain rejected the booking.";
         throw new Error(errorMessage);
+      }
+
+      if (!isConfirmed) {
+        console.warn(
+          `⚠️ [RateGain] Booking accepted but NOT confirmed (status: "${rgStatus}"). Saving as MANUAL_REVIEW — no confirmation voucher will be sent.`,
+        );
       }
 
       // Build lean rooms array
@@ -635,26 +807,30 @@ class CommitService {
           rgResponse.body?.booking?.reservationId || "RG-PENDING",
         propertyId: payload.BookReservation?.propertyID || "RG-PROP",
         provider: BookingProvider.RATEGAIN,
-        // "ConfirmationFailed" from RateGain is a pending/processing state when
-        // outer statusCode=200 and confirmationNumber is present — treat as CONFIRMED
-        status: BookingStatus.CONFIRMED,
+        // CONFIRMED only when RateGain returns booking.status === "Confirmed";
+        // otherwise MANUAL_REVIEW so ops/reconciliation can resolve it (never fake it).
+        status: isConfirmed ? BookingStatus.CONFIRMED : BookingStatus.MANUAL_REVIEW,
         checkIn: new Date(payload.BookReservation?.checkin),
         checkOut: new Date(payload.BookReservation?.checkout),
-        totalAmount: finalPrice,
-        netAmount: netPrice,
-        markupAmount: markup,
+        totalAmount: round2(finalPrice),
+        netAmount: round2(netPrice),
+        markupAmount: round2(markup),
         guestName: primaryGuest
           ? `${primaryGuest.FirstName || ""} ${primaryGuest.LastName || ""}`.trim()
           : "",
         guestEmail:
           primaryGuest?.Email ||
           payload.BookReservation?.emailAddress ||
-          payload.emailAddress ||
+          payload.deliveryInfo?.emails?.[0] ||
           "",
         guestMobile:
-          primaryGuest?.Phone || payload.BookReservation?.phoneNumber || "",
-        agentId: agentId || undefined,
-        agentName: agentName || undefined,
+          primaryGuest?.ContactNumber ||
+          payload.BookReservation?.phoneNumber ||
+          payload.deliveryInfo?.contacts?.[0] ||
+          "",
+        agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
+        userId: (clientType === "B2C" || clientType === "GUEST") ? (agentId || undefined) : undefined,
+        agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
         rooms: rgRooms.length > 0 ? rgRooms : undefined,
         hotelName: payload.hotelName,
         hotelImage: extractHotelImage(payload.hotelImage),
@@ -680,10 +856,14 @@ class CommitService {
           undefined,
         razorpayOrderId: payload.razorpayOrderId,
         razorpayPaymentId: payload.razorpayPaymentId,
+        idempotencyKey: payload.idempotencyKey,
         userInfo,
+        clientType,
       });
 
-      notificationService.sendBookingConfirmation(saved);
+      if (saved) {
+        notificationService.sendBookingStatusEmail(saved, saved.status);
+      }
 
       return rgResponse;
     } catch (err: any) {

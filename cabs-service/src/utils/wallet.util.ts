@@ -36,7 +36,7 @@ export class WalletUtil {
             console.log(`[WalletUtil] Deducting ₹${amount} for ref: ${referenceId}`);
             const response = await axios.post(`${env.authServiceUrl}/user/wallet/debit`, {
                 amount,
-                referenceType: "HOTEL_BOOKING",
+                referenceType: "CAB_BOOKING",
                 referenceId,
                 description
             }, {
@@ -65,7 +65,7 @@ export class WalletUtil {
                 amount,
                 type: "REFUND",
                 paymentMethod: "WALLET",
-                referenceType: "HOTEL_BOOKING_REFUND",
+                referenceType: "CAB_BOOKING_REFUND",
                 referenceId,
                 description
             }, {
@@ -76,6 +76,44 @@ export class WalletUtil {
         } catch (error: any) {
             console.error("[WalletUtil] Error refunding balance:", error.response?.data || error.message);
             return false;
+        }
+    }
+
+    /**
+     * Credit an agent's wallet from a background job (no user JWT available).
+     *
+     * `refundBalance` credits whoever owns the token it is given — useless to a
+     * cron/worker. This hits the shared-secret internal route, which takes the
+     * target userId explicitly. Throws on failure so callers never record a
+     * refund that did not happen.
+     */
+    static async refundToAgentWallet(
+        agentUserId: string,
+        amount: number,
+        referenceId: string,
+        description: string
+    ): Promise<void> {
+        const internalKey = process.env.INTERNAL_SERVICE_KEY || "";
+        if (!internalKey) {
+            throw new Error("INTERNAL_SERVICE_KEY is not configured; cannot issue a wallet refund.");
+        }
+
+        const response = await axios.post(
+            `${env.authServiceUrl}/user/wallet/internal/credit`,
+            {
+                userId: agentUserId,
+                amount,
+                type: "REFUND",
+                paymentMethod: "WALLET",
+                referenceType: "CAB_BOOKING_REFUND",
+                referenceId,
+                description,
+            },
+            { headers: { "x-internal-key": internalKey } }
+        );
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || "Wallet refund was rejected by auth-service");
         }
     }
 

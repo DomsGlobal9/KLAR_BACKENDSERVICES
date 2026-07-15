@@ -1,10 +1,12 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { precheckController } from "../controllers/precheck.controller";
 import { commitController } from "../controllers/commit.controller";
 import {
   cancelController,
   getCancelChargesController,
 } from "../controllers/cancel.controller";
+import { processManualRefund } from "../controllers/refund.controller";
 import { listController } from "../controllers/list.controller";
 import { specialRequestsController } from "../controllers/special-requests.controller";
 import { getPricingSummaryController } from "../controllers/pricing.controller";
@@ -52,7 +54,23 @@ router.get("/health", (_req, res) => {
 
 // List bookings from DB
 router.get("/bookings", authenticateJWT, listController);
-router.get("/bookings/check/:email", checkBookingsByEmail);
+
+// This endpoint is intentionally pre-auth (the guest flow asks "do you already
+// have bookings, please log in"), so it's an unauthenticated existence oracle.
+// Throttle hard to blunt email enumeration.
+const emailCheckLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: false,
+    statusCode: 429,
+    description: "Too many requests. Please try again later.",
+    body: null,
+  },
+});
+router.get("/bookings/check/:email", emailCheckLimiter, checkBookingsByEmail);
 
 import {
   getModificationPolicy,
@@ -66,6 +84,7 @@ router.post("/commit", optionalAuthenticateJWT, commitController);
 router.post("/confirm", optionalAuthenticateJWT, confirmController);
 router.post("/cancel", optionalAuthenticateJWT, cancelController);
 router.get("/cancel/charges", optionalAuthenticateJWT, getCancelChargesController);
+router.post("/refund/manual/:bookingId", authenticateJWT, processManualRefund);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 
 router.get("/amend/policy", authenticateJWT, getModificationPolicy);

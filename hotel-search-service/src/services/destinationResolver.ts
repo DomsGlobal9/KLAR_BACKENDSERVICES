@@ -4,6 +4,53 @@
 import { HotelModel, IHotelData } from "../models/Hotel.model";
 import { RGDestinationModel } from "../models/RGDestination.model";
 import { GeoCacheModel } from "../models/GeoCache.model";
+import { fuzzyCities, getCountryName, getStateName } from "./suggestionIndex";
+import { resolveCityAlias } from "../data/cityAliases";
+
+interface GeoPoint {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  boundingBox: string[];
+}
+
+/**
+ * The single place coordinates enter this system.
+ *
+ * Every caller resolves a *name* through OpenCage; nothing reads coordinates out
+ * of `country-state-city`, whose data is wrong often enough to have silently
+ * sent "Mysuru" searches 27km into open farmland.
+ */
+async function geocodeQuery(query: string): Promise<GeoPoint | null> {
+  const axios = require("axios");
+  const apiKey = process.env.OPENCAGE_API_KEY || "ae11f396076d4310a96bb12acc0a6323";
+
+  try {
+    const response = await axios.get(
+      `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(query)}&key=${apiKey}&limit=1&no_annotations=1`,
+      { timeout: 5000 },
+    );
+
+    const result = response.data?.results?.[0];
+    if (!result) return null;
+
+    const lat = result.geometry.lat;
+    const lng = result.geometry.lng;
+    const boundingBox = result.bounds
+      ? [
+          result.bounds.southwest.lat.toString(),
+          result.bounds.northeast.lat.toString(),
+          result.bounds.southwest.lng.toString(),
+          result.bounds.northeast.lng.toString(),
+        ]
+      : [];
+
+    return { lat, lng, radiusKm: getRadiusFromBoundingBox(lat, lng, boundingBox), boundingBox };
+  } catch (error: any) {
+    console.error(`[GEO] OpenCage error for "${query}":`, error.message);
+    return null;
+  }
+}
 
 const GENERIC_WORDS = [
   "india",
@@ -258,7 +305,7 @@ export async function resolveCityToCoords(
   query: string,
 ): Promise<{ lat: number; lng: number; radiusKm: number } | null> {
   if (!query || query.length < 2) return null;
-  const normalizedQuery = query.toLowerCase().trim();
+  let normalizedQuery = query.toLowerCase().trim();
 
   // Instant coordinates extraction if prefixed with "geo:"
   if (normalizedQuery.startsWith("geo:")) {
@@ -271,6 +318,15 @@ export async function resolveCityToCoords(
         return { lat, lng, radiusKm: 25 };
       }
     }
+  }
+
+  // Bookmarked links and cached recent searches still carry the name the user
+  // typed ("Mysore"). Canonicalise before geocoding, so one GeoCache row serves
+  // every spelling of a place.
+  const canonical = resolveCityAlias(normalizedQuery);
+  if (canonical) {
+    console.log(`[GEO] Alias "${normalizedQuery}" → "${canonical}"`);
+    normalizedQuery = canonical.toLowerCase();
   }
 
   // 0. Check Database Cache
@@ -300,49 +356,19 @@ export async function resolveCityToCoords(
     let boundingBox: string[] = [];
 
     // Strategy 1: Geocoding via OpenCage
-    try {
-      console.log(`[GEO] Cache MISS for "${query}". Fetching from OpenCage...`);
-      const axios = require("axios");
-      const apiKey = process.env.OPENCAGE_API_KEY || "ae11f396076d4310a96bb12acc0a6323";
+    console.log(`[GEO] Cache MISS for "${query}". Fetching from OpenCage...`);
+    let point = await geocodeQuery(normalizedQuery);
 
-      let response = await axios.get(
-        `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(normalizedQuery)}&key=${apiKey}&limit=1&no_annotations=1`,
-        { timeout: 5000 },
+    if (!point && !normalizedQuery.includes(",")) {
+      console.log(`[GEO] No results for "${normalizedQuery}", retrying with India suffix...`);
+      point = await geocodeQuery(`${normalizedQuery}, India`);
+    }
+
+    if (point) {
+      ({ lat, lng, radiusKm, boundingBox } = point);
+      console.log(
+        `[GEO] OpenCage resolved "${query}" to [${lat}, ${lng}] with dynamic radius: ${radiusKm.toFixed(2)}km`,
       );
-
-      if (
-        (!response.data?.results || response.data.results.length === 0) &&
-        !normalizedQuery.includes(",")
-      ) {
-        console.log(
-          `[GEO] No results for "${normalizedQuery}", retrying with India suffix...`,
-        );
-        response = await axios.get(
-          `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(normalizedQuery + ", India")}&key=${apiKey}&limit=1&no_annotations=1`,
-          { timeout: 5000 },
-        );
-      }
-
-      const results = response.data?.results;
-      if (results && results.length > 0) {
-        const result = results[0];
-        lat = result.geometry.lat;
-        lng = result.geometry.lng;
-        if (result.bounds) {
-          boundingBox = [
-            result.bounds.southwest.lat.toString(),
-            result.bounds.northeast.lat.toString(),
-            result.bounds.southwest.lng.toString(),
-            result.bounds.northeast.lng.toString(),
-          ];
-        }
-        radiusKm = getRadiusFromBoundingBox(lat as number, lng as number, boundingBox);
-        console.log(
-          `[GEO] OpenCage resolved "${query}" to [${lat}, ${lng}] with dynamic radius: ${radiusKm.toFixed(2)}km`,
-        );
-      }
-    } catch (error: any) {
-      console.error(`[GEO] OpenCage error for "${query}":`, error.message);
     }
 
     // Strategy 2: exact city match in DB
@@ -401,33 +427,44 @@ export async function resolveCityToCoords(
       }
     }
 
-    // Strategy 3: fuzzy match in country-state-city
+    // Strategy 3: the query is probably misspelled. Use country-state-city to
+    // correct the *spelling* only, then geocode the corrected, disambiguated name
+    // through OpenCage. Its coordinates are never read.
     if (lat === null || lng === null) {
       try {
-        console.log(`[GEO] Exact fallback failed. Checking country-state-city fuzzy matches for "${normalizedQuery}"...`);
-        const { City } = require("country-state-city");
-        const { fuzzyFindCities } = require("../utils/fuzzy");
-        const allCities = City.getAllCities();
+        console.log(
+          `[GEO] Exact fallback failed. Looking for a spelling correction of "${normalizedQuery}"...`,
+        );
+        const [bestMatch] = fuzzyCities(normalizedQuery);
 
-        const fuzzyMatches = fuzzyFindCities(normalizedQuery, allCities);
-        if (fuzzyMatches.length > 0) {
-          const bestMatch = fuzzyMatches[0];
-          lat = parseFloat(bestMatch.latitude);
-          lng = parseFloat(bestMatch.longitude);
-          radiusKm = 20;
-          boundingBox = [
-            (lat - 0.2).toString(),
-            (lat + 0.2).toString(),
-            (lng - 0.2).toString(),
-            (lng + 0.2).toString(),
-          ];
-          console.log(
-            `[GEO] Resolved fuzzy match "${query}" to "${bestMatch.name}" [${lat}, ${lng}] from country-state-city`
-          );
+        if (bestMatch) {
+          // "Mysuru" → "Mysuru, Karnataka, India": the extra context stops OpenCage
+          // from picking a same-named place on the other side of the world.
+          const stateName = getStateName(bestMatch.countryCode, bestMatch.stateCode);
+          const countryName = getCountryName(bestMatch.countryCode);
+          const disambiguated = [bestMatch.name, stateName, countryName]
+            .filter(Boolean)
+            .join(", ");
+
+          console.log(`[GEO] Corrected "${query}" → "${disambiguated}". Geocoding...`);
+          const corrected = await geocodeQuery(disambiguated);
+
+          if (corrected) {
+            ({ lat, lng, radiusKm, boundingBox } = corrected);
+            console.log(
+              `[GEO] Resolved "${query}" via "${disambiguated}" to [${lat}, ${lng}], radius ${radiusKm.toFixed(2)}km`,
+            );
+          }
         }
       } catch (fuzzyErr: any) {
-        console.error(`[GEO] country-state-city fuzzy search error:`, fuzzyErr.message);
+        console.error(`[GEO] Spelling-correction fallback failed:`, fuzzyErr.message);
       }
+    }
+
+    // Returning null is better than returning a wrong point: the caller falls back
+    // to a supplier-side text search instead of scanning empty farmland.
+    if (lat === null || lng === null) {
+      console.warn(`[GEO] Could not resolve "${query}" to coordinates.`);
     }
 
     // Save to database cache if resolved
@@ -620,6 +657,9 @@ export async function resolveForTJ(
 
   if (geo) {
     const { lat, lng } = geo;
+    // Exact api-derived radius (no rounding) — same value used by RG (Geofilter)
+    // and the post-filter, so all three cover the IDENTICAL distance and we never
+    // drop hotels sitting in the last fraction of a km.
     const radiusKm = geo.radiusKm || 20;
     console.log(
       `[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] with radius ${radiusKm}km for "${normalizedQuery}"`,
