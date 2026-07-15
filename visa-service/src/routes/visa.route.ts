@@ -3,6 +3,15 @@ import visaController from '../controllers/visa.controller';
 
 const router = Router();
 
+
+// Create a new visa plan configuration (Without fee requirement)
+router.post('/plans', visaController.createVisaPlan.bind(visaController));
+
+// Get all visa plans (Supports filtering by country parameter)
+router.get('/plans', visaController.getVisaPlans.bind(visaController));
+
+
+
 // Submit new visa application
 router.post('/submit', visaController.submitVisaApplication.bind(visaController));
 
