@@ -602,9 +602,9 @@ class CommitService {
       } else {
         const requestedSellingRate = Number(
           payload.sellingRate ||
-            payload.BookReservation?.sellingRate ||
-            payload.BookReservation?.SellingRate ||
-            netPrice,
+          payload.BookReservation?.sellingRate ||
+          payload.BookReservation?.SellingRate ||
+          netPrice,
         );
         finalPrice = round2(requestedSellingRate);
         // A selling rate below net is a loss, not a negative markup.
@@ -689,9 +689,9 @@ class CommitService {
 
       const b2cSellingRate = Number(
         payload.sellingRate ||
-          payload.BookReservation?.sellingRate ||
-          payload.BookReservation?.SellingRate ||
-          netPrice,
+        payload.BookReservation?.sellingRate ||
+        payload.BookReservation?.SellingRate ||
+        netPrice,
       );
 
       const roundedNetPrice = Number(netPrice.toFixed(2));
