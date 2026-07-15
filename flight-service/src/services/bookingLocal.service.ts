@@ -125,76 +125,11 @@ class BookingService {
 
             const agentEmail = dbData?.userInfo?.email || "";
 
-            const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
-            const segments = [];
-            for (const trip of tripInfo) {
-                for (const segment of (trip.SegmentInformation || [])) {
-                    segments.push({
-                        departureAirport: segment.DepartureAirport,
-                        arrivalAirport: segment.ArrivalAirport,
-                        departureTime: segment.DepartureTime,
-                        arrivalTime: segment.ArrivalTime,
-                        flightDetails: segment.FlightDetails,
-                        duration: segment.Duration,
-                        numberOfStops: segment.NumberOfStops,
-                        baggageInfo: segment.BaggageInfo,
-                    });
-                }
-            }
-
-            const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
-            const formattedTravellers = travellers.map((t: any) => ({
-                title: t.Title || '',
-                firstName: t.FirstName || '',
-                lastName: t.LastName || '',
-                paxType: t.PaxType || '',
-                dateOfBirth: t.DateOfBirth || '',
-                seatInfo: t.SSR_Seat_Information || {},
-                mealInfo: t.SSR_Meal_Information || {},
-                baggageInfo: t.SSR_Baggage_Information || {},
-                pnrDetails: t.pnrDetails || {},
-                passportNumber: t.PassportNumber || '',
-                passportNationality: t.PassportNationality || '',
-                passportIssueDate: t.PassportIssueDate || '',
-                passportExpiryDate: t.PassportExpiryDate || '',
-            }));
-
-            const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
-            const formattedGstInfo = gstInfo ? {
-                gstNumber: gstInfo.GSTNumber || gstInfo.gstNumber || '',
-                registeredName: gstInfo.RegisteredName || gstInfo.registeredName || '',
-                email: gstInfo.email || '',
-                mobile: gstInfo.mobile || '',
-                address: gstInfo.address || '',
-                isSez: gstInfo.isez || gstInfo.isSez || false
-            } : null;
-
-            const emergencyContact = tripjackData?.order?.EmergencyContactInformation || {};
-            const formattedEmergencyContact = {
-                name: emergencyContact.EmergencyContactName || '',
-                email: emergencyContact.Emails?.[0] || '',
-                phone: emergencyContact.Contacts?.[0] || ''
-            };
-
-            const templateData = {
-                bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
-                bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
-                status: tripjackData?.order?.status || '',
-                totalAmount: tripjackData?.order?.Amount || 0,
-                totalPrice: booking?.totalPrice || 0,
-                markupPrice: booking?.markupPrice || 0,
-                tripjackPrice: booking?.tripjackPrice || 0,
-                travellers: formattedTravellers,
-                segments: segments,
-                emergencyContact: formattedEmergencyContact,
-                travellerEmail: booking?.email || '',
-                agentEmail: dbData?.userInfo?.email || '',
-                isMultiCity: segments.length > 1,
-                isRoundTrip: segments.length === 2,
-                isOneWay: segments.length === 1,
-                gstInfo: formattedGstInfo,
-                order: tripjackData?.order || {},
-            };
+            const templateData = this.prepareTemplateData(
+                tripjackData,
+                dbData,
+                booking
+            );
 
             const clientTemplate = Handlebars.compile(flightBookingConfirmationTemplate, {
                 strict: false,
@@ -302,7 +237,6 @@ class BookingService {
                     `Flight Cancellation Confirmation - ${bookingId}`,
                     clientTemplate(templateData)
                 );
-                console.log(`✅ Cancellation email sent to traveller: ${travellerEmail}`);
             }
 
             if (agentEmail && agentEmail !== travellerEmail) {
@@ -311,7 +245,6 @@ class BookingService {
                     `Flight Cancellation Confirmation - ${bookingId} (Agency Copy)`,
                     agencyTemplate(templateData)
                 );
-                console.log(`✅ Cancellation email sent to agent: ${agentEmail}`);
             }
 
         } catch (error) {
@@ -324,9 +257,6 @@ class BookingService {
         bookingId: string
     ) {
         try {
-            console.log(`📦 [Booking] Processing aftermath for ${bookingId}`);
-            console.log(`📦 [Update Booking] Processing aftermath for ${updatedBooking}`);
-
             const [tripjackBookingStatus, ownDatabaseBookingStatus] = await Promise.all([
                 TripjackBookingService.getBookingDetails(updatedBooking.bookingId),
                 this.getBookingDetails(updatedBooking.bookingId),
@@ -343,9 +273,6 @@ class BookingService {
 
             const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
 
-            console.log(`📧 [Booking] Traveller Email: ${travellerEmail}`);
-            console.log(`📧 [Booking] Agent Email: ${agentEmail}`);
-
             const html = flightConfirmationTemplate(tripjackBookingStatus);
             const subject = `Flight Booking Confirmation - ${updatedBooking.bookingId}`;
 
@@ -355,7 +282,6 @@ class BookingService {
                     subject,
                     html
                 );
-                console.log(`✅ [Booking] Email sent to traveller: ${travellerEmail}`);
             }
 
             if (agentEmail && agentEmail !== travellerEmail) {
@@ -364,10 +290,7 @@ class BookingService {
                     subject,
                     html
                 );
-                console.log(`✅ [Booking] Email sent to agent: ${agentEmail}`);
             }
-
-            console.log(`✅ [Booking] Aftermath completed for ${bookingId}`);
         } catch (error: any) {
             console.error(`❌ [Booking] Aftermath failed for ${bookingId}:`, error.message);
         }
@@ -708,8 +631,6 @@ class BookingService {
 
     async processBookingAftermathById(bookingId: string) {
         try {
-            console.log(`🧪 [TEST] Processing aftermath for booking: ${bookingId}`);
-
             const booking = await this.bookingRepo.getBookingById(bookingId);
             if (!booking) {
                 throw new Error("Booking not found");
@@ -720,9 +641,6 @@ class BookingService {
                 this.getBookingDetails(bookingId),
             ]);
 
-            console.log("******************** TRIP Jack Booking Status get: \n", JSON.stringify(tripjackBookingStatus, null, 2));
-            console.log("******************** Own Database Booking Status get: \n", JSON.stringify(ownDatabaseBookingStatus, null, 2));
-
             if (!tripjackBookingStatus) {
                 throw new Error("Failed to get booking details from Tripjack");
             }
@@ -732,9 +650,6 @@ class BookingService {
                 booking?.email || "";
 
             const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
-
-            console.log(`📧 [TEST] Traveller Email: ${travellerEmail}`);
-            console.log(`📧 [TEST] Agent Email: ${agentEmail}`);
 
             // Register helpers
             Handlebars.registerHelper('formatDate', function (dateString: string) {
@@ -762,7 +677,7 @@ class BookingService {
 
             Handlebars.registerHelper('formatPrice', function (price: number) {
                 if (!price) return '₹0';
-                return `₹${price.toFixed(2)}`;
+                return `${price.toFixed(2)}`;
             });
 
             Handlebars.registerHelper('getAirlineName', function (airlineInfo: any) {
@@ -779,8 +694,6 @@ class BookingService {
                 ownDatabaseBookingStatus,
                 booking
             );
-
-            console.log(`📧 [TEST] Template Data:`, JSON.stringify(templateData, null, 2));
 
             // Compile templates with proper options
             const clientTemplate = Handlebars.compile(flightBookingConfirmationTemplate, {
@@ -800,7 +713,6 @@ class BookingService {
                     `Flight Booking Confirmation - ${bookingId}`,
                     clientHtml
                 );
-                console.log(`✅ [TEST] Client email sent to traveller: ${travellerEmail}`);
             }
 
             if (agentEmail && agentEmail !== travellerEmail) {
@@ -810,10 +722,7 @@ class BookingService {
                     `Flight Booking Confirmation - ${bookingId} (Agency Copy)`,
                     agencyHtml
                 );
-                console.log(`✅ [TEST] Agency email sent to agent: ${agentEmail}`);
             }
-
-            console.log(`✅ [TEST] Aftermath completed for ${bookingId}`);
 
             return {
                 success: true,
@@ -909,10 +818,41 @@ class BookingService {
                 }
             }
 
+            let extraBaggageByTrip: { [key: number]: string[] } = {};
             if (traveller.SSR_Baggage_Information) {
                 const baggageKeys = Object.keys(traveller.SSR_Baggage_Information);
                 for (const key of baggageKeys) {
-                    totalBaggageCharge += traveller.SSR_Baggage_Information[key]?.Amount || 0;
+                    const baggage = traveller.SSR_Baggage_Information[key];
+                    totalBaggageCharge += baggage?.Amount || 0;
+                    if (baggage?.Description) {
+                        const segment = segments.find((s: any) => {
+                            const routeKey = `${s.departureAirport.SSRCode}-${s.arrivalAirport.SSRCode}`;
+                            return routeKey === key;
+                        });
+                        const tripIndex = segment ? segment.tripIndex : 0;
+                        if (!extraBaggageByTrip[tripIndex]) {
+                            extraBaggageByTrip[tripIndex] = [];
+                        }
+                        if (!extraBaggageByTrip[tripIndex].includes(baggage.Description)) {
+                            extraBaggageByTrip[tripIndex].push(baggage.Description);
+                        }
+                    }
+                }
+            }
+
+            const extraBaggageDetails: string[] = [];
+            const tripKeys = Object.keys(extraBaggageByTrip).map(Number).sort((a, b) => a - b);
+            for (const tripIndex of tripKeys) {
+                const descriptions = extraBaggageByTrip[tripIndex];
+                if (descriptions && descriptions.length > 0) {
+                    if (isRoundTrip) {
+                        const label = tripIndex === 0 ? 'Onward' : 'Return';
+                        extraBaggageDetails.push(`${label}: ${descriptions.join(', ')}`);
+                    } else if (isMultiCity) {
+                        extraBaggageDetails.push(`Journey ${tripIndex + 1}: ${descriptions.join(', ')}`);
+                    } else {
+                        extraBaggageDetails.push(descriptions.join(', '));
+                    }
                 }
             }
 
@@ -955,6 +895,7 @@ class BookingService {
                 mealInfo: traveller.SSR_Meal_Information || traveller.mealInfo || {},
                 baggageInfo: baggageInfo || {},
                 baseBaggage: baseBaggage,
+                extraBaggageDetails: extraBaggageDetails,
                 pnrDetails: traveller.pnrDetails || traveller.gdsPnrs || {},
                 formattedPnrDetails: formattedPnrDetails,
                 passportNumber: traveller.PassportNumber || '',

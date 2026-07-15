@@ -1,9 +1,3 @@
-const fs = require('fs');
-const path = require('path');
-
-const imagePath = path.join(__dirname, '../assets/images/KLARBlue.png');
-const imageBuffer = fs.readFileSync(imagePath);
-const base64Image = imageBuffer.toString('base64');
 
 export const flightAgencyBookingConfirmationTemplate = `
 <!DOCTYPE html>
@@ -640,9 +634,11 @@ export const flightAgencyBookingConfirmationTemplate = `
                 {{#if this.baseBaggage}}
                     {{this.baseBaggage}}
                 {{/if}}
-                {{#if this.baggageCharge}}
+                {{#if this.extraBaggageDetails}}
                     {{#if this.baseBaggage}} + {{/if}}
-                    Extra Baggage
+                    {{#each this.extraBaggageDetails}}
+                        {{this}}{{#unless @last}}, {{/unless}}
+                    {{/each}}
                 {{else if this.baseBaggage}}
                     
                 {{else}}
@@ -650,7 +646,7 @@ export const flightAgencyBookingConfirmationTemplate = `
                 {{/if}}
                 </strong>
                 <span class="separator-line"></span>
-                <span style="font-weight: bold;">{{formatPrice this.baggageCharge}}</span>
+                <span style="font-weight: bold;">₹{{formatPrice this.baggageCharge}}</span>
             </td>
             <td>
                 <strong>
@@ -663,7 +659,7 @@ export const flightAgencyBookingConfirmationTemplate = `
                 {{/if}}
                 </strong>
                 <span class="separator-line"></span>
-                <span style="font-weight: bold;">{{formatPrice this.mealCharge}}</span>
+                <span style="font-weight: bold;">₹{{formatPrice this.mealCharge}}</span>
             </td>
             <td>
                 <strong>
@@ -678,24 +674,24 @@ export const flightAgencyBookingConfirmationTemplate = `
                 {{/if}}
                 </strong>
                 <span class="separator-line"></span>
-                <span style="font-weight: bold;">{{formatPrice this.seatCharge}}</span>
+                <span style="font-weight: bold;">₹{{formatPrice this.seatCharge}}</span>
             </td>
             <td class="highlight-price">
-                {{formatPrice ../tripjackPrice}}
+                ₹{{formatPrice ../tripjackPrice}}
             </td>
             <td class="highlight-price">
-                {{formatPrice ../totalPrice}}
+                ₹{{formatPrice ../totalPrice}}
             </td>
         </tr>
         {{/each}}
         
         <tr class="total-row">
             <td style="text-align: left; font-weight: bold;">Total</td>
-            <td style="font-weight: bold;">{{formatPrice totalBaggage}}</td>
-            <td style="font-weight: bold;">{{formatPrice totalMeals}}</td>
-            <td style="font-weight: bold;">{{formatPrice totalSeat}}</td>
-            <td style="font-weight: bold;">{{formatPrice tripjackPrice}}</td>
-            <td style="font-weight: bold;">{{formatPrice totalPrice}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalBaggage}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalMeals}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalSeat}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice tripjackPrice}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalPrice}}</td>
         </tr>
     </table>   
 
