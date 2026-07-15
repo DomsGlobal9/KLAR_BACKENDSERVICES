@@ -1,5 +1,6 @@
 import axios from "axios";
 import { env } from "../config/env";
+import tripjackInsuranceConfig from "../config/tripjack.config";
 
 /**
  * TripJack Insurance API Client
@@ -7,11 +8,11 @@ import { env } from "../config/env";
  * All requests carry the shared TripJack apikey header.
  */
 export const tripJackInsuranceClient = axios.create({
-    baseURL: env.tripJack.baseUrl,
+    baseURL: tripjackInsuranceConfig.BASE_URL,
     timeout: 60000,
     headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "apikey": env.tripJack.apiKey,
+        "apikey": tripjackInsuranceConfig.API_KEY,
     },
 });
