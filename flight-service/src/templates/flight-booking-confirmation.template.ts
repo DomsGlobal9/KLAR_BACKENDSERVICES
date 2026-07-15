@@ -565,18 +565,19 @@ export const flightBookingConfirmationTemplate = `
                 {{#if this.baseBaggage}}
                     {{this.baseBaggage}}
                 {{/if}}
-                {{#if this.baggageCharge}}
+                {{#if this.extraBaggageDetails}}
                     {{#if this.baseBaggage}} + {{/if}}
-                    Extra Baggage
+                    {{#each this.extraBaggageDetails}}
+                        {{this}}{{#unless @last}}, {{/unless}}
+                    {{/each}}
                 {{else if this.baseBaggage}}
                     
                 {{else}}
                     -
                 {{/if}}
                 </strong>
-                <!-- Separator line added here -->
                 <span class="separator-line"></span>
-                <span style="font-weight: bold;">{{formatPrice this.baggageCharge}}</span>
+                <span style="font-weight: bold;">₹{{formatPrice this.baggageCharge}}</span>
             </td>
             <td>
                 <strong>
@@ -588,9 +589,8 @@ export const flightBookingConfirmationTemplate = `
                     -
                 {{/if}}
                 </strong>
-                <!-- Separator line added here -->
                 <span class="separator-line"></span>
-                <span style="font-weight: bold;">{{formatPrice this.mealCharge}}</span>
+                <span style="font-weight: bold;">₹{{formatPrice this.mealCharge}}</span>
             </td>
             <td>
                 <strong>
@@ -604,9 +604,8 @@ export const flightBookingConfirmationTemplate = `
                     -
                 {{/if}}
                 </strong>
-                <!-- Separator line added here -->
                 <span class="separator-line"></span>
-                <span style="font-weight: bold;">{{formatPrice this.seatCharge}}</span>
+                <span style="font-weight: bold;">₹{{formatPrice this.seatCharge}}</span>
             </td>
             <td class="highlight-price">
                 {{formatPrice ../totalPrice}}
@@ -616,12 +615,12 @@ export const flightBookingConfirmationTemplate = `
         
         <tr class="total-row">
             <td style="text-align: left; font-weight: bold;">Total</td>
-            <td style="font-weight: bold;">{{formatPrice totalBaggage}}</td>
-            <td style="font-weight: bold;">{{formatPrice totalMeals}}</td>
-            <td style="font-weight: bold;">{{formatPrice totalSeat}}</td>
-            <td style="font-weight: bold;">{{formatPrice totalPrice}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalBaggage}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalMeals}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalSeat}}</td>
+            <td style="font-weight: bold;">₹{{formatPrice totalPrice}}</td>
         </tr>
-    </table>   
+    </table>
 
     
     <!-- Footer -->
