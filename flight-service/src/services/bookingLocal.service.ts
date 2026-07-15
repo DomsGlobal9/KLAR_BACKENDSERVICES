@@ -19,6 +19,10 @@ import { cancellationRequestAgencyTemplate } from "../templates/flight-agency-ca
 
 class BookingService {
 
+    constructor() {
+        this.registerHandlebarsHelpers();
+    }
+
     private bookingRepo = new BookingRepository();
 
     private async sendEmail(
@@ -35,10 +39,6 @@ class BookingService {
         } catch (error: any) {
             // Email send failed silently
         }
-    }
-
-    constructor() {
-        this.registerHandlebarsHelpers();
     }
 
     private registerHandlebarsHelpers() {
@@ -64,8 +64,8 @@ class BookingService {
         });
 
         Handlebars.registerHelper('formatPrice', function (price: number) {
-            if (!price) return '₹0';
-            return `₹${price.toFixed(2)}`;
+            if (!price) return '0.00';
+            return `${price.toFixed(2)}`;
         });
 
         Handlebars.registerHelper('getAirlineName', function (airlineInfo: any) {
@@ -82,6 +82,10 @@ class BookingService {
 
         Handlebars.registerHelper('defaultIfEmpty', function (value: any, defaultValue: string) {
             return value && value.toString().trim() !== '' ? value : defaultValue;
+        });
+
+        Handlebars.registerHelper('add', function (a: number, b: number) {
+            return a + b;
         });
 
         Handlebars.registerHelper('ifCond', function (this: any, v1: any, operator: string, v2: any, options: any) {
@@ -837,41 +841,131 @@ class BookingService {
 
     private prepareTemplateData(tripjackData: any, dbData: any, booking: any) {
         const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
-        const segments = [];
+        const segments: any[] = [];
 
-        for (const trip of tripInfo) {
+        const totalTrips = tripInfo.length;
+        const isRoundTrip = totalTrips === 2;
+        const isMultiCity = totalTrips > 2;
+        const isOneWay = totalTrips === 1;
+
+        for (let tripIndex = 0; tripIndex < tripInfo.length; tripIndex++) {
+            const trip = tripInfo[tripIndex];
             const segmentInfo = trip.SegmentInformation || [];
+
             for (const segment of segmentInfo) {
+                let baggageInfo = null;
+                if (segment.BaggageInfo && segment.BaggageInfo.tI && segment.BaggageInfo.tI.length > 0) {
+                    baggageInfo = segment.BaggageInfo.tI[0]?.FareDetails?.BaggageInfo || null;
+                }
+
                 segments.push({
                     departureAirport: segment.DepartureAirport,
                     arrivalAirport: segment.ArrivalAirport,
                     departureTime: segment.DepartureTime,
                     arrivalTime: segment.ArrivalTime,
-                    flightDetails: segment.FlightDetails,
+                    flightDetails: {
+                        AirlineInfo: segment.FlightDetails?.AirlineInfo || {},
+                        FirstName: segment.FlightDetails?.FirstName || '',
+                        EquipmentType: segment.FlightDetails?.EquipmentType || '',
+                        FareBasis: segment.BaggageInfo?.tI?.[0]?.FareDetails?.FareBasis || '',
+                        CabinClass: segment.BaggageInfo?.tI?.[0]?.FareDetails?.CabinClass || 'Economy'
+                    },
                     duration: segment.Duration,
                     numberOfStops: segment.NumberOfStops,
-                    baggageInfo: segment.BaggageInfo,
-                    segmentNumber: segment.SegmentNumber
+                    baggageInfo: baggageInfo,
+                    segmentNumber: segment.SegmentNumber,
+                    tripIndex: tripIndex,
+                    isFirstTrip: tripIndex === 0,
+                    totalTrips: totalTrips
                 });
             }
         }
 
         const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
-        const formattedTravellers = travellers.map((traveller: any) => ({
-            title: traveller.Title || '',
-            firstName: traveller.FirstName || '',
-            lastName: traveller.LastName || '',
-            paxType: traveller.PaxType || '',
-            dateOfBirth: traveller.DateOfBirth || '',
-            seatInfo: traveller.SSR_Seat_Information || {},
-            mealInfo: traveller.SSR_Meal_Information || {},
-            baggageInfo: traveller.SSR_Baggage_Information || {},
-            pnrDetails: traveller.pnrDetails || {},
-            passportNumber: traveller.PassportNumber || '',
-            passportNationality: traveller.PassportNationality || '',
-            passportIssueDate: traveller.PassportIssueDate || '',
-            passportExpiryDate: traveller.PassportExpiryDate || '',
-        }));
+        const formattedTravellers = travellers.map((traveller: any) => {
+            let baggageInfo = null;
+            let baseBaggage = null;
+
+            if (traveller.FareDetails?.BaggageInfo) {
+                baggageInfo = traveller.FareDetails.BaggageInfo;
+                baseBaggage = baggageInfo.CheckInBaggage || baggageInfo.ClassCode || null;
+            }
+
+            let totalSeatCharge = 0;
+            let totalMealCharge = 0;
+            let totalBaggageCharge = 0;
+
+            if (traveller.SSR_Seat_Information) {
+                const seatKeys = Object.keys(traveller.SSR_Seat_Information);
+                for (const key of seatKeys) {
+                    totalSeatCharge += traveller.SSR_Seat_Information[key]?.Amount || 0;
+                }
+            }
+
+            if (traveller.SSR_Meal_Information) {
+                const mealKeys = Object.keys(traveller.SSR_Meal_Information);
+                for (const key of mealKeys) {
+                    totalMealCharge += traveller.SSR_Meal_Information[key]?.Amount || 0;
+                }
+            }
+
+            if (traveller.SSR_Baggage_Information) {
+                const baggageKeys = Object.keys(traveller.SSR_Baggage_Information);
+                for (const key of baggageKeys) {
+                    totalBaggageCharge += traveller.SSR_Baggage_Information[key]?.Amount || 0;
+                }
+            }
+
+            const formattedPnrDetails: any[] = [];
+            if (traveller.pnrDetails) {
+                const pnrKeys = Object.keys(traveller.pnrDetails);
+                for (const key of pnrKeys) {
+                    const segment = segments.find((s: any) => {
+                        const routeKey = `${s.departureAirport.SSRCode}-${s.arrivalAirport.SSRCode}`;
+                        return routeKey === key;
+                    });
+
+                    if (segment) {
+                        formattedPnrDetails.push({
+                            pnr: traveller.pnrDetails[key],
+                            route: `${segment.departureAirport.SSRCode} → ${segment.arrivalAirport.SSRCode}`,
+                            flightNumber: `${segment.flightDetails.AirlineInfo.SSRCode} ${segment.flightDetails.FirstName}`,
+                            departureCity: segment.departureAirport.city,
+                            arrivalCity: segment.arrivalAirport.city
+                        });
+                    } else {
+                        formattedPnrDetails.push({
+                            pnr: traveller.pnrDetails[key],
+                            route: key,
+                            flightNumber: 'N/A',
+                            departureCity: '',
+                            arrivalCity: ''
+                        });
+                    }
+                }
+            }
+
+            return {
+                title: traveller.Title || '',
+                firstName: traveller.FirstName || '',
+                lastName: traveller.LastName || '',
+                paxType: traveller.PaxType || '',
+                dateOfBirth: traveller.DateOfBirth || '',
+                seatInfo: traveller.SSR_Seat_Information || traveller.seatInfo || {},
+                mealInfo: traveller.SSR_Meal_Information || traveller.mealInfo || {},
+                baggageInfo: baggageInfo || {},
+                baseBaggage: baseBaggage,
+                pnrDetails: traveller.pnrDetails || traveller.gdsPnrs || {},
+                formattedPnrDetails: formattedPnrDetails,
+                passportNumber: traveller.PassportNumber || '',
+                passportNationality: traveller.PassportNationality || '',
+                passportIssueDate: traveller.PassportIssueDate || '',
+                passportExpiryDate: traveller.PassportExpiryDate || '',
+                mealCharge: totalMealCharge,
+                baggageCharge: totalBaggageCharge,
+                seatCharge: totalSeatCharge
+            };
+        });
 
         const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
         const formattedGstInfo = gstInfo ? {
@@ -883,8 +977,13 @@ class BookingService {
             isSez: gstInfo.isez || gstInfo.isSez || false
         } : null;
 
+        const totalMeals = formattedTravellers.reduce((sum: number, t: any) => sum + (t.mealCharge || 0), 0);
+        const totalBaggage = formattedTravellers.reduce((sum: number, t: any) => sum + (t.baggageCharge || 0), 0);
+        const totalSeat = formattedTravellers.reduce((sum: number, t: any) => sum + (t.seatCharge || 0), 0);
+
         return {
             bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
+            ticketNumber: tripjackData?.order?.BookingId || booking?.bookingId || '',
             bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
             status: tripjackData?.order?.status || '',
             totalAmount: tripjackData?.order?.Amount || 0,
@@ -893,16 +992,21 @@ class BookingService {
             tripjackPrice: booking?.tripjackPrice || 0,
             travellers: formattedTravellers,
             segments: segments,
-            emergencyContact: tripjackData?.order?.EmergencyContactInformation || {},
             deliveryInfo: tripjackData?.order?.DeliveryInformation || {},
             travellerEmail: booking?.email || '',
             agentEmail: dbData?.userInfo?.email || '',
             userInfo: dbData?.userInfo || {},
-            isMultiCity: segments.length > 1,
-            isRoundTrip: segments.length === 2,
-            isOneWay: segments.length === 1,
+            isMultiCity: isMultiCity,
+            isRoundTrip: isRoundTrip,
+            isOneWay: isOneWay,
             gstInfo: formattedGstInfo,
             order: tripjackData?.order || {},
+            totalMeals: totalMeals,
+            totalBaggage: totalBaggage,
+            totalSeat: totalSeat,
+            taxBreakdown: [],
+            airlineContact: '022 26168058',
+            companyEmail: 'info.klarworld@gmail.com'
         };
     }
 }

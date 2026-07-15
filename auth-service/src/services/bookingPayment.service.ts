@@ -821,13 +821,15 @@ export class BookingPaymentService {
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
-        if (userRole === "RM") {
+        const role = Array.isArray(userRole) ? userRole[0] : userRole;
+
+        if (role === "RM") {
             const result = await this.handleRMPayment(userId, user, bookingId, totalPrice);
             console.log("@@@@@@@@@@@@ The result we got role RM", result);
             return result;
         }
 
-        if (userRole === "B2B_ADMIN" || userRole === "USER") {
+        if (role === "B2B_ADMIN" || userRole === "USER") {
             const result = await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
             console.log("@@@@@@@@@@@@ The result we got role B2B_ADMIN", result);
             return result;
