@@ -1,5 +1,5 @@
 import visaRepository from '../repository/visa.repository';
-import { IVisaApplication } from '../models/VisaApplication.model';
+import { IVisaApplication, IVisaPlan } from '../models/VisaApplication.model';
 
 export type VisaCategory = 'employment' | 'family' | 'tourist' | 'student' | 'business';
 
@@ -8,6 +8,54 @@ export const VALID_CATEGORIES: VisaCategory[] = [
 ];
 
 export class VisaService {
+
+
+    // Create new custom database plan
+    async createVisaPlan(planData: Partial<IVisaPlan>): Promise<any> {
+        return await visaRepository.createVisaPlan(planData);
+    }
+
+    // Get matching plans or fetch fallback arrays dynamically
+    async getVisaPlans(filter: any): Promise<any[]> {
+        const storedPlans = await visaRepository.findVisaPlans(filter);
+        
+        // If the query specified a country but no exact matches were found, output the dynamic fallbacks
+        if (storedPlans.length === 0 && filter.$or) {
+            const requestedCountry = filter.$or[0].country.$regex.source.replace(/[\^$]/g, '');
+            return this.generateDynamicFallbackPlans(requestedCountry);
+        }
+
+        return storedPlans;
+    }
+
+    // Standalone structured format fallback generator
+    private generateDynamicFallbackPlans(countryName: string): any[] {
+        return [
+            {
+                id: `dynamic-${Date.now()}-tourist`,
+                title: 'Standard Tourist Visa',
+                isPopular: true,
+                processingTime: '4-7 Working Days',
+                stayPeriod: '30 Days',
+                validity: '90 Days',
+                entry: 'Single Entry',
+                country: countryName
+            },
+            {
+                id: `dynamic-${Date.now()}-business`,
+                title: 'Commercial Business Visa',
+                processingTime: '5-10 Working Days',
+                stayPeriod: '90 Days',
+                validity: '180 Days',
+                entry: 'Multiple Entry',
+                country: countryName
+            }
+        ];
+    }
+
+
+
+
     // Submit visa application
     async submitVisaApplication(visaData: Partial<IVisaApplication>): Promise<IVisaApplication> {
         // Set visa category based on purpose or fields provided

@@ -1,6 +1,24 @@
-import VisaApplication, { IVisaApplication } from '../models/VisaApplication.model';
+import VisaApplication, { IVisaApplication, VisaPlanModel } from '../models/VisaApplication.model';
 
 export class VisaRepository {
+
+
+    async createVisaPlan(planData: any): Promise<any> {
+        // Omits 'fees' explicitly if accidentally passed from any legacy system middleware wrappers
+        const { fees, ...cleanPlanData } = planData;
+        const plan = new VisaPlanModel(cleanPlanData);
+        return await plan.save();
+    }
+
+    // Database Parallel Lean Search Read Query
+    async findVisaPlans(filter: Record<string, any> = {}): Promise<any[]> {
+        return await VisaPlanModel.find(filter)
+            .sort({ isPopular: -1, createdAt: -1 })
+            .lean();
+    }
+
+
+
     // Create
     async create(visaData: Partial<IVisaApplication>): Promise<IVisaApplication> {
         const visa = new VisaApplication(visaData);

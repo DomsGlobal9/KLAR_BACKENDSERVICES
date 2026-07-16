@@ -50,7 +50,7 @@ export const checkEmailBookings = async (req: Request, res: Response, next: Next
         if (!email) {
             throw new StructuredError("VALIDATION_ERROR", "Email is required");
         }
-        const hasBookings = await orderService.checkEmailBookings(email);
+        const hasBookings = await orderService.checkEmailBookings(email as string);
         res.status(200).json({
             success: true,
             body: { hasBookings }

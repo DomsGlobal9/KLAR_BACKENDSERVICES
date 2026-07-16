@@ -54,6 +54,7 @@ export interface ITraveller {
 export interface IInsuranceBooking extends Document {
     // TripJack identifiers
     bookingId: string;          // TJS-xxx returned from Book API
+    source: string;
     amendmentId?: string;       // returned from Raise Amendment API
 
     // Journey metadata
@@ -133,6 +134,7 @@ const travellerSchema = new Schema<ITraveller>(
 const insuranceBookingSchema = new Schema<IInsuranceBooking>(
     {
         bookingId: { type: String, required: true, unique: true, index: true },
+        source: { type: String},
         amendmentId: { type: String },
 
         journeyType: {

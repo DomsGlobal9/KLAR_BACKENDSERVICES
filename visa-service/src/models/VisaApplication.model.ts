@@ -10,6 +10,7 @@ export interface IVisaApplication extends Document {
     destinationCountry: string;
     travelDate: Date;
     purpose: string;
+    source: string;
     
     // Employment Fields (Optional)
     employmentStatus?: 'Employed' | 'Self Employed';
@@ -50,11 +51,12 @@ const VisaApplicationSchema = new Schema({
     destinationCountry: { type: String, required: true },
     travelDate: { type: Date, required: true },
     purpose: { type: String, required: true },
+    source: { type: String},
     
     // Employment Fields
     employmentStatus: { 
         type: String, 
-        enum: ['Employed', 'Self Employed'], 
+        enum: ['Employed', 'Self-employed'], 
         required: false 
     },
     applicantName: { type: String, required: false },
@@ -109,5 +111,33 @@ const VisaApplicationSchema = new Schema({
         required: true 
     }
 }, { timestamps: true });
+
+
+export interface IVisaPlan extends Document {
+  title: string;
+  processingTime: string;
+  stayPeriod: string;
+  validity: string;
+  entry: string;
+  country: string;
+  isPopular?: boolean;
+  countryAliases?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const VisaPlanSchema = new Schema({
+  title: { type: String, required: true },
+  processingTime: { type: String, required: true },
+  stayPeriod: { type: String, required: true },
+  validity: { type: String, required: true },
+  entry: { type: String, required: true },
+  country: { type: String, required: true },
+  isPopular: { type: Boolean, default: false },
+  countryAliases: { type: [String], default: [] }
+}, { timestamps: true });
+
+export const VisaApplication = mongoose.model<IVisaApplication>('VisaApplication', VisaApplicationSchema);
+export const VisaPlanModel = mongoose.model<IVisaPlan>('VisaPlan', VisaPlanSchema);
 
 export default mongoose.model<IVisaApplication>('VisaApplication', VisaApplicationSchema);
