@@ -468,50 +468,33 @@ export const bookingVoucherTemplate = `
             font-weight: 600;
         }
         
-        /* Price Summary */
+        /* Price Summary - Only Total Amount */
         .price-summary {
             background: #f8fafc;
             padding: 15px 20px;
             border-radius: 8px;
             border: 1px solid #e8edf4;
             margin-bottom: 20px;
+            text-align: center;
         }
         
-        .price-summary .price-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            border-bottom: 1px solid #e8edf4;
-        }
-        
-        .price-summary .price-row:last-child {
-            border-bottom: none;
-            border-top: 2px solid #3b82f6;
-            padding-top: 10px;
-            margin-top: 6px;
-        }
-        
-        .price-summary .price-row .label {
-            font-size: 9px;
-            color: #64748b;
-        }
-        
-        .price-summary .price-row .value {
-            font-size: 9px;
-            font-weight: 600;
-            color: #0f172a;
-        }
-        
-        .price-summary .price-row.total .label {
-            font-size: 12px;
+        .price-summary .total-label {
+            font-size: 14px;
             font-weight: 700;
             color: #0f172a;
+            margin-bottom: 8px;
         }
         
-        .price-summary .price-row.total .value {
-            font-size: 14px;
+        .price-summary .total-amount {
+            font-size: 28px;
             font-weight: 800;
             color: #3b82f6;
+        }
+        
+        .price-summary .total-note {
+            font-size: 8px;
+            color: #94a3b8;
+            margin-top: 8px;
         }
         
         /* Footer */
@@ -643,14 +626,15 @@ export const bookingVoucherTemplate = `
             </div>
             
             <!-- Right: Address -->
-            <div class="right-section">
-                <div class="company-address">
-                    <div class="company-name">Klar Travels</div>
-                    <div class="address-line">#8-3-949/4 & 5, MADHU'S HOUSE, AMEERPET,</div>
-                    <div class="address-line">PANJAGUTTA, HYDERABAD - 500 0073</div>
-                    <div class="address-line">Mob: +918099359377 | GSTIN: 36BGCPS2420P1Z4</div>
-                </div>
-            </div>
+<div class="right-section">
+    <div class="company-address">
+        <div class="company-name">Klar Travels</div>
+        <div class="address-line">3rd Floor 305, Tilak Rd, above Max Fashion Showroom,</div>
+        <div class="address-line">beside payal footwears, Hanuman Tekdi, Abids,</div>
+        <div class="address-line">Hyderabad, Telangana 500001</div>
+        <div class="address-line">Mob: +918099359377 | GSTIN: 36BGCPS2420P1Z4</div>
+    </div>
+</div>
         </div>
         
         <!-- Booking Info Bar -->
@@ -914,37 +898,11 @@ export const bookingVoucherTemplate = `
         </div>
         {{/if}}
         
-        <!-- Price Summary -->
+        <!-- Price Summary - Only Total Amount -->
         <div class="price-summary">
-            <div class="price-row">
-                <span class="label">Base Fare</span>
-                <span class="value">₹{{formatNumber priceBreakdown.baseFare}}</span>
-            </div>
-            <div class="price-row">
-                <span class="label">Taxes & Surcharges</span>
-                <span class="value">₹{{formatNumber priceBreakdown.totalAdditionalFare}}</span>
-            </div>
-            <div class="price-row">
-                <span class="label">SSRP Charges</span>
-                <span class="value">₹{{formatNumber priceBreakdown.ssrp}}</span>
-            </div>
-            <div class="price-row">
-                <span class="label">IGST</span>
-                <span class="value">₹{{formatNumber priceBreakdown.igst}}</span>
-            </div>
-            {{#if localBooking.markupPrice}}
-            <div class="price-row">
-                <span class="label">Markup ({{localBooking.markupPercentage}}%)</span>
-                <span class="value">₹{{formatNumber localBooking.markupPrice}}</span>
-            </div>
-            {{/if}}
-            <div class="price-row total">
-                <span class="label">Total Amount</span>
-                <span class="value">₹{{formatNumber totalPrice}}</span>
-            </div>
-            <div style="font-size: 8px; color: #94a3b8; text-align: right; margin-top: 4px;">
-                * Includes all taxes and charges
-            </div>
+            <div class="total-label">Total Amount</div>
+            <div class="total-amount">₹{{formatNumber totalPrice}}</div>
+            <div class="total-note">* Includes all taxes and charges</div>
         </div>
         
         <!-- Footer -->
