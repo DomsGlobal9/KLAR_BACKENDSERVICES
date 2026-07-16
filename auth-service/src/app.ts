@@ -12,8 +12,18 @@ import routes from "./routes";
 const app = express();
 
 /**
- * CORS
+ * CORS explicitly handle preflight
  */
+app.use((req, res, next) => {
+    if (req.method === "OPTIONS") {
+        res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+        res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+        res.header("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "Content-Type, Authorization, apikey");
+        res.header("Access-Control-Allow-Credentials", "true");
+        return res.status(200).send();
+    }
+    next();
+});
 app.use(cors(corsOptions));
 
 /**

@@ -23,12 +23,15 @@ router.post("/booking/create", optionalAuthenticateJWT, bookingController.create
 // ─── Order Routes ───────────────────────────────────────────────────────
 router.get("/booking/details", optionalAuthenticateJWT, orderController.getBookingDetails);
 router.get("/booking/my-bookings", authenticateJWT, orderController.getUserBookings);
+router.get("/booking/check/:email", orderController.checkEmailBookings);
 router.post("/payment/create", authenticateJWT, orderController.createPayment);
 
 // ─── Amendment Routes ────────────────────────────────────────────────────
-// Optional auth: a B2B agent's token lets us refund their Klar wallet on
-// cancellation; B2C/guest cancels refund via Razorpay (no token needed).
-router.get("/amendment/charges", amendmentController.getAmendmentCharges);
+// Optional auth attaches req.user when a token is present; the controllers then
+// enforce booking ownership (a bare bookingId is never enough to cancel/read a
+// ride — see ownership.util). A B2B agent's token also lets us refund their
+// Klar wallet; B2C/guest refunds go back to Razorpay.
+router.get("/amendment/charges", optionalAuthenticateJWT, amendmentController.getAmendmentCharges);
 router.post("/amendment/cancel", optionalAuthenticateJWT, amendmentController.processCancellation);
 
 

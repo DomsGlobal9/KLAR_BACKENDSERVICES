@@ -81,7 +81,8 @@ export class ReconciliationWorker {
       const detailsRes = await supplier?.adapter.pollStatus?.(booking.bookingId);
       const supplierStatus: string | undefined = detailsRes?.data?.[0]?.order?.status;
 
-      if (supplierStatus === "CONFIRMED" || supplierStatus === "PAYMENT_SUCCESS") {
+      // UAT reports a paid booking as "SUCCESS"; live/doc show "CONFIRMED"/"PAYMENT_SUCCESS".
+      if (supplierStatus === "CONFIRMED" || supplierStatus === "PAYMENT_SUCCESS" || supplierStatus === "SUCCESS") {
         await this.transition(booking, CabBookingStatus.CONFIRMED, detailsRes);
         const saved = await CabBookingModel.findById(booking._id);
         if (saved) notificationService.sendBookingConfirmation(saved);

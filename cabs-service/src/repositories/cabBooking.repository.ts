@@ -1,4 +1,4 @@
-import { CabBookingModel, CabBookingStatus, ICabBooking } from "../models/CabBooking.model";
+import { CabBookingModel, CabBookingStatus, PaymentMethod, ICabBooking } from "../models/CabBooking.model";
 
 export class CabBookingRepository {
     /**
@@ -58,13 +58,25 @@ export class CabBookingRepository {
     }
 
     /**
-     * Delete expired bookings by status
+     * Delete expired, abandoned bookings by status.
+     *
+     * Safety guard: never delete a booking that took money or reached the
+     * supplier — only truly abandoned drafts (no bookingId, no Razorpay payment,
+     * no wallet debit). Otherwise a paid-but-unreconciled booking could be
+     * purged, destroying the record, the refund path and the idempotency key.
      */
     async deleteExpiredBookings(status: CabBookingStatus, beforeDate: Date): Promise<number> {
-        const result = await CabBookingModel.deleteMany({
+        const filter: Record<string, unknown> = {
             status,
-            createdAt: { $lt: beforeDate }
-        });
+            createdAt: { $lt: beforeDate },
+            bookingId: { $in: [null, ""] },
+            razorpayPaymentId: { $in: [null, ""] },
+            $or: [
+                { paymentMethod: { $exists: false } },
+                { paymentMethod: PaymentMethod.NONE },
+            ],
+        };
+        const result = await CabBookingModel.deleteMany(filter);
         return result.deletedCount;
     }
 }

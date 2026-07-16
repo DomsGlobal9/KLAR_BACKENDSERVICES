@@ -140,7 +140,7 @@ export interface ICabBooking extends Document {
 
 const CabBookingSchema = new Schema<ICabBooking>(
   {
-    bookingId: { type: String, index: true },
+    bookingId: { type: String, unique: true, sparse: true, index: true },
     correlationId: { type: String, index: true },
     idempotencyKey: { type: String, unique: true, sparse: true, index: true },
     userId: { type: String, index: true },
