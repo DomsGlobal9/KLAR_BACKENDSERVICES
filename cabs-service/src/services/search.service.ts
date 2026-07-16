@@ -1,5 +1,5 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
-import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
+import { resolveAddress } from "../utils/location.utils";
 
 const locationCache = new Map<string, { timestamp: number; data: any }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour cache for locations
@@ -68,6 +68,18 @@ class SearchService {
         payload.passengers = pax;
         payload.quoteFilter = { paxCount: pax };
 
+        // Resolve real address data (city/country/postalCode) dynamically via
+        // TripJack's location APIs when the client didn't send a complete one —
+        // the quotes API 404s ("No Cabs Found!") on guessed city/country.
+        const [originAddress, destinationAddress] = await Promise.all([
+            payload.origin.address?.city && payload.origin.address?.country
+                ? payload.origin.address
+                : resolveAddress(payload.from),
+            payload.destination.address?.city && payload.destination.address?.country
+                ? payload.destination.address
+                : resolveAddress(payload.to),
+        ]);
+
         // Format for TripJack
         const tripjackPayload = {
             ...payload,
@@ -76,20 +88,14 @@ class SearchService {
                 lat: String(payload.origin.lat),
                 long: String(payload.origin.long),
                 displayAddress: payload.from || "Pickup Location",
-                address: { 
-                    city: payload.origin.address?.city || getCityFromAddress(payload.from), 
-                    country: payload.origin.address?.country || getCountryFromAddress(payload.from) || "India"
-                }
+                address: originAddress
             },
             destination: {
                 type: "location",
                 lat: String(payload.destination.lat),
                 long: String(payload.destination.long),
                 displayAddress: payload.to || "Drop Location",
-                address: { 
-                    city: payload.destination.address?.city || getCityFromAddress(payload.to), 
-                    country: payload.destination.address?.country || getCountryFromAddress(payload.to) || "India"
-                }
+                address: destinationAddress
             }
         };
 

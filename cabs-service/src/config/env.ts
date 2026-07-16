@@ -50,6 +50,11 @@ export const env = {
 if (!env.tripJack.apiKey) {
   console.warn("⚠️  TRIPJACK_API_KEY is not set. TripJack cab bookings will fail.");
 }
+if (!env.tripJack.agencyId || !Number.isFinite(Number(env.tripJack.agencyId))) {
+  console.warn(
+    "⚠️  TRIPJACK_AGENCY_ID is not a valid numeric id. It must be the API-key owner's agency id — bookings will be created but their payment will fail with Access Denied.",
+  );
+}
 if (!env.mongoUri) {
   console.warn("⚠️  MONGODB_URI is not set. Booking persistence is disabled.");
 }

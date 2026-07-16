@@ -4,6 +4,7 @@ import { CabPrecheckPayload } from "../adapters/tripjack.cabs.adapter";
 import { ValidationEngine, ExpectedCab } from "./ValidationEngine";
 import { StructuredError } from "./StructuredError";
 import { env } from "../config/env";
+import { ensureLocationAddress } from "../utils/location.utils";
 import {
   QuoteRequest,
   JourneyInfo,
@@ -59,13 +60,22 @@ class PrecheckService {
 
     const passengers = Number(quotationInfo.paxCount) || 1;
 
+    // TripJack's quotes API returns "No Cabs Found!" unless the location carries
+    // a real `address` (city/country). Booking payloads from the frontends only
+    // send `{displayAddress, lat, long}`, so resolve the address dynamically via
+    // TripJack's location APIs before re-quoting.
+    const [origin, destination] = await Promise.all([
+      ensureLocationAddress(routeDetail.origin),
+      ensureLocationAddress(routeDetail.destination),
+    ]);
+
     const quoteRequest: QuoteRequest = {
       pickupDate: toQuoteDate(journeyInfo.pickupDateTime),
       ...(journeyInfo.returnDateTime
         ? { returnDate: toQuoteDate(journeyInfo.returnDateTime) }
         : {}),
-      origin: routeDetail.origin,
-      destination: routeDetail.destination,
+      origin,
+      destination,
       journeyType,
       tripType,
       passengers,
