@@ -13,21 +13,21 @@ export const corsOptions: CorsOptions = {
 
         // Allow localhost and 127.0.0.1 on any port for local development/testing
         if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:') || origin === 'http://localhost' || origin === 'http://127.0.0.1') {
-            return callback(null, true);
+            return callback(null, origin);
         }
 
         /**
          * Allow wild card entry
          */
         if (allowedOrigins.includes('*')) {
-            return callback(null, true);
+            return callback(null, origin);
         }
 
         /**
          * Allow specific origins
          */
         if (origin && allowedOrigins.includes(origin)) {
-            return callback(null, true);
+            return callback(null, origin);
         }
 
         /**
@@ -40,7 +40,7 @@ export const corsOptions: CorsOptions = {
 
         // Development → warn but allow
         console.warn(`⚠️ CORS warning: ${origin} not in allowlist`);
-        callback(null, true);
+        callback(null, origin);
     },
 
     methods: envConfig.CORS.CORS_METHODS.split(',').map(m => m.trim()),
