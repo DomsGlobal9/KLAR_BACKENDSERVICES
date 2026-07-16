@@ -54,6 +54,7 @@ temp/
 # MongoDB local files (if any)
 # =========================
 data/
+!**/src/data/
 *.db
 
 # =========================
