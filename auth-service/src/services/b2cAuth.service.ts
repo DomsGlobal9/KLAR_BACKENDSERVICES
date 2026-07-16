@@ -682,7 +682,7 @@ export class B2CAuthService {
         message: string;
     }> {
 
-        const isTestCredentials = email === "test@klartravels.in" && password === "test@klartravels.in";
+        const isTestCredentials = email === "b2c.test@klartravels.in" && password === "b2c.test@klartravels.in";
 
         if (isTestCredentials) {
             return {
@@ -760,7 +760,7 @@ export class B2CAuthService {
         message: string;
     }> {
 
-        const isTestCredentials = email === "test@klartravels.in" && otp === "123456";
+        const isTestCredentials = email === "b2c.test@klartravels.in" && otp === "123456";
 
         if (isTestCredentials) {
 
