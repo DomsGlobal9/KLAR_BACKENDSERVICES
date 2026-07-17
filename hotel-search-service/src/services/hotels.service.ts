@@ -702,8 +702,8 @@ export class HotelsService {
       inventoryCount,
       facets,
       meta: {
-        tjCount: providerStats['TJ']?.total || 0,
-        rgCount: providerStats['RG']?.total || 0,
+        tjCount: master.filter(h => h.source === 'TJ').length,
+        rgCount: master.filter(h => h.source === 'RG').length,
       },
     };
   }
