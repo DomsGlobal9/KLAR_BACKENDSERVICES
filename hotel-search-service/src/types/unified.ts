@@ -21,6 +21,7 @@ export interface UnifiedSearchRequest {
   currency?: string; // default USD
   countryCode?: string; // default US
   pageNo?: number; // 1-indexed pagination
+  limit?: number; // page size when slicing from the cached master list (default 20)
   _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
   _abortSignal?: AbortSignal | null; // internal: cancels supplier calls once the partial-return window elapses
   providers?: string[];

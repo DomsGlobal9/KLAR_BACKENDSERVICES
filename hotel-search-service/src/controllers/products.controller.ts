@@ -11,10 +11,13 @@ export const getProducts = async (
     const clientType = getClientType(req);
     const token = extractToken(req);
     const payload = {
+      // Body first: `clientType` and `token` are derived from the verified JWT
+      // and decide which markup prices this request, so the caller must not be
+      // able to supply their own by putting them in the body.
+      ...req.body,
       propertyId: req.params.propertyId,
       clientType,
       token,
-      ...req.body,
     };
 
     const data = await productsService.getProducts(payload);

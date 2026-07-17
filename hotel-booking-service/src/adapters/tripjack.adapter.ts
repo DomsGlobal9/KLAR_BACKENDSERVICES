@@ -3,11 +3,18 @@ import { SupplierAdapter, PrecheckResultV1 } from "../models/PrecheckResult";
 import { tripJackProvider } from "../providers/tripjack.provider";
 import { CircuitBreaker } from "../services/CircuitBreaker";
 import { applyPlatformMarkup } from "../utils/pricing.util";
+import { refreshMarkupConfig } from "../config/markup-config";
 
 const tripJackCircuitBreaker = new CircuitBreaker(5, 30000); // 5 failures -> Open for 30s
 
 export class TripJackAdapter implements SupplierAdapter {
   async precheck(payload: any): Promise<PrecheckResultV1> {
+    // Every pricing path in this service funnels through precheck, so this is
+    // the one place that has to guarantee `applyPlatformMarkup` below reads a
+    // current snapshot rather than boot-time env defaults. Never throws, and
+    // is a no-op once warm.
+    await refreshMarkupConfig();
+
     return tripJackCircuitBreaker.execute(async () => {
       // Call existing provider
       const tjRes = await tripJackProvider.precheck(payload);
