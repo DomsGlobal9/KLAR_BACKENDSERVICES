@@ -81,3 +81,10 @@ coverage/
 .claude/
 .claude
 hotel-booking-service/test-db.js
+
+
+# Audit files
+CABS_MODULE_AUDIT.md
+HOTEL_MODULE_AUDIT.md
+*AUDIT.md
+*.md

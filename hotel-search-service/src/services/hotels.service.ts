@@ -701,6 +701,10 @@ export class HotelsService {
       // Display only — never drives paging.
       inventoryCount,
       facets,
+      meta: {
+        tjCount: providerStats['TJ']?.total || 0,
+        rgCount: providerStats['RG']?.total || 0,
+      },
     };
   }
 
