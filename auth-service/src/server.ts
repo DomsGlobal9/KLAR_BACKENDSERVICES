@@ -1,5 +1,5 @@
-import dns from "node:dns/promises";
-dns.setServers(["0.0.0.0", "1.1.1.1"]);
+// import dns from "node:dns/promises";
+// dns.setServers(["0.0.0.0", "1.1.1.1"]);
 
 
 import app from "./app";
