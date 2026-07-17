@@ -10,7 +10,7 @@ import {
   ICabBooking,
 } from "../models/CabBooking.model";
 import { cabBookingRepository } from "../repositories/cabBooking.repository";
-import { getCityFromAddress, getCountryFromAddress } from "../utils/location.utils";
+import { ensureLocationAddress } from "../utils/location.utils";
 import { WalletUtil } from "../utils/wallet.util";
 import { PaymentUtil } from "../utils/payment.util";
 import { notificationService } from "./notification.service";
@@ -36,22 +36,27 @@ function round2(n: number): number {
 
 /** Who is booking and how — assembled by the controller from auth + headers. */
 export interface BookingContext {
-  token?: string;
+  token: string;
   clientType: ClientType;
   agentId?: string | null;
   agentName?: string | null;
-  userInfo?: { id?: string; email?: string; role?: string; clientType?: string };
+  userInfo?: { id?: string; email?: string; phone?: string; role?: string; clientType?: string };
 }
 
 class BookingService {
   private getAgentDetail(payload: any, ctx: BookingContext) {
+    // TripJack's payment API debits the account named at booking time: the
+    // booking's agentId and the payment's payUserId must BOTH be our API-key
+    // owner's agency id, or /cabs/v1/payment/create rejects with
+    // "Access Denied" (code 408) and the booking dies unpaid. Never use a
+    // client-supplied or Klar-internal agent id for the supplier payload.
     return {
-      agentId: Number(payload.agentId || ctx.agentId || env.tripJack.agencyId || 312879),
+      agentId: Number(env.tripJack.agencyId),
       agentEmail: String(
         payload.agentEmail || ctx.userInfo?.email || payload.passengerDetail?.email || "support@klar.com",
       ),
       agentPhone: String(
-        payload.agentPhone || payload.passengerDetail?.phone || "+911234567890",
+        payload.agentPhone || ctx.userInfo?.phone || payload.passengerDetail?.phone || "+911234567890",
       ),
     };
   }
@@ -152,40 +157,38 @@ class BookingService {
 
     const agent = this.getAgentDetail(payload, ctx);
 
-    // ── 2. Build the supplier payload against the FRESH quote ids.
+    // ── 2. Build the supplier payload against the FRESH quote ids. The origin/
+    //       destination addresses are resolved dynamically (TripJack location
+    //       APIs) when the frontend only sent {displayAddress, lat, long}.
+    const [bookOrigin, bookDestination] = await Promise.all([
+      ensureLocationAddress(payload.routeDetail?.origin),
+      ensureLocationAddress(payload.routeDetail?.destination),
+    ]);
     const routeDetail = {
       ...payload.routeDetail,
-      origin: {
-        ...payload.routeDetail?.origin,
-        type: "location",
-        address:
-          payload.routeDetail?.origin?.address || {
-            city: getCityFromAddress(payload.routeDetail?.origin?.displayAddress),
-            country: getCountryFromAddress(payload.routeDetail?.origin?.displayAddress),
-          },
-      },
-      destination: {
-        ...payload.routeDetail?.destination,
-        type: "location",
-        address:
-          payload.routeDetail?.destination?.address || {
-            city: getCityFromAddress(payload.routeDetail?.destination?.displayAddress),
-            country: getCountryFromAddress(payload.routeDetail?.destination?.displayAddress),
-          },
-      },
+      origin: bookOrigin,
+      destination: bookDestination,
     };
 
+    // Supplier-side pricing must mirror the FRESH quote exactly: TripJack rejects
+    // the booking ("Expected net amount is X") when netAmount differs from the
+    // live quote's fare, and any drift between search and book breaks it. The
+    // client-sent gross is still what we CHARGE the customer (see below); only
+    // the supplier payload is rebuilt from the precheck.
+    const freshFare = round2(Number(fresh.price || 0));
+    const freshTax = round2(Number(fresh.taxes || 0));
+    const agentMarkupNum = Number(payload.pricingInfo?.agentMarkup || 0);
     const pricingInfo = {
-      netAmount: String(payload.pricingInfo?.netAmount || "0.00"),
+      netAmount: freshFare.toFixed(2),
       addonsPrice: String(payload.pricingInfo?.addonsPrice || "0.00"),
-      tjTaxAmount: String(payload.pricingInfo?.tjTaxAmount || "0.00"),
+      tjTaxAmount: freshTax.toFixed(2),
       tjManagementFee: String(payload.pricingInfo?.tjManagementFee || "0.00"),
-      agentMarkup: Number(payload.pricingInfo?.agentMarkup || 0),
+      agentMarkup: agentMarkupNum,
       agentMarkupSplitup: {
         onwardJourneyMarkup: Number(payload.pricingInfo?.agentMarkupSplitup?.onwardJourneyMarkup || 0),
         returnJourneyMarkup: Number(payload.pricingInfo?.agentMarkupSplitup?.returnJourneyMarkup || 0),
       },
-      grossAmount: String(payload.pricingInfo?.grossAmount || payload.pricingInfo?.netAmount || "0.00"),
+      grossAmount: round2(freshFare + freshTax + agentMarkupNum).toFixed(2),
     };
 
     const quotationInfo = {
@@ -223,7 +226,7 @@ class BookingService {
       passengerDetail,
       addons: Array.isArray(payload.addons) ? payload.addons : [],
       serviceRequest: String(payload.serviceRequest || ""),
-      agentId: Number(payload.agentId || agent.agentId),
+      agentId: agent.agentId,
       agentEmail: String(payload.agentEmail || agent.agentEmail),
       agentPhone: String(payload.agentPhone || agent.agentPhone),
       consent: String(payload.consent || "yes"),
@@ -231,8 +234,13 @@ class BookingService {
       correlationId,
     };
 
-    // Klar-side amount the customer pays = GROSS (includes markup).
-    const grossAmount = round2(Number(pricingInfo.grossAmount || 0));
+    // Klar-side amount the customer pays = the CLIENT-approved gross (already
+    // validated against the fresh quote within tolerance by the precheck) —
+    // NOT the rebuilt supplier gross, so what we charge never silently moves.
+    const clientGross = round2(
+      Number(payload.pricingInfo?.grossAmount || payload.pricingInfo?.netAmount || 0),
+    );
+    const grossAmount = clientGross > 0 ? clientGross : round2(Number(pricingInfo.grossAmount || 0));
     const netAmount = round2(validatedPrice); // supplier owed (fresh total)
     const markupAmount = grossAmount > netAmount ? round2(grossAmount - netAmount) : 0;
 
@@ -283,7 +291,10 @@ class BookingService {
     if (bookingId) {
       status = await this.settleSupplier({
         bookingId,
-        grossAmount,
+        // Pay the supplier the NET we owe them (fresh validated fare), not the
+        // customer-facing GROSS — the platform/agent markup is Klar's margin and
+        // must not be handed to TripJack.
+        supplierAmount: netAmount,
         agentId: agent.agentId,
         response,
         bookingDoc,
@@ -299,6 +310,12 @@ class BookingService {
     if (status === CabBookingStatus.CONFIRMED) {
       const saved = await CabBookingModel.findById(bookingDoc._id);
       if (saved) notificationService.sendBookingConfirmation(saved);
+    } else if (status === CabBookingStatus.FAILED) {
+      throw new StructuredError(
+        "SUPPLIER_ERROR",
+        "Booking was rejected by the cab vendor/supplier. Razorpay payment will be refunded within 3-5 working days.",
+        response
+      );
     }
 
     return response;
@@ -368,7 +385,16 @@ class BookingService {
             "This booking is already being processed. Please wait.",
           );
         }
-        if (prior) return prior; // FAILED prior — reuse to retry
+        if (prior) {
+          // FAILED prior — reuse to retry, but reset the state: finalizeBookingRecord
+          // refuses to overwrite FAILED, so a stale FAILED status would mask the
+          // retry's real outcome (seen 2026-07-16: a booking that committed at the
+          // supplier stayed FAILED with the first attempt's failureReason).
+          prior.status = CabBookingStatus.INITIATED;
+          prior.failureReason = undefined;
+          await prior.save();
+          return prior;
+        }
       }
       throw err;
     }
@@ -392,32 +418,40 @@ class BookingService {
   }): Promise<PaymentMethod> {
     const { clientType, token, payload, bookingDoc, grossAmount, netAmount, quoteId, routeSummary } = args;
 
-    if (grossAmount <= 0) {
+    // Klar must always collect at least the supplier net it now settles (see
+    // settleSupplier). Charging the raw client-supplied gross let a tampered/buggy
+    // `gross < net` collect less than we pay TripJack — a direct Klar loss. Floor
+    // the collected amount at the net for BOTH channels.
+    const chargeAmount = round2(Math.max(Number(grossAmount) || 0, Number(netAmount) || 0));
+
+    if (chargeAmount <= 0) {
       bookingDoc.paymentMethod = PaymentMethod.NONE;
       await bookingDoc.save();
       return PaymentMethod.NONE;
     }
 
     if (clientType === ClientType.B2B) {
-      const { hasBalance } = await WalletUtil.checkInternalBalance(token!, grossAmount);
+      const { hasBalance } = await WalletUtil.checkInternalBalance(token!, chargeAmount);
       if (!hasBalance) {
         await this.markFailed(bookingDoc, "Insufficient wallet balance");
         throw new StructuredError("INSUFFICIENT_BALANCE", "Insufficient balance in internal Klar Wallet.");
       }
-      const deducted = await WalletUtil.deductBalance(token!, grossAmount, quoteId, `Cabs Booking - ${routeSummary}`);
+      const deducted = await WalletUtil.deductBalance(token!, chargeAmount, quoteId, `Cabs Booking - ${routeSummary}`);
       if (!deducted) {
         await this.markFailed(bookingDoc, "Wallet deduction failed");
         throw new StructuredError("WALLET_ERROR", "Wallet deduction failed.");
       }
       bookingDoc.paymentMethod = PaymentMethod.WALLET;
       await bookingDoc.save();
-      console.log(`✅ [BookingService] Debited ₹${grossAmount} from agent Klar wallet.`);
+      console.log(`✅ [BookingService] Debited ₹${chargeAmount} from agent Klar wallet.`);
       return PaymentMethod.WALLET;
     }
 
     // B2C / GUEST: verify Razorpay SERVER-SIDE. Must cover the gross AND the net
     // we owe the supplier (a tampered-low gross can never book).
-    const requiredAmount = round2(Math.max(grossAmount, netAmount));
+    const requiredAmount = chargeAmount;
+    // Guard against a stale/reused payment id backing a second booking.
+    await this.assertPaymentNotReused(payload.razorpayPaymentId, bookingDoc.idempotencyKey);
     const pay = await PaymentUtil.verifyRazorpayPayment({
       paymentId: payload.razorpayPaymentId,
       orderId: payload.razorpayOrderId,
@@ -441,15 +475,15 @@ class BookingService {
   /** Settle TripJack (payment API) and poll for a terminal status. */
   private async settleSupplier(args: {
     bookingId: string;
-    grossAmount: number;
+    supplierAmount: number;
     agentId: number;
     response: any;
     bookingDoc: ICabBooking;
   }): Promise<CabBookingStatus> {
-    const { bookingId, grossAmount, agentId, response, bookingDoc } = args;
+    const { bookingId, supplierAmount, agentId, response, bookingDoc } = args;
     const supplier = cabSupplierRegistry.getByCode("TJ");
 
-    if (grossAmount <= 0) {
+    if (supplierAmount <= 0) {
       if (response?.data) {
         response.data.status = "CONFIRMED";
         response.data.paymentStatus = "SUCCESS";
@@ -460,14 +494,15 @@ class BookingService {
     try {
       // TripJack payment settles the agency's TripJack credit account (Klar↔TripJack);
       // independent of how the customer paid Klar, so it runs for every clientType.
+      // The amount is the supplier NET (what TripJack quoted), never Klar's gross.
       const paymentResponse = await tripJackCabsProvider.createPayment({
         bookingId,
-        amount: grossAmount,
+        amount: supplierAmount,
         paymentMedium: "WALLET",
         opType: "DEBIT",
         product: "CAB",
         transactionType: "PAID_FOR_ORDER",
-        payUserId: String(agentId),
+        payUserId: env.tripJack.agencyId,
       });
 
       const paymentOk = paymentResponse?.success || paymentResponse?.data?.[0]?.status === "SUCCESS";
@@ -485,13 +520,14 @@ class BookingService {
           finalStatus = detailsRes?.data?.[0]?.order?.status;
           finalPaymentStatus = detailsRes?.data?.[0]?.order?.paymentStatus;
           console.log(`[BookingService] Poll ${attempt}/4 - status=${finalStatus} paymentStatus=${finalPaymentStatus}`);
-          if (finalStatus === "CONFIRMED" || finalStatus === "FAILED") break;
+          // UAT reports a paid booking as "SUCCESS"; live/doc show "CONFIRMED"/"PAYMENT_SUCCESS".
+          if (finalStatus === "CONFIRMED" || finalStatus === "SUCCESS" || finalStatus === "FAILED") break;
         } catch (pollErr: any) {
           console.warn(`⚠️ [BookingService] Poll ${attempt} failed:`, pollErr?.message || pollErr);
         }
       }
 
-      if (finalStatus === "CONFIRMED" || finalStatus === "PAYMENT_SUCCESS") {
+      if (finalStatus === "CONFIRMED" || finalStatus === "PAYMENT_SUCCESS" || finalStatus === "SUCCESS") {
         if (response?.data) {
           response.data.status = "CONFIRMED";
           response.data.paymentStatus = "SUCCESS";
@@ -536,6 +572,28 @@ class BookingService {
       console.log(`✅ [BookingService] Saved booking ${args.bookingId} as ${doc.status}.`);
     } catch (dbErr) {
       console.error("❌ [BookingService] Failed to persist booking:", dbErr);
+    }
+  }
+
+  /**
+   * A captured Razorpay payment must back exactly one booking. Reject a paymentId
+   * already attached to a *different* booking (different idempotencyKey) so a
+   * stale/reused id from the client can never pay for a second ride. Retries of
+   * the same booking (same idempotencyKey) are allowed.
+   */
+  private async assertPaymentNotReused(paymentId?: string, idempotencyKey?: string): Promise<void> {
+    if (!paymentId) return;
+    const query: any = {
+      razorpayPaymentId: paymentId,
+      status: { $nin: [CabBookingStatus.FAILED, CabBookingStatus.CANCELLED] },
+    };
+    if (idempotencyKey) query.idempotencyKey = { $ne: idempotencyKey };
+    const prior = await CabBookingModel.findOne(query);
+    if (prior) {
+      throw new StructuredError(
+        "PAYMENT_ALREADY_USED",
+        "This payment has already been used for another booking. If you were charged again it will be refunded automatically.",
+      );
     }
   }
 

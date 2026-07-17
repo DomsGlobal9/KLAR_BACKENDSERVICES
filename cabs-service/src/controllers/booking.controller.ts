@@ -39,8 +39,9 @@ function resolveContext(req: AuthenticatedRequest): BookingContext {
   const userInfo = {
     id: req.user?.userId || req.user?.id || req.user?._id || "",
     email: req.user?.email || "",
-    role: req.user?.role || req.user?.roles?.[0] || "",
-    clientType,
+    phone: req.user?.phone || req.user?.number || req.user?.profile?.number || "",
+    role: req.user?.role || req.user?.roles?.[0] || (clientType === ClientType.GUEST ? "b2c" : ""),
+    clientType: clientType.toLowerCase(),
   };
 
   return { token, clientType, agentId, agentName, userInfo };

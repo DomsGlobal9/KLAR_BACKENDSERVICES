@@ -247,6 +247,28 @@ class CommitService {
     }
   }
 
+  /**
+   * A captured Razorpay payment must back exactly one booking. Reject a paymentId
+   * already attached to a *different* booking (different idempotencyKey) so a
+   * stale/reused id from the client can never pay for a second stay. Retries of
+   * the same booking (same idempotencyKey) are allowed.
+   */
+  async #assertPaymentNotReused(paymentId?: string, idempotencyKey?: string): Promise<void> {
+    if (!paymentId) return;
+    const query: any = {
+      razorpayPaymentId: paymentId,
+      status: { $nin: [BookingStatus.FAILED, BookingStatus.CANCELLED] },
+    };
+    if (idempotencyKey) query.idempotencyKey = { $ne: idempotencyKey };
+    const prior = await hotelBookingRepository.findOne(query, true);
+    if (prior) {
+      throw new StructuredError(
+        "PAYMENT_ALREADY_USED",
+        "This payment has already been used for another booking. If you were charged again it will be refunded automatically.",
+      );
+    }
+  }
+
   async #commitTripJack(
     payload: any,
     agentId?: string | null,
@@ -385,6 +407,8 @@ class CommitService {
         // we will owe the supplier (so a tampered-low price can never book).
         const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
         const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        // Guard against a stale/reused payment id backing a second booking.
+        await this.#assertPaymentNotReused(payload.razorpayPaymentId, payload.idempotencyKey);
         const pay = await PaymentUtil.verifyRazorpayPayment({
           paymentId: payload.razorpayPaymentId,
           orderId: payload.razorpayOrderId,
@@ -635,6 +659,8 @@ class CommitService {
         // the net we owe RateGain.
         const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
         const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        // Guard against a stale/reused payment id backing a second booking.
+        await this.#assertPaymentNotReused(payload.razorpayPaymentId, payload.idempotencyKey);
         const pay = await PaymentUtil.verifyRazorpayPayment({
           paymentId: payload.razorpayPaymentId,
           orderId: payload.razorpayOrderId,

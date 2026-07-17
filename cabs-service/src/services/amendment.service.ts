@@ -4,6 +4,7 @@ import { CancellationRequest } from "../models/tripjack.types";
 import { CabBookingModel, CabBookingStatus } from "../models/CabBooking.model";
 import { refundService } from "./refund.service";
 import { StructuredError } from "./StructuredError";
+import { Caller, assertBookingOwnership } from "../utils/ownership.util";
 
 function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
@@ -25,11 +26,15 @@ class AmendmentService {
    * getCancelCharges): what the customer paid, the charge, and what they'd get
    * back — computed from TripJack's amendment-charges API.
    */
-  async getCharges(bookingId: string, type: string = "CANCELLATION") {
+  async getCharges(bookingId: string, type: string = "CANCELLATION", caller?: Caller) {
     if (!bookingId)
       throw new StructuredError("VALIDATION_ERROR", "bookingId is required.");
 
     const booking = await CabBookingModel.findOne({ bookingId });
+    // A caller is passed for direct API access; assert ownership before we reveal
+    // any booking-specific charge/refund detail. Internal calls (from
+    // processCancellation, which already checked ownership) pass no caller.
+    if (caller) assertBookingOwnership(booking, caller);
     const totalAmount = round2(booking?.totalAmount ?? 0); // gross the customer paid
     const apiPrice = round2(booking?.netAmount ?? booking?.totalAmount ?? 0);
 
@@ -75,12 +80,18 @@ class AmendmentService {
   /**
    * Cancel a booking at the supplier, then settle the customer refund.
    */
-  async processCancellation(payload: CancellationRequest) {
+  async processCancellation(payload: CancellationRequest, caller: Caller) {
     if (!payload.bookingId)
       throw new StructuredError(
         "VALIDATION_ERROR",
         "bookingId is required for cancellation.",
       );
+
+    // 0. Ownership gate — cancellation is destructive and moves money, so a bare
+    //    bookingId is never enough. The caller must own the booking (token
+    //    identity, admin, or a matching guest capability proof).
+    const owned = await CabBookingModel.findOne({ bookingId: payload.bookingId });
+    assertBookingOwnership(owned, caller);
 
     // 1. Capture the charge breakdown BEFORE cancelling (penalty depends on now).
     let cancelChargesInfo: any = null;
