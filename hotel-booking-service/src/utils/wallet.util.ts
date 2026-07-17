@@ -1,10 +1,54 @@
 import axios from "axios";
 import { env } from "../config/env";
+import { refreshMarkupConfig } from "../config/markup-config";
 
 export interface MarkupRule {
   serviceType: string;
   percentageMarkup: number;
   fixedMarkup: number;
+}
+
+/**
+ * The markup rules to price a request with, by channel.
+ *
+ * B2B — the agent's own rules.
+ * B2C / GUEST — the master's B2C rule, expressed as a synthetic agent rule so
+ *       it flows through the same PricingUtil path. There is no agent on this
+ *       channel, so nothing else would occupy that slot; a B2C caller's own
+ *       token must never be allowed to contribute markup rules.
+ *
+ * MUST mirror hotel-search-service's resolveMarkupRules(). When the two
+ * disagree the customer is quoted one price at search and charged another here,
+ * and — because B2C markup is invisible to the customer — the only symptom is
+ * a commit that fails price validation with no hint as to which side is wrong.
+ *
+ * Anything that is not explicitly B2B is B2C, matching how the search service
+ * reads the same JWT claim. A "GUEST" is a B2C customer who has not signed in,
+ * not a third pricing channel.
+ */
+export async function resolveMarkupRules(
+  clientType: string | undefined,
+  token: string,
+): Promise<MarkupRule[]> {
+  const isB2B = (clientType || "").toUpperCase() === "B2B";
+
+  const [config, agentRules] = await Promise.all([
+    refreshMarkupConfig(),
+    isB2B ? WalletUtil.getMarkupRules(token) : Promise.resolve([]),
+  ]);
+
+  if (isB2B) return agentRules;
+
+  const b2c = config.b2c;
+  if (!b2c.enabled || b2c.value <= 0) return [];
+
+  return [
+    {
+      serviceType: "HOTEL",
+      percentageMarkup: b2c.type === "PERCENTAGE" ? b2c.value : 0,
+      fixedMarkup: b2c.type === "FIXED" ? b2c.value : 0,
+    },
+  ];
 }
 
 export class WalletUtil {

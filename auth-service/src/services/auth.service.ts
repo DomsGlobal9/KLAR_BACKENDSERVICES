@@ -314,6 +314,10 @@ export class AuthService {
             status: user.status,
             verificationStatus: user.verification?.status,
             createdBy: user.createdBy || '',
+            fullName: user.fullName || '',
+            firstName: (user as any).firstName || '',
+            lastName: (user as any).lastName || '',
+            businessProfile: user.businessProfile || null,
         };
 
         console.log('✅ === getCurrentUser completed ===');

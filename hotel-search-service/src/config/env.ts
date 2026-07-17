@@ -8,6 +8,14 @@ export const env = {
     "your_super_secret_jwt_key_change_me_in_production",
   mongoUri: process.env.MONGODB_URI || "",
 
+  // Redis + backend pagination. When Redis is reachable, a search's deduplicated
+  // master result set is cached and pages are sliced from it; on a cache miss the
+  // first `searchPrefetchPages` supplier pages are fetched eagerly. When Redis is
+  // down, search falls back to live per-page fetching (see hotels.service.ts).
+  redisUrl: process.env.REDIS_URL || "redis://127.0.0.1:6379",
+  searchPrefetchPages: Number(process.env.SEARCH_PREFETCH_PAGES || 3),
+  searchResultCacheTtl: Number(process.env.SEARCH_RESULT_CACHE_TTL || 300),
+
   rateGain: {
     baseUrl: process.env.RATEGAIN_BASE_URL!,
     apiKey: process.env.RATEGAIN_API_KEY!,
