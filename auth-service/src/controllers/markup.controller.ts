@@ -132,7 +132,7 @@ export class MarkupController {
         console.log("[getMarkupByUserAndType] Request Params:", req.params);
         console.log("[getMarkupByUserAndType] Request Body:", req.body);
 
-        const userId = req.params.userId;
+        const userId = req.body.userId;
 
         console.log("[getMarkupByUserAndType] userId:", userId);
 

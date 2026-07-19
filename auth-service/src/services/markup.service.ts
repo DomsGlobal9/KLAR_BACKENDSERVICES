@@ -147,38 +147,56 @@ export class MarkupService {
     }
 
     async getMarkupByUserAndType(userId: Types.ObjectId, serviceType: string) {
-        const userData = await this.userRepository.findUserById(userId);
+        try {
+            const userData = await this.userRepository.findUserById(userId);
 
-        if (!userData) {
-            throw new Error("User not found");
+            if (!userData) {
+                throw new Error("User not found");
+            }
+
+            let targetUserId = userId;
+            if (userData.createdBy) {
+                targetUserId = userData.createdBy;
+            }
+
+            const markup = await this.markupRepo.findActiveByUser(targetUserId);
+
+            if (!markup) return null;
+
+            const target = serviceType.toUpperCase();
+            const service = markup.services.find(s => {
+                const current = (s.serviceType || '').toUpperCase();
+                return current === target ||
+                    (target === 'HOTELS' && current === 'HOTEL') ||
+                    (target === 'HOTEL' && current === 'HOTELS') ||
+                    (target === 'FLIGHTS' && current === 'FLIGHT') ||
+                    (target === 'FLIGHT' && current === 'FLIGHTS');
+            });
+
+            if (!service) return null;
+
+            // Fix: Convert to object safely
+            const markupObject = typeof markup.toObject === 'function'
+                ? markup.toObject()
+                : markup;
+
+            const result = {
+                ...markupObject,
+                services: [service],
+                _usedUserId: targetUserId,
+                _isInherited: targetUserId.toString() !== userId.toString()
+            };
+
+            console.log(`[DEBUG] Markup result:`, JSON.stringify(result, null, 2));
+            return result;
+
+        } catch (error: any) {
+            console.error(`[ERROR] getMarkupByUserAndType failed:`, {
+                userId: userId.toString(),
+                serviceType: serviceType,
+                errorMessage: error.message
+            });
+            throw error;
         }
-
-        let targetUserId = userId;
-        if (userData.createdBy) {
-            targetUserId = userData.createdBy;
-        }
-
-        const markup = await this.markupRepo.findActiveByUser(targetUserId);
-
-        if (!markup) return null;
-
-        const target = serviceType.toUpperCase();
-        const service = markup.services.find(s => {
-            const current = (s.serviceType || '').toUpperCase();
-            return current === target ||
-                (target === 'HOTELS' && current === 'HOTEL') ||
-                (target === 'HOTEL' && current === 'HOTELS') ||
-                (target === 'FLIGHTS' && current === 'FLIGHT') ||
-                (target === 'FLIGHT' && current === 'FLIGHTS');
-        });
-
-        if (!service) return null;
-
-        return {
-            ...markup.toObject(),
-            services: [service],
-            _usedUserId: targetUserId,
-            _isInherited: targetUserId.toString() !== userId.toString()
-        };
     }
 }
