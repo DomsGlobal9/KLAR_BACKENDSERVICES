@@ -6,6 +6,7 @@ const route = Router();
 
 
 route.post('/', authenticateJWT, MarkupController.addMarkup);
+route.get('/:serviceType', MarkupController.getMarkupByUserAndType);
 route.get('/my-markup', authenticateJWT, MarkupController.getMyMarkups);
 route.put('/bulk-update', authenticateJWT, MarkupController.bulkUpdate);
 route.get('/monthly-revenue', authenticateJWT, MarkupController.getMonthlyRevenue);

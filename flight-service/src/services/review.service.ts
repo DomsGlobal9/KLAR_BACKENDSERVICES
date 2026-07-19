@@ -5,6 +5,15 @@ import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
 import RedisCacheService from "../cache/redisCache.service";
 import { v4 as uuidv4 } from "uuid";
 import { FlightReviewDataService } from "./flightReviewData.service";
+import { envConfig } from "../config";
+
+export const SERVICE_TYPES = {
+    FLIGHTS: "FLIGHTS",
+    HOTELS: "hotel",
+    BUS: "bus",
+    TRAIN: "train",
+    INSURANCE: "insurance"
+} as const;
 
 class ReviewService {
 
@@ -30,18 +39,15 @@ class ReviewService {
 
             const rawData = response.data;
             const mappedData = TripjackFieldMapper.map(rawData);
-            
-            
+
+
             await RedisCacheService.set(sessionId, {
                 raw: mappedData,
             }, 1800);
-            
-            const finalReviewResult = {
-                mappedData,
-                sessionId
-            };
-            this.reviewService.storeReviewData(finalReviewResult as any);
-            
+
+            const markupData = await this.getMarkupByServiceType(SERVICE_TYPES.FLIGHTS);
+            console.log("[MARKUP DATA] Markup data: ", markupData);
+
 
             return {
                 mappedData,
@@ -69,6 +75,34 @@ class ReviewService {
             }
 
             // If no specific error from TripJack, throw generic error
+            throw error;
+        }
+    }
+
+    async getMarkupByServiceType(serviceType: string) {
+        try {
+            console.log(`[DEBUG] URL: ${envConfig.AUTH_SERVICE}`);
+
+            const response = await axios.get(
+                `${envConfig.AUTH_SERVICE}/markup/${serviceType}`,
+                {
+                    params: {
+                        userId: process.env.USER_ID
+                    },
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+
+            return response.data;
+        } catch (error: any) {
+            console.error("Get Markup API ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
             throw error;
         }
     }
