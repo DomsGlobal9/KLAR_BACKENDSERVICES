@@ -2,6 +2,7 @@ import { UserModel, IUser, LoginType } from "../models/user.model";
 import { Roles } from "../constants/roles";
 import { UserStatus } from "../constants/userStatus";
 import { ClientType } from "../constants/clientTypes";
+import { Types } from 'mongoose';
 
 export class UserRepository {
 
@@ -15,6 +16,14 @@ export class UserRepository {
         }
 
         return UserRepository.instance;
+    }
+
+    async findUserById(userId: Types.ObjectId) {
+        if (!userId) return null;
+
+        return await UserModel.findOne({
+            _id: userId,
+        });
     }
 
 

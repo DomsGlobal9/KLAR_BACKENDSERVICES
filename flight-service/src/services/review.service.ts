@@ -5,10 +5,83 @@ import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
 import RedisCacheService from "../cache/redisCache.service";
 import { v4 as uuidv4 } from "uuid";
 import { FlightReviewDataService } from "./flightReviewData.service";
+import { envConfig } from "../config";
+
+export const SERVICE_TYPES = {
+    FLIGHTS: "FLIGHTS",
+    HOTELS: "hotel",
+    BUS: "bus",
+    TRAIN: "train",
+    INSURANCE: "insurance"
+} as const;
 
 class ReviewService {
 
-    private reviewService = new FlightReviewDataService();
+    private applyMarkupToFare(mappedData: any, markup: any): any {
+        const finalData = JSON.parse(JSON.stringify(mappedData));
+        const percentageMarkup = markup.services?.[0]?.percentageMarkup || 0;
+        const fixedMarkup = markup.services?.[0]?.fixedMarkup || 0;
+
+        if (percentageMarkup === 0 && fixedMarkup === 0) {
+            return finalData;
+        }
+
+        const appliedTo = markup.appliedTo || 'BASE_FARE';
+
+        if (finalData.TripInformation && Array.isArray(finalData.TripInformation)) {
+            finalData.TripInformation = finalData.TripInformation.map((trip: any) => {
+                if (trip.TotalPriceList && Array.isArray(trip.TotalPriceList)) {
+                    trip.TotalPriceList = trip.TotalPriceList.map((priceItem: any) => {
+                        if (priceItem.FareDetails?.AdultFare?.FareComponents) {
+                            const fareComponents = priceItem.FareDetails.AdultFare.FareComponents;
+
+                            if (fareComponents.AdditionalFareComponents?.TotalAdditionalFare) {
+                                const taxComponents = fareComponents.AdditionalFareComponents.TotalAdditionalFare;
+
+                                let taxAmount = 0;
+
+                                if (appliedTo === 'BASE_FARE') {
+                                    taxAmount = fareComponents.BaseFare || 0;
+                                } else {
+                                    taxAmount = fareComponents.TotalFare || fareComponents.NetFare || 0;
+                                }
+
+                                const markupAmount = (taxAmount * percentageMarkup / 100) + fixedMarkup;
+
+                                if (taxComponents.CarrierMiscFee) {
+                                    taxComponents.CarrierMiscFee += markupAmount;
+                                } else {
+                                    taxComponents.MarkupAmount = (taxComponents.MarkupAmount || 0) + markupAmount;
+                                }
+
+                                fareComponents.MarkupAmount = markupAmount;
+                                fareComponents.TotalFare = (fareComponents.TotalFare || fareComponents.NetFare || 0) + markupAmount;
+                                fareComponents.NetFare = (fareComponents.NetFare || 0) + markupAmount;
+
+                                if (finalData.totalPriceInfo?.totalFareDetail?.FareComponents) {
+                                    const totalFareComp = finalData.totalPriceInfo.totalFareDetail.FareComponents;
+                                    totalFareComp.MarkupAmount = (totalFareComp.MarkupAmount || 0) + markupAmount;
+                                    totalFareComp.TotalFare = (totalFareComp.TotalFare || 0) + markupAmount;
+                                    totalFareComp.NetFare = (totalFareComp.NetFare || 0) + markupAmount;
+                                }
+                            }
+                        }
+                        return priceItem;
+                    });
+                }
+                return trip;
+            });
+        }
+
+        finalData.markupApplied = {
+            percentage: percentageMarkup,
+            fixed: fixedMarkup,
+            appliedTo: appliedTo,
+            markupId: markup._id
+        };
+
+        return finalData;
+    }
 
     async reviewFare(priceIds: string[]) {
         const sessionId = uuidv4();
@@ -30,21 +103,31 @@ class ReviewService {
 
             const rawData = response.data;
             const mappedData = TripjackFieldMapper.map(rawData);
-            
-            
+
             await RedisCacheService.set(sessionId, {
                 raw: mappedData,
             }, 1800);
-            
-            const finalReviewResult = {
-                mappedData,
-                sessionId
-            };
-            this.reviewService.storeReviewData(finalReviewResult as any);
-            
+
+            const markupData = await this.getMarkupByServiceType(SERVICE_TYPES.FLIGHTS);
+
+            let finalData = mappedData;
+            if (markupData?.success && markupData?.data) {
+                finalData = this.applyMarkupToFare(mappedData, markupData.data);
+            }
+
+            console.log("[FINAL FARE WITH MARKUP]", JSON.stringify({
+                originalBaseFare: mappedData.TripInformation?.[0]?.TotalPriceList?.[0]?.FareDetails?.AdultFare?.FareComponents?.BaseFare,
+                originalTaxes: mappedData.TripInformation?.[0]?.TotalPriceList?.[0]?.FareDetails?.AdultFare?.FareComponents?.AdditionalFareComponents?.TotalAdditionalFare,
+                finalTotalFare: finalData.TripInformation?.[0]?.TotalPriceList?.[0]?.FareDetails?.AdultFare?.FareComponents?.TotalFare,
+                markupApplied: finalData.markupApplied
+            }, null, 2));
+
+            await RedisCacheService.set(sessionId, {
+                raw: finalData,
+            }, 1800);
 
             return {
-                mappedData,
+                mappedData: finalData,
                 sessionId
             };
 
@@ -55,7 +138,6 @@ class ReviewService {
                 message: error.message
             });
 
-            // Extract and format the error from TripJack response
             const tripjackError = error.response?.data;
 
             if (tripjackError && tripjackError.errors && tripjackError.errors.length > 0) {
@@ -68,7 +150,34 @@ class ReviewService {
                 throw customError;
             }
 
-            // If no specific error from TripJack, throw generic error
+            throw error;
+        }
+    }
+
+    async getMarkupByServiceType(serviceType: string) {
+        try {
+            console.log(`[DEBUG] URL: ${envConfig.AUTH_SERVICE}`);
+
+            const response = await axios.post(
+                `${envConfig.AUTH_SERVICE}/markup/${serviceType}`,
+                {
+                    userId: process.env.USER_ID
+                },
+                {
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+
+            return response.data;
+        } catch (error: any) {
+            console.error("Get Markup API ERROR >>>", {
+                status: error.response?.status,
+                data: JSON.stringify(error.response?.data, null, 2),
+                message: error.message
+            });
+
             throw error;
         }
     }
