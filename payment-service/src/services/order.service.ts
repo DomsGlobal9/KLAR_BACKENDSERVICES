@@ -64,7 +64,7 @@ export const getPaymentStatusService = async (orderId: string) => {
     if (order.cfOrderId) {
         try {
             const paymentStatus = await getCashfreePaymentStatus(order.cfOrderId);
-            let finalStatus: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' = order.status;
+            let finalStatus: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED' = order.status;
 
             if (paymentStatus.payments && paymentStatus.payments.length > 0) {
                 const latestPayment = paymentStatus.payments[0];
@@ -116,7 +116,7 @@ export const syncOrderStatusService = async (orderId: string) => {
     const paymentStatus = await getCashfreePaymentStatus(order.cfOrderId);
     console.log("@@@@@@@@@@@@@@@@@@@ The payment status we get", JSON.stringify(paymentStatus, null, 2));
 
-    let status: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' = order.status;
+    let status: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED' = order.status;
 
     // Check if paymentStatus is an array and has elements
     if (Array.isArray(paymentStatus) && paymentStatus.length > 0) {

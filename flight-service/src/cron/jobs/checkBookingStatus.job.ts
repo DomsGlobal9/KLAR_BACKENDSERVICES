@@ -175,6 +175,9 @@ const checkAndUpdateBookingStatus = async (
                         console.error(`❌ Failed to credit wallet for booking ${booking.bookingId}:`, error.message);
                     }
                 }
+                else {
+                    
+                }
             }
         }
     }

@@ -20,7 +20,7 @@ import {
     IWebhookPaymentData
 } from '../types/razorpay.types';
 
-const getRazorpayInstance = (platform: 'B2B' | 'B2C'): Razorpay => {
+export const getRazorpayInstance = (platform: 'B2B' | 'B2C'): Razorpay => {
     const config = platform === 'B2B' ? razorpayConfig.b2b : razorpayConfig.b2c;
 
     if (!config.keyId || !config.keySecret) {
@@ -278,7 +278,7 @@ export const syncRazorpayOrderStatusService = async (orderId: string): Promise<a
     const razorpayOrderResponse = await razorpay.orders.fetch(order.razorpayOrderId);
     const razorpayOrder = razorpayOrderResponse as unknown as IRazorpayOrderResponse;
 
-    let status: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' = order.status;
+    let status: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED' = order.status;
 
     if (razorpayOrder.status === 'paid') {
         status = 'SUCCESS';
