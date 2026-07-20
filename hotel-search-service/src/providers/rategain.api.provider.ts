@@ -1,9 +1,10 @@
 import { rateGainClient } from "../clients/rategain.client";
 import {
+  buildPublicPricing,
   calculateEnrichedPricing,
   calculateNightsFromDates,
 } from "../utils/pricing.util";
-import { getMarkupRules } from "../utils/auth";
+import { resolveMarkupRules } from "../utils/auth";
 import { HotelModel } from "../models/Hotel.model";
 
 /** Full supplier request/response bodies. Multi-megabyte and pretty-printed — opt-in only. */
@@ -122,7 +123,10 @@ export class RateGainApiProvider {
     );
 
     // Start markup fetch in parallel — doesn't block the RateGain API call
-    const markupRulesPromise = getMarkupRules(token);
+    const markupRulesPromise = resolveMarkupRules(
+      payload.clientType === "B2B" ? "B2B" : "B2C",
+      token,
+    );
 
     // Same for the static-data lookup: it enriches the response but nothing in
     // the RateGain call depends on it, so it must not sit behind it.
@@ -238,14 +242,14 @@ export class RateGainApiProvider {
             ...rate,
             price: enriched.finalTotalPrice,
             netPrice: enriched.basePrice,
-            pricing: {
-              totalPrice,
+            pricing: buildPublicPricing({
+              enriched,
               taxes: taxAmount,
               mf: 0,
               mft: 0,
               currency,
-              ...enriched,
-            },
+              clientType: payload.clientType === "B2B" ? "B2B" : "B2C",
+            }),
           };
         } catch {
           return rate; // fallback: return rate unchanged if enrichment fails
