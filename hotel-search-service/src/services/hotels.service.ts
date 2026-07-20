@@ -31,12 +31,22 @@ const SEARCH_CACHE_MAX_ENTRIES = 500;
 
 const DEFAULT_PAGE_SIZE = 20;
 
+// Ceiling on how many times a single request will extend the master list. Guards
+// against a supplier that keeps claiming `hasMore` while returning nothing new.
+const MAX_EXTEND_ROUNDS = 5;
+
 // What we persist in Redis per search: the pre-markup, deduped, geofenced master
 // list plus the destination inventory figure (which is derived from supplier
-// totals and so can't be recomputed from the list alone on a cache hit).
+// totals and so can't be recomputed from the list alone on a cache hit), plus
+// enough bookkeeping to resume fetching where we left off when the client
+// scrolls past what we hold.
 interface CachedMaster {
   hotels: UnifiedHotel[];
   inventoryCount: number;
+  // Supplier pages consumed so far; the next extension resumes at +1.
+  supplierPagesFetched: number;
+  // Whether any supplier still had a page left after the last one we fetched.
+  providerHasMore: boolean;
 }
 
 export class HotelsService {
@@ -126,6 +136,15 @@ export class HotelsService {
       let master = await searchResultCache.get<CachedMaster>(masterKey);
 
       if (master) {
+        // Entries cached before on-demand extension existed carry neither field.
+        // Assume the prefetch depth and that suppliers may still have pages —
+        // the extension's own "a round that added nothing ends it" guard corrects
+        // an optimistic guess cheaply, whereas defaulting to `false` would keep
+        // serving the old capped list until the entry expired.
+        if (typeof master.supplierPagesFetched !== "number") {
+          master.supplierPagesFetched = env.searchPrefetchPages;
+          master.providerHasMore = true;
+        }
         console.log(
           `[Search] master cache HIT for "${searchPayload.destination}" (${master.hotels.length} hotels) — serving page ${pageNo} from cache`,
         );
@@ -138,8 +157,34 @@ export class HotelsService {
           clientType,
           env.searchPrefetchPages,
         );
-        master = { hotels: built.hotels, inventoryCount: built.inventoryCount };
+        master = {
+          hotels: built.hotels,
+          inventoryCount: built.inventoryCount,
+          supplierPagesFetched: built.pagesFetched,
+          providerHasMore: built.providerHasMore,
+        };
         await searchResultCache.set(masterKey, master);
+      }
+
+      // The prefetch above is a head start, not a ceiling. If the client has
+      // scrolled past what we hold and the suppliers still have pages, pull more
+      // and re-cache — otherwise the result set would be permanently capped at
+      // the prefetch depth however much inventory the destination really has.
+      const needed = pageNo * limit;
+      if (master.hotels.length < needed && master.providerHasMore) {
+        const extended = await this.extendMasterList(
+          master,
+          searchPayload,
+          clientType,
+          needed,
+        );
+        if (
+          extended.hotels.length !== master.hotels.length ||
+          extended.providerHasMore !== master.providerHasMore
+        ) {
+          master = extended;
+          await searchResultCache.set(masterKey, master);
+        }
       }
 
       response = this.finalizeResponse(
@@ -149,7 +194,12 @@ export class HotelsService {
         markupRules,
         nights,
         master.inventoryCount,
-        { slice: true, page: pageNo, limit },
+        {
+          slice: true,
+          page: pageNo,
+          limit,
+          providerHasMore: master.providerHasMore,
+        },
       );
     } else {
       // ── Fallback path (Redis down): live-fetch only the requested page ──────
@@ -350,9 +400,15 @@ export class HotelsService {
     clientType: "B2B" | "B2C",
     pages: number,
     startPage = 1,
-  ): Promise<{ hotels: UnifiedHotel[]; inventoryCount: number; providerHasMore: boolean }> {
+  ): Promise<{
+    hotels: UnifiedHotel[];
+    inventoryCount: number;
+    providerHasMore: boolean;
+    pagesFetched: number;
+  }> {
     const collected: UnifiedHotel[] = [];
     const providerStats: Record<string, { count: number; total: number; hasMore: boolean }> = {};
+    let pagesFetched = 0;
 
     for (let i = 0; i < pages; i++) {
       const pageNo = startPage + i;
@@ -362,6 +418,7 @@ export class HotelsService {
         pageNo,
       );
       collected.push(...hotels);
+      pagesFetched++;
       // Keep the latest stats per supplier — `total` is stable across pages and
       // `hasMore` from the last page fetched reflects whether more remain.
       for (const [code, stat] of Object.entries(pageStats)) {
@@ -417,7 +474,63 @@ export class HotelsService {
         `(merged ${dedupMeta.duplicatedCount}), after geofence ${finalOutputHotels.length}, inventory ${inventoryCount}`,
     );
 
-    return { hotels: finalOutputHotels, inventoryCount, providerHasMore };
+    return { hotels: finalOutputHotels, inventoryCount, providerHasMore, pagesFetched };
+  }
+
+  /**
+   * Grow a cached master list until it covers `needed` hotels (or the suppliers
+   * run dry), resuming from the supplier page after the last one consumed.
+   * Deduplicates across the union so a hotel we already hold can never reappear
+   * on a later page, and preserves existing order so pages already served to the
+   * client stay stable.
+   */
+  private async extendMasterList(
+    master: CachedMaster,
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    needed: number,
+  ): Promise<CachedMaster> {
+    let current = master;
+
+    for (let round = 0; round < MAX_EXTEND_ROUNDS; round++) {
+      if (current.hotels.length >= needed || !current.providerHasMore) break;
+
+      const startPage = current.supplierPagesFetched + 1;
+      console.log(
+        `[Search] extending master list for "${searchPayload.destination}": ` +
+          `have ${current.hotels.length}, need ${needed} — fetching supplier page(s) from ${startPage}`,
+      );
+
+      const built = await this.fetchMasterList(
+        searchPayload,
+        clientType,
+        env.searchExtendPages,
+        startPage,
+      );
+
+      const before = current.hotels.length;
+      const { items: merged } = deduplicateHotels([
+        ...current.hotels,
+        ...built.hotels,
+      ]);
+      const added = merged.length - before;
+
+      current = {
+        hotels: merged,
+        inventoryCount: Math.max(current.inventoryCount, built.inventoryCount),
+        supplierPagesFetched: current.supplierPagesFetched + built.pagesFetched,
+        // A round that produced nothing new means the suppliers are effectively
+        // exhausted, whatever their `hasMore` flag claims — stop either way.
+        providerHasMore: built.providerHasMore && added > 0,
+      };
+
+      console.log(
+        `[Search] master list extended: +${added} hotels (now ${current.hotels.length}), ` +
+          `supplier pages consumed ${current.supplierPagesFetched}, more=${current.providerHasMore}`,
+      );
+    }
+
+    return current;
   }
 
   /**
@@ -433,7 +546,13 @@ export class HotelsService {
     markupRules: any[],
     nights: number,
     inventoryCount: number,
-    opts: { slice: boolean; page?: number; limit?: number; legacyHasMore?: boolean },
+    opts: {
+      slice: boolean;
+      page?: number;
+      limit?: number;
+      legacyHasMore?: boolean;
+      providerHasMore?: boolean;
+    },
   ) {
     // 1. Fold the master list into the search's running facets and return the
     //    cumulative counts. Built from the unfiltered/geofenced list so that
@@ -617,7 +736,18 @@ export class HotelsService {
       const start = (page - 1) * limit;
       const end = start + limit;
       pageItems = filteredResults.slice(start, end);
-      hasMore = end < filteredResults.length;
+      // More to serve if this page didn't reach the end of what we hold, or if
+      // the suppliers still have pages we haven't pulled into the master list.
+      //
+      // Never claim more on an *empty* page. A client that jumps far beyond the
+      // master list can outrun MAX_EXTEND_ROUNDS, leaving nothing to slice; the
+      // suppliers may genuinely have more, but answering "empty, keep asking"
+      // strands the client in a loop it can't make progress on. Ending cleanly
+      // costs only the deep-jump case — sequential scrolling grows the list a
+      // page at a time and never lands here.
+      hasMore =
+        pageItems.length > 0 &&
+        (end < filteredResults.length || (opts.providerHasMore ?? false));
     } else {
       pageItems = filteredResults;
       hasMore = opts.legacyHasMore ?? false;
