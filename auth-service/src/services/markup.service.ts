@@ -2,13 +2,16 @@ import { Types } from 'mongoose';
 import { IMarkup, IMarkupService } from '../models/markup.model';
 import { MarkupRepository } from '../repositories/markup.repository';
 import { MarkupEarningRepository } from '../repositories/markup-earning.repository';
+import { UserRepository } from '../repositories/user.repository';
 
 export class MarkupService {
 
     private markupRepo = new MarkupRepository();
     private earningRepo = new MarkupEarningRepository();
+    private userRepository = UserRepository.getInstance();
 
     async getAll(userId: Types.ObjectId, serviceType?: string) {
+
         const markup = await this.markupRepo.findActiveByUser(userId);
 
         if (!markup) return null;
@@ -18,11 +21,11 @@ export class MarkupService {
         const target = serviceType.toUpperCase();
         const service = markup.services.find(s => {
             const current = (s.serviceType || '').toUpperCase();
-            return current === target || 
-                   (target === 'HOTELS' && current === 'HOTEL') || 
-                   (target === 'HOTEL' && current === 'HOTELS') ||
-                   (target === 'FLIGHTS' && current === 'FLIGHT') ||
-                   (target === 'FLIGHT' && current === 'FLIGHTS');
+            return current === target ||
+                (target === 'HOTELS' && current === 'HOTEL') ||
+                (target === 'HOTEL' && current === 'HOTELS') ||
+                (target === 'FLIGHTS' && current === 'FLIGHT') ||
+                (target === 'FLIGHT' && current === 'FLIGHTS');
         });
 
         if (!service) return {};
@@ -39,6 +42,12 @@ export class MarkupService {
         appliedTo?: IMarkup['appliedTo'];
         isActive?: boolean;
     }) {
+
+        const userData = await this.userRepository.findUserById(userId);
+
+        if (userData?.createdBy) {
+            throw new Error("You have no access to create and get personal markup");
+        }
 
         if (data.services && Array.isArray(data.services)) {
             return this.markupRepo.upsertFull(userId, {
@@ -135,5 +144,59 @@ export class MarkupService {
         startDate.setMonth(startDate.getMonth() - monthsBack);
 
         return this.earningRepo.getMonthlyRevenue(userId, startDate);
+    }
+
+    async getMarkupByUserAndType(userId: Types.ObjectId, serviceType: string) {
+        try {
+            const userData = await this.userRepository.findUserById(userId);
+
+            if (!userData) {
+                throw new Error("User not found");
+            }
+
+            let targetUserId = userId;
+            if (userData.createdBy) {
+                targetUserId = userData.createdBy;
+            }
+
+            const markup = await this.markupRepo.findActiveByUser(targetUserId);
+
+            if (!markup) return null;
+
+            const target = serviceType.toUpperCase();
+            const service = markup.services.find(s => {
+                const current = (s.serviceType || '').toUpperCase();
+                return current === target ||
+                    (target === 'HOTELS' && current === 'HOTEL') ||
+                    (target === 'HOTEL' && current === 'HOTELS') ||
+                    (target === 'FLIGHTS' && current === 'FLIGHT') ||
+                    (target === 'FLIGHT' && current === 'FLIGHTS');
+            });
+
+            if (!service) return null;
+
+            // Fix: Convert to object safely
+            const markupObject = typeof markup.toObject === 'function'
+                ? markup.toObject()
+                : markup;
+
+            const result = {
+                ...markupObject,
+                services: [service],
+                _usedUserId: targetUserId,
+                _isInherited: targetUserId.toString() !== userId.toString()
+            };
+
+            console.log(`[DEBUG] Markup result:`, JSON.stringify(result, null, 2));
+            return result;
+
+        } catch (error: any) {
+            console.error(`[ERROR] getMarkupByUserAndType failed:`, {
+                userId: userId.toString(),
+                serviceType: serviceType,
+                errorMessage: error.message
+            });
+            throw error;
+        }
     }
 }

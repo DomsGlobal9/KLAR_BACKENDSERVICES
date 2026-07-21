@@ -34,5 +34,6 @@ route.put('/bulk-update', authenticateJWT, MarkupController.bulkUpdate);
 route.get('/monthly-revenue', authenticateJWT, MarkupController.getMonthlyRevenue);
 route.delete('/:serviceType', authenticateJWT, MarkupController.deleteOne);
 route.delete('/:serviceId', authenticateJWT, MarkupController.deleteByServiceId);
+route.post('/:serviceType', MarkupController.getMarkupByUserAndType);
 
 export default route;
