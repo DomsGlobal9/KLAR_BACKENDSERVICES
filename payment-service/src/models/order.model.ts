@@ -23,6 +23,7 @@ export interface IOrder extends Document {
     userId: string;
     userEmail: string;
     mobile?: string;
+    bookingId?: string;
     clientType: string;
     amount: number;
     currency: string;
@@ -47,12 +48,10 @@ const RefundSchema: Schema = new Schema(
         refundId: {
             type: String,
             required: true,
-            unique: true,
         },
         razorpayRefundId: {
             type: String,
             required: true,
-            unique: true,
         },
         paymentId: {
             type: String,
@@ -87,6 +86,10 @@ const RefundSchema: Schema = new Schema(
     }
 );
 
+
+RefundSchema.index({ refundId: 1 }, { unique: true });
+RefundSchema.index({ razorpayRefundId: 1 }, { unique: true });
+
 const OrderSchema: Schema = new Schema(
     {
         userId: {
@@ -100,6 +103,9 @@ const OrderSchema: Schema = new Schema(
         mobile: {
             type: String,
             required: false,
+        },
+        bookingId: {
+            type: String,
         },
         clientType: {
             type: String,
@@ -122,7 +128,6 @@ const OrderSchema: Schema = new Schema(
         orderId: {
             type: String,
             required: true,
-            unique: true,
         },
         cfOrderId: {
             type: String,
@@ -168,13 +173,34 @@ const OrderSchema: Schema = new Schema(
     }
 );
 
+
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ paymentGateway: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ platform: 1 });
-OrderSchema.index({ razorpayOrderId: 1 });
 OrderSchema.index({ razorpayPaymentId: 1 });
-OrderSchema.index({ 'refunds.refundId': 1 });
-OrderSchema.index({ 'refunds.razorpayRefundId': 1 });
+OrderSchema.index({ cfOrderId: 1 });
+
+
+OrderSchema.index({ razorpayOrderId: 1 }, { 
+    unique: true, 
+    sparse: true,
+    background: true 
+});
+
+OrderSchema.index({ bookingId: 1 }, { 
+    unique: true,
+    sparse: true,
+    background: true 
+});
+
+OrderSchema.index({ orderId: 1 }, { 
+    unique: true,
+    background: true 
+});
+
+
+OrderSchema.index({ userId: 1, status: 1 });
+OrderSchema.index({ platform: 1, status: 1 });
 
 export const OrderModel = mongoose.model<IOrder>('Order', OrderSchema);
