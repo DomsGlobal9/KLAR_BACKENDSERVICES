@@ -265,10 +265,10 @@ function buildDestinations(
   ];
 
   candidates.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
     const aHome = a.entry.countryCode === HOME_COUNTRY ? 0 : 1;
     const bHome = b.entry.countryCode === HOME_COUNTRY ? 0 : 1;
     if (aHome !== bHome) return aHome - bHome;
-    if (a.score !== b.score) return a.score - b.score;
     // A state outranks a city of equal standing: it is the broader search.
     const aKind = a.kind === "state" ? 0 : 1;
     const bKind = b.kind === "state" ? 0 : 1;
