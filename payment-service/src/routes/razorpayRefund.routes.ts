@@ -9,12 +9,17 @@ import {
     getAllRefundsByUserIdController,
     fetchRefundFromRazorpayController,
     fetchAllRefundsFromRazorpayController,
-    updateRefundNotesController
+    updateRefundNotesController,
+    createRefundByBookingIdController
 } from '../controllers/razorpayRefund.controller';
 
 const router = express.Router();
 
 router.post('/', createRefundController);
+
+router.post('/bookingid', createRefundByBookingIdController);
+
+
 
 router.get('/:refundId', getRefundByRefundIdController);
 

@@ -9,7 +9,7 @@ import {
     updateOrderStatusBasedOnRefunds,
     getAllRefundsByUserId
 } from '../repositories/razorpayRefund.repository';
-import { getOrderByRazorpayPaymentId, getOrderByOrderId } from '../repositories/order.repository';
+import { getOrderByRazorpayPaymentId, getOrderByOrderId, getOrderByBookingId } from '../repositories/order.repository';
 import { IRefund, RefundStatus } from '../models/order.model';
 import { ICreateRefundParams, IRefundResponse, IRazorpayRefundResponse } from '../types/razorpayRefund.types';
 import { getRazorpayInstance } from './razorpay.service';
@@ -155,6 +155,74 @@ export const createRefundService = async (
             }
         );
 
+        throw new Error(error?.error?.description || error.message || 'Failed to process refund');
+    }
+};
+
+export const createRefundByBookingIdService = async (
+    bookingId: string,
+    amount: number,
+): Promise<IRefundResponse> => {
+    if (!bookingId) throw new Error('bookingId is required');
+    if (!amount) throw new Error('Amount is required for refund');
+
+    const order = await getOrderByBookingId(bookingId);
+    if (!order) throw new Error(`Order not found for bookingId: ${bookingId}`);
+    if (order.platform !== 'B2C' || order.clientType !== 'B2C') throw new Error('Refunds are only allowed for B2C orders');
+    if (order.paymentGateway !== 'razorpay') throw new Error('This order is not a Razorpay order.');
+    if (order.status !== 'SUCCESS') throw new Error('This payment is not completed yet.');
+
+    const paymentId = order.razorpayPaymentId;
+    if (!paymentId) throw new Error('No payment found for this order');
+
+    const payment = await getRazorpayInstance(order.platform || 'B2C').payments.fetch(paymentId) as any;
+    if (payment.status !== 'captured') throw new Error(`Payment status is ${payment.status}, only captured payments can be refunded`);
+
+    const maxRefundableAmount = (Number(payment.amount) / 100) - (order.totalRefundedAmount || 0);
+    const refundAmount = amount || maxRefundableAmount;
+    if (refundAmount <= 0) throw new Error('Refund amount must be greater than 0');
+    if (refundAmount > maxRefundableAmount) throw new Error(`Refund amount (${refundAmount}) exceeds maximum refundable amount (${maxRefundableAmount})`);
+
+    const refundId = generateRefundId();
+    const refundData: Partial<IRefund> = {
+        refundId,
+        razorpayRefundId: '',
+        paymentId,
+        amount: refundAmount,
+        currency: payment.currency || 'INR',
+        status: 'pending',
+        notes: { bookingId, orderId: order.orderId, userId: order.userId, userEmail: order.userEmail, platform: order.platform, requestedAt: new Date().toISOString() }
+    };
+
+    const updatedOrder = await createRefund(order.orderId, refundData);
+    if (!updatedOrder) throw new Error('Failed to create refund record');
+
+    try {
+        const razorpayRefund = await getRazorpayInstance(order.platform || 'B2C').payments.refund(paymentId, {
+            amount: Math.round(refundAmount * 100),
+            notes: { refundId, bookingId, orderId: order.orderId, userId: order.userId }
+        });
+
+        const updatedRefund = await updateRefund(order.orderId, refundId, {
+            razorpayRefundId: (razorpayRefund as IRazorpayRefundResponse).id,
+            status: 'processed',
+            processedAt: new Date(),
+            notes: { ...refundData.notes, razorpayRefundResponse: razorpayRefund }
+        });
+
+        await updateOrderStatusBasedOnRefunds(order.orderId);
+        if (!updatedRefund) throw new Error('Failed to update refund record');
+
+        const refund = updatedRefund.refunds.find((r: IRefund) => r.refundId === refundId);
+        if (!refund) throw new Error('Refund not found after update');
+
+        const { refundId: rId, razorpayRefundId, paymentId: pId, amount: amt, currency, status, reason, notes, processedAt, createdAt, updatedAt } = refund;
+        return { refundId: rId, razorpayRefundId, paymentId: pId, amount: amt, currency, status, reason, notes, processedAt, createdAt, updatedAt };
+    } catch (error: any) {
+        await updateRefund(order.orderId, refundId, {
+            status: 'failed',
+            notes: { ...refundData.notes, error: error.message || 'Refund failed' }
+        });
         throw new Error(error?.error?.description || error.message || 'Failed to process refund');
     }
 };

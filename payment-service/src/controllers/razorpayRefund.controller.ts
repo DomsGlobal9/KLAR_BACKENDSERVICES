@@ -9,7 +9,8 @@ import {
     getAllRefundsByUserIdService,
     fetchRefundFromRazorpayService,
     fetchAllRefundsFromRazorpayService,
-    updateRefundNotesService
+    updateRefundNotesService,
+    createRefundByBookingIdService
 } from '../services/razorpayRefund.service';
 import {
     validatePaymentIdParam,
@@ -41,6 +42,44 @@ export const createRefundController = async (req: Request, res: Response) => {
             reason,
             notes
         });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Refund processed successfully',
+            data: refund
+        });
+
+    } catch (error: any) {
+        console.error('Create refund controller error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to process refund'
+        });
+    }
+};
+
+export const createRefundByBookingIdController = async (req: Request, res: Response) => {
+    try {
+        const { bookingId, amount } = req.body;
+
+        if (!bookingId) {
+            return res.status(400).json({
+                success: false,
+                message: '[CONTROLLER] Booking Id is required'
+            });
+        }
+
+        if (!amount) {
+            return res.status(400).json({
+                success: false,
+                message: '[CONTROLLER] Amount is required'
+            });
+        }
+
+        const refund = await createRefundByBookingIdService(
+            bookingId,
+            amount
+        );
 
         return res.status(200).json({
             success: true,
