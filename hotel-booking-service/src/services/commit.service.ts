@@ -11,7 +11,7 @@ import { notificationService } from "./notification.service";
 import { refundService } from "./refund.service";
 import { WalletUtil, MarkupRule } from "../utils/wallet.util";
 import { PaymentUtil } from "../utils/payment.util";
-import { PricingUtil, round2 } from "../utils/pricing.util";
+import { PricingUtil, round2, b2cPriceFloor } from "../utils/pricing.util";
 
 // ─── Async Polling Helpers ──────────────────────────────────────────────────
 
@@ -403,10 +403,16 @@ class CommitService {
       } else {
         // B2C/GUEST: the browser cannot be trusted to say a payment happened.
         // Verify the Razorpay payment SERVER-SIDE before booking. It must be
-        // genuinely captured AND cover both the quoted selling price and the net
-        // we will owe the supplier (so a tampered-low price can never book).
-        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
-        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        // genuinely captured AND cover both the quoted selling price and our
+        // floor (so a tampered-low price can never book).
+        //
+        // The floor is the api net (supplier net + the master's platform
+        // markup) plus the master's B2C markup — NOT the raw supplier net.
+        // Flooring at supplier net would let a tampered price book at cost,
+        // forfeiting both margins with no signal to anyone: B2C markup is
+        // invisible to the customer and platform markup is invisible to agents.
+        const apiNet = Number(freshPrecheck.price ?? netPrice) || 0;
+        const requiredAmount = round2(Math.max(finalPrice, b2cPriceFloor(apiNet)));
         // Guard against a stale/reused payment id backing a second booking.
         await this.#assertPaymentNotReused(payload.razorpayPaymentId, payload.idempotencyKey);
         const pay = await PaymentUtil.verifyRazorpayPayment({
@@ -656,9 +662,9 @@ class CommitService {
       } else {
         // B2C/GUEST: verify the Razorpay payment SERVER-SIDE before booking (see
         // the TripJack path for the rationale). Must cover the selling price AND
-        // the net we owe RateGain.
-        const supplierFloor = Number(freshPrecheck.supplierNet ?? netPrice) || 0;
-        const requiredAmount = round2(Math.max(finalPrice, supplierFloor));
+        // our floor — api net (incl. platform markup) plus the B2C markup.
+        const apiNet = Number(freshPrecheck.price ?? netPrice) || 0;
+        const requiredAmount = round2(Math.max(finalPrice, b2cPriceFloor(apiNet)));
         // Guard against a stale/reused payment id backing a second booking.
         await this.#assertPaymentNotReused(payload.razorpayPaymentId, payload.idempotencyKey);
         const pay = await PaymentUtil.verifyRazorpayPayment({

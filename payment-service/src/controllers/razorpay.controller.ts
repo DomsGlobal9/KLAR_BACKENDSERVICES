@@ -19,6 +19,7 @@ import {
     validateRazorpayOrderIdParam
 } from '../utils/validator/razorpay.validation';
 
+
 export const createRazorpayOrderController = async (req: Request, res: Response) => {
     try {
         const error = validateCreateOrder(req.body);
@@ -26,12 +27,20 @@ export const createRazorpayOrderController = async (req: Request, res: Response)
             return res.status(400).json({ success: false, message: error });
         }
 
-        const { userId, userEmail, mobile, clientType, amount, currency = 'INR', platform } = req.body;
+        const { userId, userEmail, mobile, clientType, amount, currency = 'INR', platform, bookingId } = req.body;
 
         if (!platform || !['B2B', 'B2C'].includes(platform)) {
             return res.status(400).json({
                 success: false,
                 message: 'platform must be B2B or B2C'
+            });
+        }
+
+        
+        if (platform === 'B2C' && !bookingId) {
+            return res.status(400).json({
+                success: false,
+                message: 'bookingId is required for B2C platform'
             });
         }
 
@@ -42,7 +51,8 @@ export const createRazorpayOrderController = async (req: Request, res: Response)
             clientType,
             amount,
             currency,
-            platform
+            platform,
+            bookingId 
         });
 
         return res.status(200).json({
