@@ -6,8 +6,12 @@ import {
     syncOrderStatusService
 } from '../services/order.service';
 
+
 export const createOrderController = async (req: Request, res: Response) => {
     try {
+
+        console.log(`[PAYMENT ORDER CONTROLELR] Order Create Body: ${req.body}`);
+
         const {
             userId,
             userEmail,
@@ -15,8 +19,11 @@ export const createOrderController = async (req: Request, res: Response) => {
             clientType,
             amount,
             currency,
-            environment
+            environment,
+            bookingId
         } = req.body;
+
+        console.log(`[PAYMENT ORDER CONTROLELR] Order Create Body: ${req.body}`);
 
         if (!userId) {
             return res.status(400).json({
@@ -43,6 +50,21 @@ export const createOrderController = async (req: Request, res: Response) => {
             return res.status(400).json({
                 success: false,
                 message: 'clientType is required',
+            });
+        }
+
+        if (!['B2C', 'B2B'].includes(clientType)) { 
+            return res.status(400).json({
+                success: false,
+                message: 'clientType must be either B2C or B2B', 
+            });
+        }
+
+        // *** NEW VALIDATION: bookingId is mandatory for B2C ***
+        if (clientType === 'B2C' && !bookingId) {
+            return res.status(400).json({
+                success: false,
+                message: 'bookingId is required for B2C client type',
             });
         }
 
@@ -74,10 +96,10 @@ export const createOrderController = async (req: Request, res: Response) => {
             });
         }
 
-        if (!['sandbox', 'production'].includes(environment)) {
+        if (!['sandbox', 'production', 'test', 'live'].includes(environment)) {
             return res.status(400).json({
                 success: false,
-                message: 'environment must be either sandbox or production',
+                message: 'environment must be either sandbox, production, test, or live',
             });
         }
 
@@ -88,7 +110,8 @@ export const createOrderController = async (req: Request, res: Response) => {
             clientType,
             amount,
             currency,
-            environment
+            environment,
+            bookingId
         });
 
         return res.status(200).json({

@@ -6,6 +6,7 @@ export interface ICreateRazorpayOrderParams {
     amount: number;
     currency?: string;
     platform: 'B2B' | 'B2C';
+    bookingId?: string;
 }
 
 export interface ICreateRazorpayOrderResponse {
@@ -15,6 +16,7 @@ export interface ICreateRazorpayOrderResponse {
     amount: number;
     currency: string;
     platform: 'B2B' | 'B2C';
+    bookingId?: string;
 }
 
 export interface IVerifyRazorpayPaymentParams {
