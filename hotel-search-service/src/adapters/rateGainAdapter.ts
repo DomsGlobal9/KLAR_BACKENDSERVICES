@@ -1,6 +1,7 @@
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
+import { qualifyImageUrls } from "../utils/imageUrl.util";
 
 export async function searchRG(
   req: UnifiedSearchRequest,
@@ -168,26 +169,11 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   // Priority: hotel-level images first, then room-level.
   let imagesList: string[] = [];
 
-  const extractUrls = (raw: any): string[] => {
-    if (!raw) return [];
-    const arr = Array.isArray(raw) ? raw : [raw];
-    return arr
-      .map((img: any) => {
-        if (typeof img === "string") return img;
-        // RG sometimes returns object with url/imageUrl/imageUrlPath/imageURL
-        return (
-          img.imageUrl ||
-          img.imageUrlPath ||
-          img.imageURL ||
-          img.url ||
-          img.src ||
-          img.link ||
-          img.href ||
-          ""
-        );
-      })
-      .filter(Boolean) as string[];
-  };
+  // Emits absolute URLs only. RG hands back bare Hotelbeds filenames as often
+  // as full URLs; qualifying them here means the frontend never has to guess a
+  // CDN from a file extension (which is what pointed TripJack images at
+  // Hotelbeds and produced galleries of 404s).
+  const extractUrls = (raw: any): string[] => qualifyImageUrls(raw, "RG");
 
   // 1. Hotel-level images (most reliable for RG bestproperties response)
   const hotelImgFields = [
