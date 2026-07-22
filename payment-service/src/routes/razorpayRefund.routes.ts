@@ -17,7 +17,7 @@ const router = express.Router();
 
 router.post('/', createRefundController);
 
-router.post('/bookingid', createRefundByBookingIdController);
+router.post('/bookingId', createRefundByBookingIdController);
 
 
 
