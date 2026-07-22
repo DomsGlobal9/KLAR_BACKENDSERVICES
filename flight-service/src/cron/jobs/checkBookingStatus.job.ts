@@ -6,6 +6,7 @@ import { BookingRepository } from "../../repositories/bookingLocal.repository";
 import CancellationService from "../../services/cancellation.service";
 import { cancellationPriceService } from "../../services/cancellationRefund.service";
 import { BookingModel } from "../../model/bookingLocal.model";
+import { envConfig } from "../../config/env.config";
 
 const bookingRepository = new BookingRepository();
 
@@ -56,11 +57,7 @@ const executeBookingStatusCron = async () => {
          */
         await processBookings(bookings);
 
-    } catch (error: any) {
-
-        // Error handling without console
-
-    } finally {
+    } catch (error: any) { } finally {
 
         isRunning = false;
     }
@@ -100,10 +97,7 @@ const processSingleBooking = async (booking: any) => {
             response
         );
 
-    } catch (error: any) {
-
-        // Error handling without console
-    }
+    } catch (error: any) { }
 };
 
 /**
@@ -173,6 +167,48 @@ const checkAndUpdateBookingStatus = async (
                         }
                     } catch (error: any) {
                         console.error(`❌ Failed to credit wallet for booking ${booking.bookingId}:`, error.message);
+                    }
+                }
+                else {
+                    const refundAmount = amendmentResponse?.data?.refundableAmount;
+                    if (refundAmount > 0) {
+                        try {
+                            const response = await fetch(
+                                `${envConfig.PAYMENT_SERVICE}/razorpay/refund/bookingId`,
+                                {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        bookingId: booking.bookingId,
+                                        amount: refundAmount
+                                    })
+                                }
+                            );
+
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+
+                            const refundResult = await response.json();
+
+                            if (refundResult.success) {
+                                await BookingModel.updateOne(
+                                    { bookingId: booking.bookingId },
+                                    {
+                                        refundProcessed: true,
+                                        refundPrice: refundAmount.toString(),
+                                        refundDate: new Date()
+                                    }
+                                );
+                                console.log(`✅ Refund processed via payment service: ₹${refundAmount} for booking ${booking.bookingId}`);
+                            } else {
+                                throw new Error(refundResult.message || 'Refund failed');
+                            }
+                        } catch (error: any) {
+                            console.error(`❌ Failed to process refund for booking ${booking.bookingId}:`, error.message);
+                        }
                     }
                 }
             }
