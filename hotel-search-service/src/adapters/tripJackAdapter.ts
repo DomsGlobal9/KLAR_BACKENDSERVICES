@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import { HotelModel } from "../models/Hotel.model";
 import { toTjNationality } from "../utils/nationality";
 import { qualifyImageUrls } from "../utils/imageUrl.util";
+import { deriveRegion } from "../utils/region.util";
 
 // ─── TripJack Circuit Breaker ────────────────────────────────────────────────
 let tjCircuitOpenUntil = 0;
@@ -28,7 +29,7 @@ export async function searchTJ(
   const page = req.pageNo || 1;
 
   const targetCount = 20;
-  const CHUNK_SIZE = 100; // Increased to 100 to find hotels faster per page
+  const CHUNK_SIZE = 20; // Increased to 100 to find hotels faster per page
   const chunks: string[][] = [];
   for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
     chunks.push(hids.slice(i, i + CHUNK_SIZE));
@@ -276,6 +277,8 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     address: h.address,
     city: h.city,
     country: h.country,
+    // Diagnostic only — booking re-derives from the supplier's own response.
+    markupRegion: deriveRegion(h.country),
     starRating: rating,
     latitude: h.latitude,
     longitude: h.longitude,

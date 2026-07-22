@@ -1,8 +1,24 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
+/**
+ * Which journeys this agent's margin applies to. Mirrors MarkupRegion on the
+ * master-owned MarkupConfig deliberately: the two are resolved by the same
+ * exact-region-then-ALL rule, and a mismatch between them would price search
+ * and commit differently.
+ */
+export type AgentMarkupRegion = 'DOMESTIC' | 'INTERNATIONAL' | 'ALL';
+
+export const AGENT_MARKUP_REGIONS: AgentMarkupRegion[] = [
+  'DOMESTIC',
+  'INTERNATIONAL',
+  'ALL',
+];
+
 export interface IMarkupService {
   _id?: Types.ObjectId;
-  serviceType: 'FLIGHT' | 'HOTEL' | 'TOURSANDPACKAGE' | 'VISA' | string;
+  serviceType: 'FLIGHT' | 'HOTEL' | 'CABS' | 'TOURSANDPACKAGE' | 'VISA' | string;
+  /** Defaults to ALL so every pre-region row keeps its current behaviour. */
+  region: AgentMarkupRegion;
   percentageMarkup: number;
   fixedMarkup: number;
 }
@@ -25,6 +41,12 @@ export interface IMarkup extends Document {
 
 const MarkupServiceSchema = new Schema<IMarkupService>({
   serviceType: { type: String, required: true },
+  region: {
+    type: String,
+    enum: AGENT_MARKUP_REGIONS,
+    required: true,
+    default: 'ALL',
+  },
   percentageMarkup: { type: Number, default: 0, min: 0 },
   fixedMarkup: { type: Number, default: 0, min: 0 },
 }, { _id: true });
@@ -47,14 +69,40 @@ const MarkupSchema = new Schema<IMarkup>({
 MarkupSchema.index({ userId: 1 }, { unique: true });
 MarkupSchema.index({ userId: 1, isActive: 1 });
 
+/**
+ * A service is identified by (serviceType, region), not serviceType alone —
+ * "HOTEL DOMESTIC" and "HOTEL INTERNATIONAL" are two legitimate rows, but a
+ * second "HOTEL DOMESTIC" is not. Without this guard the resolver would pick
+ * whichever duplicate happened to come first in the array, so an agent editing
+ * their margin could silently keep being charged the old one.
+ */
+const assertNoDuplicateServices = (services: any[]) => {
+  const seen = new Set<string>();
+  services.forEach((service: any) => {
+    const region = service.region || 'ALL';
+    const key = `${(service.serviceType || '').toUpperCase()}|${region}`;
+    if (seen.has(key)) {
+      throw new Error(
+        `DUPLICATE MARKUP: ${service.serviceType} already has a ${region} rule. Edit that one instead of adding a second.`
+      );
+    }
+    seen.add(key);
+  });
+};
+
+const assertAddOnlyOne = (services: any[]) => {
+  services.forEach((service: any) => {
+    if (service.percentageMarkup > 0 && service.fixedMarkup > 0) {
+      throw new Error(`ADD ONLY ONE: Each service can only have either percentage or fixed markup. Issue in ${service.serviceType} (${service.region || 'ALL'})`);
+    }
+  });
+};
+
 // Pre-save hook to enforce "Add Only One" rule
 MarkupSchema.pre('save', function (this: any, next: any) {
   if (this.services && Array.isArray(this.services)) {
-    this.services.forEach((service: any) => {
-      if (service.percentageMarkup > 0 && service.fixedMarkup > 0) {
-        throw new Error(`ADD ONLY ONE: Each service can only have either percentage or fixed markup. Issue in ${service.serviceType}`);
-      }
-    });
+    assertAddOnlyOne(this.services);
+    assertNoDuplicateServices(this.services);
   }
   next();
 });
@@ -64,11 +112,8 @@ MarkupSchema.pre('findOneAndUpdate', function (this: any) {
   const update = this.getUpdate() as mongoose.UpdateQuery<IMarkup>;
 
   const checkServices = (services: any[]) => {
-    services.forEach((service: any) => {
-      if (service.percentageMarkup > 0 && service.fixedMarkup > 0) {
-        throw new Error(`ADD ONLY ONE: Each service can only have either percentage or fixed markup. Issue in ${service.serviceType}`);
-      }
-    });
+    assertAddOnlyOne(services);
+    assertNoDuplicateServices(services);
   };
 
   if (update && update.services && Array.isArray(update.services)) {

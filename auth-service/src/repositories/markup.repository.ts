@@ -49,14 +49,29 @@ export class MarkupRepository {
         return Markup.create(data);
     }
 
+    /**
+     * Removes the one (serviceType, region) rule.
+     *
+     * The region predicate matters: pulling on serviceType alone would delete
+     * an agent's DOMESTIC *and* INTERNATIONAL margins when they asked to remove
+     * one of them.
+     *
+     * `$in: [region, null]` covers rows written before the region field existed
+     * and not yet touched by the migration — for region "ALL" those are the
+     * same rule.
+     */
     async pullService(
         userId: Types.ObjectId,
-        serviceType: string
+        serviceType: string,
+        region: string = 'ALL'
     ): Promise<IMarkup | null> {
+        const regionMatch =
+            region === 'ALL' ? { $in: [region, null] } : region;
+
         return Markup.findOneAndUpdate(
             { userId },
             {
-                $pull: { services: { serviceType } },
+                $pull: { services: { serviceType, region: regionMatch } },
                 $set: { updatedBy: userId }
             },
             { new: true }

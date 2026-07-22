@@ -13,7 +13,7 @@ const router = Router();
 // ─── Search Routes ──────────────────────────────────────────────────────
 router.post("/search/location", searchController.locationSearch);
 router.post("/search/lat-long", searchController.getLatLong);
-router.post("/search/quotes",   searchController.getQuotes);
+router.post("/search/quotes", optionalAuthenticateJWT, searchController.getQuotes);
 
 // ─── Booking Routes ─────────────────────────────────────────────────────
 // Optional auth: B2B agents send a token (-> B2B wallet), B2C/guests don't

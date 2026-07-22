@@ -2,6 +2,7 @@ import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
 import { qualifyImageUrls } from "../utils/imageUrl.util";
+import { deriveRegion } from "../utils/region.util";
 
 export async function searchRG(
   req: UnifiedSearchRequest,
@@ -330,6 +331,8 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
     address: h.address || "",
     city: h.city || h.destinationName || "",
     country: h.countryName || h.country || "",
+    // Diagnostic only — booking re-derives from the supplier's own response.
+    markupRegion: deriveRegion(h.countryName || h.country || ""),
     starRating:
       parseFloat(h.categoryCode) ||
       parseFloat(h.starRating) ||

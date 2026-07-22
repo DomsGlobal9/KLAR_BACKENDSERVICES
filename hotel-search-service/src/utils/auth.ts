@@ -6,6 +6,7 @@ import { env } from "../config/env";
 import { MarkupRule } from "./pricing.util";
 import { LruCache } from "./lruCache";
 import { refreshMarkupConfig } from "../config/markup-config";
+import { MarkupRegion } from "./region.util";
 
 export function getClientType(req: Request): "B2B" | "B2C" {
   try {
@@ -132,13 +133,14 @@ export async function getMarkupRules(
 export async function resolveMarkupRules(
   clientType: "B2B" | "B2C",
   token: string | null,
+  region: MarkupRegion = "ALL",
 ): Promise<MarkupRule[]> {
   const [config, agentRules] = await Promise.all([
-    refreshMarkupConfig(),
+    refreshMarkupConfig(region),
     clientType === "B2B" ? getMarkupRules(token) : Promise.resolve([]),
   ]);
 
-  if (clientType === "B2B") return agentRules;
+  if (clientType === "B2B") return pickRulesForRegion(agentRules, region);
 
   const b2c = config.b2c;
   if (!b2c.enabled || b2c.value <= 0) return [];
@@ -150,4 +152,38 @@ export async function resolveMarkupRules(
       fixedMarkup: b2c.type === "FIXED" ? b2c.value : 0,
     },
   ];
+}
+
+/**
+ * Narrows an agent's rules to the ones that apply to `region`, using the same
+ * exact-region-then-ALL precedence auth-service applies to the master config.
+ *
+ * An agent may hold several rules for one serviceType (one per region); without
+ * this the first array entry would win, which is whatever order Mongo returned.
+ */
+export function pickRulesForRegion(
+  rules: MarkupRule[],
+  region: MarkupRegion,
+): MarkupRule[] {
+  const byService = new Map<string, MarkupRule>();
+
+  for (const rule of rules ?? []) {
+    const service = (rule.serviceType || "").toUpperCase();
+    const ruleRegion = (rule.region || "ALL").toUpperCase();
+
+    // Ignore rules belonging to a different region entirely.
+    if (ruleRegion !== "ALL" && ruleRegion !== region) continue;
+
+    const existing = byService.get(service);
+    const existingRegion = existing
+      ? (existing.region || "ALL").toUpperCase()
+      : null;
+
+    // An exact-region rule beats the ALL catch-all; otherwise first wins.
+    if (!existing || (existingRegion === "ALL" && ruleRegion === region)) {
+      byService.set(service, rule);
+    }
+  }
+
+  return [...byService.values()];
 }
