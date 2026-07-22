@@ -6,7 +6,7 @@ async function testPayloadMinimal() {
     console.log("🚀 Testing MINIMAL payload for Dubai (Lat/Long only)...\n");
 
     const payload = {
-        pickupDate: "2026-06-25 16:07", // User's date
+        pickupDate: "2026-07-25 16:07", // User's date
         origin: {
             lat: "25.2532",
             long: "55.3657"
@@ -21,7 +21,7 @@ async function testPayloadMinimal() {
     };
 
     try {
-        console.log("Testing with date: 2026-06-25 16:07");
+        console.log("Testing with date: 2026-07-25 16:07");
         const res = await tripJackCabsProvider.getQuotes(payload);
         console.log("Result (Minimal):", res.data?.quotesInfo?.length ? "SUCCESS" : "EMPTY (404/No Cabs)");
 

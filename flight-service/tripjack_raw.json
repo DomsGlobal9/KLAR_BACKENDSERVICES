@@ -1,0 +1,12 @@
+{
+  "status": {
+    "success": false,
+    "httpStatus": 403
+  },
+  "errors": [
+    {
+      "errCode": "408",
+      "message": "Access Denied"
+    }
+  ]
+}

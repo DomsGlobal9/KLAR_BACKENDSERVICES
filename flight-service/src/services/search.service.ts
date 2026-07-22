@@ -34,6 +34,44 @@ class SearchService {
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
+        // ── Route-level cache: skip TripJack if we already have this route ──
+        if (!printData) {
+            const routeKey = this.buildRouteKey(payload);
+            if (routeKey) {
+                const cached = await RedisCacheService.get(routeKey);
+                if (cached?.raw) {
+                    console.log(`[SearchService] Cache HIT for key: ${routeKey}`);
+                    const fakeMarkedUp = { searchResult: { tripInfos: cached.raw } };
+                    const normalizedResult = OneWayNormalizer.transform({ data: fakeMarkedUp });
+
+                    let normalized = normalizedResult.flights;
+                    const airlineStats = normalizedResult.airlineStats;
+                    const originalCount = normalized.length;
+
+                    if (filters && filters.length > 0) {
+                        const validation = FlightFilter.validateFilters(filters);
+                        if (validation.isValid) {
+                            normalized = FlightFilter.applyFilters(normalized, filters);
+                        }
+                    }
+                    if (sortOption && OnewayFlightSorter.isValidSortField(sortOption.field)) {
+                        normalized = OnewayFlightSorter.sortFlights(normalized, sortOption);
+                    }
+                    // Store new session pointing to same raw data
+                    await RedisCacheService.set(sessionId, { raw: cached.raw }, 1800);
+
+                    const response: any = { sessionId, flights: normalized, airlineStats, fromCache: true };
+                    if (includeStats) {
+                        const stats = FlightFilter.getFilterStats(normalized);
+                        stats.totalFlights = originalCount;
+                        stats.filteredFlights = normalized.length;
+                        response.stats = stats;
+                    }
+                    return response;
+                }
+            }
+        }
+
         try {
             const rawResponse = await axios.post(
                 url,
@@ -46,6 +84,13 @@ class SearchService {
                 }
             );
 
+            require('fs').writeFileSync('tripjack_raw.json', JSON.stringify(rawResponse.data, null, 2));
+            if (rawResponse.data && rawResponse.data.status && rawResponse.data.status.success === false) {
+                throw new Error("TripJack API Error: " + JSON.stringify(rawResponse.data.errors));
+            }
+            if (rawResponse.data && rawResponse.data.status && rawResponse.data.status.success === false) {
+                throw new Error("TripJack API Error: " + JSON.stringify(rawResponse.data.errors));
+            }
             const markedUpResponse = MarkupInterceptor.applyMarkupToFlightSearch(rawResponse.data);
 
             if (printData == "true" || printData == true) {
@@ -129,9 +174,18 @@ class SearchService {
                 stats.filteredFlights = normalized.length;
             }
 
+            // Store by session id (for fare/details lookup)
             await RedisCacheService.set(sessionId, {
                 raw: markedUpResponse?.searchResult?.tripInfos,
             }, 1800);
+
+            // Also store by route key (for repeated search cache hit)
+            const routeKey = this.buildRouteKey(payload);
+            if (routeKey) {
+                await RedisCacheService.set(routeKey, {
+                    raw: markedUpResponse?.searchResult?.tripInfos,
+                }, 1200); // 20-minute TTL — flights don't change that fast
+            }
 
             const response: any = {
                 sessionId,
@@ -155,6 +209,7 @@ class SearchService {
             throw error;
         }
     }
+
 
     async searchReturn(
         payload: any,
@@ -999,6 +1054,21 @@ class SearchService {
             penaltyDetails: rules?.penalties || rules?.cancellationPenalties || [],
             termsAndConditions: rules?.terms || rules?.fareTerms || []
         };
+    }
+
+    // ── Helper: build a deterministic cache key from a one-way search payload ──
+    private buildRouteKey(payload: any): string {
+        try {
+            const ri = payload?.routeInfos?.[0] ?? {};
+            const from = (ri.fromCityOrAirport?.code ?? '').toUpperCase();
+            const to   = (ri.toCityOrAirport?.code  ?? '').toUpperCase();
+            const date = ri.travelDate ?? '';
+            const cabin = (payload.cabinClass ?? 'ECONOMY').toUpperCase();
+            const pax = JSON.stringify(payload.paxInfo ?? {});
+            return `route:oneway:${Date.now()}:${from}:${to}:${date}:${cabin}:${pax}`;
+        } catch {
+            return '';
+        }
     }
 }
 

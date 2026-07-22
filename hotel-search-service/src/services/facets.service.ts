@@ -289,14 +289,17 @@ export function accumulateFacets(
 function extractLocality(address: unknown): string | null {
   if (!address || typeof address !== "string") return null;
   const parts = address
-    .split(",")
+    .split(/[;,]/)
     .map((s) => s.trim())
     .filter(Boolean);
-  if (parts.length < 2) return null;
+  if (parts.length === 0) return null;
 
-  const locality = parts[parts.length - 2];
-  if (!locality || locality.length <= 2 || /\d/.test(locality)) return null;
-  return titleCase(locality);
+  for (const part of parts) {
+    if (part.length > 3 && !/\d{5,}/.test(part) && !/^\d+$/.test(part) && !/india/i.test(part)) {
+      return titleCase(part);
+    }
+  }
+  return null;
 }
 
 function serialize(state: FacetState): SearchFacets {

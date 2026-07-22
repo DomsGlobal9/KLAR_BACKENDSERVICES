@@ -670,11 +670,21 @@ export class HotelsService {
       // Selected locations
       if (filters.selectedLocations && filters.selectedLocations.length > 0) {
         filteredResults = filteredResults.filter((h) => {
-          const hotelCity = (h.city || "").trim();
-          const hotelAddr = (h.address || "").split(",")[0]?.trim() || "";
-          return filters.selectedLocations!.some(
-            (loc) => hotelCity === loc || hotelAddr === loc
-          );
+          const hotelCity = (h.city || "").trim().toLowerCase();
+          const hotelAddrParts = (h.address || "")
+            .split(/[;,]/)
+            .map((s: string) => s.trim().toLowerCase())
+            .filter(Boolean);
+          const fullAddr = (h.address || "").toLowerCase();
+
+          return filters.selectedLocations!.some((loc) => {
+            const target = loc.trim().toLowerCase();
+            return (
+              hotelCity === target ||
+              hotelAddrParts.includes(target) ||
+              fullAddr.includes(target)
+            );
+          });
         });
       }
     }

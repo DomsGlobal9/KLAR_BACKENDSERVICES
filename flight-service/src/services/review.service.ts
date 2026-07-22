@@ -161,7 +161,7 @@ class ReviewService {
             const response = await axios.post(
                 `${envConfig.AUTH_SERVICE}/markup/${serviceType}`,
                 {
-                    userId: process.env.USER_ID
+                    userId: process.env.USER_ID || "default-user-id"
                 },
                 {
                     headers: {
@@ -172,13 +172,13 @@ class ReviewService {
 
             return response.data;
         } catch (error: any) {
-            console.error("Get Markup API ERROR >>>", {
+            console.warn("Get Markup API Warning >>>", {
                 status: error.response?.status,
-                data: JSON.stringify(error.response?.data, null, 2),
+                data: error.response?.data,
                 message: error.message
             });
-
-            throw error;
+            // Return null instead of throwing so reviewFare can continue without markup
+            return null;
         }
     }
 
