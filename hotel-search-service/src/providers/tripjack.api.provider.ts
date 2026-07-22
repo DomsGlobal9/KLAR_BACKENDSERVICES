@@ -2,13 +2,14 @@ import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 import { HotelModel } from "../models/Hotel.model";
 import {
+  buildPublicPricing,
   calculateEnrichedPricing,
   calculateNightsFromDates,
   deriveRefundable,
   platformMarkupAmount,
   round2,
 } from "../utils/pricing.util";
-import { getMarkupRules } from "../utils/auth";
+import { resolveMarkupRules } from "../utils/auth";
 import { toTjNationality } from "../utils/nationality";
 import { LruCache } from "../utils/lruCache";
 
@@ -99,7 +100,10 @@ export class TripJackApiProvider {
     let localHotel: any = null;
     let staticData: any = null;
 
-    const markupRulesPromise = getMarkupRules(token);
+    const markupRulesPromise = resolveMarkupRules(
+      payload.clientType === "B2B" ? "B2B" : "B2C",
+      token,
+    );
     const localHotelPromise = HotelModel.findOne({ tjHotelId: hidValue })
       .lean()
       .then((doc) => (localHotel = doc))
@@ -381,10 +385,20 @@ export class TripJackApiProvider {
             managementFee: rawMf,
             managementFeeTax: rawMft,
 
-            // Enriched pricing block — frontend reads ONLY these for display
+            // Enriched pricing block — frontend reads ONLY these for display.
+            // The canonical block must win over the spread: opt.pricing carries
+            // the RAW supplier totals, which are below the api net whenever a
+            // platform markup is configured.
             pricing: {
               ...opt.pricing,
-              ...enriched,
+              ...buildPublicPricing({
+                enriched,
+                taxes: rawTaxes,
+                mf: rawMf,
+                mft: rawMft,
+                currency: rawCurrency,
+                clientType: payload.clientType === "B2B" ? "B2B" : "B2C",
+              }),
             },
             strikethrough: opt.pricing?.strikethrough,
             currency: rawCurrency,

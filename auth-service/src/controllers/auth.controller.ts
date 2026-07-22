@@ -903,7 +903,7 @@ export const updateProfile = async (
 ) => {
   try {
     const userId = (req as any).user.userId;
-    const { fullName } = req.body;
+    const { fullName, mobile } = req.body;
 
     // 1. Validate
     if (!fullName) {
@@ -913,16 +913,35 @@ export const updateProfile = async (
       });
     }
 
-    // 2. Find and update only the name
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const updateFields: any = {};
+    
+    if (user.clientType === 'b2b') {
+        updateFields["businessProfile.contactPerson"] = fullName;
+        if (mobile !== undefined) {
+            updateFields["businessProfile.businessMobile"] = mobile;
+            updateFields["mobile"] = mobile;
+        }
+    } else {
+        updateFields["fullName"] = fullName; // assuming B2C
+        if (mobile !== undefined) {
+            updateFields["mobile"] = mobile;
+        }
+    }
+
+    // 2. Find and update
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
+      { $set: updateFields },
       { 
-        $set: { 
-          "businessProfile.contactPerson": fullName 
-        } 
-      },
-      { 
-        new: true,
+        returnDocument: 'after',
         runValidators: false
       }
     );
@@ -943,6 +962,9 @@ export const updateProfile = async (
           id: updatedUser._id,
           email: updatedUser.email,
           contactPerson: updatedUser.businessProfile?.contactPerson || '',
+          businessMobile: updatedUser.businessProfile?.businessMobile || '',
+          fullName: updatedUser.fullName || '',
+          mobile: updatedUser.mobile || '',
         }
       }
     });
@@ -980,7 +1002,7 @@ export const updateAddress = async (
         } 
       },
       { 
-        new: true,
+        returnDocument: 'after',
         runValidators: false
       }
     );

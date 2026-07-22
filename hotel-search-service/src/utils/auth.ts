@@ -5,6 +5,7 @@ import axios from "axios";
 import { env } from "../config/env";
 import { MarkupRule } from "./pricing.util";
 import { LruCache } from "./lruCache";
+import { refreshMarkupConfig } from "../config/markup-config";
 
 export function getClientType(req: Request): "B2B" | "B2C" {
   try {
@@ -112,4 +113,41 @@ export async function getMarkupRules(
     markupFailureCache.set(key, true);
     return [];
   }
+}
+
+/**
+ * The markup rules to price a request with, by channel.
+ *
+ * B2B — the agent's own rules. The platform markup is already folded into the
+ *       net they see, so their rule stacks on top of it.
+ * B2C — the master's B2C rule, expressed as a synthetic agent rule so it flows
+ *       through the same `calculateEnrichedPricing` path. There is no agent in
+ *       this channel, so nothing else would occupy that slot; a B2C caller's
+ *       token must never be allowed to contribute markup rules of its own.
+ *
+ * Also refreshes the master config snapshot, which every downstream sync call
+ * to `platformMarkupAmount()` depends on. Both hotel search and hotel detail
+ * route through here, which is what keeps that guarantee cheap to hold.
+ */
+export async function resolveMarkupRules(
+  clientType: "B2B" | "B2C",
+  token: string | null,
+): Promise<MarkupRule[]> {
+  const [config, agentRules] = await Promise.all([
+    refreshMarkupConfig(),
+    clientType === "B2B" ? getMarkupRules(token) : Promise.resolve([]),
+  ]);
+
+  if (clientType === "B2B") return agentRules;
+
+  const b2c = config.b2c;
+  if (!b2c.enabled || b2c.value <= 0) return [];
+
+  return [
+    {
+      serviceType: "HOTEL",
+      percentageMarkup: b2c.type === "PERCENTAGE" ? b2c.value : 0,
+      fixedMarkup: b2c.type === "FIXED" ? b2c.value : 0,
+    },
+  ];
 }

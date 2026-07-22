@@ -1,10 +1,18 @@
+import crypto from "crypto";
 import { supplierRegistry } from "../suppliers";
 import { resolveCityToCoords, resolveGeoCenter } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
-import { getMarkupRules } from "../utils/auth";
-import { calculateNights, calculateEnrichedPricing, round2 } from "../utils/pricing.util";
+import { resolveMarkupRules } from "../utils/auth";
+import {
+  buildPublicPricing,
+  calculateNights,
+  calculateEnrichedPricing,
+  round2,
+} from "../utils/pricing.util";
 import { getSuggestions } from "./suggestions.service";
+import { env } from "../config/env";
+import searchResultCache from "../cache/searchResultCache.service";
 import {
   accumulateFacets,
   buildFacetKey,
@@ -21,11 +29,37 @@ const searchCache = new Map<string, { at: number; data: any }>();
 const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || 60_000);
 const SEARCH_CACHE_MAX_ENTRIES = 500;
 
+const DEFAULT_PAGE_SIZE = 20;
+
+// Ceiling on how many times a single request will extend the master list. Guards
+// against a supplier that keeps claiming `hasMore` while returning nothing new.
+const MAX_EXTEND_ROUNDS = 5;
+
+// What we persist in Redis per search: the pre-markup, deduped, geofenced master
+// list plus the destination inventory figure (which is derived from supplier
+// totals and so can't be recomputed from the list alone on a cache hit), plus
+// enough bookkeeping to resume fetching where we left off when the client
+// scrolls past what we hold.
+interface CachedMaster {
+  hotels: UnifiedHotel[];
+  inventoryCount: number;
+  // Supplier pages consumed so far; the next extension resumes at +1.
+  supplierPagesFetched: number;
+  // Whether any supplier still had a page left after the last one we fetched.
+  providerHasMore: boolean;
+}
+
 export class HotelsService {
   /**
    * Unified Search Entry Point
    * Senior OTA Strategy: Concurrently fetch, partial return on slow providers,
    * and high-efficiency deduplication.
+   *
+   * Pagination: when Redis is reachable we build a stable, deduplicated master
+   * result set once per search (eagerly prefetching the first N supplier pages),
+   * cache it, and slice pages from it — so scrolling never re-hits the paid
+   * supplier APIs and the same hotel can't appear on two pages. When Redis is
+   * down we fall back to live per-page fetching (the original behavior).
    */
   async searchHotels(
     searchPayload: UnifiedSearchRequest,
@@ -33,7 +67,9 @@ export class HotelsService {
     token?: string | null,
   ) {
     const totalStartTime = Date.now();
-    const markupRules = token ? await getMarkupRules(token) : [];
+    // Resolves the agent's rules for B2B / the master's B2C rule for B2C, and
+    // refreshes the platform-markup snapshot the adapters read synchronously.
+    const markupRules = await resolveMarkupRules(clientType, token ?? null);
     const nights = calculateNights(searchPayload.checkin, searchPayload.checkout);
     const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
     console.log(
@@ -71,9 +107,9 @@ export class HotelsService {
       };
     }
 
-    // Serve identical anonymous searches from the short-TTL cache to spare the
+    // Serve identical anonymous searches from the short-TTL L1 cache to spare the
     // paid supplier APIs. Keyed on the whole request (minus the geo center we
-    // resolve below). B2B (token) requests are never cached.
+    // resolve below). B2B (token) requests are never cached here.
     const cacheable = !token;
     const cacheKey = cacheable
       ? JSON.stringify({ ...searchPayload, _geoCenter: undefined, __ct: clientType })
@@ -81,20 +117,135 @@ export class HotelsService {
     if (cacheable) {
       const cached = searchCache.get(cacheKey);
       if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
-        console.log(`[Search] cache hit for "${searchPayload.destination}"`);
+        console.log(`[Search] L1 cache hit for "${searchPayload.destination}"`);
         return cached.data;
       }
     }
 
-    const isDirectSearch = supplierRegistry.isDirectSearch(searchPayload.destination);
+    // 1. Resolve Location (Once) — shared by every supplier page we fetch below.
+    await this.resolveGeoCenter(searchPayload);
 
+    const pageNo = Math.max(1, Number(searchPayload.pageNo) || 1);
+    const limit = Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE);
+
+    let response: any;
+
+    if (searchResultCache.ready()) {
+      // ── Redis path: cache the deduped master list, slice pages from it ──────
+      const masterKey = this.buildMasterKey(searchPayload, clientType);
+      let master = await searchResultCache.get<CachedMaster>(masterKey);
+
+      if (master) {
+        // Entries cached before on-demand extension existed carry neither field.
+        // Assume the prefetch depth and that suppliers may still have pages —
+        // the extension's own "a round that added nothing ends it" guard corrects
+        // an optimistic guess cheaply, whereas defaulting to `false` would keep
+        // serving the old capped list until the entry expired.
+        if (typeof master.supplierPagesFetched !== "number") {
+          master.supplierPagesFetched = env.searchPrefetchPages;
+          master.providerHasMore = true;
+        }
+        console.log(
+          `[Search] master cache HIT for "${searchPayload.destination}" (${master.hotels.length} hotels) — serving page ${pageNo} from cache`,
+        );
+      } else {
+        console.log(
+          `[Search] master cache MISS for "${searchPayload.destination}" — eagerly fetching ${env.searchPrefetchPages} page(s)`,
+        );
+        const built = await this.fetchMasterList(
+          searchPayload,
+          clientType,
+          env.searchPrefetchPages,
+        );
+        master = {
+          hotels: built.hotels,
+          inventoryCount: built.inventoryCount,
+          supplierPagesFetched: built.pagesFetched,
+          providerHasMore: built.providerHasMore,
+        };
+        await searchResultCache.set(masterKey, master);
+      }
+
+      // The prefetch above is a head start, not a ceiling. If the client has
+      // scrolled past what we hold and the suppliers still have pages, pull more
+      // and re-cache — otherwise the result set would be permanently capped at
+      // the prefetch depth however much inventory the destination really has.
+      const needed = pageNo * limit;
+      if (master.hotels.length < needed && master.providerHasMore) {
+        const extended = await this.extendMasterList(
+          master,
+          searchPayload,
+          clientType,
+          needed,
+        );
+        if (
+          extended.hotels.length !== master.hotels.length ||
+          extended.providerHasMore !== master.providerHasMore
+        ) {
+          master = extended;
+          await searchResultCache.set(masterKey, master);
+        }
+      }
+
+      response = this.finalizeResponse(
+        master.hotels,
+        searchPayload,
+        clientType,
+        markupRules,
+        nights,
+        master.inventoryCount,
+        {
+          slice: true,
+          page: pageNo,
+          limit,
+          providerHasMore: master.providerHasMore,
+        },
+      );
+    } else {
+      // ── Fallback path (Redis down): live-fetch only the requested page ──────
+      console.warn(
+        `[Search] Redis unavailable — falling back to live per-page fetch for "${searchPayload.destination}"`,
+      );
+      const built = await this.fetchMasterList(searchPayload, clientType, 1, pageNo);
+      response = this.finalizeResponse(
+        built.hotels,
+        searchPayload,
+        clientType,
+        markupRules,
+        nights,
+        built.inventoryCount,
+        { slice: false, legacyHasMore: built.providerHasMore },
+      );
+    }
+
+    console.log(
+      `[Search] "${searchPayload.destination}" page ${pageNo} served in ${Date.now() - totalStartTime}ms`,
+    );
+
+    if (cacheable) {
+      // Bound the cache: drop the oldest entry when full (Map preserves insertion order).
+      if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey !== undefined) searchCache.delete(oldestKey);
+      }
+      searchCache.set(cacheKey, { at: Date.now(), data: response });
+    }
+
+    return response;
+  }
+
+  /**
+   * Resolve the destination to a geo center once and stash it on the payload so
+   * every supplier page reuses it. Mutates searchPayload._geoCenter.
+   */
+  private async resolveGeoCenter(searchPayload: UnifiedSearchRequest): Promise<void> {
+    const isDirectSearch = supplierRegistry.isDirectSearch(searchPayload.destination);
     if (isDirectSearch) {
       console.log(
         `[DEBUG] Direct hotel search detected for "${searchPayload.destination}".`,
       );
     }
 
-    // 1. Resolve Location (Once) - Skip if direct search
     let geoCenter = null;
     if (!isDirectSearch) {
       const hasDestinationText =
@@ -149,13 +300,28 @@ export class HotelsService {
         `[GEO] No geo center resolved for "${searchPayload.destination}"`,
       );
     }
+  }
 
-    const finalResults: UnifiedHotel[] = [];
+  /**
+   * Fan out to every eligible supplier for a single page and return the raw
+   * (un-deduplicated) hotels plus per-supplier stats. One AbortController per
+   * page cancels any supplier still in flight once the partial-return window
+   * elapses.
+   */
+  private async fetchOnePage(
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    pageNo: number,
+  ): Promise<{
+    hotels: UnifiedHotel[];
+    providerStats: Record<string, { count: number; total: number; hasMore: boolean }>;
+  }> {
+    const startTime = Date.now();
+    const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
+    const pageResults: UnifiedHotel[] = [];
     const providerStats: Record<string, { count: number; total: number; hasMore: boolean }> = {};
 
-    // 2. Fan out to every supplier enabled for this mode/destination/providers-filter.
-    //    Adding a new supplier = register() it in suppliers/index.ts; nothing below
-    //    this line ever needs to change.
+    // Fan out to every supplier enabled for this mode/destination/providers-filter.
     const requestedProviders = searchPayload.providers;
     const eligibleSuppliers = supplierRegistry.getModeAndDirectEligible(
       mode,
@@ -177,37 +343,39 @@ export class HotelsService {
         );
     }
 
-    // One AbortController for this search. Its signal is threaded into every
+    // One AbortController for this page. Its signal is threaded into every
     // supplier's underlying axios call; once we decide to return (all settled or
     // the partial-return window elapsed) we abort it, so a slow supplier's HTTP
     // request is actively cancelled instead of orphaned until its own timeout.
     const abortController = new AbortController();
-    searchPayload._abortSignal = abortController.signal;
+    const pagePayload: UnifiedSearchRequest = {
+      ...searchPayload,
+      pageNo,
+      _abortSignal: abortController.signal,
+    };
 
     const allTasks = enabledSuppliers.map((supplier) =>
       supplier
-        .search(searchPayload, clientType)
+        .search(pagePayload, clientType)
         .then((res) => {
           providerStats[supplier.code] = {
             count: res.hotels.length,
             total: res.total,
             hasMore: res.hasMore,
           };
-          finalResults.push(...res.hotels);
+          pageResults.push(...res.hotels);
           console.log(
-            `[OK] ${supplier.code} finished in ${Date.now() - totalStartTime}ms (${res.hotels.length} hotels)`,
+            `[OK] ${supplier.code} page ${pageNo} finished in ${Date.now() - startTime}ms (${res.hotels.length} hotels)`,
           );
         })
         .catch((err) => {
-          console.error(`[ERR] ${supplier.code} failed: ${err.message}`);
+          console.error(`[ERR] ${supplier.code} page ${pageNo} failed: ${err.message}`);
         }),
     );
 
-    // 3. Orchestration: High-Performance Concurrent Collection
     // Wait for all providers, but cap at 15 seconds for partial-result return (MMT-style).
-    // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases and provides a stable UI.
+    // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases.
     const PARTIAL_RETURN_TIMEOUT_MS = 15000;
-
     let partialTimer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       Promise.allSettled(allTasks),
@@ -215,72 +383,75 @@ export class HotelsService {
         partialTimer = setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS);
       }),
     ]);
-    // Clear the timer (harmless if it already fired) and actively cancel any
-    // supplier request still in flight. Already-settled requests are unaffected;
-    // the losing supplier's socket is released now instead of lingering.
     if (partialTimer) clearTimeout(partialTimer);
     abortController.abort();
 
-    // 4. Deduplication Logic (MMT-style efficient dedup)
-    const totalReceivedCount = finalResults.length;
-    const { items: deduplicatedResults, meta: dedupMeta } =
-      deduplicateHotels(finalResults);
+    return { hotels: pageResults, providerStats };
+  }
 
-    // Whether any supplier still has pages left. This — not a summed total — is
-    // what tells the client to keep loading.
-    const hasMore = Object.values(providerStats).some((s) => s.hasMore);
+  /**
+   * Build the deduplicated, geofenced master list for a search by fetching
+   * `pages` supplier pages sequentially (sequential access keeps TripJack's WAF
+   * happy) and deduplicating the union once. `startPage` lets the Redis-down
+   * fallback fetch just the one page the client asked for.
+   */
+  private async fetchMasterList(
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    pages: number,
+    startPage = 1,
+  ): Promise<{
+    hotels: UnifiedHotel[];
+    inventoryCount: number;
+    providerHasMore: boolean;
+    pagesFetched: number;
+  }> {
+    const collected: UnifiedHotel[] = [];
+    const providerStats: Record<string, { count: number; total: number; hasMore: boolean }> = {};
+    let pagesFetched = 0;
+
+    for (let i = 0; i < pages; i++) {
+      const pageNo = startPage + i;
+      const { hotels, providerStats: pageStats } = await this.fetchOnePage(
+        searchPayload,
+        clientType,
+        pageNo,
+      );
+      collected.push(...hotels);
+      pagesFetched++;
+      // Keep the latest stats per supplier — `total` is stable across pages and
+      // `hasMore` from the last page fetched reflects whether more remain.
+      for (const [code, stat] of Object.entries(pageStats)) {
+        providerStats[code] = stat;
+      }
+      // Stop early if no supplier has more pages — nothing to gain from fetching further.
+      const anyMore = Object.values(pageStats).some((s) => s.hasMore);
+      if (!anyMore) break;
+    }
+
+    // Deduplication (MMT-style efficient dedup) across the whole union.
+    const totalReceivedCount = collected.length;
+    const { items: deduplicatedResults, meta: dedupMeta } =
+      deduplicateHotels(collected);
+
+    // Whether any supplier still had pages left after the last page we fetched
+    // (used only by the Redis-down fallback path).
+    const providerHasMore = Object.values(providerStats).some((s) => s.hasMore);
 
     // How many properties we know of in this destination — the "6,179 properties
-    // in Goa" figure, not the subset bookable on these dates.
-    //
-    // Deliberately the largest supplier's count, never the sum: the same hotel is
-    // listed by TripJack and RateGain both (which is why deduplicateHotels exists),
-    // so adding 6,179 + 384 counts an unknown overlap twice and yields a number
-    // that is not a count of anything. Zero when the destination came back empty,
-    // so a search with no results can never claim to have properties.
+    // in Goa" figure, not the subset bookable on these dates. Deliberately the
+    // largest supplier's count, never the sum (the same hotel is listed by both
+    // suppliers, so summing double-counts). Zero when the destination is empty.
     const providerTotals = Object.values(providerStats).map((s) => s.total);
     const inventoryCount = deduplicatedResults.length
       ? Math.max(...providerTotals, deduplicatedResults.length)
       : 0;
 
-    // Sum kept purely for the diagnostic log line below.
-    const sumProviderTotals = providerTotals.reduce((sum, t) => sum + t, 0);
-    const totalToUI = Math.max(sumProviderTotals, deduplicatedResults.length);
-
-    const totalDuration = Date.now() - totalStartTime;
-
-    // Per-supplier status lines — automatically includes any future registered supplier.
-    const statusLines = supplierRegistry
-      .all()
-      .map((s) => {
-        const wasQueried = enabledSuppliers.includes(s);
-        const stat = providerStats[s.code];
-        const line = wasQueried && stat ? `${stat.count} (Total: ${stat.total})` : "[SKIPPED]";
-        return `${s.code} Status: ${line}`;
-      })
-      .join("\n");
-
-    console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏨 FINAL SEARCH SUMMARY (Senior OTA Logic)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${statusLines}
-----------------------------------------------------
-Total Combined Unique:     ${deduplicatedResults.length}
-Items Merged (Cheaper Wins): ${dedupMeta.duplicatedCount}
-Search Duration:           ${totalDuration}ms
-----------------------------------------------------
-Summed provider totals:    ${totalToUI} (double-counts supplier overlap — never shown)
-Destination inventory:     ${inventoryCount} (properties known in this area)
-Has more pages:            ${hasMore}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        `);
-
+    // Geofence: drop hotels outside the resolved radius.
+    const geoCenter = searchPayload._geoCenter;
     let finalOutputHotels = deduplicatedResults;
     if (geoCenter) {
-      // Exact api-derived radius (same as TJ $near and RG Geofilter), no rounding.
       const allowedRadiusKm = geoCenter.radiusKm || 20;
-
       finalOutputHotels = deduplicatedResults.filter((hotel) => {
         const lat = Number(hotel.latitude);
         const lng = Number(hotel.longitude);
@@ -290,28 +461,107 @@ Has more pages:            ${hasMore}
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
           return true;
         }
-
         const dist = getDistanceKm(geoCenter.lat, geoCenter.lng, lat, lng);
         return dist <= allowedRadiusKm;
       });
       console.log(
-        `[GEO] Dynamic geofence: Filtered hotels using ${allowedRadiusKm.toFixed(2)}km radius around [${geoCenter.lat}, ${geoCenter.lng}]. Kept ${finalOutputHotels.length}/${deduplicatedResults.length} hotels.`,
+        `[GEO] Dynamic geofence: ${allowedRadiusKm.toFixed(2)}km radius around [${geoCenter.lat}, ${geoCenter.lng}]. Kept ${finalOutputHotels.length}/${deduplicatedResults.length} hotels.`,
       );
     }
 
-    // 1. Fold this page into the search's running facets and return the
+    console.log(
+      `[Search] master list built: received ${totalReceivedCount}, unique ${deduplicatedResults.length} ` +
+        `(merged ${dedupMeta.duplicatedCount}), after geofence ${finalOutputHotels.length}, inventory ${inventoryCount}`,
+    );
+
+    return { hotels: finalOutputHotels, inventoryCount, providerHasMore, pagesFetched };
+  }
+
+  /**
+   * Grow a cached master list until it covers `needed` hotels (or the suppliers
+   * run dry), resuming from the supplier page after the last one consumed.
+   * Deduplicates across the union so a hotel we already hold can never reappear
+   * on a later page, and preserves existing order so pages already served to the
+   * client stay stable.
+   */
+  private async extendMasterList(
+    master: CachedMaster,
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    needed: number,
+  ): Promise<CachedMaster> {
+    let current = master;
+
+    for (let round = 0; round < MAX_EXTEND_ROUNDS; round++) {
+      if (current.hotels.length >= needed || !current.providerHasMore) break;
+
+      const startPage = current.supplierPagesFetched + 1;
+      console.log(
+        `[Search] extending master list for "${searchPayload.destination}": ` +
+          `have ${current.hotels.length}, need ${needed} — fetching supplier page(s) from ${startPage}`,
+      );
+
+      const built = await this.fetchMasterList(
+        searchPayload,
+        clientType,
+        env.searchExtendPages,
+        startPage,
+      );
+
+      const before = current.hotels.length;
+      const { items: merged } = deduplicateHotels([
+        ...current.hotels,
+        ...built.hotels,
+      ]);
+      const added = merged.length - before;
+
+      current = {
+        hotels: merged,
+        inventoryCount: Math.max(current.inventoryCount, built.inventoryCount),
+        supplierPagesFetched: current.supplierPagesFetched + built.pagesFetched,
+        // A round that produced nothing new means the suppliers are effectively
+        // exhausted, whatever their `hasMore` flag claims — stop either way.
+        providerHasMore: built.providerHasMore && added > 0,
+      };
+
+      console.log(
+        `[Search] master list extended: +${added} hotels (now ${current.hotels.length}), ` +
+          `supplier pages consumed ${current.supplierPagesFetched}, more=${current.providerHasMore}`,
+      );
+    }
+
+    return current;
+  }
+
+  /**
+   * Turn a master list into the client response: accumulate facets, apply
+   * filters + sort, bake in markup, then either slice a page (Redis path) or
+   * return the whole set (Redis-down fallback). Deterministic given the master
+   * list + request params, so it runs per request rather than being cached.
+   */
+  private finalizeResponse(
+    master: UnifiedHotel[],
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    markupRules: any[],
+    nights: number,
+    inventoryCount: number,
+    opts: {
+      slice: boolean;
+      page?: number;
+      limit?: number;
+      legacyHasMore?: boolean;
+      providerHasMore?: boolean;
+    },
+  ) {
+    // 1. Fold the master list into the search's running facets and return the
     //    cumulative counts. Built from the unfiltered/geofenced list so that
     //    applying a filter never zeroes out the options the user didn't pick.
     const facetKey = buildFacetKey(searchPayload, clientType, markupRules);
-    const facets = accumulateFacets(
-      facetKey,
-      finalOutputHotels,
-      markupRules,
-      nights,
-    );
+    const facets = accumulateFacets(facetKey, master, markupRules, nights);
 
     // 2. Apply filters (if provided)
-    let filteredResults = finalOutputHotels;
+    let filteredResults = master;
     const filters = searchPayload.filters;
     if (filters) {
       // Text search
@@ -432,7 +682,7 @@ Has more pages:            ${hasMore}
     // 3. Apply sorting (if provided)
     const sortBy = searchPayload.sortBy;
     if (sortBy) {
-      filteredResults.sort((a, b) => {
+      filteredResults = filteredResults.slice().sort((a, b) => {
         const enrichedA = calculateEnrichedPricing(
           {
             basePrice: a.basePrice ?? a.price,
@@ -476,10 +726,37 @@ Has more pages:            ${hasMore}
       });
     }
 
-    // 4. Bake markup into the returned price (single source of truth — same as the
-    //    detail/products path). Search now returns FINAL prices; the frontend renders
+    // 4. Paginate: slice the requested page from the processed list (Redis path),
+    //    or take the whole set when the fallback already fetched a single page.
+    let hasMore: boolean;
+    let pageItems: UnifiedHotel[];
+    if (opts.slice) {
+      const page = Math.max(1, opts.page || 1);
+      const limit = Math.max(1, opts.limit || DEFAULT_PAGE_SIZE);
+      const start = (page - 1) * limit;
+      const end = start + limit;
+      pageItems = filteredResults.slice(start, end);
+      // More to serve if this page didn't reach the end of what we hold, or if
+      // the suppliers still have pages we haven't pulled into the master list.
+      //
+      // Never claim more on an *empty* page. A client that jumps far beyond the
+      // master list can outrun MAX_EXTEND_ROUNDS, leaving nothing to slice; the
+      // suppliers may genuinely have more, but answering "empty, keep asking"
+      // strands the client in a loop it can't make progress on. Ending cleanly
+      // costs only the deep-jump case — sequential scrolling grows the list a
+      // page at a time and never lands here.
+      hasMore =
+        pageItems.length > 0 &&
+        (end < filteredResults.length || (opts.providerHasMore ?? false));
+    } else {
+      pageItems = filteredResults;
+      hasMore = opts.legacyHasMore ?? false;
+    }
+
+    // 5. Bake markup into the returned price (single source of truth — same as the
+    //    detail/products path). Search returns FINAL prices; the frontend renders
     //    them verbatim (no client-side markup). B2C / no-rule => markup 0.
-    const optimizedResults = filteredResults.map((hotel) => {
+    const optimizedResults = pageItems.map((hotel) => {
       const { rawPayload, ...rest } = hotel;
       const enriched = calculateEnrichedPricing(
         {
@@ -515,30 +792,39 @@ Has more pages:            ${hasMore}
           }
         : rest.altDeal;
 
+      const publicPricing = buildPublicPricing({
+        enriched,
+        taxes: hotel.taxAmount ?? 0,
+        mf: 0,
+        mft: 0,
+        currency: hotel.currency,
+        clientType,
+      });
+
       return {
         ...rest,
-        // price now INCLUDES markup; basePrice stays the net room cost
+        // price is the sell price on both channels (B2C: +master margin, B2B:
+        // +agent margin), so it stays keyed off finalTotalPrice.
         price: round2(enriched.finalTotalPrice),
+        // basePrice INCLUDES the master's margin on B2C: the card's headline
+        // per-night number is derived from it, so leaving the margin out
+        // advertised a price we would not honour at review.
+        basePrice: publicPricing.basePrice,
         altDeal,
         pricing: {
           ...(rest.pricing || {}),
-          markupAmount: round2(enriched.markupAmount),
-          perNightPrice: round2(enriched.perNightPrice),
-          finalTotalPrice: round2(enriched.finalTotalPrice),
-          supplierTotalPrice: round2(enriched.supplierTotalPrice),
+          ...publicPricing,
         },
         correlationId: (rawPayload as any)?._correlationId || hotel.correlationId || "",
       };
     });
 
-    const response = {
+    return {
       results: optimizedResults,
       body: optimizedResults, // Fallback for some frontend components
       hotels: optimizedResults,
       // Hotels on this page. The client accumulates across pages and uses
-      // `hasMore` to decide whether to ask for another one. Reporting a summed
-      // provider total here made the UI claim "1 Property" for a search that
-      // returned none, and made infinite scroll fetch forever.
+      // `hasMore` to decide whether to ask for another one.
       total: optimizedResults.length,
       hasMore,
       // Properties we hold for this destination, for "Showing 40 of 6,179".
@@ -546,21 +832,37 @@ Has more pages:            ${hasMore}
       inventoryCount,
       facets,
       meta: {
-        tjCount: providerStats['TJ']?.total || 0,
-        rgCount: providerStats['RG']?.total || 0,
+        tjCount: master.filter(h => h.source === 'TJ').length,
+        rgCount: master.filter(h => h.source === 'RG').length,
       },
     };
+  }
 
-    if (cacheable) {
-      // Bound the cache: drop the oldest entry when full (Map preserves insertion order).
-      if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
-        const oldestKey = searchCache.keys().next().value;
-        if (oldestKey !== undefined) searchCache.delete(oldestKey);
-      }
-      searchCache.set(cacheKey, { at: Date.now(), data: response });
-    }
-
-    return response;
+  /**
+   * Stable Redis key for a search's master list. Excludes pageNo/limit/filters/
+   * sortBy and the auth token (all applied per request in finalizeResponse), but
+   * includes clientType because RateGain maps prices differently per client type.
+   */
+  private buildMasterKey(
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+  ): string {
+    const identity = {
+      d: (searchPayload.destination || "").trim().toLowerCase(),
+      dc: searchPayload.destinationCode || "",
+      ci: searchPayload.checkin,
+      co: searchPayload.checkout,
+      rooms: searchPayload.rooms,
+      cur: searchPayload.currency || "INR",
+      cc: searchPayload.countryCode || "IN",
+      prov: (searchPayload.providers || []).slice().sort(),
+      ct: clientType,
+    };
+    const hash = crypto
+      .createHash("sha1")
+      .update(JSON.stringify(identity))
+      .digest("hex");
+    return `hsearch:v1:${hash}`;
   }
 
   /**

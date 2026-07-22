@@ -22,7 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 
 connectDB();
 
-app.use('/api', routes);
+app.use('/api/visa', routes);
 
 app.get('/', (req, res) => {
     res.json({

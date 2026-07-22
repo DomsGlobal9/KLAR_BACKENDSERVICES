@@ -1,35 +1,66 @@
 import { MarkupRule } from "./wallet.util";
+import { getMarkupConfig } from "../config/markup-config";
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ---------------------------------------------------------------------------
-// PLATFORM (super-admin) markup — MUST mirror hotel-search-service config.
+// PLATFORM (KLAR master) markup — MUST mirror hotel-search-service config.
 // A hidden margin added to the raw supplier net BEFORE agents see it.
 // Booking uses it to (a) validate against the api price the agent saw, and
-// (b) still pay the supplier the raw net. Superadmin-configured via env.
+// (b) still pay the supplier the raw net. Master-configured via auth-service.
+//
+// Read live from the snapshot on every call: caching a module const here would
+// pin this service to whatever the config was at boot, while hotel-search
+// picked up the master's change within its TTL — and the resulting mismatch
+// surfaces as spurious PRICE_CHANGED rejections, not as a config error.
 // ---------------------------------------------------------------------------
 export const PLATFORM_MARKUP = {
-  enabled: (process.env.PLATFORM_MARKUP_ENABLED || "false") === "true",
-  type:
-    (process.env.PLATFORM_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
-      ? ("PERCENTAGE" as const)
-      : ("FIXED" as const),
-  value: Number(process.env.PLATFORM_MARKUP_VALUE || 0),
+  get enabled() {
+    return getMarkupConfig().platform.enabled;
+  },
+  get type() {
+    return getMarkupConfig().platform.type;
+  },
+  get value() {
+    return getMarkupConfig().platform.value;
+  },
 };
 
 /** Amount the platform adds on top of a raw supplier NET price. */
 export function platformMarkupAmount(supplierNet: number): number {
-  if (!PLATFORM_MARKUP.enabled || !supplierNet || supplierNet <= 0) return 0;
+  const cfg = getMarkupConfig().platform;
+  if (!cfg.enabled || !supplierNet || supplierNet <= 0) return 0;
   const amt =
-    PLATFORM_MARKUP.type === "PERCENTAGE"
-      ? (supplierNet * PLATFORM_MARKUP.value) / 100
-      : PLATFORM_MARKUP.value;
+    cfg.type === "PERCENTAGE" ? (supplierNet * cfg.value) / 100 : cfg.value;
   return round2(Math.max(0, amt));
 }
 
 /** api net (what the agent sees) = supplier net + platform markup. */
 export function applyPlatformMarkup(supplierNet: number): number {
   return round2(supplierNet + platformMarkupAmount(supplierNet));
+}
+
+/**
+ * The master's B2C margin on top of an api net (i.e. a net that already
+ * includes the platform markup). B2C's analogue of an agent's own markup.
+ */
+export function b2cMarkupAmount(apiNet: number): number {
+  const cfg = getMarkupConfig().b2c;
+  if (!cfg.enabled || !apiNet || apiNet <= 0) return 0;
+  const amt = cfg.type === "PERCENTAGE" ? (apiNet * cfg.value) / 100 : cfg.value;
+  return round2(Math.max(0, amt));
+}
+
+/**
+ * The least a B2C customer may pay for this rate: api net + B2C markup.
+ *
+ * The browser supplies the selling price at commit, so this is the server-side
+ * floor that makes the master's pricing unbypassable. Flooring at the raw
+ * supplier net instead — as this path used to — lets a tampered-low price book
+ * at cost, silently forfeiting both margins.
+ */
+export function b2cPriceFloor(apiNet: number): number {
+  return round2(apiNet + b2cMarkupAmount(apiNet));
 }
 
 export class PricingUtil {

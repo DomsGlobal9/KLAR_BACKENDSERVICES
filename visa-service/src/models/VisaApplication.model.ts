@@ -13,7 +13,7 @@ export interface IVisaApplication extends Document {
     source: string;
     
     // Employment Fields (Optional)
-    employmentStatus?: 'Employed' | 'Self Employed';
+    employmentStatus?: 'salaried-employee' | 'business-owner';
     applicantName?: string;
     companyName?: string;
     designation?: string;
@@ -56,7 +56,7 @@ const VisaApplicationSchema = new Schema({
     // Employment Fields
     employmentStatus: { 
         type: String, 
-        enum: ['Employed', 'Self-employed'], 
+        enum: ['salaried-employee', 'business-owner'], 
         required: false 
     },
     applicantName: { type: String, required: false },
