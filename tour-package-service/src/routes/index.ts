@@ -1,8 +1,8 @@
 import { Router } from "express";
-import packageRoutes from "./package.routes";
+import toursRoutes from "./tour.routes"
 
 const router = Router();
 
-router.use("/packages", packageRoutes);
+router.use("/query", toursRoutes);
 
 export default router;
