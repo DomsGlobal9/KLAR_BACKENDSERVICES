@@ -35,10 +35,10 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // server-to-server / Postman
       if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      // In non-production: allow any localhost port
+      // In non-production: allow any localhost or local network IP
       if (
         process.env.NODE_ENV !== "production" &&
-        /^http:\/\/localhost:\d+$/.test(origin)
+        /^http:\/\/(localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+):\d+$/.test(origin)
       ) {
         return callback(null, true);
       }
