@@ -13,7 +13,7 @@ export const env = {
   // first `searchPrefetchPages` supplier pages are fetched eagerly. When Redis is
   // down, search falls back to live per-page fetching (see hotels.service.ts).
   redisUrl: process.env.REDIS_URL || "redis://127.0.0.1:6379",
-  searchPrefetchPages: Number(process.env.SEARCH_PREFETCH_PAGES || 3),
+  searchPrefetchPages: Number(process.env.SEARCH_PREFETCH_PAGES || 1),
   // How many further supplier pages to pull each time the client scrolls past
   // what the master list already holds. The prefetch above is only a head start
   // — the list grows on demand from here, so it is never capped at the prefetch

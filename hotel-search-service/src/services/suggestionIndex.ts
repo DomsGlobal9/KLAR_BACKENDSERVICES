@@ -22,6 +22,14 @@ import { boundedEditDistance, normalizeText, tokenizeText } from "../utils/text"
  * Omitting the fields makes that a compile-time guarantee rather than a
  * convention someone can forget.
  */
+export interface CountryEntry {
+  name: string;
+  nameLower: string;
+  tokens: string[];
+  isoCode: string;
+  countryCode: string;
+}
+
 export interface CityEntry {
   name: string;
   nameLower: string;
@@ -39,6 +47,7 @@ export interface StateEntry {
 }
 
 interface SuggestionIndex {
+  countryBuckets: Map<string, CountryEntry[]>;
   cityBuckets: Map<string, CityEntry[]>;
   stateBuckets: Map<string, StateEntry[]>;
   citiesByState: Map<string, CityEntry[]>;
@@ -92,6 +101,7 @@ export function buildSuggestionIndex(): SuggestionIndex {
   if (index) return index;
   const startedAt = Date.now();
 
+  const countryBuckets = new Map<string, CountryEntry[]>();
   const cityBuckets = new Map<string, CityEntry[]>();
   const stateBuckets = new Map<string, StateEntry[]>();
   const citiesByState = new Map<string, CityEntry[]>();
@@ -101,6 +111,14 @@ export function buildSuggestionIndex(): SuggestionIndex {
 
   for (const country of Country.getAllCountries()) {
     countryNames.set(country.isoCode, country.name);
+    const entry: CountryEntry = {
+      name: country.name,
+      nameLower: normalize(country.name),
+      tokens: tokenize(country.name),
+      isoCode: country.isoCode,
+      countryCode: country.isoCode,
+    };
+    indexByTokens(countryBuckets, entry);
   }
 
   for (const raw of State.getAllStates()) {
@@ -131,6 +149,7 @@ export function buildSuggestionIndex(): SuggestionIndex {
   }
 
   index = {
+    countryBuckets,
     cityBuckets,
     stateBuckets,
     citiesByState,
@@ -168,6 +187,11 @@ export function getCitiesOfState(
   stateCode: string,
 ): CityEntry[] {
   return getSuggestionIndex().citiesByState.get(`${countryCode}::${stateCode}`) ?? [];
+}
+
+export function candidateCountries(queryTokens: string[]): CountryEntry[] {
+  if (!queryTokens.length) return [];
+  return getSuggestionIndex().countryBuckets.get(bucketKey(queryTokens[0])) ?? [];
 }
 
 /** Candidate places whose name contains a token starting with the query's first token. */
@@ -240,6 +264,12 @@ export function fuzzyCities(queryLower: string): CityEntry[] {
     const home = city.countryCode === HOME_COUNTRY;
     const limit = home ? homeMax : max;
     const name = city.nameLower;
+
+    // Enforce prefix similarity: city must share at least first 3 characters for 3+ char queries.
+    // Stops "maldi" (prefix "mal") from matching "mandi" (prefix "man") or "madhi" (prefix "mad").
+    const prefixLen = Math.min(3, queryLower.length);
+    if (!name.startsWith(queryLower.slice(0, prefixLen))) continue;
+
     if (name.length < len - limit || name.length > len + limit) continue;
 
     const dist = boundedEditDistance(queryLower, name, limit);

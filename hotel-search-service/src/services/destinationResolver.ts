@@ -307,7 +307,15 @@ export async function resolveCityToCoords(
   if (!query || query.length < 2) return null;
   let normalizedQuery = query.toLowerCase().trim();
 
-  // Instant coordinates extraction if prefixed with "geo:"
+  // Strip ID prefixes like "COUNTRY:MV", "STATE:IN:GA", "CITY:IN:GA:Goa"
+  if (normalizedQuery.startsWith("country:")) {
+    const code = normalizedQuery.replace("country:", "").trim().toUpperCase();
+    const countryName = getCountryName(code);
+    normalizedQuery = countryName ? countryName.toLowerCase() : normalizedQuery;
+  } else if (normalizedQuery.startsWith("city:") || normalizedQuery.startsWith("state:")) {
+    const parts = normalizedQuery.split(":");
+    normalizedQuery = parts[parts.length - 1].toLowerCase().trim();
+  }
   if (normalizedQuery.startsWith("geo:")) {
     const coords = normalizedQuery.replace("geo:", "").split(",");
     if (coords.length === 2) {
