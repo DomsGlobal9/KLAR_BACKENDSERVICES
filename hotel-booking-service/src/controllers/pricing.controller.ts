@@ -1,8 +1,13 @@
 import { Request, Response } from "express";
-import { PricingUtil } from "../utils/pricing.util";
-import { WalletUtil } from "../utils/wallet.util";
+import { PricingUtil, applyPlatformMarkup, platformMarkupAmount } from "../utils/pricing.util";
+import { resolveMarkupRules } from "../utils/wallet.util";
 import { convertToINR } from "../utils/fx.util";
 import { precheckService } from "../services/precheck.service";
+import {
+  describeRegionDecision,
+  resolveBookingRegion,
+} from "../utils/bookingRegion.util";
+import { refreshMarkupConfig } from "../config/markup-config";
 
 export const getPricingSummaryController = async (
   req: Request,
@@ -23,12 +28,23 @@ export const getPricingSummaryController = async (
         .json({ success: false, message: "Valid rooms array is required" });
     }
 
+    // This endpoint is agent-facing, and it reaches past the supplier adapters
+    // to the raw provider (below) — so nothing here has the platform markup
+    // applied for us. Refresh the snapshot before we add it by hand.
+    //
+    // Refreshed again after precheck once the region is known; this first call
+    // keeps the ALL snapshot warm for the unverifiable case.
+    await refreshMarkupConfig();
+
     // ─── Step 1: Call TripJack precheck to get the TRUE price ───────────────
     // This is the ONLY source of truth for TripJack hotels.
     // No frontend room price summing allowed.
     let providerNetPrice = 0;
     let precheckBreakdown: any = null;
     let precheckBookingId: string | null = null;
+    /** Raw supplier precheck payload — the only server-side source of the
+     *  hotel's country, and therefore of the markup region. */
+    let precheckRaw: any = null;
 
     const isTripJack = (
       searchParams?.hotelId ||
@@ -56,24 +72,38 @@ export const getPricingSummaryController = async (
           precheckPayload.optionId,
         );
         const precheckRes = await precheckService.precheck(precheckPayload);
+        precheckRaw = precheckRes;
 
         if (precheckRes.status && precheckRes.body?.hotel?.ops?.[0]) {
           const pricing = precheckRes.body.hotel.ops[0];
           // TripJack pricing structure: tp (total price), mf (management fee), mft (management fee tax), bf (base fare)
-          providerNetPrice = Number(pricing.tp || pricing.totalPrice || 0);
+          const supplierNet = Number(pricing.tp || pricing.totalPrice || 0);
           precheckBookingId = precheckRes.bookingId || null;
+
+          // Everything below this line is agent-visible and must be expressed
+          // in "api price" terms — supplier net + platform markup. This call
+          // goes to the raw provider rather than TripJackAdapter, so unlike
+          // every other pricing path it does not get the markup applied for
+          // free. Returning `pricing.tp` here as `netPrice` would hand the
+          // agent the raw supplier price, and diffing it against the search
+          // result discloses the master's markup exactly.
+          providerNetPrice = applyPlatformMarkup(supplierNet);
+
+          const supplierBase =
+            Number(pricing.bf || pricing.basePrice || 0) ||
+            supplierNet - (pricing.mf || 0) - (pricing.mft || 0);
 
           precheckBreakdown = {
             totalPrice: providerNetPrice,
-            basePrice:
-              Number(pricing.bf || pricing.basePrice || 0) ||
-              providerNetPrice - (pricing.mf || 0) - (pricing.mft || 0),
+            // The markup rides on the base, so the breakdown still reconciles
+            // to totalPrice (base + mf + mft) and nothing hints at the delta.
+            basePrice: applyPlatformMarkup(supplierBase),
             mf: Number(pricing.mf || 0),
             mft: Number(pricing.mft || 0),
           };
 
           console.log(
-            `[PricingSummary] TripJack TRUE price: ₹${providerNetPrice}`,
+            `[PricingSummary] TripJack supplier net: ₹${supplierNet}, api price: ₹${providerNetPrice} (platform markup ₹${platformMarkupAmount(supplierNet)})`,
             precheckBreakdown,
           );
         } else {
@@ -124,17 +154,44 @@ export const getPricingSummaryController = async (
     }
 
     // ─── Step 2: Apply Klar Markup Rules on top of provider net price ────────
-    const markupRules = await WalletUtil.getMarkupRules(token);
+    // Channel-aware: B2B gets the agent's own rules, B2C the master's B2C rule.
+    // Using the agent-rule lookup for both (as this did) returns nothing on B2C
+    // — there is no agent — so every B2C quote came back at the api net with
+    // the master's margin silently dropped, while commit still demanded it.
+    const clientType = (req as any).user?.clientType || "B2C";
+    const isB2B = String(clientType).toUpperCase() === "B2B";
+    // Which region this quote is priced under. Derived from the supplier's own
+    // precheck payload — never from anything the caller sent, which would let a
+    // client pick the cheaper margin. Unverifiable stays resolve to ALL rather
+    // than to a guess.
+    const regionDecision = resolveBookingRegion({
+      precheckResponse: precheckRaw,
+      claimedRegion: searchParams?.markupRegion,
+    });
+    console.log(describeRegionDecision(regionDecision));
+
+    await refreshMarkupConfig(regionDecision.region);
+    const markupRules = await resolveMarkupRules(
+      clientType,
+      token,
+      regionDecision.region,
+    );
+
+    // `additionalMarkup` is the agent's own margin, entered in the B2B UI. On
+    // B2C there is no agent to set one, and honouring a caller-supplied value
+    // here would let a customer price their own booking — including below our
+    // floor with a negative number.
+    const appliedAdditionalMarkup = isB2B ? Number(additionalMarkup) || 0 : 0;
+
     let { total, markup, adminMarkup, net } =
       PricingUtil.calculatePriceWithMarkup(
         providerNetPrice,
         markupRules,
-        Number(additionalMarkup) || 0,
+        appliedAdditionalMarkup,
         couponCode,
       );
 
     // Enforce B2C RateGain Minimum Selling Price (MSP) if mandatory
-    const clientType = (req as any).user?.clientType || "B2C";
     if (clientType === "B2C") {
       let mspRequired = 0;
       let enforceMsp = false;
@@ -152,7 +209,7 @@ export const getPricingSummaryController = async (
         );
         total = mspRequired;
         markup = total - net;
-        adminMarkup = markup - (Number(additionalMarkup) || 0);
+        adminMarkup = markup - appliedAdditionalMarkup;
       }
     }
 
@@ -168,7 +225,7 @@ export const getPricingSummaryController = async (
         netPrice: net, // Provider's price (what we pay TripJack)
         totalPrice: total, // What the agent pays (net + markup)
         adminMarkup, // Klar's admin markup
-        additionalMarkup: Number(additionalMarkup) || 0,
+        additionalMarkup: appliedAdditionalMarkup,
         totalMarkup: markup,
         taxes: 0, // TripJack includes taxes in totalPrice
         breakdown: precheckBreakdown, // mf, mft, basePrice from TripJack

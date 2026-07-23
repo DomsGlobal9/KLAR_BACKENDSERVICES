@@ -1,3 +1,5 @@
+import { MarkupRegion } from "../utils/region.util";
+
 export interface UnifiedFilters {
   starRatings?: number[];
   priceRange?: [number, number];
@@ -21,6 +23,7 @@ export interface UnifiedSearchRequest {
   currency?: string; // default USD
   countryCode?: string; // default US
   pageNo?: number; // 1-indexed pagination
+  limit?: number; // page size when slicing from the cached master list (default 20)
   _geoCenter?: { lat: number; lng: number; radiusKm?: number } | null; // internal: pre-resolved coords
   _abortSignal?: AbortSignal | null; // internal: cancels supplier calls once the partial-return window elapses
   providers?: string[];
@@ -41,6 +44,15 @@ export interface UnifiedHotel {
   address: string;
   city: string;
   country: string;
+  /**
+   * Which markup region this hotel was priced under.
+   *
+   * Echoed back by the client at commit so booking can detect a quote-vs-charge
+   * divergence. It is a DIAGNOSTIC: hotel-booking re-derives the region from the
+   * supplier's own response and never lets this value select the markup — see
+   * resolveBookingRegion.
+   */
+  markupRegion?: MarkupRegion;
   starRating: number;
   latitude: number;
   longitude: number;

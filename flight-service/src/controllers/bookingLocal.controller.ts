@@ -462,7 +462,10 @@ class BookingLocalController {
                 }
 
                 const bookings = await BookingService.getBookingsByEmail(email as string);
-                const reversedBookings = bookings.reverse();
+                
+                // Filter for B2C bookings only
+                const b2cBookings = bookings.filter((b: any) => b.userInfo?.clientType === 'b2c' || b.userInfo?.clientType?.toLowerCase() === 'b2c');
+                const reversedBookings = b2cBookings.reverse();
 
                 return res.status(200).json({
                     success: true,
@@ -490,9 +493,12 @@ class BookingLocalController {
 
             const bookings = await BookingService.getBookingsByUserId(userData.id);
 
+            // Filter for B2B bookings only
+            const b2bBookings = bookings.filter((b: any) => b.userInfo?.clientType === 'b2b' || b.userInfo?.clientType?.toLowerCase() === 'b2b');
+
             return res.status(200).json({
                 success: true,
-                data: bookings,
+                data: b2bBookings,
             });
         } catch (error: any) {
             return res.status(400).json({

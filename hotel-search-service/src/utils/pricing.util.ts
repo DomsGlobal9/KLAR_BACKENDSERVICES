@@ -1,8 +1,14 @@
 /**
  * pricing.util.ts
- * Pure utility — no I/O, no side-effects.
  * Centralises all hotel pricing & markup computation for hotel-search-service.
+ *
+ * Computation here is pure and synchronous. The one dependency is a sync read
+ * of the master markup snapshot (config/markup-config.ts) — no I/O happens on
+ * this path; refreshing the snapshot is the request head's job.
  */
+
+import { getMarkupConfig } from "../config/markup-config";
+import { MarkupRegion } from "./region.util";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -10,6 +16,8 @@
 
 export interface MarkupRule {
   serviceType: string;
+  /** Absent on rules written before regions existed — treat as "ALL". */
+  region?: MarkupRegion;
   percentageMarkup: number;
   fixedMarkup: number;
 }
@@ -128,12 +136,98 @@ export function calculateEnrichedPricing(
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ---------------------------------------------------------------------------
-// PLATFORM (super-admin) markup
+// buildPublicPricing — the ONE block clients read
+// ---------------------------------------------------------------------------
+
+export interface PublicPricing {
+  basePrice: number;
+  /** Everything charged on top of basePrice: taxes + management fees. */
+  taxesAndFees: number;
+  /** The number to display and charge. Always === basePrice + taxesAndFees. */
+  totalPrice: number;
+  currency: string;
+  perNightPrice: number;
+  taxesIncluded: boolean;
+
+  /** Supplier's own split of taxesAndFees, when it gives one. Display only. */
+  taxes: number;
+  mf: number;
+  mft: number;
+
+  /** Internal/audit. Never render these. */
+  markupAmount: number;
+  supplierTotalPrice: number;
+  finalTotalPrice: number;
+}
+
+/**
+ * Shapes an EnrichedPricing into the client-facing block, per channel.
+ *
+ * B2C — the master's B2C margin is invisible to the customer by design, so it
+ *       is folded into basePrice and totalPrice is the marked-up total.
+ * B2B — the agent's own margin is theirs to see and edit, so the block stays
+ *       decomposed: basePrice is the api net, totalPrice the api total, and the
+ *       agent's markup is applied downstream from finalTotalPrice.
+ *
+ * WHY taxesAndFees IS DERIVED AND NOT SUMMED
+ * ------------------------------------------
+ * basePrice + taxesAndFees === totalPrice must hold at every call site, but the
+ * sites disagree on how much of the gap they can name: the products path knows
+ * taxes/mf/mft, while the search-list path only knows `taxes` and has no field
+ * for the management fees. Summing the named parts there yields a breakdown
+ * that silently comes up short of the total. Deriving the gap instead makes the
+ * identity true by construction, and the named parts stay as display detail.
+ *
+ * A breakdown that does not add up is exactly how the B2C markup went missing
+ * before: each UI surface picked a different "total" to paper over the gap, and
+ * the markup vanished somewhere between the search card and the review page.
+ */
+export function buildPublicPricing(args: {
+  enriched: EnrichedPricing;
+  taxes: number;
+  mf: number;
+  mft: number;
+  currency: string;
+  clientType: "B2B" | "B2C";
+}): PublicPricing {
+  const { enriched, taxes, mf, mft, currency, clientType } = args;
+  const isB2C = clientType === "B2C";
+
+  const basePrice = isB2C
+    ? round2(enriched.basePrice + enriched.markupAmount)
+    : round2(enriched.basePrice);
+  const totalPrice = isB2C
+    ? round2(enriched.finalTotalPrice)
+    : round2(enriched.supplierTotalPrice);
+
+  return {
+    basePrice,
+    taxesAndFees: round2(totalPrice - basePrice),
+    totalPrice,
+    currency,
+    perNightPrice: round2(enriched.perNightPrice),
+    taxesIncluded: enriched.taxesIncluded,
+    taxes: round2(taxes),
+    mf: round2(mf),
+    mft: round2(mft),
+    markupAmount: round2(enriched.markupAmount),
+    supplierTotalPrice: round2(enriched.supplierTotalPrice),
+    finalTotalPrice: round2(enriched.finalTotalPrice),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PLATFORM (KLAR master) markup
 // A hidden margin the platform adds to the RAW supplier net BEFORE anyone sees
 // it. Agents (and their customers) perceive the result as "the API price".
-// Superadmin-configured via env; the agent's own markup is applied AFTER this.
+// Master-configured via auth-service; the agent's own markup is applied AFTER.
 //   supplier net 500  --(+platform 100)-->  api net 600  --(+agent markup)-->  sell price
 // The supplier is still paid the raw net (500) at booking — see stripPlatformMarkup().
+//
+// The values come from the snapshot in config/markup-config.ts, which the
+// request head refreshes. Reading it per call (rather than caching a module
+// const as this file used to) is what lets a master's change take effect
+// without a redeploy.
 // ---------------------------------------------------------------------------
 
 export interface PlatformMarkupConfig {
@@ -142,36 +236,60 @@ export interface PlatformMarkupConfig {
   value: number;
 }
 
-export const PLATFORM_MARKUP: PlatformMarkupConfig = {
-  enabled: (process.env.PLATFORM_MARKUP_ENABLED || "false") === "true",
-  type: (process.env.PLATFORM_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
-    ? "PERCENTAGE"
-    : "FIXED",
-  value: Number(process.env.PLATFORM_MARKUP_VALUE || 0),
-};
+/** @deprecated Reads the live snapshot. Kept as a getter so existing callers
+ *  that touch `PLATFORM_MARKUP.value` don't silently freeze on env defaults. */
+export const PLATFORM_MARKUP = {
+  get enabled() {
+    return getMarkupConfig().platform.enabled;
+  },
+  get type() {
+    return getMarkupConfig().platform.type;
+  },
+  get value() {
+    return getMarkupConfig().platform.value;
+  },
+} as PlatformMarkupConfig;
 
-/** Amount the platform adds on top of a raw supplier NET price. */
-export function platformMarkupAmount(supplierNet: number): number {
-  if (!PLATFORM_MARKUP.enabled || !supplierNet || supplierNet <= 0) return 0;
+/**
+ * Amount the platform adds on top of a raw supplier NET price.
+ *
+ * `region` is passed explicitly rather than read from module state: the sync
+ * pricing path runs after supplier awaits, so a shared "current region" would
+ * be overwritten by whatever request happened to interleave. Defaults to ALL,
+ * which is the catch-all every pre-region config migrated to.
+ */
+export function platformMarkupAmount(
+  supplierNet: number,
+  region: MarkupRegion = "ALL",
+): number {
+  const cfg = getMarkupConfig(region).platform;
+  if (!cfg.enabled || !supplierNet || supplierNet <= 0) return 0;
   const amt =
-    PLATFORM_MARKUP.type === "PERCENTAGE"
-      ? (supplierNet * PLATFORM_MARKUP.value) / 100
-      : PLATFORM_MARKUP.value;
+    cfg.type === "PERCENTAGE" ? (supplierNet * cfg.value) / 100 : cfg.value;
   return round2(Math.max(0, amt));
 }
 
 /** api net (what the agent sees) = supplier net + platform markup. */
-export function applyPlatformMarkup(supplierNet: number): number {
-  return round2(supplierNet + platformMarkupAmount(supplierNet));
+export function applyPlatformMarkup(
+  supplierNet: number,
+  region: MarkupRegion = "ALL",
+): number {
+  return round2(supplierNet + platformMarkupAmount(supplierNet, region));
 }
 
 /** Reverse of applyPlatformMarkup: recover the raw supplier NET to send to the supplier. */
-export function stripPlatformMarkup(apiNet: number): number {
-  if (!PLATFORM_MARKUP.enabled || !apiNet || apiNet <= 0) return round2(apiNet);
-  if (PLATFORM_MARKUP.type === "PERCENTAGE") {
-    return round2(apiNet / (1 + PLATFORM_MARKUP.value / 100));
+export function stripPlatformMarkup(
+  apiNet: number,
+  region: MarkupRegion = "ALL",
+): number {
+  // MUST use the same region applyPlatformMarkup used, or the net we send the
+  // supplier will not be the net we marked up.
+  const cfg = getMarkupConfig(region).platform;
+  if (!cfg.enabled || !apiNet || apiNet <= 0) return round2(apiNet);
+  if (cfg.type === "PERCENTAGE") {
+    return round2(apiNet / (1 + cfg.value / 100));
   }
-  return round2(Math.max(0, apiNet - PLATFORM_MARKUP.value));
+  return round2(Math.max(0, apiNet - cfg.value));
 }
 
 // ---------------------------------------------------------------------------

@@ -24,7 +24,15 @@ export const getLatLong = async (req: Request, res: Response, next: NextFunction
 export const getQuotes = async (req: Request, res: Response, next: NextFunction) => {
     try {
         console.log("[Cabs][Controller] getQuotes request body:", JSON.stringify(req.body, null, 2));
-        const result = await searchService.getQuotes(req.body);
+        // Channel and token come from the authenticated request, never the body:
+        // a caller must not be able to select which markup prices their quote.
+        const clientType =
+            (req as any).user?.clientType ||
+            (req.headers["x-client-type"] as string) ||
+            "B2C";
+        const token = req.headers.authorization?.split(" ")[1] || "";
+
+        const result = await searchService.getQuotes(req.body, clientType, token);
         console.log("[Cabs][Controller] getQuotes success result:", JSON.stringify(result, null, 2).substring(0, 200) + "...");
         res.status(200).json(result);
     } catch (error) {

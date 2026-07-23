@@ -5,31 +5,61 @@
  *
  *   npx ts-node --transpile-only scripts/validateCityAliases.ts
  */
-import { City } from "country-state-city";
-import { CITY_ALIASES } from "../src/data/cityAliases";
+import { City, State } from "country-state-city";
+import { CITY_ALIASES, STATE_ALIASES } from "../src/data/cityAliases";
 import { HOME_COUNTRY, normalize } from "../src/services/suggestionIndex";
 
 const cities = City.getAllCities();
+const states = State.getAllStates();
 let failures = 0;
+let checked = 0;
 
-for (const [alias, canonical] of Object.entries(CITY_ALIASES)) {
-  const matches = cities.filter(
-    (c) => c.countryCode === HOME_COUNTRY && normalize(c.name) === normalize(canonical),
-  );
+/** `locate` returns the dataset rows a canonical name resolves to, if any. */
+function check(
+  alias: string,
+  canonical: string,
+  locate: (canonical: string) => string[],
+): void {
+  checked++;
+  const where = locate(canonical);
 
-  if (matches.length === 0) {
+  if (where.length === 0) {
     console.error(`✗ ${alias.padEnd(14)} → "${canonical}" NOT FOUND in ${HOME_COUNTRY}`);
     failures++;
   } else if (normalize(alias) !== alias) {
     console.error(`✗ ${alias.padEnd(14)} key is not normalized`);
     failures++;
   } else {
-    const states = [...new Set(matches.map((m) => m.stateCode))];
-    console.log(`✓ ${alias.padEnd(14)} → ${canonical} (${states.join(", ")})`);
+    console.log(`✓ ${alias.padEnd(14)} → ${canonical} (${where.join(", ")})`);
   }
 }
 
-console.log(
-  `\n${Object.keys(CITY_ALIASES).length - failures}/${Object.keys(CITY_ALIASES).length} aliases valid.`,
-);
+for (const [alias, canonical] of Object.entries(CITY_ALIASES)) {
+  check(alias, canonical, (name) => [
+    ...new Set(
+      cities
+        .filter((c) => c.countryCode === HOME_COUNTRY && normalize(c.name) === normalize(name))
+        .map((c) => c.stateCode),
+    ),
+  ]);
+}
+
+for (const [alias, canonical] of Object.entries(STATE_ALIASES)) {
+  check(alias, canonical, (name) =>
+    states
+      .filter((s) => s.countryCode === HOME_COUNTRY && normalize(s.name) === normalize(name))
+      .map((s) => s.isoCode),
+  );
+}
+
+// An alias listed as both a city and a state resolves ambiguously — whichever
+// table `resolveCityAlias` reads first silently wins.
+for (const alias of Object.keys(STATE_ALIASES)) {
+  if (alias in CITY_ALIASES) {
+    console.error(`✗ ${alias.padEnd(14)} appears in both CITY_ALIASES and STATE_ALIASES`);
+    failures++;
+  }
+}
+
+console.log(`\n${checked - failures}/${checked} aliases valid.`);
 process.exit(failures === 0 ? 0 : 1);

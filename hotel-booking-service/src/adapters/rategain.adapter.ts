@@ -3,11 +3,15 @@ import { SupplierAdapter, PrecheckResultV1 } from "../models/PrecheckResult";
 import { rateGainProvider } from "../providers/rategain.provider";
 import { CircuitBreaker } from "../services/CircuitBreaker";
 import { applyPlatformMarkup } from "../utils/pricing.util";
+import { refreshMarkupConfig } from "../config/markup-config";
 
 const rateGainCircuitBreaker = new CircuitBreaker(5, 30000); // 5 failures -> Open for 30s
 
 export class RateGainAdapter implements SupplierAdapter {
   async precheck(payload: any): Promise<PrecheckResultV1> {
+    // See TripJackAdapter.precheck — same guarantee, same reason.
+    await refreshMarkupConfig();
+
     return rateGainCircuitBreaker.execute(async () => {
       // Call existing provider
       const rgRes = await rateGainProvider.precheck(payload);

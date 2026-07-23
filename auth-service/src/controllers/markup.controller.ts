@@ -73,9 +73,15 @@ export class MarkupController {
             return res.status(400).json({ success: false });
         }
 
+        // Region is a query param so the existing DELETE /:serviceType route
+        // keeps working; omitting it targets the ALL rule.
+        const region =
+            typeof req.query.region === "string" ? req.query.region : undefined;
+
         await service.delete(
             new Types.ObjectId(userId),
-            serviceType
+            trimmedServiceType,
+            region
         );
 
         res.json({ success: true });

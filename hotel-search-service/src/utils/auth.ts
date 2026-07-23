@@ -5,6 +5,8 @@ import axios from "axios";
 import { env } from "../config/env";
 import { MarkupRule } from "./pricing.util";
 import { LruCache } from "./lruCache";
+import { refreshMarkupConfig } from "../config/markup-config";
+import { MarkupRegion } from "./region.util";
 
 export function getClientType(req: Request): "B2B" | "B2C" {
   try {
@@ -112,4 +114,76 @@ export async function getMarkupRules(
     markupFailureCache.set(key, true);
     return [];
   }
+}
+
+/**
+ * The markup rules to price a request with, by channel.
+ *
+ * B2B — the agent's own rules. The platform markup is already folded into the
+ *       net they see, so their rule stacks on top of it.
+ * B2C — the master's B2C rule, expressed as a synthetic agent rule so it flows
+ *       through the same `calculateEnrichedPricing` path. There is no agent in
+ *       this channel, so nothing else would occupy that slot; a B2C caller's
+ *       token must never be allowed to contribute markup rules of its own.
+ *
+ * Also refreshes the master config snapshot, which every downstream sync call
+ * to `platformMarkupAmount()` depends on. Both hotel search and hotel detail
+ * route through here, which is what keeps that guarantee cheap to hold.
+ */
+export async function resolveMarkupRules(
+  clientType: "B2B" | "B2C",
+  token: string | null,
+  region: MarkupRegion = "ALL",
+): Promise<MarkupRule[]> {
+  const [config, agentRules] = await Promise.all([
+    refreshMarkupConfig(region),
+    clientType === "B2B" ? getMarkupRules(token) : Promise.resolve([]),
+  ]);
+
+  if (clientType === "B2B") return pickRulesForRegion(agentRules, region);
+
+  const b2c = config.b2c;
+  if (!b2c.enabled || b2c.value <= 0) return [];
+
+  return [
+    {
+      serviceType: "HOTEL",
+      percentageMarkup: b2c.type === "PERCENTAGE" ? b2c.value : 0,
+      fixedMarkup: b2c.type === "FIXED" ? b2c.value : 0,
+    },
+  ];
+}
+
+/**
+ * Narrows an agent's rules to the ones that apply to `region`, using the same
+ * exact-region-then-ALL precedence auth-service applies to the master config.
+ *
+ * An agent may hold several rules for one serviceType (one per region); without
+ * this the first array entry would win, which is whatever order Mongo returned.
+ */
+export function pickRulesForRegion(
+  rules: MarkupRule[],
+  region: MarkupRegion,
+): MarkupRule[] {
+  const byService = new Map<string, MarkupRule>();
+
+  for (const rule of rules ?? []) {
+    const service = (rule.serviceType || "").toUpperCase();
+    const ruleRegion = (rule.region || "ALL").toUpperCase();
+
+    // Ignore rules belonging to a different region entirely.
+    if (ruleRegion !== "ALL" && ruleRegion !== region) continue;
+
+    const existing = byService.get(service);
+    const existingRegion = existing
+      ? (existing.region || "ALL").toUpperCase()
+      : null;
+
+    // An exact-region rule beats the ALL catch-all; otherwise first wins.
+    if (!existing || (existingRegion === "ALL" && ruleRegion === region)) {
+      byService.set(service, rule);
+    }
+  }
+
+  return [...byService.values()];
 }

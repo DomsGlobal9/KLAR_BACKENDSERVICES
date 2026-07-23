@@ -62,7 +62,25 @@ export const envConfig = {
 
     EMAIL: {
         EMAIL_SERVICE_URL: getEnv("EMAIL_BASE_URL"),
-    }
+    },
+
+    /**
+     * The KLAR master logins, which configure platform-wide pricing.
+     *
+     * A second factor on top of Roles.MASTER: the role alone would make a
+     * stolen/mis-seeded MASTER user doc enough to rewrite platform pricing,
+     * and that write is invisible to agents by design. Requiring the email to
+     * also appear here means promoting a master is a deliberate deploy, not a
+     * DB update.
+     *
+     * Empty (the default) disables master access entirely — fail closed.
+     */
+    MASTER: {
+        EMAILS: (getEnv("MASTER_EMAILS", false) || "")
+            .split(",")
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean),
+    },
 };
 
 /**

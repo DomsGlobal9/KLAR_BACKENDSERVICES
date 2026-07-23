@@ -4,7 +4,7 @@ import visaRoutes from '../routes/visa.route';
 const router = Router();
 
 // Use visa routes
-router.use('/visa', visaRoutes);
+router.use(visaRoutes);
 
 // Root API route
 // router.get('/', (req, res) => {
