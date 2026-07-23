@@ -3,6 +3,10 @@ import { PricingUtil, applyPlatformMarkup, platformMarkupAmount } from "../utils
 import { resolveMarkupRules } from "../utils/wallet.util";
 import { convertToINR } from "../utils/fx.util";
 import { precheckService } from "../services/precheck.service";
+import {
+  describeRegionDecision,
+  resolveBookingRegion,
+} from "../utils/bookingRegion.util";
 import { refreshMarkupConfig } from "../config/markup-config";
 
 export const getPricingSummaryController = async (
@@ -27,6 +31,9 @@ export const getPricingSummaryController = async (
     // This endpoint is agent-facing, and it reaches past the supplier adapters
     // to the raw provider (below) — so nothing here has the platform markup
     // applied for us. Refresh the snapshot before we add it by hand.
+    //
+    // Refreshed again after precheck once the region is known; this first call
+    // keeps the ALL snapshot warm for the unverifiable case.
     await refreshMarkupConfig();
 
     // ─── Step 1: Call TripJack precheck to get the TRUE price ───────────────
@@ -35,6 +42,9 @@ export const getPricingSummaryController = async (
     let providerNetPrice = 0;
     let precheckBreakdown: any = null;
     let precheckBookingId: string | null = null;
+    /** Raw supplier precheck payload — the only server-side source of the
+     *  hotel's country, and therefore of the markup region. */
+    let precheckRaw: any = null;
 
     const isTripJack = (
       searchParams?.hotelId ||
@@ -62,6 +72,7 @@ export const getPricingSummaryController = async (
           precheckPayload.optionId,
         );
         const precheckRes = await precheckService.precheck(precheckPayload);
+        precheckRaw = precheckRes;
 
         if (precheckRes.status && precheckRes.body?.hotel?.ops?.[0]) {
           const pricing = precheckRes.body.hotel.ops[0];
@@ -149,7 +160,22 @@ export const getPricingSummaryController = async (
     // the master's margin silently dropped, while commit still demanded it.
     const clientType = (req as any).user?.clientType || "B2C";
     const isB2B = String(clientType).toUpperCase() === "B2B";
-    const markupRules = await resolveMarkupRules(clientType, token);
+    // Which region this quote is priced under. Derived from the supplier's own
+    // precheck payload — never from anything the caller sent, which would let a
+    // client pick the cheaper margin. Unverifiable stays resolve to ALL rather
+    // than to a guess.
+    const regionDecision = resolveBookingRegion({
+      precheckResponse: precheckRaw,
+      claimedRegion: searchParams?.markupRegion,
+    });
+    console.log(describeRegionDecision(regionDecision));
+
+    await refreshMarkupConfig(regionDecision.region);
+    const markupRules = await resolveMarkupRules(
+      clientType,
+      token,
+      regionDecision.region,
+    );
 
     // `additionalMarkup` is the agent's own margin, entered in the B2B UI. On
     // B2C there is no agent to set one, and honouring a caller-supplied value

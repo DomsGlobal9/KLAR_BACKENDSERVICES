@@ -11,6 +11,9 @@ import {
 } from "../models/CabBooking.model";
 import { cabBookingRepository } from "../repositories/cabBooking.repository";
 import { ensureLocationAddress } from "../utils/location.utils";
+import { deriveRegion } from "../utils/region.util";
+import { calculateCabPrice } from "../utils/pricing.util";
+import { resolveMarkupRules } from "../utils/wallet.util";
 import { WalletUtil } from "../utils/wallet.util";
 import { PaymentUtil } from "../utils/payment.util";
 import { notificationService } from "./notification.service";
@@ -170,6 +173,23 @@ class BookingService {
       destination: bookDestination,
     };
 
+    // ── 2a. Price the journey SERVER-SIDE.
+    //
+    // The region comes from the resolved pickup address, which ensureLocationAddress
+    // guarantees carries {city, country} — never from anything the caller sent.
+    const region = deriveRegion(bookOrigin?.address?.country);
+    const markupRules = await resolveMarkupRules(clientType, ctx.token, region);
+    const price = calculateCabPrice({
+      supplierNet: validatedPrice,
+      clientType,
+      agentRules: markupRules,
+      region,
+    });
+    console.log(
+      `[BookingService] Priced region=${price.region} net=${price.supplierNet} ` +
+        `platform=${price.platformMarkup} channel=${price.channelMarkup} gross=${price.gross}`,
+    );
+
     // Supplier-side pricing must mirror the FRESH quote exactly: TripJack rejects
     // the booking ("Expected net amount is X") when netAmount differs from the
     // live quote's fare, and any drift between search and book breaks it. The
@@ -177,7 +197,9 @@ class BookingService {
     // the supplier payload is rebuilt from the precheck.
     const freshFare = round2(Number(fresh.price || 0));
     const freshTax = round2(Number(fresh.taxes || 0));
-    const agentMarkupNum = Number(payload.pricingInfo?.agentMarkup || 0);
+    // Klar's total margin, computed above. Was `payload.pricingInfo.agentMarkup`
+    // — a client-supplied number, which meant the caller chose our margin.
+    const agentMarkupNum = price.markupAmount;
     const pricingInfo = {
       netAmount: freshFare.toFixed(2),
       addonsPrice: String(payload.pricingInfo?.addonsPrice || "0.00"),
@@ -234,15 +256,29 @@ class BookingService {
       correlationId,
     };
 
-    // Klar-side amount the customer pays = the CLIENT-approved gross (already
-    // validated against the fresh quote within tolerance by the precheck) —
-    // NOT the rebuilt supplier gross, so what we charge never silently moves.
+    // Klar-side amount the customer pays. Computed from the fresh supplier fare
+    // plus the master's and the agent's configured rules — NOT from the request
+    // body.
+    //
+    // The client's number is only compared. ValidationEngine rejects a supplier
+    // price INCREASE beyond tolerance but has nothing to say about a gross that
+    // is too LOW, so trusting `pricingInfo.grossAmount` let a caller send the
+    // bare supplier net and pay no margin at all.
+    const grossAmount = price.gross;
+    const netAmount = price.supplierNet; // supplier owed (fresh total)
+    const markupAmount = price.markupAmount;
+
     const clientGross = round2(
       Number(payload.pricingInfo?.grossAmount || payload.pricingInfo?.netAmount || 0),
     );
-    const grossAmount = clientGross > 0 ? clientGross : round2(Number(pricingInfo.grossAmount || 0));
-    const netAmount = round2(validatedPrice); // supplier owed (fresh total)
-    const markupAmount = grossAmount > netAmount ? round2(grossAmount - netAmount) : 0;
+    if (clientGross > 0 && Math.abs(clientGross - grossAmount) > 0.01) {
+      // Not fatal — the quote may simply be stale — but it means the customer
+      // saw a different number than we are charging, so make it greppable.
+      console.warn(
+        `[BookingService] QUOTE MISMATCH quoted=${clientGross} charged=${grossAmount} ` +
+          `region=${price.region} idempotencyKey=${idempotencyKey}`,
+      );
+    }
 
     // ── 3. Claim the idempotency slot with an INITIATED record BEFORE any charge.
     const bookingDoc = await this.claimBookingRecord({

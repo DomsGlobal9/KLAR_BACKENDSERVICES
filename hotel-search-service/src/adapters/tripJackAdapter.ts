@@ -5,6 +5,8 @@ import { tripJackClient } from "../clients/tripjack.client";
 import { v4 as uuidv4 } from "uuid";
 import { HotelModel } from "../models/Hotel.model";
 import { toTjNationality } from "../utils/nationality";
+import { qualifyImageUrls } from "../utils/imageUrl.util";
+import { deriveRegion } from "../utils/region.util";
 
 // ─── TripJack Circuit Breaker ────────────────────────────────────────────────
 let tjCircuitOpenUntil = 0;
@@ -27,7 +29,7 @@ export async function searchTJ(
   const page = req.pageNo || 1;
 
   const targetCount = 20;
-  const CHUNK_SIZE = 100; // Increased to 100 to find hotels faster per page
+  const CHUNK_SIZE = 20; // Increased to 100 to find hotels faster per page
   const chunks: string[][] = [];
   for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
     chunks.push(hids.slice(i, i + CHUNK_SIZE));
@@ -167,9 +169,12 @@ export async function searchTJ(
           const rating = bh.starRating || s.starRating || 0;
           // Always prefer DB images since TJ listing API rarely returns images
           const enrichedImages = (() => {
-            // Use listing images if present; otherwise always fall back to DB
+            // Use listing images if present; otherwise always fall back to DB.
+            // bh.images is already qualified by mapTJHotel; the DB copy is not,
+            // so it goes through the same resolver before it can be counted.
             if (bh.images && bh.images.length > 0) return bh.images;
-            if (s.images && s.images.length > 0) return s.images as string[];
+            const dbImages = qualifyImageUrls(s.images, "TJ");
+            if (dbImages.length > 0) return dbImages;
             return [];
           })();
           const finalAmenities =
@@ -272,16 +277,18 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     address: h.address,
     city: h.city,
     country: h.country,
+    // Diagnostic only — booking re-derives from the supplier's own response.
+    markupRegion: deriveRegion(h.country),
     starRating: rating,
     latitude: h.latitude,
     longitude: h.longitude,
-    // TJ listing rarely returns images — DB enrichment fills these in the enrichment step below
-    images:
-      Array.isArray(h.images) && h.images.length > 0
-        ? h.images
-        : h.img
-          ? [h.img]
-          : [],
+    // TJ listing rarely returns images — DB enrichment fills these in the
+    // enrichment step below. Qualified here so anything unresolvable is dropped
+    // at the source instead of reaching the gallery as a dead URL.
+    images: qualifyImageUrls(
+      Array.isArray(h.images) && h.images.length > 0 ? h.images : h.img,
+      "TJ",
+    ),
     // TJ: totalPrice already includes all taxes + management fees. taxesIncluded = true.
     // basePrice = the base net price (without taxes); taxAmount = taxes on top (0 at search level — detail has breakdown).
     price: round2(tjTotal + tjPlatformAmt),

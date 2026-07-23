@@ -4,6 +4,7 @@ import { resolveCityToCoords, resolveGeoCenter } from "./destinationResolver";
 import { deduplicateHotels } from "./deduplicator";
 import { UnifiedSearchRequest, UnifiedHotel } from "../types/unified";
 import { resolveMarkupRules } from "../utils/auth";
+import { deriveRegion } from "../utils/region.util";
 import {
   buildPublicPricing,
   calculateNights,
@@ -69,7 +70,16 @@ export class HotelsService {
     const totalStartTime = Date.now();
     // Resolves the agent's rules for B2B / the master's B2C rule for B2C, and
     // refreshes the platform-markup snapshot the adapters read synchronously.
-    const markupRules = await resolveMarkupRules(clientType, token ?? null);
+    // The destination's country decides which region's markup this search is
+    // priced under. It is resolved BEFORE any supplier call because the
+    // adapters read the platform snapshot synchronously, per rate, and cannot
+    // await a config fetch mid-mapping.
+    const searchRegion = deriveRegion(searchPayload.countryCode);
+    const markupRules = await resolveMarkupRules(
+      clientType,
+      token ?? null,
+      searchRegion,
+    );
     const nights = calculateNights(searchPayload.checkin, searchPayload.checkout);
     const mode = process.env.HOTEL_PROVIDER_MODE || "UNIFIED";
     console.log(

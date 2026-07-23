@@ -12,7 +12,7 @@
 import { LruCache } from "../utils/lruCache";
 import { boundedEditDistance } from "../utils/text";
 import { isMongoReady, withTimeout } from "../utils/mongoReady";
-import { resolveCityAlias } from "../data/cityAliases";
+import { matchAliasPrefixes, resolveCityAlias } from "../data/cityAliases";
 import {
   candidateCountries,
   candidateCities,
@@ -25,6 +25,8 @@ import {
   tokenize,
   scoreName,
   NO_MATCH,
+  SCORE_EXACT,
+  SCORE_WORD_PREFIX,
   SCORE_PREFIX,
   SCORE_FUZZY,
   type CountryEntry,
@@ -215,6 +217,53 @@ function matchStates(queryLower: string, queryTokens: string[]): Array<Scored<St
     if (score !== NO_MATCH) matches.push({ entry, score });
   }
   return matches;
+}
+
+/**
+ * Destinations reached through a partly-typed alias — "bom" → Mumbai.
+ *
+ * The canonical name is looked up in the index and scored against the *alias*,
+ * not against the canonical name: "bom" is a prefix of "bombay", so Mumbai
+ * ranks as though the city were literally named Bombay. That keeps aliased and
+ * real matches comparable in one ranking pass instead of bolting alias rows on
+ * at the top.
+ *
+ * A part-typed alias scores as a word prefix, never a mid-word one. Anything
+ * weaker loses to foreign micro-towns sharing the same opening letters — "bom"
+ * put Bom Lugar and Bom Jesus above Mumbai, and "bang" buried Bengaluru under
+ * Bang Na entirely. At equal score the home-country tiebreak settles it.
+ */
+function matchAliasedPlaces(typedLower: string): {
+  states: Array<Scored<StateEntry>>;
+  cities: Array<Scored<CityEntry>>;
+} {
+  const states: Array<Scored<StateEntry>> = [];
+  const cities: Array<Scored<CityEntry>> = [];
+
+  for (const { alias, canonical, kind } of matchAliasPrefixes(typedLower)) {
+    const score = alias === typedLower ? SCORE_EXACT : SCORE_WORD_PREFIX;
+    const canonicalLower = normalize(canonical);
+    const canonicalTokens = tokenize(canonical);
+
+    if (kind === "state") {
+      for (const entry of candidateStates(canonicalTokens)) {
+        if (entry.countryCode === HOME_COUNTRY && entry.nameLower === canonicalLower) {
+          states.push({ entry, score });
+          break;
+        }
+      }
+      continue;
+    }
+
+    for (const entry of candidateCities(canonicalTokens)) {
+      if (entry.countryCode === HOME_COUNTRY && entry.nameLower === canonicalLower) {
+        cities.push({ entry, score });
+        break;
+      }
+    }
+  }
+
+  return { states, cities };
 }
 
 function matchCities(queryLower: string, queryTokens: string[]): Array<Scored<CityEntry>> {
@@ -685,6 +734,10 @@ export async function getSuggestions(rawQuery: string): Promise<Suggestion[]> {
     getPopularAreasByCity(),
     matchHotels(tokenSets),
   ]);
+
+  // Alias hits are scored against the alias and merged into the same pool, so a
+  // part-typed "bom" competes with real "bom…" cities rather than pre-empting them.
+  const aliased = matchAliasedPlaces(typedLower);
 
   const destinations = buildDestinations(
     queryLower,
