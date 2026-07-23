@@ -25,6 +25,10 @@ export interface CreateSubCompanyInput {
     businessMobile: string;
     password: string;
     gstNumber?: string;
+    gstRegisteredName?: string;
+    gstEmail?: string;
+    gstMobile?: string;
+    gstAddress?: string;
     panNumber?: string;
     address: string;
     city: string;
@@ -41,6 +45,10 @@ export interface UpdateSubCompanyInput {
     businessMobile?: string;
     password?: string;
     gstNumber?: string;
+    gstRegisteredName?: string;
+    gstEmail?: string;
+    gstMobile?: string;
+    gstAddress?: string;
     panNumber?: string;
     address?: string;
     city?: string;
@@ -80,6 +88,10 @@ export class CompanyService {
             businessMobile,
             password,
             gstNumber,
+            gstRegisteredName,
+            gstEmail,
+            gstMobile,
+            gstAddress,
             panNumber,
             address,
             city,
@@ -117,6 +129,10 @@ export class CompanyService {
                 businessEmail: businessEmail.toLowerCase(),
                 businessMobile,
                 gstNumber,
+                gstRegisteredName,
+                gstEmail: gstEmail?.toLowerCase(),
+                gstMobile,
+                gstAddress,
                 panNumber,
                 address,
                 city,
@@ -422,6 +438,10 @@ export class CompanyService {
             if (updateData.businessEmail) company.businessProfile.businessEmail = updateData.businessEmail;
             if (updateData.businessMobile) company.businessProfile.businessMobile = updateData.businessMobile;
             if (updateData.gstNumber) company.businessProfile.gstNumber = updateData.gstNumber;
+            if (updateData.gstRegisteredName) company.businessProfile.gstRegisteredName = updateData.gstRegisteredName;
+            if (updateData.gstEmail) company.businessProfile.gstEmail = updateData.gstEmail.toLowerCase();
+            if (updateData.gstMobile) company.businessProfile.gstMobile = updateData.gstMobile;
+            if (updateData.gstAddress) company.businessProfile.gstAddress = updateData.gstAddress;
             if (updateData.panNumber) company.businessProfile.panNumber = updateData.panNumber;
             if (updateData.address) company.businessProfile.address = updateData.address;
             if (updateData.city) company.businessProfile.city = updateData.city;
