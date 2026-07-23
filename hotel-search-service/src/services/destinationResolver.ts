@@ -6,6 +6,23 @@ import { RGDestinationModel } from "../models/RGDestination.model";
 import { GeoCacheModel } from "../models/GeoCache.model";
 import { fuzzyCities, getCountryName, getStateName } from "./suggestionIndex";
 import { resolveCityAlias } from "../data/cityAliases";
+import searchResultCache from "../cache/searchResultCache.service";
+import { LruCache } from "../utils/lruCache";
+import { env } from "../config/env";
+
+/**
+ * TripJack candidate-id lists are a `$near` over a static hotel collection: the
+ * same centre and radius return the same thousands of ids every time, yet the
+ * query was re-run on every cold search (Goa alone scans ~6,000 documents).
+ * Cached per rounded centre+radius in-process and in Redis.
+ */
+const tjHidL1 = new LruCache<string[]>(200, env.tjHidCacheTtl * 1000);
+
+function tjHidCacheKey(lat: number, lng: number, radiusKm: number): string {
+  // ~11m of precision — far finer than any radius we search with, so rounding
+  // never merges two genuinely different centres.
+  return `tjhids:v1:${lat.toFixed(4)}:${lng.toFixed(4)}:${radiusKm.toFixed(2)}`;
+}
 
 interface GeoPoint {
   lat: number;
@@ -438,11 +455,13 @@ export async function resolveCityToCoords(
         const [bestMatch] = fuzzyCities(normalizedQuery);
 
         if (bestMatch) {
+          // fuzzyCities now returns { entry, dist } ranked by edit distance.
+          const city = bestMatch.entry;
           // "Mysuru" → "Mysuru, Karnataka, India": the extra context stops OpenCage
           // from picking a same-named place on the other side of the world.
-          const stateName = getStateName(bestMatch.countryCode, bestMatch.stateCode);
-          const countryName = getCountryName(bestMatch.countryCode);
-          const disambiguated = [bestMatch.name, stateName, countryName]
+          const stateName = getStateName(city.countryCode, city.stateCode);
+          const countryName = getCountryName(city.countryCode);
+          const disambiguated = [city.name, stateName, countryName]
             .filter(Boolean)
             .join(", ");
 
@@ -661,6 +680,17 @@ export async function resolveForTJ(
     // and the post-filter, so all three cover the IDENTICAL distance and we never
     // drop hotels sitting in the last fraction of a km.
     const radiusKm = geo.radiusKm || 20;
+    const hidKey = tjHidCacheKey(lat, lng, radiusKm);
+    const cachedHids =
+      tjHidL1.get(hidKey) ?? (await searchResultCache.get<string[]>(hidKey));
+    if (cachedHids) {
+      tjHidL1.set(hidKey, cachedHids);
+      console.log(
+        `[DEBUG] resolveForTJ: hid cache HIT for "${normalizedQuery}" (${cachedHids.length} ids)`,
+      );
+      return cachedHids;
+    }
+
     console.log(
       `[DEBUG] resolveForTJ: Searching near [${lat}, ${lng}] with radius ${radiusKm}km for "${normalizedQuery}"`,
     );
@@ -699,6 +729,13 @@ export async function resolveForTJ(
         seen.add(h.tjHotelId);
         uniqueHids.push(h.tjHotelId);
       }
+    }
+
+    // An empty result usually means the hotel sync hasn't reached this area yet;
+    // caching it would keep the destination empty for a day.
+    if (uniqueHids.length) {
+      tjHidL1.set(hidKey, uniqueHids);
+      await searchResultCache.set(hidKey, uniqueHids, env.tjHidCacheTtl);
     }
     return uniqueHids;
   }

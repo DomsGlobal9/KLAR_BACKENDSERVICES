@@ -27,6 +27,7 @@
 import axios from "axios";
 
 import { env } from "./env";
+import { MarkupRegion } from "../utils/region.util";
 
 export interface ResolvedMarkup {
   type: "FIXED" | "PERCENTAGE";
@@ -66,18 +67,31 @@ const envB2cMarkup = (): ResolvedMarkup => ({
   value: Number(process.env.B2C_MARKUP_VALUE || 0),
 });
 
-let snapshot: MarkupConfigSnapshot = {
+const envSnapshot = (): MarkupConfigSnapshot => ({
   platform: envPlatformMarkup(),
   b2c: envB2cMarkup(),
+});
+
+/**
+ * One snapshot PER REGION, not a single "current region" module variable.
+ *
+ * A module-level active region would be corrupted by ordinary concurrency:
+ * request A resolves DOMESTIC, awaits the supplier, request B overwrites the
+ * region with INTERNATIONAL, then A resumes and prices its hotels with B's
+ * markup. Keying the cache by region means the sync hot path reads the region
+ * it was handed and nothing else can move it.
+ */
+const snapshots = new Map<MarkupRegion, MarkupConfigSnapshot>();
+const fetchedAt = new Map<MarkupRegion, number>();
+/** Deduplicates the refresh across the concurrent requests of a burst. */
+const inFlight = new Map<MarkupRegion, Promise<void>>();
+
+const isFresh = (region: MarkupRegion) => {
+  const at = fetchedAt.get(region) ?? 0;
+  return at > 0 && Date.now() - at < CONFIG_TTL_MS;
 };
 
-let fetchedAt = 0;
-/** Deduplicates the refresh across the concurrent requests of a burst. */
-let inFlight: Promise<void> | null = null;
-
-const isFresh = () => fetchedAt > 0 && Date.now() - fetchedAt < CONFIG_TTL_MS;
-
-async function fetchConfig(): Promise<void> {
+async function fetchConfig(region: MarkupRegion): Promise<void> {
   const key = process.env.INTERNAL_SERVICE_KEY;
 
   if (!key) {
@@ -89,7 +103,9 @@ async function fetchConfig(): Promise<void> {
   const res = await axios.get(
     `${env.authServiceUrl}/user/markup/config/resolve`,
     {
-      params: { serviceType: SERVICE_TYPE },
+      // auth-service applies the exact-region-then-ALL fallback, so what comes
+      // back is already the effective rule for this region.
+      params: { serviceType: SERVICE_TYPE, region },
       headers: { "x-internal-key": key },
       timeout: CONFIG_TIMEOUT_MS,
     },
@@ -101,50 +117,61 @@ async function fetchConfig(): Promise<void> {
 
   const data = res.data.data || {};
 
-  snapshot = {
+  snapshots.set(region, {
     // null means the master has never configured this scope — fall back to
     // env rather than treating "unconfigured" as "off".
     platform: data.platform ?? envPlatformMarkup(),
     b2c: data.b2c ?? envB2cMarkup(),
-  };
-  fetchedAt = Date.now();
+  });
+  fetchedAt.set(region, Date.now());
 }
 
 /**
- * Refresh the snapshot if stale. Never throws: a config fetch must not be able
- * to fail a search.
+ * Refresh the snapshot for `region` if stale. Never throws: a config fetch must
+ * not be able to fail a search.
  */
-export async function refreshMarkupConfig(): Promise<MarkupConfigSnapshot> {
-  if (isFresh()) return snapshot;
+export async function refreshMarkupConfig(
+  region: MarkupRegion = "ALL",
+): Promise<MarkupConfigSnapshot> {
+  if (isFresh(region)) return getMarkupConfig(region);
 
-  if (!inFlight) {
-    inFlight = fetchConfig()
+  if (!inFlight.has(region)) {
+    const p = fetchConfig(region)
       .catch((err: any) => {
         // Keep serving the last known good snapshot (or env). Do NOT advance
         // fetchedAt, so the next request retries rather than caching a failure.
         console.warn(
-          `[markup-config] resolve failed, serving ${
-            fetchedAt > 0 ? "stale config" : "env defaults"
+          `[markup-config] resolve failed for region=${region}, serving ${
+            snapshots.has(region) ? "stale config" : "env defaults"
           }: ${err?.message ?? err}`,
         );
       })
       .finally(() => {
-        inFlight = null;
+        inFlight.delete(region);
       });
+    inFlight.set(region, p);
   }
 
-  await inFlight;
-  return snapshot;
+  await inFlight.get(region);
+  return getMarkupConfig(region);
 }
 
-/** Sync read of the current snapshot, for the hot pricing path. */
-export function getMarkupConfig(): MarkupConfigSnapshot {
-  return snapshot;
+/**
+ * Sync read for the hot pricing path.
+ *
+ * Degrades region snapshot -> ALL snapshot -> env defaults, and never to zero:
+ * pricing at supplier net because a region was never fetched is a silent,
+ * unbounded loss that nobody downstream can see.
+ */
+export function getMarkupConfig(
+  region: MarkupRegion = "ALL",
+): MarkupConfigSnapshot {
+  return snapshots.get(region) ?? snapshots.get("ALL") ?? envSnapshot();
 }
 
 /** Test seam — resets the module back to env defaults. */
 export function __resetMarkupConfigForTests(): void {
-  snapshot = { platform: envPlatformMarkup(), b2c: envB2cMarkup() };
-  fetchedAt = 0;
-  inFlight = null;
+  snapshots.clear();
+  fetchedAt.clear();
+  inFlight.clear();
 }

@@ -8,6 +8,7 @@
  */
 
 import { getMarkupConfig } from "../config/markup-config";
+import { MarkupRegion } from "./region.util";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -15,6 +16,8 @@ import { getMarkupConfig } from "../config/markup-config";
 
 export interface MarkupRule {
   serviceType: string;
+  /** Absent on rules written before regions existed — treat as "ALL". */
+  region?: MarkupRegion;
   percentageMarkup: number;
   fixedMarkup: number;
 }
@@ -247,9 +250,19 @@ export const PLATFORM_MARKUP = {
   },
 } as PlatformMarkupConfig;
 
-/** Amount the platform adds on top of a raw supplier NET price. */
-export function platformMarkupAmount(supplierNet: number): number {
-  const cfg = getMarkupConfig().platform;
+/**
+ * Amount the platform adds on top of a raw supplier NET price.
+ *
+ * `region` is passed explicitly rather than read from module state: the sync
+ * pricing path runs after supplier awaits, so a shared "current region" would
+ * be overwritten by whatever request happened to interleave. Defaults to ALL,
+ * which is the catch-all every pre-region config migrated to.
+ */
+export function platformMarkupAmount(
+  supplierNet: number,
+  region: MarkupRegion = "ALL",
+): number {
+  const cfg = getMarkupConfig(region).platform;
   if (!cfg.enabled || !supplierNet || supplierNet <= 0) return 0;
   const amt =
     cfg.type === "PERCENTAGE" ? (supplierNet * cfg.value) / 100 : cfg.value;
@@ -257,13 +270,21 @@ export function platformMarkupAmount(supplierNet: number): number {
 }
 
 /** api net (what the agent sees) = supplier net + platform markup. */
-export function applyPlatformMarkup(supplierNet: number): number {
-  return round2(supplierNet + platformMarkupAmount(supplierNet));
+export function applyPlatformMarkup(
+  supplierNet: number,
+  region: MarkupRegion = "ALL",
+): number {
+  return round2(supplierNet + platformMarkupAmount(supplierNet, region));
 }
 
 /** Reverse of applyPlatformMarkup: recover the raw supplier NET to send to the supplier. */
-export function stripPlatformMarkup(apiNet: number): number {
-  const cfg = getMarkupConfig().platform;
+export function stripPlatformMarkup(
+  apiNet: number,
+  region: MarkupRegion = "ALL",
+): number {
+  // MUST use the same region applyPlatformMarkup used, or the net we send the
+  // supplier will not be the net we marked up.
+  const cfg = getMarkupConfig(region).platform;
   if (!cfg.enabled || !apiNet || apiNet <= 0) return round2(apiNet);
   if (cfg.type === "PERCENTAGE") {
     return round2(apiNet / (1 + cfg.value / 100));

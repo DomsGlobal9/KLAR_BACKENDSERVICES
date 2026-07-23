@@ -50,10 +50,14 @@ export class MarkupConfigController {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
 
-        const { scope, serviceType } = req.query;
+        const { scope, serviceType, region } = req.query;
 
         try {
-            await service.delete(scope as string, serviceType as string);
+            await service.delete(
+                scope as string,
+                serviceType as string,
+                region as string | undefined
+            );
             res.json({ success: true });
         } catch (err: any) {
             res.status(400).json({
@@ -83,7 +87,12 @@ export class MarkupConfigController {
             });
         }
 
-        const data = await service.resolve(serviceType);
+        // Absent region resolves the ALL catch-all, which is what a caller that
+        // has not been taught about regions yet expects.
+        const region =
+            typeof req.query.region === "string" ? req.query.region.trim() : "";
+
+        const data = await service.resolve(serviceType, region);
         res.json({ success: true, data });
     });
 }

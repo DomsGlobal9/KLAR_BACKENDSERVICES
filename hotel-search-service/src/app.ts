@@ -1,10 +1,17 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import routes from "./routes";
 import { errorHandler } from "./middlewares/error.middleware";
 import { searchRateLimiter } from "./middlewares/rateLimit.middleware";
 
 const app = express();
+
+// gzip every response. A hotel page is 20 hotels plus their images/amenities
+// plus the facet counts — a few hundred KB of highly compressible JSON, and the
+// audience is largely on Indian mobile networks, so this is most of the
+// transfer-time win for the bytes we already produce.
+app.use(compression());
 
 // Allowed origins: loaded from env so no code change needed on deployment.
 // In .env: ALLOWED_ORIGINS=https://b2b.yourdomain.com,https://b2c.yourdomain.com
@@ -28,10 +35,10 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // server-to-server / Postman
       if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      // In non-production: allow any localhost port
+      // In non-production: allow any localhost or local network IP
       if (
         process.env.NODE_ENV !== "production" &&
-        /^http:\/\/localhost:\d+$/.test(origin)
+        /^http:\/\/(localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+):\d+$/.test(origin)
       ) {
         return callback(null, true);
       }

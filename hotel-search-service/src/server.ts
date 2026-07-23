@@ -10,6 +10,7 @@ import { syncRGDestinations } from "./sync/rgDestinationSync";
 import { syncTJHotels } from "./sync/tjHotelSync";
 import { startSearchTokenMaintenance } from "./sync/hotelSearchTokensBackfill";
 import { buildSuggestionIndex } from "./services/suggestionIndex";
+import { startSearchWarmer } from "./sync/searchWarmer";
 
 const PORT = process.env.PORT || 5012;
 
@@ -50,6 +51,10 @@ async function start() {
       "ℹ️  Background sync disabled (ENABLE_AUTO_SYNC is not 'true'). Set it to 'true' in .env to sync 1.6M hotels.",
     );
   }
+
+  // Pre-builds master result lists for the busiest destination/date combinations
+  // so most real searches are served from cache instead of a supplier round-trip.
+  startSearchWarmer();
 
   console.log(`⏳ Attempting to listen on port ${PORT}...`);
   const server = app.listen(Number(PORT), "0.0.0.0", () => {

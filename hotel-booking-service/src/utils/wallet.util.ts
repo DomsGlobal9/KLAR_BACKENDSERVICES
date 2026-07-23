@@ -1,9 +1,12 @@
 import axios from "axios";
 import { env } from "../config/env";
 import { refreshMarkupConfig } from "../config/markup-config";
+import { MarkupRegion } from "./region.util";
 
 export interface MarkupRule {
   serviceType: string;
+  /** Absent on rules written before regions existed — treat as "ALL". */
+  region?: MarkupRegion;
   percentageMarkup: number;
   fixedMarkup: number;
 }
@@ -29,15 +32,16 @@ export interface MarkupRule {
 export async function resolveMarkupRules(
   clientType: string | undefined,
   token: string,
+  region: MarkupRegion = "ALL",
 ): Promise<MarkupRule[]> {
   const isB2B = (clientType || "").toUpperCase() === "B2B";
 
   const [config, agentRules] = await Promise.all([
-    refreshMarkupConfig(),
+    refreshMarkupConfig(region),
     isB2B ? WalletUtil.getMarkupRules(token) : Promise.resolve([]),
   ]);
 
-  if (isB2B) return agentRules;
+  if (isB2B) return pickRulesForRegion(agentRules, region);
 
   const b2c = config.b2c;
   if (!b2c.enabled || b2c.value <= 0) return [];
@@ -49,6 +53,41 @@ export async function resolveMarkupRules(
       fixedMarkup: b2c.type === "FIXED" ? b2c.value : 0,
     },
   ];
+}
+
+/**
+ * Narrows an agent's rules to those applying to `region`, with the same
+ * exact-region-then-ALL precedence auth-service uses for the master config.
+ *
+ * MUST match hotel-search-service's pickRulesForRegion: search quotes with the
+ * rule this picks and commit validates against it, so a divergence prices the
+ * quote and the charge differently.
+ */
+export function pickRulesForRegion(
+  rules: MarkupRule[],
+  region: MarkupRegion,
+): MarkupRule[] {
+  const byService = new Map<string, MarkupRule>();
+
+  for (const rule of rules ?? []) {
+    const service = (rule.serviceType || "").toUpperCase();
+    const ruleRegion = (rule.region || "ALL").toUpperCase();
+
+    // Ignore rules belonging to a different region entirely.
+    if (ruleRegion !== "ALL" && ruleRegion !== region) continue;
+
+    const existing = byService.get(service);
+    const existingRegion = existing
+      ? (existing.region || "ALL").toUpperCase()
+      : null;
+
+    // An exact-region rule beats the ALL catch-all; otherwise first wins.
+    if (!existing || (existingRegion === "ALL" && ruleRegion === region)) {
+      byService.set(service, rule);
+    }
+  }
+
+  return [...byService.values()];
 }
 
 export class WalletUtil {

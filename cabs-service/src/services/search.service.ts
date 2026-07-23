@@ -1,5 +1,8 @@
 import { tripJackCabsProvider } from "../providers/tripjack.cabs.provider";
 import { resolveAddress } from "../utils/location.utils";
+import { deriveRegion } from "../utils/region.util";
+import { resolveMarkupRules } from "../utils/wallet.util";
+import { applyMarkupToQuotes } from "../utils/quotePricing.util";
 
 const locationCache = new Map<string, { timestamp: number; data: any }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour cache for locations
@@ -47,7 +50,11 @@ class SearchService {
         throw lastError;
     }
 
-    async getQuotes(payload: any) {
+    /**
+     * `clientType` and `token` decide which channel's margin is applied, and
+     * must come from the request's auth context — never from the body.
+     */
+    async getQuotes(payload: any, clientType?: string, token?: string) {
         // Robust validation
         if (!payload.pickupDate) throw { status: 400, message: "pickupDate is required (YYYY-MM-DD HH:mm)" };
         if (!payload.origin?.lat || !payload.origin?.long) {
@@ -99,7 +106,32 @@ class SearchService {
             }
         };
 
-        return await tripJackCabsProvider.getQuotes(tripjackPayload);
+        const quotes = await tripJackCabsProvider.getQuotes(tripjackPayload);
+
+        // Price the quotes with the SAME rules booking will charge with.
+        // Returning the bare supplier fare here would show the customer one
+        // number and charge another at commit.
+        //
+        // The region comes from the resolved pickup address, which is derived
+        // server-side above — never from anything the caller sent.
+        const region = deriveRegion(originAddress?.country);
+        const agentRules = await resolveMarkupRules(clientType, token || "", region);
+        const summary = applyMarkupToQuotes(quotes, {
+            clientType,
+            agentRules,
+            region,
+        });
+
+        if (summary.quotesSkipped > 0) {
+            // A quote we could not price is served at supplier net; booking will
+            // still charge the marked-up gross, so this is the one place that
+            // gap can originate.
+            console.warn(
+                `[SearchService] ${summary.quotesSkipped} quote(s) had no usable fare and were left unpriced`,
+            );
+        }
+
+        return quotes;
     }
 }
 
