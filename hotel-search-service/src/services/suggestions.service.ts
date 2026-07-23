@@ -15,9 +15,13 @@ import { isMongoReady, withTimeout } from "../utils/mongoReady";
 import { matchAliasPrefixes, resolveCityAlias } from "../data/cityAliases";
 import {
   candidateCountries,
+  fuzzyCountries,
+  getStatesOfCountry,
   candidateCities,
   candidateStates,
   fuzzyCities,
+  fuzzyStates,
+  getCitiesOfCountry,
   getCitiesOfState,
   getCountryName,
   getStateName,
@@ -203,19 +207,43 @@ function buildSubSuggestions(
 
 function matchCountries(queryLower: string, queryTokens: string[]): Array<Scored<CountryEntry>> {
   const matches: Array<Scored<CountryEntry>> = [];
+  const seen = new Set<CountryEntry>();
+
   for (const entry of candidateCountries(queryTokens)) {
     const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
-    if (score !== NO_MATCH) matches.push({ entry, score });
+    if (score !== NO_MATCH) {
+      matches.push({ entry, score });
+      seen.add(entry);
+    }
   }
+
+  if (matches.length < 3) {
+    for (const { entry, dist } of fuzzyCountries(queryLower)) {
+      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
+    }
+  }
+
   return matches;
 }
 
 function matchStates(queryLower: string, queryTokens: string[]): Array<Scored<StateEntry>> {
   const matches: Array<Scored<StateEntry>> = [];
+  const seen = new Set<StateEntry>();
+
   for (const entry of candidateStates(queryTokens)) {
     const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
-    if (score !== NO_MATCH) matches.push({ entry, score });
+    if (score !== NO_MATCH) {
+      matches.push({ entry, score });
+      seen.add(entry);
+    }
   }
+
+  if (matches.length < 3) {
+    for (const { entry, dist } of fuzzyStates(queryLower)) {
+      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
+    }
+  }
+
   return matches;
 }
 
@@ -270,6 +298,19 @@ function matchCities(queryLower: string, queryTokens: string[]): Array<Scored<Ci
   const matches: Array<Scored<CityEntry>> = [];
   const seen = new Set<CityEntry>();
 
+  // If a country matches the query, expand it to its top cities
+  for (const countryMatch of matchCountries(queryLower, queryTokens)) {
+    const cities = getCitiesOfCountry(countryMatch.entry.isoCode);
+    cities.sort((a, b) => a.name.length - b.name.length);
+    for (const city of cities.slice(0, 5)) {
+      if (!seen.has(city)) {
+        // Cap the score at SCORE_PREFIX so they aren't dropped
+        matches.push({ entry: city, score: Math.min(countryMatch.score, SCORE_PREFIX) });
+        seen.add(city);
+      }
+    }
+  }
+
   for (const entry of candidateCities(queryTokens)) {
     const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
     if (score !== NO_MATCH) {
@@ -279,8 +320,8 @@ function matchCities(queryLower: string, queryTokens: string[]): Array<Scored<Ci
   }
 
   if (matches.length < 3) {
-    for (const entry of fuzzyCities(queryLower)) {
-      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY });
+    for (const { entry, dist } of fuzzyCities(queryLower)) {
+      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
     }
   }
 

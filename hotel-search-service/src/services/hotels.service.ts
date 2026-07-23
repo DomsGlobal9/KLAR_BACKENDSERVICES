@@ -14,6 +14,7 @@ import {
 import { getSuggestions } from "./suggestions.service";
 import { env } from "../config/env";
 import searchResultCache from "../cache/searchResultCache.service";
+import { LruCache } from "../utils/lruCache";
 import {
   accumulateFacets,
   buildFacetKey,
@@ -22,25 +23,22 @@ import {
   getPropertyTypeLabel,
 } from "./facets.service";
 
-// Short-TTL in-memory cache for identical anonymous (token-less) searches, so
-// repeated B2C searches for the same destination/dates don't re-hit the paid
-// supplier APIs on every keystroke/refresh. B2B (token) searches are never
-// cached because pricing depends on the agent's markup rules.
-const searchCache = new Map<string, { at: number; data: any }>();
-const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || 60_000);
-const SEARCH_CACHE_MAX_ENTRIES = 500;
-
 const DEFAULT_PAGE_SIZE = 20;
 
 // Ceiling on how many times a single request will extend the master list. Guards
 // against a supplier that keeps claiming `hasMore` while returning nothing new.
 const MAX_EXTEND_ROUNDS = 5;
 
-// What we persist in Redis per search: the pre-markup, deduped, geofenced master
-// list plus the destination inventory figure (which is derived from supplier
-// totals and so can't be recomputed from the list alone on a cache hit), plus
-// enough bookkeeping to resume fetching where we left off when the client
-// scrolls past what we hold.
+// What we cache per search: the pre-markup, deduped, geofenced master list plus
+// the destination inventory figure (which is derived from supplier totals and so
+// can't be recomputed from the list alone on a cache hit), plus enough
+// bookkeeping to resume fetching where we left off when the client scrolls past
+// what we hold.
+//
+// The list is pre-agent-markup, so one B2B entry serves every agent (and one
+// B2C entry every anonymous visitor) — each caller's markup is applied per
+// request in finalizeResponse. Only clientType splits the key, because RateGain
+// maps prices differently for B2B and B2C.
 interface CachedMaster {
   hotels: UnifiedHotel[];
   inventoryCount: number;
@@ -48,7 +46,33 @@ interface CachedMaster {
   supplierPagesFetched: number;
   // Whether any supplier still had a page left after the last one we fetched.
   providerHasMore: boolean;
+  // When the supplier data was last pulled, for stale-while-revalidate.
+  builtAt: number;
 }
+
+// ── Caching layers ───────────────────────────────────────────────────────────
+// L1 (per-process, ~20s): the master list, keyed identically to the Redis entry.
+// Absorbs bursts of identical searches without a Redis round-trip and keeps
+// search cached at all when Redis is down.
+const l1Master = new LruCache<CachedMaster>(
+  env.searchL1MaxEntries,
+  env.searchL1TtlMs,
+);
+
+// Coalesces concurrent identical master builds. Without this, fifty users
+// searching Goa in the same five seconds each trigger their own full supplier
+// fan-out; with it they share one and the other forty-nine cost nothing.
+const inFlightMasters = new Map<string, Promise<CachedMaster>>();
+
+// Coalesces concurrent *extensions* of the same master. A user scrolling to
+// page 2 and the background prefetch top-up would otherwise both fetch the same
+// next supplier pages; sharing one grow keeps a scroll from doubling supplier
+// load. Deduplication already makes the result correct — this makes it cheap.
+const inFlightGrows = new Map<string, Promise<CachedMaster>>();
+
+// Master keys with a background refresh or top-up already running, so a burst of
+// stale hits schedules exactly one rebuild rather than one per request.
+const backgroundJobs = new Set<string>();
 
 export class HotelsService {
   /**
@@ -56,11 +80,16 @@ export class HotelsService {
    * Senior OTA Strategy: Concurrently fetch, partial return on slow providers,
    * and high-efficiency deduplication.
    *
-   * Pagination: when Redis is reachable we build a stable, deduplicated master
-   * result set once per search (eagerly prefetching the first N supplier pages),
-   * cache it, and slice pages from it — so scrolling never re-hits the paid
-   * supplier APIs and the same hotel can't appear on two pages. When Redis is
-   * down we fall back to live per-page fetching (the original behavior).
+   * Pagination: we build a stable, deduplicated master result set once per
+   * search, cache it (L1 then Redis), and slice pages from it — so scrolling
+   * never re-hits the paid supplier APIs and the same hotel can't appear on two
+   * pages.
+   *
+   * Latency: the request waits for `searchBlockingPages` supplier page(s) only —
+   * enough to fill the first screen — and the remaining prefetch depth is pulled
+   * in the background after the response is sent. A stale-but-usable cached list
+   * is served immediately and refreshed behind the response. Both mean the user
+   * waits for one supplier round-trip at worst, and usually for none at all.
    */
   async searchHotels(
     searchPayload: UnifiedSearchRequest,
@@ -117,131 +146,291 @@ export class HotelsService {
       };
     }
 
-    // Serve identical anonymous searches from the short-TTL L1 cache to spare the
-    // paid supplier APIs. Keyed on the whole request (minus the geo center we
-    // resolve below). B2B (token) requests are never cached here.
-    const cacheable = !token;
-    const cacheKey = cacheable
-      ? JSON.stringify({ ...searchPayload, _geoCenter: undefined, __ct: clientType })
-      : "";
-    if (cacheable) {
-      const cached = searchCache.get(cacheKey);
-      if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
-        console.log(`[Search] L1 cache hit for "${searchPayload.destination}"`);
-        return cached.data;
-      }
-    }
-
     // 1. Resolve Location (Once) — shared by every supplier page we fetch below.
     await this.resolveGeoCenter(searchPayload);
 
     const pageNo = Math.max(1, Number(searchPayload.pageNo) || 1);
     const limit = Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE);
 
-    let response: any;
+    const masterKey = this.buildMasterKey(searchPayload, clientType);
+    let master = await this.loadMaster(masterKey);
 
-    if (searchResultCache.ready()) {
-      // ── Redis path: cache the deduped master list, slice pages from it ──────
-      const masterKey = this.buildMasterKey(searchPayload, clientType);
-      let master = await searchResultCache.get<CachedMaster>(masterKey);
-
-      if (master) {
-        // Entries cached before on-demand extension existed carry neither field.
-        // Assume the prefetch depth and that suppliers may still have pages —
-        // the extension's own "a round that added nothing ends it" guard corrects
-        // an optimistic guess cheaply, whereas defaulting to `false` would keep
-        // serving the old capped list until the entry expired.
-        if (typeof master.supplierPagesFetched !== "number") {
-          master.supplierPagesFetched = env.searchPrefetchPages;
-          master.providerHasMore = true;
-        }
-        console.log(
-          `[Search] master cache HIT for "${searchPayload.destination}" (${master.hotels.length} hotels) — serving page ${pageNo} from cache`,
-        );
-      } else {
-        console.log(
-          `[Search] master cache MISS for "${searchPayload.destination}" — eagerly fetching ${env.searchPrefetchPages} page(s)`,
-        );
+    if (master) {
+      const ageMs = Date.now() - master.builtAt;
+      console.log(
+        `[Search] master cache HIT for "${searchPayload.destination}" ` +
+          `(${master.hotels.length} hotels, age ${Math.round(ageMs / 1000)}s) — serving page ${pageNo} from cache`,
+      );
+      // Stale-while-revalidate: this response goes out against the cached list
+      // regardless; the refresh lands in time for the next visitor.
+      if (ageMs > env.searchResultFreshTtl * 1000) {
+        this.scheduleRefresh(masterKey, searchPayload, clientType);
+      }
+    } else {
+      console.log(
+        `[Search] master cache MISS for "${searchPayload.destination}" — fetching ${env.searchBlockingPages} page(s) inline`,
+      );
+      // Coalesced so concurrent identical searches share one supplier fan-out.
+      master = await this.coalesce(masterKey, async () => {
         const built = await this.fetchMasterList(
           searchPayload,
           clientType,
-          env.searchPrefetchPages,
+          env.searchBlockingPages,
+          1,
+          env.searchBlockingTimeoutMs,
         );
-        master = {
+        const fresh: CachedMaster = {
           hotels: built.hotels,
           inventoryCount: built.inventoryCount,
           supplierPagesFetched: built.pagesFetched,
           providerHasMore: built.providerHasMore,
+          builtAt: Date.now(),
         };
-        await searchResultCache.set(masterKey, master);
-      }
+        // Only cache a non-empty list. An empty build is usually transient — a
+        // supplier timing out, not a truly empty destination — and caching it
+        // would serve "no hotels" for the whole TTL and suppress the retry that
+        // would have succeeded. Returning it uncached lets the next request try
+        // again (mirrors warmMaster).
+        if (fresh.hotels.length > 0) await this.storeMaster(masterKey, fresh);
+        return fresh;
+      });
+      // Everything past the first screen is fetched after this response is sent,
+      // so the next scroll is already paid for by the time it happens.
+      this.scheduleTopUp(masterKey, searchPayload, clientType);
+    }
 
-      // The prefetch above is a head start, not a ceiling. If the client has
-      // scrolled past what we hold and the suppliers still have pages, pull more
-      // and re-cache — otherwise the result set would be permanently capped at
-      // the prefetch depth however much inventory the destination really has.
-      const needed = pageNo * limit;
-      if (master.hotels.length < needed && master.providerHasMore) {
-        const extended = await this.extendMasterList(
-          master,
-          searchPayload,
-          clientType,
-          needed,
-        );
-        if (
-          extended.hotels.length !== master.hotels.length ||
-          extended.providerHasMore !== master.providerHasMore
-        ) {
-          master = extended;
-          await searchResultCache.set(masterKey, master);
-        }
-      }
-
-      response = this.finalizeResponse(
-        master.hotels,
+    // The prefetch depth is a head start, not a ceiling. If the client has
+    // scrolled past what we hold and the suppliers still have pages, pull more
+    // and re-cache — otherwise the result set would be permanently capped at
+    // the prefetch depth however much inventory the destination really has.
+    const needed = pageNo * limit;
+    if (master.hotels.length < needed && master.providerHasMore) {
+      // growOnce (inside) persists the extended list, so no store is needed here.
+      master = await this.extendMasterList(
+        masterKey,
+        master,
         searchPayload,
         clientType,
-        markupRules,
-        nights,
-        master.inventoryCount,
-        {
-          slice: true,
-          page: pageNo,
-          limit,
-          providerHasMore: master.providerHasMore,
-        },
-      );
-    } else {
-      // ── Fallback path (Redis down): live-fetch only the requested page ──────
-      console.warn(
-        `[Search] Redis unavailable — falling back to live per-page fetch for "${searchPayload.destination}"`,
-      );
-      const built = await this.fetchMasterList(searchPayload, clientType, 1, pageNo);
-      response = this.finalizeResponse(
-        built.hotels,
-        searchPayload,
-        clientType,
-        markupRules,
-        nights,
-        built.inventoryCount,
-        { slice: false, legacyHasMore: built.providerHasMore },
+        needed,
       );
     }
+
+    const response = this.finalizeResponse(
+      master.hotels,
+      searchPayload,
+      clientType,
+      markupRules,
+      nights,
+      master.inventoryCount,
+      { page: pageNo, limit, providerHasMore: master.providerHasMore },
+    );
 
     console.log(
       `[Search] "${searchPayload.destination}" page ${pageNo} served in ${Date.now() - totalStartTime}ms`,
     );
 
-    if (cacheable) {
-      // Bound the cache: drop the oldest entry when full (Map preserves insertion order).
-      if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
-        const oldestKey = searchCache.keys().next().value;
-        if (oldestKey !== undefined) searchCache.delete(oldestKey);
+    return response;
+  }
+
+  // ── Master list cache plumbing ─────────────────────────────────────────────
+
+  /** L1 first, then Redis (which repopulates L1 on the way back). */
+  private async loadMaster(key: string): Promise<CachedMaster | null> {
+    const local = l1Master.get(key);
+    if (local) return local;
+
+    const remote = await searchResultCache.get<CachedMaster>(key);
+    if (!remote) return null;
+
+    // Entries written by an older build carry neither field. Assume the prefetch
+    // depth and that suppliers may still have pages — the extension's own "a
+    // round that added nothing ends it" guard corrects an optimistic guess
+    // cheaply, whereas defaulting to `false` would keep serving the old capped
+    // list until the entry expired.
+    if (typeof remote.supplierPagesFetched !== "number") {
+      remote.supplierPagesFetched = env.searchPrefetchPages;
+      remote.providerHasMore = true;
+    }
+    // No builtAt means we can't date it; treat as just-built rather than forcing
+    // an immediate refresh on every such entry at once.
+    if (typeof remote.builtAt !== "number") remote.builtAt = Date.now();
+
+    l1Master.set(key, remote);
+    return remote;
+  }
+
+  private async storeMaster(key: string, master: CachedMaster): Promise<void> {
+    l1Master.set(key, master);
+    await searchResultCache.set(key, master);
+  }
+
+  /**
+   * Share one in-flight build per master key. The rejection path deliberately
+   * leaves nothing cached, so the next request retries rather than inheriting a
+   * failure.
+   */
+  private coalesce(
+    key: string,
+    build: () => Promise<CachedMaster>,
+  ): Promise<CachedMaster> {
+    const existing = inFlightMasters.get(key);
+    if (existing) {
+      console.log(`[Search] joining in-flight master build for ${key}`);
+      return existing;
+    }
+    const pending = build().finally(() => inFlightMasters.delete(key));
+    inFlightMasters.set(key, pending);
+    return pending;
+  }
+
+  /**
+   * Run work after the response has been sent. At most one background job per
+   * master key: a burst of stale hits must not turn into a burst of rebuilds.
+   * Failures are logged and swallowed — background work must never surface as a
+   * failed search or an unhandled rejection.
+   */
+  private runInBackground(
+    key: string,
+    label: string,
+    job: () => Promise<void>,
+  ): void {
+    if (backgroundJobs.has(key)) return;
+    backgroundJobs.add(key);
+    setImmediate(() => {
+      job()
+        .catch((err: any) =>
+          console.warn(`[Search] background ${label} failed for ${key}: ${err?.message}`),
+        )
+        .finally(() => backgroundJobs.delete(key));
+    });
+  }
+
+  /**
+   * Snapshot of the request for background use. Drops the request-scoped abort
+   * signal (aborted the moment the response is sent) and the paging/filter
+   * fields, none of which affect the master list.
+   */
+  private backgroundPayload(
+    searchPayload: UnifiedSearchRequest,
+  ): UnifiedSearchRequest {
+    return {
+      ...searchPayload,
+      _abortSignal: undefined,
+      filters: undefined,
+      sortBy: undefined,
+    } as UnifiedSearchRequest;
+  }
+
+  /**
+   * Grow a freshly-built master from the blocking depth to the full prefetch
+   * depth, in the background.
+   */
+  private scheduleTopUp(
+    masterKey: string,
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+  ): void {
+    const extraPages = env.searchPrefetchPages - env.searchBlockingPages;
+    if (extraPages <= 0) return;
+
+    const payload = this.backgroundPayload(searchPayload);
+    this.runInBackground(masterKey, "prefetch top-up", async () => {
+      const current = await this.loadMaster(masterKey);
+      if (!current || !current.providerHasMore) return;
+
+      // Coalesced with any concurrent user-driven extend, so a fast scroll and
+      // this top-up never fetch the same supplier pages twice.
+      const grown = await this.growOnce(
+        masterKey,
+        current,
+        payload,
+        clientType,
+        extraPages,
+        env.searchBackgroundTimeoutMs,
+      );
+      console.log(
+        `[Search] background top-up for "${payload.destination}": ` +
+          `${current.hotels.length} → ${grown.hotels.length} hotels`,
+      );
+    });
+  }
+
+  /**
+   * Rebuild a stale master from scratch in the background. An empty rebuild
+   * (supplier outage, expired inventory) is discarded rather than overwriting a
+   * list that is merely old — stale hotels beat no hotels.
+   */
+  private scheduleRefresh(
+    masterKey: string,
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+  ): void {
+    const payload = this.backgroundPayload(searchPayload);
+    this.runInBackground(masterKey, "stale refresh", async () => {
+      const built = await this.fetchMasterList(
+        payload,
+        clientType,
+        env.searchPrefetchPages,
+        1,
+        env.searchBackgroundTimeoutMs,
+      );
+      if (!built.hotels.length) {
+        console.warn(
+          `[Search] stale refresh for "${payload.destination}" returned nothing — keeping the existing list`,
+        );
+        return;
       }
-      searchCache.set(cacheKey, { at: Date.now(), data: response });
+      await this.storeMaster(masterKey, {
+        hotels: built.hotels,
+        inventoryCount: built.inventoryCount,
+        supplierPagesFetched: built.pagesFetched,
+        providerHasMore: built.providerHasMore,
+        builtAt: Date.now(),
+      });
+      console.log(
+        `[Search] stale refresh complete for "${payload.destination}" (${built.hotels.length} hotels)`,
+      );
+    });
+  }
+
+  /**
+   * Build a master list for a search without serving a response — used by the
+   * cache warmer to pay the cold cost before any user arrives.
+   */
+  async warmMaster(
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C" = "B2C",
+  ): Promise<{ warmed: boolean; hotels: number }> {
+    await this.resolveGeoCenter(searchPayload);
+    const masterKey = this.buildMasterKey(searchPayload, clientType);
+
+    const existing = await this.loadMaster(masterKey);
+    if (existing && Date.now() - existing.builtAt < env.searchResultFreshTtl * 1000) {
+      return { warmed: false, hotels: existing.hotels.length };
     }
 
-    return response;
+    const master = await this.coalesce(masterKey, async () => {
+      const built = await this.fetchMasterList(
+        searchPayload,
+        clientType,
+        env.searchPrefetchPages,
+        1,
+        env.searchBackgroundTimeoutMs,
+      );
+      const fresh: CachedMaster = {
+        hotels: built.hotels,
+        inventoryCount: built.inventoryCount,
+        supplierPagesFetched: built.pagesFetched,
+        providerHasMore: built.providerHasMore,
+        builtAt: Date.now(),
+      };
+      // A warm that found nothing is not worth caching: it would mask a real
+      // result set for the whole TTL.
+      if (fresh.hotels.length) await this.storeMaster(masterKey, fresh);
+      return fresh;
+    });
+
+    return { warmed: master.hotels.length > 0, hotels: master.hotels.length };
   }
 
   /**
@@ -322,6 +511,7 @@ export class HotelsService {
     searchPayload: UnifiedSearchRequest,
     clientType: "B2B" | "B2C",
     pageNo: number,
+    partialReturnTimeoutMs: number,
   ): Promise<{
     hotels: UnifiedHotel[];
     providerStats: Record<string, { count: number; total: number; hasMore: boolean }>;
@@ -383,17 +573,49 @@ export class HotelsService {
         }),
     );
 
-    // Wait for all providers, but cap at 15 seconds for partial-result return (MMT-style).
-    // RG typically responds in 2-5s, TJ in 4-6s. 15s covers almost all cases.
-    const PARTIAL_RETURN_TIMEOUT_MS = 15000;
-    let partialTimer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      Promise.allSettled(allTasks),
-      new Promise<void>((resolve) => {
-        partialTimer = setTimeout(resolve, PARTIAL_RETURN_TIMEOUT_MS);
-      }),
-    ]);
-    if (partialTimer) clearTimeout(partialTimer);
+    // Partial-return policy (MMT-style), but never discard a supplier that is
+    // about to deliver just because it crossed the window by a hair:
+    //  • return the instant every supplier has settled;
+    //  • once the soft window elapses, return as soon as we hold ≥1 hotel;
+    //  • if the soft window elapses with nothing yet, keep waiting for the first
+    //    results up to a hard cap.
+    // The last rule is what a densified TripJack needs: its listing fetch can
+    // finish under the window but cross it during DB enrichment (~1-2s tail), so
+    // a fixed cutoff would return an empty page on any destination where the
+    // other supplier also came back empty (e.g. RateGain timing out on Chennai).
+    const softMs = partialReturnTimeoutMs;
+    const hardMs =
+      partialReturnTimeoutMs +
+      Number(process.env.SEARCH_TIMEOUT_GRACE_MS || 6000);
+
+    await new Promise<void>((resolve) => {
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      let finished = false;
+      let softElapsed = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        timers.forEach(clearTimeout);
+        resolve();
+      };
+
+      timers.push(
+        setTimeout(() => {
+          softElapsed = true;
+          if (pageResults.length > 0) finish();
+        }, softMs),
+      );
+      timers.push(setTimeout(finish, hardMs));
+
+      // Everyone done → return. Never rejects: each task swallows its own error.
+      Promise.allSettled(allTasks).then(finish);
+      // Past the soft window, return the moment the first results land.
+      for (const t of allTasks) {
+        t.then(() => {
+          if (softElapsed && pageResults.length > 0) finish();
+        });
+      }
+    });
     abortController.abort();
 
     return { hotels: pageResults, providerStats };
@@ -410,6 +632,7 @@ export class HotelsService {
     clientType: "B2B" | "B2C",
     pages: number,
     startPage = 1,
+    partialReturnTimeoutMs = env.searchBlockingTimeoutMs,
   ): Promise<{
     hotels: UnifiedHotel[];
     inventoryCount: number;
@@ -426,6 +649,7 @@ export class HotelsService {
         searchPayload,
         clientType,
         pageNo,
+        partialReturnTimeoutMs,
       );
       collected.push(...hotels);
       pagesFetched++;
@@ -495,6 +719,7 @@ export class HotelsService {
    * client stay stable.
    */
   private async extendMasterList(
+    masterKey: string,
     master: CachedMaster,
     searchPayload: UnifiedSearchRequest,
     clientType: "B2B" | "B2C",
@@ -505,49 +730,130 @@ export class HotelsService {
     for (let round = 0; round < MAX_EXTEND_ROUNDS; round++) {
       if (current.hotels.length >= needed || !current.providerHasMore) break;
 
-      const startPage = current.supplierPagesFetched + 1;
       console.log(
         `[Search] extending master list for "${searchPayload.destination}": ` +
-          `have ${current.hotels.length}, need ${needed} — fetching supplier page(s) from ${startPage}`,
+          `have ${current.hotels.length}, need ${needed} — fetching supplier page(s) from ${current.supplierPagesFetched + 1}`,
       );
 
-      const built = await this.fetchMasterList(
+      const grown = await this.growOnce(
+        masterKey,
+        current,
         searchPayload,
         clientType,
         env.searchExtendPages,
-        startPage,
+        env.searchBlockingTimeoutMs,
       );
-
-      const before = current.hotels.length;
-      const { items: merged } = deduplicateHotels([
-        ...current.hotels,
-        ...built.hotels,
-      ]);
-      const added = merged.length - before;
-
-      current = {
-        hotels: merged,
-        inventoryCount: Math.max(current.inventoryCount, built.inventoryCount),
-        supplierPagesFetched: current.supplierPagesFetched + built.pagesFetched,
-        // A round that produced nothing new means the suppliers are effectively
-        // exhausted, whatever their `hasMore` flag claims — stop either way.
-        providerHasMore: built.providerHasMore && added > 0,
-      };
-
-      console.log(
-        `[Search] master list extended: +${added} hotels (now ${current.hotels.length}), ` +
-          `supplier pages consumed ${current.supplierPagesFetched}, more=${current.providerHasMore}`,
-      );
+      // A coalesced grow can hand back a copy at the same or an even greater
+      // depth than this round intended; if it produced nothing new, stop.
+      if (grown.hotels.length <= current.hotels.length && !grown.providerHasMore) {
+        current = grown;
+        break;
+      }
+      current = grown;
     }
 
     return current;
   }
 
   /**
+   * Pull `pages` more supplier pages onto an existing master list, resuming from
+   * the page after the last one consumed. Deduplicates across the union so a
+   * hotel we already hold can never reappear on a later page, and preserves
+   * existing order so pages already served to the client stay stable.
+   */
+  private async growMaster(
+    master: CachedMaster,
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    pages: number,
+    partialReturnTimeoutMs: number,
+  ): Promise<CachedMaster> {
+    const built = await this.fetchMasterList(
+      searchPayload,
+      clientType,
+      pages,
+      master.supplierPagesFetched + 1,
+      partialReturnTimeoutMs,
+    );
+
+    const before = master.hotels.length;
+    const { items: merged } = deduplicateHotels([
+      ...master.hotels,
+      ...built.hotels,
+    ]);
+    const added = merged.length - before;
+
+    const grown: CachedMaster = {
+      hotels: merged,
+      inventoryCount: Math.max(master.inventoryCount, built.inventoryCount),
+      supplierPagesFetched: master.supplierPagesFetched + built.pagesFetched,
+      // A round that produced nothing new means the suppliers are effectively
+      // exhausted, whatever their `hasMore` flag claims — stop either way.
+      providerHasMore: built.providerHasMore && added > 0,
+      // Growing the list doesn't re-price what we already hold, so the entry is
+      // still only as fresh as its original build.
+      builtAt: master.builtAt,
+    };
+
+    console.log(
+      `[Search] master list grown: +${added} hotels (now ${grown.hotels.length}), ` +
+        `supplier pages consumed ${grown.supplierPagesFetched}, more=${grown.providerHasMore}`,
+    );
+
+    return grown;
+  }
+
+  /**
+   * Coalesced single grow: at most one extension of a given master runs at a
+   * time, so a user scrolling to page 2 and the background prefetch top-up share
+   * one supplier fetch instead of each firing their own. Reloads the freshest
+   * cached copy before growing (the background job may have advanced it),
+   * falling back to the caller's snapshot if it was evicted, and persists the
+   * result so the next reader sees it.
+   */
+  private growOnce(
+    masterKey: string,
+    fallback: CachedMaster,
+    searchPayload: UnifiedSearchRequest,
+    clientType: "B2B" | "B2C",
+    pages: number,
+    partialReturnTimeoutMs: number,
+  ): Promise<CachedMaster> {
+    const existing = inFlightGrows.get(masterKey);
+    if (existing) {
+      console.log(`[Search] joining in-flight master grow for ${masterKey}`);
+      return existing;
+    }
+
+    const pending = (async () => {
+      const current = (await this.loadMaster(masterKey)) ?? fallback;
+      if (!current.providerHasMore) return current;
+
+      const grown = await this.growMaster(
+        current,
+        searchPayload,
+        clientType,
+        pages,
+        partialReturnTimeoutMs,
+      );
+      if (
+        grown.hotels.length !== current.hotels.length ||
+        grown.providerHasMore !== current.providerHasMore
+      ) {
+        await this.storeMaster(masterKey, grown);
+      }
+      return grown;
+    })().finally(() => inFlightGrows.delete(masterKey));
+
+    inFlightGrows.set(masterKey, pending);
+    return pending;
+  }
+
+  /**
    * Turn a master list into the client response: accumulate facets, apply
-   * filters + sort, bake in markup, then either slice a page (Redis path) or
-   * return the whole set (Redis-down fallback). Deterministic given the master
-   * list + request params, so it runs per request rather than being cached.
+   * filters + sort, bake in markup, then slice the requested page.
+   * Deterministic given the master list + request params, so it runs per request
+   * rather than being cached.
    */
   private finalizeResponse(
     master: UnifiedHotel[],
@@ -557,11 +863,9 @@ export class HotelsService {
     nights: number,
     inventoryCount: number,
     opts: {
-      slice: boolean;
-      page?: number;
-      limit?: number;
-      legacyHasMore?: boolean;
-      providerHasMore?: boolean;
+      page: number;
+      limit: number;
+      providerHasMore: boolean;
     },
   ) {
     // 1. Fold the master list into the search's running facets and return the
@@ -746,32 +1050,24 @@ export class HotelsService {
       });
     }
 
-    // 4. Paginate: slice the requested page from the processed list (Redis path),
-    //    or take the whole set when the fallback already fetched a single page.
-    let hasMore: boolean;
-    let pageItems: UnifiedHotel[];
-    if (opts.slice) {
-      const page = Math.max(1, opts.page || 1);
-      const limit = Math.max(1, opts.limit || DEFAULT_PAGE_SIZE);
-      const start = (page - 1) * limit;
-      const end = start + limit;
-      pageItems = filteredResults.slice(start, end);
-      // More to serve if this page didn't reach the end of what we hold, or if
-      // the suppliers still have pages we haven't pulled into the master list.
-      //
-      // Never claim more on an *empty* page. A client that jumps far beyond the
-      // master list can outrun MAX_EXTEND_ROUNDS, leaving nothing to slice; the
-      // suppliers may genuinely have more, but answering "empty, keep asking"
-      // strands the client in a loop it can't make progress on. Ending cleanly
-      // costs only the deep-jump case — sequential scrolling grows the list a
-      // page at a time and never lands here.
-      hasMore =
-        pageItems.length > 0 &&
-        (end < filteredResults.length || (opts.providerHasMore ?? false));
-    } else {
-      pageItems = filteredResults;
-      hasMore = opts.legacyHasMore ?? false;
-    }
+    // 4. Paginate: slice the requested page from the processed list.
+    const page = Math.max(1, opts.page || 1);
+    const limit = Math.max(1, opts.limit || DEFAULT_PAGE_SIZE);
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const pageItems = filteredResults.slice(start, end);
+    // More to serve if this page didn't reach the end of what we hold, or if
+    // the suppliers still have pages we haven't pulled into the master list.
+    //
+    // Never claim more on an *empty* page. A client that jumps far beyond the
+    // master list can outrun MAX_EXTEND_ROUNDS, leaving nothing to slice; the
+    // suppliers may genuinely have more, but answering "empty, keep asking"
+    // strands the client in a loop it can't make progress on. Ending cleanly
+    // costs only the deep-jump case — sequential scrolling grows the list a
+    // page at a time and never lands here.
+    const hasMore =
+      pageItems.length > 0 &&
+      (end < filteredResults.length || opts.providerHasMore);
 
     // 5. Bake markup into the returned price (single source of truth — same as the
     //    detail/products path). Search returns FINAL prices; the frontend renders

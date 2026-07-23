@@ -44,15 +44,13 @@ export function deduplicateHotels(hotels: UnifiedHotel[]): {
         const latDiff = Math.abs(hotel.latitude - existing.latitude);
         const lngDiff = Math.abs(hotel.longitude - existing.longitude);
 
-        // If EXACT same coordinates (within practically zero range), assume same property
-        if (latDiff === 0 && lngDiff === 0) {
-          isGeoSame = true;
-          geoMatchReason = "EXACT_GEO";
-        }
-        // Or within ~100m AND similar names
-        else if (latDiff < 0.001 && lngDiff < 0.001) {
+        // If within ~100m (or exact), they MUST have similar names to be considered the same property.
+        // Providers often return identical city-center coordinates for different hotels.
+        if (latDiff < 0.001 && lngDiff < 0.001) {
           isGeoSame = isNameSimilar(hotel.name, existing.name);
-          if (isGeoSame) geoMatchReason = "SIMILAR_GEO_AND_NAME";
+          if (isGeoSame) {
+            geoMatchReason = (latDiff === 0 && lngDiff === 0) ? "EXACT_GEO" : "SIMILAR_GEO_AND_NAME";
+          }
         }
       }
 
