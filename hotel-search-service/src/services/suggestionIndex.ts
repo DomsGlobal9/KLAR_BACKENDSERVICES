@@ -57,7 +57,6 @@ interface SuggestionIndex {
   countryBuckets: Map<string, CountryEntry[]>;
   cityBuckets: Map<string, CityEntry[]>;
   stateBuckets: Map<string, StateEntry[]>;
-  countryBuckets: Map<string, CountryEntry[]>;
   citiesByState: Map<string, CityEntry[]>;
   citiesByCountry: Map<string, CityEntry[]>;
   statesByCountry: Map<string, StateEntry[]>;
@@ -69,6 +68,7 @@ interface SuggestionIndex {
   builtInMs: number;
   cityCount: number;
 }
+
 
 let index: SuggestionIndex | null = null;
 
@@ -116,7 +116,6 @@ export function buildSuggestionIndex(): SuggestionIndex {
   const countryBuckets = new Map<string, CountryEntry[]>();
   const cityBuckets = new Map<string, CityEntry[]>();
   const stateBuckets = new Map<string, StateEntry[]>();
-  const countryBuckets = new Map<string, CountryEntry[]>();
   const citiesByState = new Map<string, CityEntry[]>();
   const citiesByCountry = new Map<string, CityEntry[]>();
   const statesByCountry = new Map<string, StateEntry[]>();
@@ -173,7 +172,6 @@ export function buildSuggestionIndex(): SuggestionIndex {
     countryBuckets,
     cityBuckets,
     stateBuckets,
-    countryBuckets,
     citiesByState,
     citiesByCountry,
     statesByCountry,
