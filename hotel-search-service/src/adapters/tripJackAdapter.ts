@@ -28,86 +28,100 @@ export async function searchTJ(
   const correlationId = uuidv4();
   const page = req.pageNo || 1;
 
-  const targetCount = 20;
-  const CHUNK_SIZE = 20; // Increased to 100 to find hotels faster per page
+  // Densification: a listing call only returns the hotels among the supplied ids
+  // that are actually bookable on these dates — for a big destination that's a
+  // small fraction (Goa yields ~1 hotel per 20 ids). Scanning 20 ids per page
+  // therefore contributed ~1 hotel per page and made every scroll a fresh
+  // supplier round-trip. Instead each page scans a WINDOW of ids
+  // (TJ_HIDS_PER_PAGE) split into listing-sized chunks, run a few at a time.
+  //
+  // Concurrency is bounded and kept low because TripJack's WAF answers a burst
+  // with 403s — TJ_CONCURRENCY simultaneous calls is the ceiling. Every knob is
+  // env-tunable so it can be dialled back without a deploy if the WAF complains.
+  const HIDS_PER_PAGE = Math.max(1, Number(process.env.TJ_HIDS_PER_PAGE || 150));
+  const CHUNK_SIZE = Math.max(1, Number(process.env.TJ_CHUNK_SIZE || 50));
+  const CONCURRENCY = Math.max(1, Number(process.env.TJ_CONCURRENCY || 3));
+  // Payload safety valve. Each page maps to a FIXED hid window so that page N+1
+  // resumes exactly where page N stopped; the whole window is therefore always
+  // scanned (never an early break on a hotel count, which would leave part of
+  // the window unscanned and make the next page skip it). This only trims an
+  // implausibly dense window before it bloats the response / DB enrichment.
+  const MAX_PER_PAGE = Math.max(1, Number(process.env.TJ_MAX_PER_PAGE || 100));
+
+  const startId = (page - 1) * HIDS_PER_PAGE;
+  const endId = Math.min(startId + HIDS_PER_PAGE, hids.length);
+  const pageHids = hids.slice(startId, endId);
+  if (!pageHids.length) return { hotels: [], total: hids.length, hasMore: false };
+
   const chunks: string[][] = [];
-  for (let i = 0; i < hids.length; i += CHUNK_SIZE) {
-    chunks.push(hids.slice(i, i + CHUNK_SIZE));
+  for (let i = 0; i < pageHids.length; i += CHUNK_SIZE) {
+    chunks.push(pageHids.slice(i, i + CHUNK_SIZE));
   }
-  const batchSize = 1; // Sequential to prevent TripJack 403 Rate Limit / WAF rules
-  const currentIdx = (page - 1) * batchSize;
 
   try {
-    let collectedHotels: any[] = [];
-    const startId = currentIdx * CHUNK_SIZE;
-    const endId = Math.min(startId + batchSize * CHUNK_SIZE, hids.length);
+    const collectedHotels: any[] = [];
     console.log(
-      `[TripJack] Pagination: Page ${page} processing HIDs index ${startId} to ${endId}`,
+      `[TripJack] Pagination: Page ${page} scanning HIDs index ${startId}-${endId} ` +
+        `(${chunks.length} chunk(s) × ${CHUNK_SIZE}, concurrency ${CONCURRENCY})`,
     );
 
-    // Run nationality lookup in parallel with the chunk fetching setup
     const nationalityId = await toTjNationality(req.countryCode ?? "IN");
     const fetchStartTime = Date.now();
 
-    // Fetch chunks concurrently to ensure extreme high-speed response
-    const fetchPromises = [];
-    for (let i = 0; i < batchSize; i++) {
-      const chunkIdx = currentIdx + i;
-      if (chunkIdx >= chunks.length) break;
+    // Rooms are identical across chunks — build the shared part once.
+    const rooms = req.rooms.map((r) => ({
+      adults: Number(r.adults),
+      children: Number(r.children || 0),
+      childAge: r.childAges?.length ? r.childAges : undefined,
+    }));
 
-      const chunk = chunks[chunkIdx];
-      const payload = {
-        checkIn: req.checkin,
-        checkOut: req.checkout,
-        rooms: req.rooms.map((r) => ({
-          adults: Number(r.adults),
-          children: Number(r.children || 0),
-          childAge: r.childAges?.length ? r.childAges : undefined,
-        })),
-        currency: req.currency ?? "INR",
-        nationality: nationalityId,
-        hids: chunk.map((id) => parseInt(id)),
-        correlationId,
-      };
-
-      fetchPromises.push(
-        tripJackClient
-          .post("/hms/v3/hotel/listing", payload, {
-            timeout: 15000,
-            signal: req._abortSignal ?? undefined,
-          })
-          .then((res) => res.data?.hotels || [])
-          .catch((err) => {
-            // Deliberate cancellation once the partial-return window elapsed —
-            // not a supplier fault, so don't log noise or trip the breaker.
-            if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") {
-              return [];
-            }
-            const status = err.response?.status;
-            console.error(
-              `[TripJack] Chunk Fetch Error (status ${status}):`,
-              err.message,
-            );
-            // Trip circuit breaker on repeated server errors (5xx)
-            if (status >= 500) tripTJCircuit();
+    const fetchChunk = (chunk: string[]): Promise<any[]> =>
+      tripJackClient
+        .post(
+          "/hms/v3/hotel/listing",
+          {
+            checkIn: req.checkin,
+            checkOut: req.checkout,
+            rooms,
+            currency: req.currency ?? "INR",
+            nationality: nationalityId,
+            hids: chunk.map((id) => parseInt(id)),
+            correlationId,
+          },
+          { timeout: 15000, signal: req._abortSignal ?? undefined },
+        )
+        .then((res) => res.data?.hotels || [])
+        .catch((err) => {
+          // Deliberate cancellation once the partial-return window elapsed —
+          // not a supplier fault, so don't log noise or trip the breaker.
+          if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") {
             return [];
-          }),
-      );
+          }
+          const status = err.response?.status;
+          console.error(
+            `[TripJack] Chunk Fetch Error (status ${status}):`,
+            err.message,
+          );
+          // Trip circuit breaker on repeated server errors (5xx)
+          if (status >= 500) tripTJCircuit();
+          return [];
+        });
+
+    // Scan the full window in waves of CONCURRENCY. The only early exit is the
+    // request's partial-return window aborting us (the timeout path, which
+    // already tolerates a partially-scanned tail); we never stop on a hotel
+    // count, so the page→window mapping stays deterministic across scrolls.
+    for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+      if (req._abortSignal?.aborted) break;
+      const wave = chunks.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(wave.map(fetchChunk));
+      for (const found of results) collectedHotels.push(...found);
     }
 
-    const resolvedArrays = await Promise.all(fetchPromises);
-    for (const found of resolvedArrays) {
-      collectedHotels.push(...found);
-    }
-
-    collectedHotels = collectedHotels.slice(0, targetCount);
+    const finalHotels = collectedHotels.slice(0, MAX_PER_PAGE);
     console.log(
-      `[TripJack] Parallel Fetch Complete in ${Date.now() - fetchStartTime}ms. Found ${collectedHotels.length} hotels.`,
-    );
-
-    const finalHotels = collectedHotels.slice(0, targetCount);
-    console.log(
-      `[TripJack] Fast Return: Returning ${finalHotels.length} hotels.`,
+      `[TripJack] Fetch complete in ${Date.now() - fetchStartTime}ms. ` +
+        `Returning ${finalHotels.length} hotels from ${pageHids.length} candidate ids.`,
     );
 
     let mapped: UnifiedHotel[] = finalHotels.map((h: any) =>
