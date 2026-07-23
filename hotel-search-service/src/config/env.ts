@@ -42,9 +42,13 @@ export const env = {
   searchL1TtlMs: Number(process.env.SEARCH_L1_TTL_MS || 20_000),
   searchL1MaxEntries: Number(process.env.SEARCH_L1_MAX_ENTRIES || 150),
 
-  // Partial-return window per supplier page. The blocking window is tight
-  // because it is time the user spends staring at a spinner (RG answers in
-  // 2-5s, TJ in 3-6s); background fills can afford to wait longer.
+  // Soft partial-return window per supplier page: once it elapses we return the
+  // instant we hold ≥1 hotel. Kept tight (8s) because it is time the user spends
+  // staring at a spinner. NOTE: RateGain's bestproperties is not the "2-5s" older
+  // comments assumed — measured live it is ~10.7s domestic and ~14.2s for an
+  // international geofilter search, so the HARD cap past this window
+  // (SEARCH_TIMEOUT_GRACE_MS, see hotels.service.ts) must clear ~15s or slow
+  // destinations abort RG right before its data lands and return zero hotels.
   searchBlockingTimeoutMs: Number(process.env.SEARCH_BLOCKING_TIMEOUT_MS || 8000),
   searchBackgroundTimeoutMs: Number(
     process.env.SEARCH_BACKGROUND_TIMEOUT_MS || 15000,
