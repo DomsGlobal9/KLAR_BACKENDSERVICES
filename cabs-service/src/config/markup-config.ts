@@ -1,19 +1,22 @@
 /**
- * Master-owned markup configuration, resolved from auth-service.
+ * Master-owned markup configuration for cabs, resolved from auth-service.
  *
- * MUST stay behaviourally identical to hotel-search-service's copy of this
- * module. The two services independently compute the platform markup baked
- * into the same price: search decides what the agent is quoted, booking
- * re-derives it to validate the quote against a fresh supplier precheck. If
- * they ever disagree by more than the ValidationEngine's tolerance
- * (fixed: 10 / percent: 0.5), every booking fails as PRICE_CHANGED — and the
- * failure looks like a supplier problem, not a config problem.
+ * Mirrors hotel-booking-service/src/config/markup-config.ts — same cache shape,
+ * same degradation order, same failure semantics — differing only in
+ * SERVICE_TYPE. Cabs previously had no markup configuration at all: the margin
+ * was whatever the client put in `pricingInfo.agentMarkup`.
  *
- * The duplication is deliberate: these are separately deployed services with
- * no shared package. Any change here must be mirrored there.
+ * FAILURE SEMANTICS
+ * -----------------
+ * This value is money. Returning 0 because auth-service blinked means selling
+ * at supplier net — a silent, unbounded loss nobody downstream reports, because
+ * the platform markup is invisible to agents by design. So we degrade:
  *
- * See that file for the snapshot rationale and failure semantics
- * (fresh -> live -> stale -> env, never zero-by-accident).
+ *   fresh cache  ->  live fetch  ->  STALE cache  ->  env defaults
+ *
+ * A rule the master has explicitly saved with `enabled: false` is a decision,
+ * not a failure, and does yield zero. auth-service distinguishes "never
+ * configured" (null -> env fallback) from "configured off".
  */
 
 import axios from "axios";
@@ -34,24 +37,25 @@ export interface MarkupConfigSnapshot {
 
 const CONFIG_TTL_MS = Number(process.env.MARKUP_CONFIG_TTL_MS || 60_000);
 const CONFIG_TIMEOUT_MS = Number(process.env.MARKUP_CONFIG_TIMEOUT_MS || 3_000);
-const SERVICE_TYPE = "HOTEL";
+const SERVICE_TYPE = "CABS";
 
 const envPlatformMarkup = (): ResolvedMarkup => ({
-  enabled: (process.env.PLATFORM_MARKUP_ENABLED || "false") === "true",
+  enabled: (process.env.CAB_PLATFORM_MARKUP_ENABLED || "false") === "true",
   type:
-    (process.env.PLATFORM_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
+    (process.env.CAB_PLATFORM_MARKUP_TYPE || "FIXED").toUpperCase() ===
+    "PERCENTAGE"
       ? "PERCENTAGE"
       : "FIXED",
-  value: Number(process.env.PLATFORM_MARKUP_VALUE || 0),
+  value: Number(process.env.CAB_PLATFORM_MARKUP_VALUE || 0),
 });
 
 const envB2cMarkup = (): ResolvedMarkup => ({
-  enabled: (process.env.B2C_MARKUP_ENABLED || "false") === "true",
+  enabled: (process.env.CAB_B2C_MARKUP_ENABLED || "false") === "true",
   type:
-    (process.env.B2C_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
+    (process.env.CAB_B2C_MARKUP_TYPE || "FIXED").toUpperCase() === "PERCENTAGE"
       ? "PERCENTAGE"
       : "FIXED",
-  value: Number(process.env.B2C_MARKUP_VALUE || 0),
+  value: Number(process.env.CAB_B2C_MARKUP_VALUE || 0),
 });
 
 const envSnapshot = (): MarkupConfigSnapshot => ({
@@ -60,10 +64,8 @@ const envSnapshot = (): MarkupConfigSnapshot => ({
 });
 
 /**
- * One snapshot PER REGION. Mirrors hotel-search-service's cache deliberately:
- * a single "current region" module variable would be overwritten by whatever
- * request interleaved during a supplier await, and search and commit would then
- * price the same stay differently.
+ * One snapshot PER REGION, not a single "current region" module variable: that
+ * would be overwritten by whatever request interleaved during a supplier await.
  */
 const snapshots = new Map<MarkupRegion, MarkupConfigSnapshot>();
 const fetchedAt = new Map<MarkupRegion, number>();
@@ -96,6 +98,8 @@ async function fetchConfig(region: MarkupRegion): Promise<void> {
   const data = res.data.data || {};
 
   snapshots.set(region, {
+    // null means never configured — fall back to env rather than treating
+    // "unconfigured" as "off".
     platform: data.platform ?? envPlatformMarkup(),
     b2c: data.b2c ?? envB2cMarkup(),
   });
@@ -127,13 +131,25 @@ export async function refreshMarkupConfig(
   return getMarkupConfig(region);
 }
 
-/**
- * Sync read for the hot pricing path. Degrades region -> ALL -> env defaults,
- * never to zero: pricing at supplier net because a region was never fetched is
- * a silent, unbounded loss.
- */
+/** Sync read. Degrades region -> ALL -> env defaults, never to zero. */
 export function getMarkupConfig(
   region: MarkupRegion = "ALL",
 ): MarkupConfigSnapshot {
   return snapshots.get(region) ?? snapshots.get("ALL") ?? envSnapshot();
+}
+
+/** Test seam — resets the module back to env defaults. */
+export function __resetMarkupConfigForTests(): void {
+  snapshots.clear();
+  fetchedAt.clear();
+  inFlight.clear();
+}
+
+/** Test seam — seeds a region's snapshot without a network call. */
+export function __setMarkupConfigForTests(
+  region: MarkupRegion,
+  snapshot: MarkupConfigSnapshot,
+): void {
+  snapshots.set(region, snapshot);
+  fetchedAt.set(region, Date.now());
 }

@@ -12,11 +12,16 @@
 import { LruCache } from "../utils/lruCache";
 import { boundedEditDistance } from "../utils/text";
 import { isMongoReady, withTimeout } from "../utils/mongoReady";
-import { resolveCityAlias } from "../data/cityAliases";
+import { matchAliasPrefixes, resolveCityAlias } from "../data/cityAliases";
 import {
+  candidateCountries,
+  fuzzyCountries,
+  getStatesOfCountry,
   candidateCities,
   candidateStates,
   fuzzyCities,
+  fuzzyStates,
+  getCitiesOfCountry,
   getCitiesOfState,
   getCountryName,
   getStateName,
@@ -24,8 +29,11 @@ import {
   tokenize,
   scoreName,
   NO_MATCH,
+  SCORE_EXACT,
+  SCORE_WORD_PREFIX,
   SCORE_PREFIX,
   SCORE_FUZZY,
+  type CountryEntry,
   type CityEntry,
   type StateEntry,
 } from "./suggestionIndex";
@@ -197,18 +205,111 @@ function buildSubSuggestions(
     }));
 }
 
+function matchCountries(queryLower: string, queryTokens: string[]): Array<Scored<CountryEntry>> {
+  const matches: Array<Scored<CountryEntry>> = [];
+  const seen = new Set<CountryEntry>();
+
+  for (const entry of candidateCountries(queryTokens)) {
+    const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
+    if (score !== NO_MATCH) {
+      matches.push({ entry, score });
+      seen.add(entry);
+    }
+  }
+
+  if (matches.length < 3) {
+    for (const { entry, dist } of fuzzyCountries(queryLower)) {
+      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
+    }
+  }
+
+  return matches;
+}
+
 function matchStates(queryLower: string, queryTokens: string[]): Array<Scored<StateEntry>> {
   const matches: Array<Scored<StateEntry>> = [];
+  const seen = new Set<StateEntry>();
+
   for (const entry of candidateStates(queryTokens)) {
     const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
-    if (score !== NO_MATCH) matches.push({ entry, score });
+    if (score !== NO_MATCH) {
+      matches.push({ entry, score });
+      seen.add(entry);
+    }
   }
+
+  if (matches.length < 3) {
+    for (const { entry, dist } of fuzzyStates(queryLower)) {
+      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
+    }
+  }
+
   return matches;
+}
+
+/**
+ * Destinations reached through a partly-typed alias — "bom" → Mumbai.
+ *
+ * The canonical name is looked up in the index and scored against the *alias*,
+ * not against the canonical name: "bom" is a prefix of "bombay", so Mumbai
+ * ranks as though the city were literally named Bombay. That keeps aliased and
+ * real matches comparable in one ranking pass instead of bolting alias rows on
+ * at the top.
+ *
+ * A part-typed alias scores as a word prefix, never a mid-word one. Anything
+ * weaker loses to foreign micro-towns sharing the same opening letters — "bom"
+ * put Bom Lugar and Bom Jesus above Mumbai, and "bang" buried Bengaluru under
+ * Bang Na entirely. At equal score the home-country tiebreak settles it.
+ */
+function matchAliasedPlaces(typedLower: string): {
+  states: Array<Scored<StateEntry>>;
+  cities: Array<Scored<CityEntry>>;
+} {
+  const states: Array<Scored<StateEntry>> = [];
+  const cities: Array<Scored<CityEntry>> = [];
+
+  for (const { alias, canonical, kind } of matchAliasPrefixes(typedLower)) {
+    const score = alias === typedLower ? SCORE_EXACT : SCORE_WORD_PREFIX;
+    const canonicalLower = normalize(canonical);
+    const canonicalTokens = tokenize(canonical);
+
+    if (kind === "state") {
+      for (const entry of candidateStates(canonicalTokens)) {
+        if (entry.countryCode === HOME_COUNTRY && entry.nameLower === canonicalLower) {
+          states.push({ entry, score });
+          break;
+        }
+      }
+      continue;
+    }
+
+    for (const entry of candidateCities(canonicalTokens)) {
+      if (entry.countryCode === HOME_COUNTRY && entry.nameLower === canonicalLower) {
+        cities.push({ entry, score });
+        break;
+      }
+    }
+  }
+
+  return { states, cities };
 }
 
 function matchCities(queryLower: string, queryTokens: string[]): Array<Scored<CityEntry>> {
   const matches: Array<Scored<CityEntry>> = [];
   const seen = new Set<CityEntry>();
+
+  // If a country matches the query, expand it to its top cities
+  for (const countryMatch of matchCountries(queryLower, queryTokens)) {
+    const cities = getCitiesOfCountry(countryMatch.entry.isoCode);
+    cities.sort((a, b) => a.name.length - b.name.length);
+    for (const city of cities.slice(0, 5)) {
+      if (!seen.has(city)) {
+        // Cap the score at SCORE_PREFIX so they aren't dropped
+        matches.push({ entry: city, score: Math.min(countryMatch.score, SCORE_PREFIX) });
+        seen.add(city);
+      }
+    }
+  }
 
   for (const entry of candidateCities(queryTokens)) {
     const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
@@ -219,8 +320,8 @@ function matchCities(queryLower: string, queryTokens: string[]): Array<Scored<Ci
   }
 
   if (matches.length < 3) {
-    for (const entry of fuzzyCities(queryLower)) {
-      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY });
+    for (const { entry, dist } of fuzzyCities(queryLower)) {
+      if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
     }
   }
 
@@ -265,10 +366,10 @@ function buildDestinations(
   ];
 
   candidates.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
     const aHome = a.entry.countryCode === HOME_COUNTRY ? 0 : 1;
     const bHome = b.entry.countryCode === HOME_COUNTRY ? 0 : 1;
     if (aHome !== bHome) return aHome - bHome;
-    if (a.score !== b.score) return a.score - b.score;
     // A state outranks a city of equal standing: it is the broader search.
     const aKind = a.kind === "state" ? 0 : 1;
     const bKind = b.kind === "state" ? 0 : 1;
@@ -678,10 +779,14 @@ export async function getSuggestions(rawQuery: string): Promise<Suggestion[]> {
     matchHotels(tokenSets),
   ]);
 
+  // Alias hits are scored against the alias and merged into the same pool, so a
+  // part-typed "bom" competes with real "bom…" cities rather than pre-empting them.
+  const aliased = matchAliasedPlaces(typedLower);
+
   const destinations = buildDestinations(
     queryLower,
-    matchStates(queryLower, queryTokens),
-    matchCities(queryLower, queryTokens),
+    [...matchStates(queryLower, queryTokens), ...aliased.states],
+    [...matchCities(queryLower, queryTokens), ...aliased.cities],
     curated,
   );
 

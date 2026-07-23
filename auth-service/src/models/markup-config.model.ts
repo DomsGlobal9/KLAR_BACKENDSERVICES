@@ -28,9 +28,26 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 export type MarkupScope = "PLATFORM" | "B2C";
 export type MarkupValueType = "FIXED" | "PERCENTAGE";
 
+/**
+ * Which journeys a rule applies to.
+ *
+ * ALL is the catch-all and the migration target for every pre-region row, so
+ * enabling this feature changes nobody's pricing until a master deliberately
+ * writes a DOMESTIC or INTERNATIONAL rule. Resolution is exact-region first,
+ * then ALL — see MarkupConfigService.resolve.
+ */
+export type MarkupRegion = "DOMESTIC" | "INTERNATIONAL" | "ALL";
+
+export const MARKUP_REGIONS: MarkupRegion[] = [
+    "DOMESTIC",
+    "INTERNATIONAL",
+    "ALL",
+];
+
 export interface IMarkupConfig extends Document {
     scope: MarkupScope;
     serviceType: string;
+    region: MarkupRegion;
     type: MarkupValueType;
     value: number;
     enabled: boolean;
@@ -53,6 +70,15 @@ const MarkupConfigSchema = new Schema<IMarkupConfig>(
             required: true,
             uppercase: true,
             trim: true,
+        },
+
+        // Defaulted (not required) so any row written before regions existed
+        // reads back as ALL, which is exactly its pre-region behaviour.
+        region: {
+            type: String,
+            enum: MARKUP_REGIONS,
+            required: true,
+            default: "ALL",
         },
 
         type: {
@@ -91,8 +117,20 @@ const MarkupConfigSchema = new Schema<IMarkupConfig>(
     { timestamps: true }
 );
 
-/** One config per (scope, serviceType) — this is what makes the row a singleton. */
-MarkupConfigSchema.index({ scope: 1, serviceType: 1 }, { unique: true });
+/**
+ * One config per (scope, serviceType, region) — this is what makes the row a
+ * singleton.
+ *
+ * NOTE FOR DEPLOY: the previous unique index was { scope, serviceType }. Mongo
+ * does NOT replace an index just because the schema changed, and while the old
+ * one survives it rejects the second region for a service ("HOTEL DOMESTIC"
+ * saves, "HOTEL INTERNATIONAL" then fails with E11000). The migration script
+ * drops it — see scripts/migrate-markup-regions.ts.
+ */
+MarkupConfigSchema.index(
+    { scope: 1, serviceType: 1, region: 1 },
+    { unique: true }
+);
 
 function assertValueInRange(this: any, type: MarkupValueType, value: number) {
     if (type === "PERCENTAGE" && value > 100) {

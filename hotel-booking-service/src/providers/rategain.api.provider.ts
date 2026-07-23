@@ -93,9 +93,14 @@ export class RateGainApiProvider {
                 EmailType: g.EmailType || 1,
                 ProfileType: g.ProfileType || 1,
                 Phone: g.Phone || "0000000000",
-                Line1: g.Line1 || "N/A",
-                City: g.City || "N/A",
-                StateCode: g.StateCode || "TN",
+                // RG spec 1.5.3 (Guest Details, p.38-39) marks Line1 / City /
+                // StateCode as Required=No. Omit them when the guest left them
+                // blank rather than shipping "N/A" and a guessed "TN" into the
+                // hotel's PMS as if they were real address data.
+                ...(g.Line1 ? { Line1: g.Line1 } : {}),
+                ...(g.City ? { City: g.City } : {}),
+                ...(g.StateCode ? { StateCode: g.StateCode } : {}),
+                // Required for the primary guest, so these keep a fallback.
                 CountryCode: g.CountryCode || "IN",
                 PostalCode: g.PostalCode || "600001",
               };
@@ -236,9 +241,14 @@ export class RateGainApiProvider {
                 EmailType: g.EmailType || 1,
                 ProfileType: g.ProfileType || 1,
                 Phone: g.Phone || "0000000000",
-                Line1: g.Line1 || "N/A",
-                City: g.City || "N/A",
-                StateCode: g.StateCode || "TN",
+                // RG spec 1.5.3 (Guest Details, p.38-39) marks Line1 / City /
+                // StateCode as Required=No. Omit them when the guest left them
+                // blank rather than shipping "N/A" and a guessed "TN" into the
+                // hotel's PMS as if they were real address data.
+                ...(g.Line1 ? { Line1: g.Line1 } : {}),
+                ...(g.City ? { City: g.City } : {}),
+                ...(g.StateCode ? { StateCode: g.StateCode } : {}),
+                // Required for the primary guest, so these keep a fallback.
                 CountryCode: g.CountryCode || "IN",
                 PostalCode: g.PostalCode || "600001",
               };

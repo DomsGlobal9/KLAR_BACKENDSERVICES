@@ -165,21 +165,31 @@ export const compileTravellerPayload = (
                   formData.phone ||
                   frontendGuest.Phone ||
                   "0000000000",
+                // Required for the primary guest per RG spec 1.5.3 (p.39).
                 CountryCode:
+                  formData.guestCountryCode ||
                   formData.countryCodeISO ||
                   formData.CountryCode ||
                   frontendGuest.CountryCode ||
                   "IN",
-                StateCode:
-                  formData.stateCode || frontendGuest.StateCode || "TN",
-                City: formData.city || frontendGuest.City || "N/A",
-                Line1:
-                  formData.addressLine1 ||
-                  formData.hotelAddress ||
-                  frontendGuest.Line1 ||
-                  "N/A",
                 PostalCode:
-                  formData.postalCode || frontendGuest.PostalCode || "500001",
+                  formData.guestPostalCode ||
+                  formData.postalCode ||
+                  frontendGuest.PostalCode ||
+                  "500001",
+                // Required=No per the same table. The booking form no longer
+                // collects them, so they are normally absent — sent only if an
+                // older client still supplies one, and omitted rather than
+                // filled with "N/A" / a guessed "TN" otherwise.
+                //
+                // Line1 must never fall back to formData.hotelAddress: that is
+                // the HOTEL's street address, and sending it as the guest's
+                // address told the property its own address was the customer's.
+                ...(frontendGuest.Line1 ? { Line1: frontendGuest.Line1 } : {}),
+                ...(frontendGuest.City ? { City: frontendGuest.City } : {}),
+                ...(frontendGuest.StateCode
+                  ? { StateCode: frontendGuest.StateCode }
+                  : {}),
               };
             }),
           Children: room.guests

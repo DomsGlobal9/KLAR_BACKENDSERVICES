@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import { IMarkup, IMarkupService } from '../models/markup.model';
+import { canonicalRegion } from './markup-config.service';
 import { MarkupRepository } from '../repositories/markup.repository';
 import { MarkupEarningRepository } from '../repositories/markup-earning.repository';
 import { UserRepository } from '../repositories/user.repository';
@@ -38,6 +39,7 @@ export class MarkupService {
 
     async upsert(userId: Types.ObjectId, data: {
         serviceType?: string;
+        region?: string;
         services?: IMarkupService[];
         appliedTo?: IMarkup['appliedTo'];
         isActive?: boolean;
@@ -62,18 +64,28 @@ export class MarkupService {
         if (data.serviceType) {
             let markup = await this.markupRepo.findByUser(userId);
 
+            // A service is keyed by (serviceType, region). Matching on
+            // serviceType alone would make "HOTEL INTERNATIONAL" overwrite the
+            // agent's existing "HOTEL DOMESTIC" rule instead of sitting beside
+            // it — silently replacing one margin with another.
+            const wantedRegion = canonicalRegion(data.region);
+            const payload = { ...data, region: wantedRegion };
+
             if (markup) {
                 const index = markup.services.findIndex(
-                    s => s.serviceType === data.serviceType
+                    s =>
+                        (s.serviceType || '').toUpperCase() ===
+                            (data.serviceType || '').toUpperCase() &&
+                        canonicalRegion(s.region) === wantedRegion
                 );
 
                 if (index > -1) {
                     markup.services[index] = {
                         ...markup.services[index],
-                        ...data
+                        ...payload
                     };
                 } else {
-                    markup.services.push(data as IMarkupService);
+                    markup.services.push(payload as IMarkupService);
                 }
 
                 markup.updatedBy = userId;
@@ -84,7 +96,7 @@ export class MarkupService {
 
             return this.markupRepo.create({
                 userId,
-                services: [data as IMarkupService],
+                services: [payload as IMarkupService],
                 appliedTo: data.appliedTo || 'BASE_FARE',
                 createdBy: userId,
                 updatedBy: userId
@@ -109,12 +121,23 @@ export class MarkupService {
         );
     }
 
-    async delete(userId: Types.ObjectId, serviceType: string) {
+    /**
+     * Removes one (serviceType, region) rule.
+     *
+     * `region` is optional for backwards compatibility: an older client that
+     * sends only a serviceType still means "the ALL rule", which is what its
+     * single pre-region row migrated to.
+     */
+    async delete(userId: Types.ObjectId, serviceType: string, region?: string) {
         if (!serviceType) {
             throw new Error('serviceType is required');
         }
 
-        return this.markupRepo.pullService(userId, serviceType);
+        return this.markupRepo.pullService(
+            userId,
+            serviceType,
+            canonicalRegion(region)
+        );
     }
 
     async deleteByServiceId(

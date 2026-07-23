@@ -38,11 +38,23 @@ export interface StateEntry {
   countryCode: string;
 }
 
+export interface CountryEntry {
+  name: string;
+  nameLower: string;
+  tokens: string[];
+  isoCode: string;
+}
+
 interface SuggestionIndex {
   cityBuckets: Map<string, CityEntry[]>;
   stateBuckets: Map<string, StateEntry[]>;
+  countryBuckets: Map<string, CountryEntry[]>;
   citiesByState: Map<string, CityEntry[]>;
+  citiesByCountry: Map<string, CityEntry[]>;
+  statesByCountry: Map<string, StateEntry[]>;
   citiesByFirstChar: Map<string, CityEntry[]>;
+  statesByFirstChar: Map<string, StateEntry[]>;
+  countriesByFirstChar: Map<string, CountryEntry[]>;
   countryNames: Map<string, string>;
   stateByCode: Map<string, StateEntry>;
   builtInMs: number;
@@ -94,13 +106,27 @@ export function buildSuggestionIndex(): SuggestionIndex {
 
   const cityBuckets = new Map<string, CityEntry[]>();
   const stateBuckets = new Map<string, StateEntry[]>();
+  const countryBuckets = new Map<string, CountryEntry[]>();
   const citiesByState = new Map<string, CityEntry[]>();
+  const citiesByCountry = new Map<string, CityEntry[]>();
+  const statesByCountry = new Map<string, StateEntry[]>();
   const citiesByFirstChar = new Map<string, CityEntry[]>();
+  const statesByFirstChar = new Map<string, StateEntry[]>();
+  const countriesByFirstChar = new Map<string, CountryEntry[]>();
   const countryNames = new Map<string, string>();
   const stateByCode = new Map<string, StateEntry>();
 
   for (const country of Country.getAllCountries()) {
     countryNames.set(country.isoCode, country.name);
+    const nameLower = normalize(country.name);
+    const entry: CountryEntry = {
+      name: country.name,
+      nameLower,
+      tokens: tokenize(country.name),
+      isoCode: country.isoCode,
+    };
+    indexByTokens(countryBuckets, entry);
+    if (nameLower) push(countriesByFirstChar, nameLower[0], entry);
   }
 
   for (const raw of State.getAllStates()) {
@@ -114,6 +140,8 @@ export function buildSuggestionIndex(): SuggestionIndex {
     };
     indexByTokens(stateBuckets, entry);
     stateByCode.set(`${raw.countryCode}::${raw.isoCode}`, entry);
+    push(statesByCountry, raw.countryCode, entry);
+    if (nameLower) push(statesByFirstChar, nameLower[0], entry);
   }
 
   for (const raw of City.getAllCities()) {
@@ -127,14 +155,20 @@ export function buildSuggestionIndex(): SuggestionIndex {
     };
     indexByTokens(cityBuckets, entry);
     push(citiesByState, `${raw.countryCode}::${raw.stateCode}`, entry);
+    push(citiesByCountry, raw.countryCode, entry);
     if (nameLower) push(citiesByFirstChar, nameLower[0], entry);
   }
 
   index = {
     cityBuckets,
     stateBuckets,
+    countryBuckets,
     citiesByState,
+    citiesByCountry,
+    statesByCountry,
     citiesByFirstChar,
+    statesByFirstChar,
+    countriesByFirstChar,
     countryNames,
     stateByCode,
     builtInMs: Date.now() - startedAt,
@@ -170,6 +204,14 @@ export function getCitiesOfState(
   return getSuggestionIndex().citiesByState.get(`${countryCode}::${stateCode}`) ?? [];
 }
 
+export function getStatesOfCountry(countryCode: string): StateEntry[] {
+  return getSuggestionIndex().statesByCountry.get(countryCode) ?? [];
+}
+
+export function getCitiesOfCountry(countryCode: string): CityEntry[] {
+  return getSuggestionIndex().citiesByCountry.get(countryCode) ?? [];
+}
+
 /** Candidate places whose name contains a token starting with the query's first token. */
 export function candidateCities(queryTokens: string[]): CityEntry[] {
   if (!queryTokens.length) return [];
@@ -179,6 +221,11 @@ export function candidateCities(queryTokens: string[]): CityEntry[] {
 export function candidateStates(queryTokens: string[]): StateEntry[] {
   if (!queryTokens.length) return [];
   return getSuggestionIndex().stateBuckets.get(bucketKey(queryTokens[0])) ?? [];
+}
+
+export function candidateCountries(queryTokens: string[]): CountryEntry[] {
+  if (!queryTokens.length) return [];
+  return getSuggestionIndex().countryBuckets.get(bucketKey(queryTokens[0])) ?? [];
 }
 
 /**
@@ -227,7 +274,7 @@ export const HOME_COUNTRY = process.env.HOME_COUNTRY_CODE || "IN";
  * Home-country matches are allowed one extra edit and win ties, so "delih"
  * resolves to Delhi rather than Delph in England.
  */
-export function fuzzyCities(queryLower: string): CityEntry[] {
+export function fuzzyCities(queryLower: string): Array<{ entry: CityEntry; dist: number }> {
   const len = queryLower.length;
   if (len < 4) return []; // too short for a meaningful edit distance
   const max = len >= 7 ? 2 : 1;
@@ -251,5 +298,56 @@ export function fuzzyCities(queryLower: string): CityEntry[] {
     if (a.dist !== b.dist) return a.dist - b.dist;
     return a.city.name.length - b.city.name.length;
   });
-  return hits.slice(0, 5).map((h) => h.city);
+  return hits.slice(0, 5).map((h) => ({ entry: h.city, dist: h.dist }));
+}
+
+export function fuzzyStates(queryLower: string): Array<{ entry: StateEntry; dist: number }> {
+  const len = queryLower.length;
+  if (len < 4) return []; // too short for a meaningful edit distance
+  const max = len >= 7 ? 2 : 1;
+  const homeMax = max + 1;
+
+  const bucket = getSuggestionIndex().statesByFirstChar.get(queryLower[0]) ?? [];
+  const hits: Array<{ state: StateEntry; dist: number; home: boolean }> = [];
+
+  for (const state of bucket) {
+    const home = state.countryCode === HOME_COUNTRY;
+    const limit = home ? homeMax : max;
+    const name = state.nameLower;
+    if (name.length < len - limit || name.length > len + limit) continue;
+
+    const dist = boundedEditDistance(queryLower, name, limit);
+    if (dist <= limit) hits.push({ state, dist, home });
+  }
+
+  hits.sort((a, b) => {
+    if (a.home !== b.home) return a.home ? -1 : 1;
+    if (a.dist !== b.dist) return a.dist - b.dist;
+    return a.state.name.length - b.state.name.length;
+  });
+  return hits.slice(0, 5).map((h) => ({ entry: h.state, dist: h.dist }));
+}
+
+export function fuzzyCountries(queryLower: string): Array<{ entry: CountryEntry; dist: number }> {
+  const len = queryLower.length;
+  if (len < 4) return []; // too short for a meaningful edit distance
+  const max = len >= 7 ? 2 : 1;
+
+  const bucket = getSuggestionIndex().countriesByFirstChar.get(queryLower[0]) ?? [];
+  const hits: Array<{ country: CountryEntry; dist: number }> = [];
+
+  for (const country of bucket) {
+    const limit = max; // No home advantage strictly needed for countries since there are so few, but we use standard limit
+    const name = country.nameLower;
+    if (name.length < len - limit || name.length > len + limit) continue;
+
+    const dist = boundedEditDistance(queryLower, name, limit);
+    if (dist <= limit) hits.push({ country, dist });
+  }
+
+  hits.sort((a, b) => {
+    if (a.dist !== b.dist) return a.dist - b.dist;
+    return a.country.name.length - b.country.name.length;
+  });
+  return hits.slice(0, 5).map((h) => ({ entry: h.country, dist: h.dist }));
 }
