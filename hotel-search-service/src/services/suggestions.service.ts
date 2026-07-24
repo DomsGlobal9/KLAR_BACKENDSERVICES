@@ -69,9 +69,10 @@ const MIN_QUERY_LENGTH = 2;
 /**
  * Without a cap, a query like "taj" fills every slot with obscure prefix
  * matches (Tajao, Tajimi, Tajiri, Tajueco) and buries the Taj hotels the user
- * was actually reaching for.
+ * was actually reaching for. Increased from 2→4 so international destinations
+ * get enough slots when the user is clearly searching abroad.
  */
-const MAX_FOREIGN_CITIES = 2;
+const MAX_FOREIGN_CITIES = 4;
 
 /** "goa" → "Goa", "north goa" → "North Goa". The sync stores cityName lowercased. */
 function titleCase(value: string): string {
@@ -268,7 +269,7 @@ function matchAliasedPlaces(typedLower: string): {
   const states: Array<Scored<StateEntry>> = [];
   const cities: Array<Scored<CityEntry>> = [];
 
-  for (const { alias, canonical, kind } of matchAliasPrefixes(typedLower)) {
+  for (const { alias, canonical, kind, countryCode } of matchAliasPrefixes(typedLower)) {
     const score = alias === typedLower ? SCORE_EXACT : SCORE_WORD_PREFIX;
     const canonicalLower = normalize(canonical);
     const canonicalTokens = tokenize(canonical);
@@ -283,6 +284,18 @@ function matchAliasedPlaces(typedLower: string): {
       continue;
     }
 
+    // International alias: match against the specific country code provided.
+    if (countryCode) {
+      for (const entry of candidateCities(canonicalTokens)) {
+        if (entry.countryCode === countryCode && entry.nameLower === canonicalLower) {
+          cities.push({ entry, score });
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Home-country alias (legacy behaviour).
     for (const entry of candidateCities(canonicalTokens)) {
       if (entry.countryCode === HOME_COUNTRY && entry.nameLower === canonicalLower) {
         cities.push({ entry, score });
