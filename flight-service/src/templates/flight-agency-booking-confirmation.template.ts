@@ -704,7 +704,7 @@ export const flightAgencyBookingConfirmationTemplate = `
             <td style="width: 30%;">Total</td>
         </tr>
         <tr>
-            <td>Base Fare (TripJack)</td>
+            <td>Base Fare</td>
             <td></td>
             <td style="font-weight: bold;">{{formatPrice tripjackPrice}}</td>
         </tr>

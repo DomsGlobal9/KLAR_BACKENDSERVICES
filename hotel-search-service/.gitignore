@@ -73,3 +73,6 @@ coverage/
 *.pid
 *.seed
 *.tgz
+
+
+*.json
