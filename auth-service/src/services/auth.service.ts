@@ -320,9 +320,6 @@ export class AuthService {
             businessProfile: user.businessProfile || null,
         };
 
-        console.log('✅ === getCurrentUser completed ===');
-        console.log('📤 Returning user data:', result);
-
         return result;
     }
 

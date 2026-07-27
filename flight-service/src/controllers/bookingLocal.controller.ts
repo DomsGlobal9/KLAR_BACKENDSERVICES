@@ -16,10 +16,10 @@ class BookingLocalController {
         this.paymentServiceUrl = envConfig.PAYMENT_SERVICE;
     }
 
-    // *************************************************************************
-    // ************************  Private Functions  ****************************
-    // ************************  BEGINS HERE  **********************************
-    // *************************************************************************
+    // ----------------------------
+    // ---- PRIVATE FUNCTIONS -----
+    // ------- BEGINS HERE --------
+    // ----------------------------
 
     private extractToken = (req: Request): string | null => {
         const authHeader = req.headers.authorization;
@@ -32,7 +32,6 @@ class BookingLocalController {
                     const parsed = JSON.parse(token);
                     token = parsed.value || parsed.token || token;
                 } catch (e) {
-                    // If parsing fails, keep as is
                 }
             }
 
@@ -48,7 +47,6 @@ class BookingLocalController {
                     const parsed = JSON.parse(token);
                     token = parsed.value || parsed.token || token;
                 } catch (e) {
-                    // If parsing fails, keep as is
                 }
             }
 
@@ -67,7 +65,6 @@ class BookingLocalController {
                     const parsed = JSON.parse(cleanToken);
                     cleanToken = parsed.value || parsed.token || cleanToken;
                 } catch (e) {
-                    // If parsing fails, keep as is
                 }
             }
 
@@ -208,20 +205,20 @@ class BookingLocalController {
         switch (filterType) {
             case 'upcoming':
                 return bookings.filter((b: any) => {
-                    if (!b.createdAt) return false;
                     if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
-                    const bookingDate = new Date(b.createdAt);
-                    bookingDate.setHours(0, 0, 0, 0);
-                    return bookingDate >= now;
+                    if (!b.departureDate) return false;
+                    const departureDate = new Date(b.departureDate);
+                    departureDate.setHours(0, 0, 0, 0);
+                    return departureDate >= now;
                 });
 
             case 'past':
                 return bookings.filter((b: any) => {
-                    if (!b.createdAt) return false;
                     if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
-                    const bookingDate = new Date(b.createdAt);
-                    bookingDate.setHours(0, 0, 0, 0);
-                    return bookingDate < now;
+                    if (!b.departureDate) return false;
+                    const departureDate = new Date(b.departureDate);
+                    departureDate.setHours(0, 0, 0, 0);
+                    return departureDate < now;
                 });
 
             case 'cancelled':
@@ -236,10 +233,10 @@ class BookingLocalController {
         }
     }
 
-    // *************************************************************************
-    // ************************  Public Functions  ****************************
-    // ************************  ENDS HERE  **********************************
-    // *************************************************************************
+    // ----------------------------
+    // ---- PRIVATE FUNCTIONS -----
+    // -------- ENDS HERE ---------
+    // ----------------------------
 
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
@@ -685,10 +682,6 @@ class BookingLocalController {
             });
         }
     };
-
-    // =======
-    // TESTING
-    // =======
 
     public testProcessAftermath = async (req: Request, res: Response) => {
         try {

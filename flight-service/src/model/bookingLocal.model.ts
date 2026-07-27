@@ -14,21 +14,32 @@ const SSRSchema = new Schema(
 const TravellerSchema = new Schema(
     {
         travellerId: { type: String, required: true },
-        
         title: String,
         paxType: { type: String, enum: ["ADULT", "CHILD", "INFANT"] },
         firstName: String,
         lastName: String,
         dob: String,
-
         passportNumber: String,
         passportNationality: String,
         passportIssueDate: String,
         passportExpiryDate: String,
-
         ssrSeatInfos: [SSRSchema],
         ssrMealInfos: [SSRSchema],
         ssrBaggageInfos: [SSRSchema]
+    },
+    { _id: false }
+);
+
+const FlightSegmentSchema = new Schema(
+    {
+        departureDate: { type: String, required: true },
+        departureTime: String,
+        arrivalDate: String,
+        arrivalTime: String,
+        origin: String,
+        destination: String,
+        airline: String,
+        flightNumber: String
     },
     { _id: false }
 );
@@ -48,7 +59,11 @@ const BookingSchema = new Schema<BookingDocument>(
         phone: String,
         isHold: Boolean,
         travellers: [TravellerSchema],
-
+        flightSegments: [FlightSegmentSchema],
+        departureDate: {
+            type: String,
+            required: true
+        },
         gstInfo: {
             gstNumber: String,
             registeredName: String,
@@ -56,20 +71,17 @@ const BookingSchema = new Schema<BookingDocument>(
             mobile: String,
             address: String
         },
-
         emergencyContact: {
             email: String,
             phone: String,
             name: String
         },
-
         userInfo: {
             id: String,
             email: String,
             role: String,
             clientType: String
         },
-
         status: {
             type: String,
             enum: [
@@ -86,14 +98,12 @@ const BookingSchema = new Schema<BookingDocument>(
                 "NO_SHOW",
                 "VOIDED",
                 "REISSUED",
-                "CANCEL_REQUESTED",  
-                "CONFIRMED"          
+                "CANCEL_REQUESTED",
+                "CONFIRMED"
             ],
             default: "INITIATED"
         },
-
         amendmentId: { type: String },
-
         refundProcessed: {
             type: Boolean,
             default: false
@@ -105,7 +115,6 @@ const BookingSchema = new Schema<BookingDocument>(
         refundDate: {
             type: Date,
         },
-
     },
     { timestamps: true }
 );

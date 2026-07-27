@@ -1,7 +1,6 @@
 import { BookingModel } from "../model/bookingLocal.model";
 import { Booking } from "../types/bookingLocal.types";
 
-
 export class BookingRepository {
 
     async createBooking(data: Booking) {
@@ -95,7 +94,6 @@ export class BookingRepository {
                     "FAILED",
                     "CANCELLED",
                     "ABORTED",
-                    // "UNCONFIRMED",
                     "REJECTED",
                     "INITIATED"
                 ]
@@ -111,29 +109,16 @@ export class BookingRepository {
     }
 
     async deleteExpiredInitiatedBookings() {
-
-        /**
-         * Current time
-         */
         const now = new Date();
-
-        /**
-         * 24 hours before current time
-         */
         const before24hr = new Date(
             now.getTime() - 24 * 60 * 60 * 1000
         );
-
-        /**
-         * Delete bookings
-         */
         const result = await BookingModel.deleteMany({
             status: "INITIATED",
             createdAt: {
                 $lte: before24hr
             }
         });
-
         return result.deletedCount;
     }
 
@@ -167,7 +152,7 @@ export class BookingRepository {
 
     async getBookingsByUserIdPaginated(query: any, skip: number, limit: number) {
         return await BookingModel.find(query)
-            .sort({ createdAt: -1 })
+            .sort({ departureDate: 1, createdAt: -1 })
             .skip(skip)
             .limit(limit);
     }

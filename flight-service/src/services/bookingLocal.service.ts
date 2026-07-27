@@ -3,10 +3,8 @@ import Handlebars from 'handlebars';
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../config/env.config";
 import { Booking } from "../types/bookingLocal.types";
-import { getLogoBase64 } from "../utils/helper/logo.utils";
 import { formatPhoneNumber } from "../utils/helper/phoneFormater.helper";
 import { BookingRepository } from "../repositories/bookingLocal.repository";
-import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
 import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
 import { FrontendBookingPayload } from "../types/booking.types";
@@ -25,6 +23,11 @@ class BookingService {
 
     private bookingRepo = new BookingRepository();
 
+    // ----------------------------
+    // ---- PRIVATE FUNCTIONS -----
+    // ------- BEGINS HERE --------
+    // ----------------------------
+
     private async sendEmail(
         to: string,
         subject: string,
@@ -37,7 +40,6 @@ class BookingService {
                 html
             });
         } catch (error: any) {
-            // Email send failed silently
         }
     }
 
@@ -105,6 +107,260 @@ class BookingService {
         });
     }
 
+    private prepareTemplateData(tripjackData: any, dbData: any, booking: any) {
+        const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
+        const segments: any[] = [];
+
+        const totalTrips = tripInfo.length;
+        const isRoundTrip = totalTrips === 2;
+        const isMultiCity = totalTrips > 2;
+        const isOneWay = totalTrips === 1;
+
+        for (let tripIndex = 0; tripIndex < tripInfo.length; tripIndex++) {
+            const trip = tripInfo[tripIndex];
+            const segmentInfo = trip.SegmentInformation || [];
+
+            for (const segment of segmentInfo) {
+                let baggageInfo = null;
+                if (segment.BaggageInfo && segment.BaggageInfo.tI && segment.BaggageInfo.tI.length > 0) {
+                    baggageInfo = segment.BaggageInfo.tI[0]?.FareDetails?.BaggageInfo || null;
+                }
+
+                segments.push({
+                    departureAirport: segment.DepartureAirport,
+                    arrivalAirport: segment.ArrivalAirport,
+                    departureTime: segment.DepartureTime,
+                    arrivalTime: segment.ArrivalTime,
+                    flightDetails: {
+                        AirlineInfo: segment.FlightDetails?.AirlineInfo || {},
+                        FirstName: segment.FlightDetails?.FirstName || '',
+                        EquipmentType: segment.FlightDetails?.EquipmentType || '',
+                        FareBasis: segment.BaggageInfo?.tI?.[0]?.FareDetails?.FareBasis || '',
+                        CabinClass: segment.BaggageInfo?.tI?.[0]?.FareDetails?.CabinClass || 'Economy'
+                    },
+                    duration: segment.Duration,
+                    numberOfStops: segment.NumberOfStops,
+                    baggageInfo: baggageInfo,
+                    segmentNumber: segment.SegmentNumber,
+                    tripIndex: tripIndex,
+                    isFirstTrip: tripIndex === 0,
+                    totalTrips: totalTrips
+                });
+            }
+        }
+
+        const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
+        const formattedTravellers = travellers.map((traveller: any) => {
+            let baggageInfo = null;
+            let baseBaggage = null;
+
+            if (traveller.FareDetails?.BaggageInfo) {
+                baggageInfo = traveller.FareDetails.BaggageInfo;
+                baseBaggage = baggageInfo.CheckInBaggage || baggageInfo.ClassCode || null;
+            }
+
+            let totalSeatCharge = 0;
+            let totalMealCharge = 0;
+            let totalBaggageCharge = 0;
+
+            if (traveller.SSR_Seat_Information) {
+                const seatKeys = Object.keys(traveller.SSR_Seat_Information);
+                for (const key of seatKeys) {
+                    totalSeatCharge += traveller.SSR_Seat_Information[key]?.Amount || 0;
+                }
+            }
+
+            if (traveller.SSR_Meal_Information) {
+                const mealKeys = Object.keys(traveller.SSR_Meal_Information);
+                for (const key of mealKeys) {
+                    totalMealCharge += traveller.SSR_Meal_Information[key]?.Amount || 0;
+                }
+            }
+
+            let extraBaggageByTrip: { [key: number]: string[] } = {};
+            if (traveller.SSR_Baggage_Information) {
+                const baggageKeys = Object.keys(traveller.SSR_Baggage_Information);
+                for (const key of baggageKeys) {
+                    const baggage = traveller.SSR_Baggage_Information[key];
+                    totalBaggageCharge += baggage?.Amount || 0;
+                    if (baggage?.Description) {
+                        const segment = segments.find((s: any) => {
+                            const routeKey = `${s.departureAirport.SSRCode}-${s.arrivalAirport.SSRCode}`;
+                            return routeKey === key;
+                        });
+                        const tripIndex = segment ? segment.tripIndex : 0;
+                        if (!extraBaggageByTrip[tripIndex]) {
+                            extraBaggageByTrip[tripIndex] = [];
+                        }
+                        if (!extraBaggageByTrip[tripIndex].includes(baggage.Description)) {
+                            extraBaggageByTrip[tripIndex].push(baggage.Description);
+                        }
+                    }
+                }
+            }
+
+            const extraBaggageDetails: string[] = [];
+            const tripKeys = Object.keys(extraBaggageByTrip).map(Number).sort((a, b) => a - b);
+            for (const tripIndex of tripKeys) {
+                const descriptions = extraBaggageByTrip[tripIndex];
+                if (descriptions && descriptions.length > 0) {
+                    if (isRoundTrip) {
+                        const label = tripIndex === 0 ? 'Onward' : 'Return';
+                        extraBaggageDetails.push(`${label}: ${descriptions.join(', ')}`);
+                    } else if (isMultiCity) {
+                        extraBaggageDetails.push(`Journey ${tripIndex + 1}: ${descriptions.join(', ')}`);
+                    } else {
+                        extraBaggageDetails.push(descriptions.join(', '));
+                    }
+                }
+            }
+
+            const formattedPnrDetails: any[] = [];
+            if (traveller.pnrDetails) {
+                const pnrKeys = Object.keys(traveller.pnrDetails);
+                for (const key of pnrKeys) {
+                    const segment = segments.find((s: any) => {
+                        const routeKey = `${s.departureAirport.SSRCode}-${s.arrivalAirport.SSRCode}`;
+                        return routeKey === key;
+                    });
+
+                    if (segment) {
+                        formattedPnrDetails.push({
+                            pnr: traveller.pnrDetails[key],
+                            route: `${segment.departureAirport.SSRCode} → ${segment.arrivalAirport.SSRCode}`,
+                            flightNumber: `${segment.flightDetails.AirlineInfo.SSRCode} ${segment.flightDetails.FirstName}`,
+                            departureCity: segment.departureAirport.city,
+                            arrivalCity: segment.arrivalAirport.city
+                        });
+                    } else {
+                        formattedPnrDetails.push({
+                            pnr: traveller.pnrDetails[key],
+                            route: key,
+                            flightNumber: 'N/A',
+                            departureCity: '',
+                            arrivalCity: ''
+                        });
+                    }
+                }
+            }
+
+            return {
+                title: traveller.Title || '',
+                firstName: traveller.FirstName || '',
+                lastName: traveller.LastName || '',
+                paxType: traveller.PaxType || '',
+                dateOfBirth: traveller.DateOfBirth || '',
+                seatInfo: traveller.SSR_Seat_Information || traveller.seatInfo || {},
+                mealInfo: traveller.SSR_Meal_Information || traveller.mealInfo || {},
+                baggageInfo: baggageInfo || {},
+                baseBaggage: baseBaggage,
+                extraBaggageDetails: extraBaggageDetails,
+                pnrDetails: traveller.pnrDetails || traveller.gdsPnrs || {},
+                formattedPnrDetails: formattedPnrDetails,
+                passportNumber: traveller.PassportNumber || '',
+                passportNationality: traveller.PassportNationality || '',
+                passportIssueDate: traveller.PassportIssueDate || '',
+                passportExpiryDate: traveller.PassportExpiryDate || '',
+                mealCharge: totalMealCharge,
+                baggageCharge: totalBaggageCharge,
+                seatCharge: totalSeatCharge
+            };
+        });
+
+        const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
+        const formattedGstInfo = gstInfo ? {
+            gstNumber: gstInfo.GSTNumber || gstInfo.gstNumber || '',
+            registeredName: gstInfo.RegisteredName || gstInfo.registeredName || '',
+            email: gstInfo.email || '',
+            mobile: gstInfo.mobile || '',
+            address: gstInfo.address || '',
+            isSez: gstInfo.isez || gstInfo.isSez || false
+        } : null;
+
+        const totalMeals = formattedTravellers.reduce((sum: number, t: any) => sum + (t.mealCharge || 0), 0);
+        const totalBaggage = formattedTravellers.reduce((sum: number, t: any) => sum + (t.baggageCharge || 0), 0);
+        const totalSeat = formattedTravellers.reduce((sum: number, t: any) => sum + (t.seatCharge || 0), 0);
+
+        return {
+            bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
+            ticketNumber: tripjackData?.order?.BookingId || booking?.bookingId || '',
+            bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
+            status: tripjackData?.order?.status || '',
+            totalAmount: tripjackData?.order?.Amount || 0,
+            totalPrice: booking?.totalPrice || 0,
+            markupPrice: booking?.markupPrice || 0,
+            tripjackPrice: booking?.tripjackPrice || 0,
+            travellers: formattedTravellers,
+            segments: segments,
+            deliveryInfo: tripjackData?.order?.DeliveryInformation || {},
+            travellerEmail: booking?.email || '',
+            agentEmail: dbData?.userInfo?.email || '',
+            userInfo: dbData?.userInfo || {},
+            isMultiCity: isMultiCity,
+            isRoundTrip: isRoundTrip,
+            isOneWay: isOneWay,
+            gstInfo: formattedGstInfo,
+            order: tripjackData?.order || {},
+            totalMeals: totalMeals,
+            totalBaggage: totalBaggage,
+            totalSeat: totalSeat,
+            taxBreakdown: [],
+            airlineContact: '022 26168058',
+            companyEmail: 'info.klarworld@gmail.com'
+        };
+    }
+
+    private async processBookingAftermath(
+        updatedBooking: any,
+        bookingId: string
+    ) {
+        try {
+            const [tripjackBookingStatus, ownDatabaseBookingStatus] = await Promise.all([
+                TripjackBookingService.getBookingDetails(updatedBooking.bookingId),
+                this.getBookingDetails(updatedBooking.bookingId),
+            ]);
+
+            await this.bookingRepo.updateBookingStatus(
+                bookingId,
+                tripjackBookingStatus?.order?.status
+            );
+
+            const travellerEmail = tripjackBookingStatus?.order?.DeliveryInformation?.Emails?.[0] ||
+                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
+                updatedBooking?.email || "";
+
+            const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
+
+            const html = flightConfirmationTemplate(tripjackBookingStatus);
+            const subject = `Flight Booking Confirmation - ${updatedBooking.bookingId}`;
+
+            if (travellerEmail) {
+                await this.sendEmail(
+                    travellerEmail,
+                    subject,
+                    html
+                );
+            }
+
+            if (agentEmail && agentEmail !== travellerEmail) {
+                await this.sendEmail(
+                    agentEmail,
+                    subject,
+                    html
+                );
+            }
+        } catch (error: any) {
+            console.error(`❌ [Booking] Aftermath failed for ${bookingId}:`, error.message);
+        }
+    }
+
+    // ----------------------------
+    // ---- PRIVATE FUNCTIONS -----
+    // -------- ENDS HERE --------
+    // ----------------------------
+
+    
+
     public async sendBookingEmails(bookingId: string) {
         try {
             const booking = await this.bookingRepo.getBookingById(bookingId);
@@ -157,7 +413,7 @@ class BookingService {
                 );
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(`Email failed for ${bookingId}:`, error);
         }
     }
@@ -247,52 +503,8 @@ class BookingService {
                 );
             }
 
-        } catch (error) {
-            console.error(`Cancellation email failed for ${bookingId}:`, error);
-        }
-    }
-
-    private async processBookingAftermath(
-        updatedBooking: any,
-        bookingId: string
-    ) {
-        try {
-            const [tripjackBookingStatus, ownDatabaseBookingStatus] = await Promise.all([
-                TripjackBookingService.getBookingDetails(updatedBooking.bookingId),
-                this.getBookingDetails(updatedBooking.bookingId),
-            ]);
-
-            await this.bookingRepo.updateBookingStatus(
-                bookingId,
-                tripjackBookingStatus?.order?.status
-            );
-
-            const travellerEmail = tripjackBookingStatus?.order?.DeliveryInformation?.Emails?.[0] ||
-                tripjackBookingStatus?.order?.contactInfo?.emails?.[0] ||
-                updatedBooking?.email || "";
-
-            const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
-
-            const html = flightConfirmationTemplate(tripjackBookingStatus);
-            const subject = `Flight Booking Confirmation - ${updatedBooking.bookingId}`;
-
-            if (travellerEmail) {
-                await this.sendEmail(
-                    travellerEmail,
-                    subject,
-                    html
-                );
-            }
-
-            if (agentEmail && agentEmail !== travellerEmail) {
-                await this.sendEmail(
-                    agentEmail,
-                    subject,
-                    html
-                );
-            }
         } catch (error: any) {
-            console.error(`❌ [Booking] Aftermath failed for ${bookingId}:`, error.message);
+            console.error(`Cancellation email failed for ${bookingId}:`, error);
         }
     }
 
@@ -304,6 +516,10 @@ class BookingService {
 
         if (!data.travellers || data.travellers.length === 0) {
             throw new Error("At least one traveller is required");
+        }
+
+        if (!data.departureDate) {
+            throw new Error("Departure date is required");
         }
 
         const travellersWithId = data.travellers.map((traveller) => ({
@@ -335,6 +551,8 @@ class BookingService {
             travellers: travellersWithId,
             status: "INITIATED",
             userInfo,
+            departureDate: data.departureDate,
+            ...(data.flightSegments && { flightSegments: data.flightSegments }),
             ...(data.gstInfo && { gstInfo: data.gstInfo }),
             ...(data.emergencyContact && { emergencyContact })
         };
@@ -348,8 +566,13 @@ class BookingService {
                 isHold: payload.isHold,
                 travellers: payload.travellers,
                 userInfo: payload.userInfo,
-                status: "INITIATED"
+                status: "INITIATED",
+                departureDate: payload.departureDate
             };
+
+            if (payload.flightSegments) {
+                updateData.flightSegments = payload.flightSegments;
+            }
 
             if (payload.gstInfo) {
                 updateData.gstInfo = payload.gstInfo;
@@ -565,13 +788,15 @@ class BookingService {
             "userInfo.id": userId
         };
 
-        
         if (filter === 'cancelled') {
             query.status = { $in: ['CANCELLED', 'CANCEL_REQUESTED'] };
+        } else if (filter === 'upcoming') {
+            query.departureDate = { $gte: now.toISOString().split('T')[0] };
+            query.status = { $nin: ['CANCELLED', 'CANCEL_REQUESTED'] };
         } else if (filter === 'past') {
-            query.createdAt = { $lt: now };
+            query.departureDate = { $lt: now.toISOString().split('T')[0] };
+            query.status = { $nin: ['CANCELLED', 'CANCEL_REQUESTED'] };
         }
-        
 
         const [bookings, total] = await Promise.all([
             this.bookingRepo.getBookingsByUserIdPaginated(query, skip, limit),
@@ -659,20 +884,6 @@ class BookingService {
         return await this.bookingRepo.getBookingsByEmail(email);
     }
 
-
-
-
-
-
-
-    // ===================================
-    // ===================================
-    // ==========TESTING==================
-    // ===================================
-    // ===================================
-
-
-
     async processBookingAftermathById(bookingId: string) {
         try {
             const booking = await this.bookingRepo.getBookingById(bookingId);
@@ -695,7 +906,6 @@ class BookingService {
 
             const agentEmail = ownDatabaseBookingStatus?.userInfo?.email || "";
 
-            // Register helpers
             Handlebars.registerHelper('formatDate', function (dateString: string) {
                 if (!dateString) return 'N/A';
                 const date = new Date(dateString);
@@ -732,14 +942,12 @@ class BookingService {
                 return flightDetails?.FirstName || 'N/A';
             });
 
-            // Transform data for templates
             const templateData = this.prepareTemplateData(
                 tripjackBookingStatus,
                 ownDatabaseBookingStatus,
                 booking
             );
 
-            // Compile templates with proper options
             const clientTemplate = Handlebars.compile(flightBookingConfirmationTemplate, {
                 strict: false,
                 assumeObjects: true
@@ -791,209 +999,6 @@ class BookingService {
         }
     }
 
-
-    private prepareTemplateData(tripjackData: any, dbData: any, booking: any) {
-        const tripInfo = tripjackData?.itemInfos?.AIR?.TripInformation || [];
-        const segments: any[] = [];
-
-        const totalTrips = tripInfo.length;
-        const isRoundTrip = totalTrips === 2;
-        const isMultiCity = totalTrips > 2;
-        const isOneWay = totalTrips === 1;
-
-        for (let tripIndex = 0; tripIndex < tripInfo.length; tripIndex++) {
-            const trip = tripInfo[tripIndex];
-            const segmentInfo = trip.SegmentInformation || [];
-
-            for (const segment of segmentInfo) {
-                let baggageInfo = null;
-                if (segment.BaggageInfo && segment.BaggageInfo.tI && segment.BaggageInfo.tI.length > 0) {
-                    baggageInfo = segment.BaggageInfo.tI[0]?.FareDetails?.BaggageInfo || null;
-                }
-
-                segments.push({
-                    departureAirport: segment.DepartureAirport,
-                    arrivalAirport: segment.ArrivalAirport,
-                    departureTime: segment.DepartureTime,
-                    arrivalTime: segment.ArrivalTime,
-                    flightDetails: {
-                        AirlineInfo: segment.FlightDetails?.AirlineInfo || {},
-                        FirstName: segment.FlightDetails?.FirstName || '',
-                        EquipmentType: segment.FlightDetails?.EquipmentType || '',
-                        FareBasis: segment.BaggageInfo?.tI?.[0]?.FareDetails?.FareBasis || '',
-                        CabinClass: segment.BaggageInfo?.tI?.[0]?.FareDetails?.CabinClass || 'Economy'
-                    },
-                    duration: segment.Duration,
-                    numberOfStops: segment.NumberOfStops,
-                    baggageInfo: baggageInfo,
-                    segmentNumber: segment.SegmentNumber,
-                    tripIndex: tripIndex,
-                    isFirstTrip: tripIndex === 0,
-                    totalTrips: totalTrips
-                });
-            }
-        }
-
-        const travellers = tripjackData?.itemInfos?.AIR?.TravellerInformation || [];
-        const formattedTravellers = travellers.map((traveller: any) => {
-            let baggageInfo = null;
-            let baseBaggage = null;
-
-            if (traveller.FareDetails?.BaggageInfo) {
-                baggageInfo = traveller.FareDetails.BaggageInfo;
-                baseBaggage = baggageInfo.CheckInBaggage || baggageInfo.ClassCode || null;
-            }
-
-            let totalSeatCharge = 0;
-            let totalMealCharge = 0;
-            let totalBaggageCharge = 0;
-
-            if (traveller.SSR_Seat_Information) {
-                const seatKeys = Object.keys(traveller.SSR_Seat_Information);
-                for (const key of seatKeys) {
-                    totalSeatCharge += traveller.SSR_Seat_Information[key]?.Amount || 0;
-                }
-            }
-
-            if (traveller.SSR_Meal_Information) {
-                const mealKeys = Object.keys(traveller.SSR_Meal_Information);
-                for (const key of mealKeys) {
-                    totalMealCharge += traveller.SSR_Meal_Information[key]?.Amount || 0;
-                }
-            }
-
-            let extraBaggageByTrip: { [key: number]: string[] } = {};
-            if (traveller.SSR_Baggage_Information) {
-                const baggageKeys = Object.keys(traveller.SSR_Baggage_Information);
-                for (const key of baggageKeys) {
-                    const baggage = traveller.SSR_Baggage_Information[key];
-                    totalBaggageCharge += baggage?.Amount || 0;
-                    if (baggage?.Description) {
-                        const segment = segments.find((s: any) => {
-                            const routeKey = `${s.departureAirport.SSRCode}-${s.arrivalAirport.SSRCode}`;
-                            return routeKey === key;
-                        });
-                        const tripIndex = segment ? segment.tripIndex : 0;
-                        if (!extraBaggageByTrip[tripIndex]) {
-                            extraBaggageByTrip[tripIndex] = [];
-                        }
-                        if (!extraBaggageByTrip[tripIndex].includes(baggage.Description)) {
-                            extraBaggageByTrip[tripIndex].push(baggage.Description);
-                        }
-                    }
-                }
-            }
-
-            const extraBaggageDetails: string[] = [];
-            const tripKeys = Object.keys(extraBaggageByTrip).map(Number).sort((a, b) => a - b);
-            for (const tripIndex of tripKeys) {
-                const descriptions = extraBaggageByTrip[tripIndex];
-                if (descriptions && descriptions.length > 0) {
-                    if (isRoundTrip) {
-                        const label = tripIndex === 0 ? 'Onward' : 'Return';
-                        extraBaggageDetails.push(`${label}: ${descriptions.join(', ')}`);
-                    } else if (isMultiCity) {
-                        extraBaggageDetails.push(`Journey ${tripIndex + 1}: ${descriptions.join(', ')}`);
-                    } else {
-                        extraBaggageDetails.push(descriptions.join(', '));
-                    }
-                }
-            }
-
-            const formattedPnrDetails: any[] = [];
-            if (traveller.pnrDetails) {
-                const pnrKeys = Object.keys(traveller.pnrDetails);
-                for (const key of pnrKeys) {
-                    const segment = segments.find((s: any) => {
-                        const routeKey = `${s.departureAirport.SSRCode}-${s.arrivalAirport.SSRCode}`;
-                        return routeKey === key;
-                    });
-
-                    if (segment) {
-                        formattedPnrDetails.push({
-                            pnr: traveller.pnrDetails[key],
-                            route: `${segment.departureAirport.SSRCode} → ${segment.arrivalAirport.SSRCode}`,
-                            flightNumber: `${segment.flightDetails.AirlineInfo.SSRCode} ${segment.flightDetails.FirstName}`,
-                            departureCity: segment.departureAirport.city,
-                            arrivalCity: segment.arrivalAirport.city
-                        });
-                    } else {
-                        formattedPnrDetails.push({
-                            pnr: traveller.pnrDetails[key],
-                            route: key,
-                            flightNumber: 'N/A',
-                            departureCity: '',
-                            arrivalCity: ''
-                        });
-                    }
-                }
-            }
-
-            return {
-                title: traveller.Title || '',
-                firstName: traveller.FirstName || '',
-                lastName: traveller.LastName || '',
-                paxType: traveller.PaxType || '',
-                dateOfBirth: traveller.DateOfBirth || '',
-                seatInfo: traveller.SSR_Seat_Information || traveller.seatInfo || {},
-                mealInfo: traveller.SSR_Meal_Information || traveller.mealInfo || {},
-                baggageInfo: baggageInfo || {},
-                baseBaggage: baseBaggage,
-                extraBaggageDetails: extraBaggageDetails,
-                pnrDetails: traveller.pnrDetails || traveller.gdsPnrs || {},
-                formattedPnrDetails: formattedPnrDetails,
-                passportNumber: traveller.PassportNumber || '',
-                passportNationality: traveller.PassportNationality || '',
-                passportIssueDate: traveller.PassportIssueDate || '',
-                passportExpiryDate: traveller.PassportExpiryDate || '',
-                mealCharge: totalMealCharge,
-                baggageCharge: totalBaggageCharge,
-                seatCharge: totalSeatCharge
-            };
-        });
-
-        const gstInfo = tripjackData?.GSTInformation || booking?.gstInfo || null;
-        const formattedGstInfo = gstInfo ? {
-            gstNumber: gstInfo.GSTNumber || gstInfo.gstNumber || '',
-            registeredName: gstInfo.RegisteredName || gstInfo.registeredName || '',
-            email: gstInfo.email || '',
-            mobile: gstInfo.mobile || '',
-            address: gstInfo.address || '',
-            isSez: gstInfo.isez || gstInfo.isSez || false
-        } : null;
-
-        const totalMeals = formattedTravellers.reduce((sum: number, t: any) => sum + (t.mealCharge || 0), 0);
-        const totalBaggage = formattedTravellers.reduce((sum: number, t: any) => sum + (t.baggageCharge || 0), 0);
-        const totalSeat = formattedTravellers.reduce((sum: number, t: any) => sum + (t.seatCharge || 0), 0);
-
-        return {
-            bookingId: tripjackData?.order?.BookingId || booking?.bookingId || '',
-            ticketNumber: tripjackData?.order?.BookingId || booking?.bookingId || '',
-            bookingDate: tripjackData?.order?.createdOn || new Date().toISOString(),
-            status: tripjackData?.order?.status || '',
-            totalAmount: tripjackData?.order?.Amount || 0,
-            totalPrice: booking?.totalPrice || 0,
-            markupPrice: booking?.markupPrice || 0,
-            tripjackPrice: booking?.tripjackPrice || 0,
-            travellers: formattedTravellers,
-            segments: segments,
-            deliveryInfo: tripjackData?.order?.DeliveryInformation || {},
-            travellerEmail: booking?.email || '',
-            agentEmail: dbData?.userInfo?.email || '',
-            userInfo: dbData?.userInfo || {},
-            isMultiCity: isMultiCity,
-            isRoundTrip: isRoundTrip,
-            isOneWay: isOneWay,
-            gstInfo: formattedGstInfo,
-            order: tripjackData?.order || {},
-            totalMeals: totalMeals,
-            totalBaggage: totalBaggage,
-            totalSeat: totalSeat,
-            taxBreakdown: [],
-            airlineContact: '022 26168058',
-            companyEmail: 'info.klarworld@gmail.com'
-        };
-    }
 }
 
 export default new BookingService();
