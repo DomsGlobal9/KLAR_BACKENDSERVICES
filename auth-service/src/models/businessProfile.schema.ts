@@ -34,6 +34,28 @@ export const BusinessProfileSchema = new Schema(
             type: String,
         },
 
+        gstRegisteredName: {
+            type: String,
+            trim: true,
+        },
+
+        gstEmail: {
+            type: String,
+            lowercase: true,
+            trim: true,
+        },
+
+        gstMobile: {
+            type: String,
+            trim: true,
+        },
+
+        gstAddress: {
+            type: String,
+            trim: true,
+        },
+
+
         panNumber: {
             type: String,
         },

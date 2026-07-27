@@ -583,10 +583,21 @@ export class HotelsService {
     // finish under the window but cross it during DB enrichment (~1-2s tail), so
     // a fixed cutoff would return an empty page on any destination where the
     // other supplier also came back empty (e.g. RateGain timing out on Chennai).
+    //
+    // The grace must clear RateGain's REAL bestproperties latency, not the
+    // optimistic "2-5s" the old comments assumed. Measured live: a Rome geofilter
+    // search returns 1,913 properties in ~14.2s, a Goa one in ~10.7s. With the
+    // former 6s grace the hard cap sat at 14s and aborted RateGain ~200ms before
+    // its data landed, so slow international destinations returned zero hotels
+    // despite RG having full inventory. 12s grace → 20s cap covers RG's observed
+    // p99 plus the enrichment tail, and stays under RG's own 25s HTTP timeout so a
+    // genuinely stalled socket is still cancelled. The cap only bites when nothing
+    // has come back yet; the instant the first results land past the soft window
+    // we return, so healthy searches are unaffected.
     const softMs = partialReturnTimeoutMs;
     const hardMs =
       partialReturnTimeoutMs +
-      Number(process.env.SEARCH_TIMEOUT_GRACE_MS || 6000);
+      Number(process.env.SEARCH_TIMEOUT_GRACE_MS || 12000);
 
     await new Promise<void>((resolve) => {
       const timers: ReturnType<typeof setTimeout>[] = [];
