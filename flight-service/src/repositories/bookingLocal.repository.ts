@@ -74,12 +74,6 @@ export class BookingRepository {
         );
     }
 
-    async getBookingsByUserId(userId: string) {
-        return await BookingModel.find({
-            "userInfo.id": userId
-        }).sort({ createdAt: -1 });
-    }
-
     async getBookingByIdAndUser(bookingId: string, userId: string) {
         return await BookingModel.findOne({
             bookingId: bookingId,
@@ -163,5 +157,22 @@ export class BookingRepository {
             console.error("Error finding bookings by email:", error);
             throw new Error("Failed to find bookings by email");
         }
+    }
+
+    async getBookingsByUserId(userId: string) {
+        return await BookingModel.find({
+            "userInfo.id": userId
+        }).sort({ createdAt: -1 });
+    }
+
+    async getBookingsByUserIdPaginated(query: any, skip: number, limit: number) {
+        return await BookingModel.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+    }
+
+    async countBookings(query: any) {
+        return await BookingModel.countDocuments(query);
     }
 }

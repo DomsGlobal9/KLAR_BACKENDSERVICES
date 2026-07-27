@@ -18,6 +18,7 @@ class BookingLocalController {
 
     // *************************************************************************
     // ************************  Private Functions  ****************************
+    // ************************  BEGINS HERE  **********************************
     // *************************************************************************
 
     private extractToken = (req: Request): string | null => {
@@ -200,8 +201,44 @@ class BookingLocalController {
         }
     };
 
+    private applyFilter(bookings: any[], filterType: string): any[] {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        switch (filterType) {
+            case 'upcoming':
+                return bookings.filter((b: any) => {
+                    if (!b.createdAt) return false;
+                    if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
+                    const bookingDate = new Date(b.createdAt);
+                    bookingDate.setHours(0, 0, 0, 0);
+                    return bookingDate >= now;
+                });
+
+            case 'past':
+                return bookings.filter((b: any) => {
+                    if (!b.createdAt) return false;
+                    if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
+                    const bookingDate = new Date(b.createdAt);
+                    bookingDate.setHours(0, 0, 0, 0);
+                    return bookingDate < now;
+                });
+
+            case 'cancelled':
+                return bookings.filter((b: any) =>
+                    b.status === 'CANCELLED' ||
+                    b.status === 'CANCEL_REQUESTED'
+                );
+
+            case 'all':
+            default:
+                return bookings;
+        }
+    }
+
     // *************************************************************************
     // ************************  Public Functions  ****************************
+    // ************************  ENDS HERE  **********************************
     // *************************************************************************
 
     public createLocalBooking = async (req: Request, res: Response) => {
@@ -451,7 +488,11 @@ class BookingLocalController {
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
-            const { source, email } = req.query;
+            const { source, email, page, limit, filter } = req.query;
+
+            const pageNum = Math.max(1, parseInt(page as string) || 1);
+            const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 10));
+            const filterType = (filter as string) || 'all';
 
             if (source === 'b2c') {
                 if (!email) {
@@ -462,14 +503,28 @@ class BookingLocalController {
                 }
 
                 const bookings = await BookingService.getBookingsByEmail(email as string);
-                
-                // Filter for B2C bookings only
-                const b2cBookings = bookings.filter((b: any) => b.userInfo?.clientType === 'b2c' || b.userInfo?.clientType?.toLowerCase() === 'b2c');
-                const reversedBookings = b2cBookings.reverse();
+
+                const b2cBookings = bookings.filter((b: any) =>
+                    b.userInfo?.clientType === 'b2c' ||
+                    b.userInfo?.clientType?.toLowerCase() === 'b2c'
+                );
+
+                const filteredBookings = this.applyFilter(b2cBookings, filterType);
+
+                const total = filteredBookings.length;
+                const paginatedBookings = filteredBookings.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
                 return res.status(200).json({
                     success: true,
-                    data: reversedBookings,
+                    data: paginatedBookings,
+                    pagination: {
+                        total,
+                        page: pageNum,
+                        limit: limitNum,
+                        totalPages: Math.ceil(total / limitNum),
+                        hasNextPage: pageNum < Math.ceil(total / limitNum),
+                        hasPrevPage: pageNum > 1
+                    }
                 });
             }
 
@@ -493,12 +548,27 @@ class BookingLocalController {
 
             const bookings = await BookingService.getBookingsByUserId(userData.id);
 
-            // Filter for B2B bookings only
-            const b2bBookings = bookings.filter((b: any) => b.userInfo?.clientType === 'b2b' || b.userInfo?.clientType?.toLowerCase() === 'b2b');
+            const b2bBookings = bookings.filter((b: any) =>
+                b.userInfo?.clientType === 'b2b' ||
+                b.userInfo?.clientType?.toLowerCase() === 'b2b'
+            );
+
+            const filteredBookings = this.applyFilter(b2bBookings, filterType);
+
+            const total = filteredBookings.length;
+            const paginatedBookings = filteredBookings.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
             return res.status(200).json({
                 success: true,
-                data: b2bBookings,
+                data: paginatedBookings,
+                pagination: {
+                    total,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages: Math.ceil(total / limitNum),
+                    hasNextPage: pageNum < Math.ceil(total / limitNum),
+                    hasPrevPage: pageNum > 1
+                }
             });
         } catch (error: any) {
             return res.status(400).json({

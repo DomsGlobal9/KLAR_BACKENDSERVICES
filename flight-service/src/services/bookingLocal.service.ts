@@ -539,12 +539,56 @@ class BookingService {
         }
     }
 
-    async getBookingsByUserId(userId: string) {
+    async getBookingsByUserId(userId: string, filter?: string) {
         if (!userId) {
             throw new Error("userId is required");
         }
 
         return await this.bookingRepo.getBookingsByUserId(userId);
+    }
+
+    async getBookingsByUserIdPaginated(
+        userId: string,
+        page: number = 1,
+        limit: number = 10,
+        filter?: string
+    ) {
+        if (!userId) {
+            throw new Error("userId is required");
+        }
+
+        const skip = (page - 1) * limit;
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        let query: any = {
+            "userInfo.id": userId
+        };
+
+        
+        if (filter === 'cancelled') {
+            query.status = { $in: ['CANCELLED', 'CANCEL_REQUESTED'] };
+        } else if (filter === 'past') {
+            query.createdAt = { $lt: now };
+        }
+        
+
+        const [bookings, total] = await Promise.all([
+            this.bookingRepo.getBookingsByUserIdPaginated(query, skip, limit),
+            this.bookingRepo.countBookings(query)
+        ]);
+
+        return {
+            data: bookings,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+                hasNextPage: page < Math.ceil(total / limit),
+                hasPrevPage: page > 1
+            }
+        };
     }
 
     async getBookingDetailsBySource(bookingId: string, source: string) {

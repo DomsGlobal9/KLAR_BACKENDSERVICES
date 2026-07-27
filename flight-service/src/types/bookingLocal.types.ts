@@ -7,6 +7,24 @@ export interface UserInfo {
     clientType: string;
 }
 
+export interface PaginationParams {
+    page?: number;
+    limit?: number;
+    filter?: 'all' | 'cancelled' | 'past';
+}
+
+export interface PaginatedResponse<T> {
+    data: T[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+    };
+}
+
 export interface SSRInfo {
     key: string;
     code: string;
