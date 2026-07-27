@@ -5,7 +5,7 @@ let isConnected = false;
 
 export const connectDB = async (): Promise<void> => {
     if (isConnected) {
-        console.log('MongoDB already connected');
+
         return;
     }
 
@@ -16,9 +16,9 @@ export const connectDB = async (): Promise<void> => {
 
         isConnected = true;
 
-        console.log(`MongoDB Connected: ${conn.connection.host}`);
+
     } catch (error: any) {
-        console.error('MongoDB connection error:', error.message);
+
         process.exit(1);
     }
 };

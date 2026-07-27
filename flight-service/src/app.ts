@@ -39,7 +39,7 @@ export const setupApp = () => {
       res: express.Response,
       _next: express.NextFunction
     ) => {
-      console.error("Global Error:", err);
+
 
       res.status(500).json({
         success: false,

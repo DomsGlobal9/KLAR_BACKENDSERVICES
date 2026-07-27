@@ -127,7 +127,7 @@ export class BookingRepository {
             const booking = await BookingModel.findOne({ email: email });
             return booking;
         } catch (error) {
-            console.error("Error finding booking by email:", error);
+
             throw new Error("Failed to find booking by email");
         }
     }
@@ -139,7 +139,7 @@ export class BookingRepository {
             });
             return bookings;
         } catch (error) {
-            console.error("Error finding bookings by email:", error);
+
             throw new Error("Failed to find bookings by email");
         }
     }

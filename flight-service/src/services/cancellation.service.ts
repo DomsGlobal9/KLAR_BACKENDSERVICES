@@ -151,10 +151,10 @@ class CancellationService {
                     bookingId,
                     "CANCELLED"
                 );
-                console.log(`✅ Amendment ${amendmentId} completed successfully - Booking ${bookingId} cancelled`);
+
             }
             else {
-                console.log(`⏳ Amendment ${amendmentId} status: ${amendmentStatus} - No database change`);
+
             }
 
             return response;
@@ -208,7 +208,7 @@ class CancellationService {
                     `Flight Cancellation Request - ${booking?.bookingId}`,
                     clientTemplate(templateData)
                 );
-                console.log(`✅ [Cancellation] Email sent to traveller: ${travellerEmail}`);
+
             }
 
             if (agentEmail && agentEmail !== travellerEmail) {
@@ -217,11 +217,11 @@ class CancellationService {
                     `Flight Cancellation Request - ${booking?.bookingId} (Agency Copy)`,
                     agencyTemplate(templateData)
                 );
-                console.log(`✅ [Cancellation] Email sent to agent: ${agentEmail}`);
+
             }
 
         } catch (error) {
-            console.error(`[Cancellation] Email failed for ${booking?.bookingId}:`, error);
+
         }
     }
 

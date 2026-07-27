@@ -61,7 +61,7 @@ export const createRazorpayOrderController = async (req: Request, res: Response)
             data: result,
         });
     } catch (error: any) {
-        console.error('Create Razorpay order controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to create Razorpay order',
@@ -84,7 +84,7 @@ export const verifyRazorpayPaymentController = async (req: Request, res: Respons
             data: result,
         });
     } catch (error: any) {
-        console.error('Verify Razorpay payment controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to verify payment',
@@ -106,7 +106,7 @@ export const getRazorpayOrderController = async (req: Request, res: Response) =>
             data: order,
         });
     } catch (error: any) {
-        console.error('Get Razorpay order controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch order',
@@ -129,7 +129,7 @@ export const syncRazorpayOrderStatusController = async (req: Request, res: Respo
             data: updatedOrder,
         });
     } catch (error: any) {
-        console.error('Sync Razorpay order status controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to sync order status',
@@ -152,7 +152,7 @@ export const getRazorpayPaymentStatusController = async (req: Request, res: Resp
             data: paymentStatus,
         });
     } catch (error: any) {
-        console.error('Get Razorpay payment status controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch payment status',
@@ -197,7 +197,7 @@ export const refundRazorpayPaymentController = async (req: Request, res: Respons
             data: refund,
         });
     } catch (error: any) {
-        console.error('Refund Razorpay payment controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error?.error?.description || error.message || 'Failed to refund payment',
@@ -229,7 +229,7 @@ export const verifyPaymentInternalController = async (req: Request, res: Respons
 
         return res.status(200).json({ success: true, data: result });
     } catch (error: any) {
-        console.error('Verify payment (internal) controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to verify payment',
@@ -252,7 +252,7 @@ export const getRazorpayOrderDetailsController = async (req: Request, res: Respo
             data: orderDetails,
         });
     } catch (error: any) {
-        console.error('Get Razorpay order details controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch order details',
@@ -265,15 +265,15 @@ export const razorpayWebhookController = async (
     res: Response
 ) => {
     try {
-        console.log('================ RAZORPAY WEBHOOK START ================');
+
 
         const signature = req.headers['x-razorpay-signature'] as string;
 
-        console.log('Signature received:', signature);
+
 
         const rawBody = req.body.toString();
 
-        console.log('Raw Body:', rawBody);
+
 
         const parsedBody = JSON.parse(rawBody);
 
@@ -289,7 +289,7 @@ export const razorpayWebhookController = async (
 
         await razorpayWebhookService(rawBody, signature);
 
-        console.log('✅ Webhook processed successfully');
+
 
         return res.status(200).json({
             success: true,
@@ -297,7 +297,7 @@ export const razorpayWebhookController = async (
 
     } catch (error: any) {
 
-        console.error('❌ Webhook Error:', error.message);
+
 
         return res.status(400).json({
             success: false,

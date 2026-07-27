@@ -16,7 +16,7 @@ class EmailController {
                 status: "queued"
             });
         } catch (error: any) {
-            console.error(`❌ [API] Send email error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message
@@ -44,7 +44,7 @@ class EmailController {
                 status: "queued"
             });
         } catch (error: any) {
-            console.error(`❌ [API] Booking confirmation error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message
@@ -71,7 +71,7 @@ class EmailController {
                 status: "queued"
             });
         } catch (error: any) {
-            console.error(`❌ [API] Bulk email error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message
@@ -99,7 +99,7 @@ class EmailController {
                 status: "queued"
             });
         } catch (error: any) {
-            console.error(`❌ [API] Test email error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message
@@ -142,7 +142,7 @@ class EmailController {
                 ...status
             });
         } catch (error: any) {
-            console.error(`❌ [API] Get job status error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message
@@ -158,7 +158,7 @@ class EmailController {
                 ...stats
             });
         } catch (error: any) {
-            console.error(`❌ [API] Get queue stats error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message

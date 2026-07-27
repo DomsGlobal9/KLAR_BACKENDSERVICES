@@ -350,7 +350,7 @@ class BookingService {
                 );
             }
         } catch (error: any) {
-            console.error(`❌ [Booking] Aftermath failed for ${bookingId}:`, error.message);
+
         }
     }
 
@@ -414,7 +414,7 @@ class BookingService {
             }
 
         } catch (error: any) {
-            console.error(`Email failed for ${bookingId}:`, error);
+
         }
     }
 
@@ -504,7 +504,7 @@ class BookingService {
             }
 
         } catch (error: any) {
-            console.error(`Cancellation email failed for ${bookingId}:`, error);
+
         }
     }
 
@@ -990,7 +990,7 @@ class BookingService {
                 }
             };
         } catch (error: any) {
-            console.error(`❌ [TEST] Aftermath failed for ${bookingId}:`, error.message);
+
             return {
                 success: false,
                 bookingId,

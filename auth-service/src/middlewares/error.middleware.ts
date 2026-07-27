@@ -14,7 +14,7 @@ export const errorHandler = (
         });
     }
 
-    console.error("Unexpected error:", err);
+
 
     res.status(500).json({
         success: false,

@@ -133,17 +133,17 @@ export class MarkupController {
 
 
     static getMarkupByUserAndType = asyncHandler(async (req: Request, res: Response) => {
-        console.log("[getMarkupByUserAndType] Controller called");
 
-        console.log("[getMarkupByUserAndType] Request Params:", req.params);
-        console.log("[getMarkupByUserAndType] Request Body:", req.body);
+
+
+
 
         const userId = req.body.userId;
 
-        console.log("[getMarkupByUserAndType] userId:", userId);
+
 
         if (!userId) {
-            console.log("[getMarkupByUserAndType] userId not provided");
+
             return res.status(401).json({
                 success: false,
                 message: "userId is required"
@@ -152,26 +152,26 @@ export class MarkupController {
 
         const { serviceType } = req.params;
 
-        console.log("[getMarkupByUserAndType] serviceType:", serviceType);
+
 
         if (!serviceType) {
-            console.log("[getMarkupByUserAndType] serviceType not provided");
+
             return res.status(400).json({
                 success: false,
                 message: "serviceType is required"
             });
         }
 
-        console.log("[getMarkupByUserAndType] Calling service...");
+
 
         const data = await service.getMarkupByUserAndType(
             new Types.ObjectId(userId as string),
             serviceType as string,
         );
 
-        console.log("[getMarkupByUserAndType] Service response:", data);
 
-        console.log("[getMarkupByUserAndType] Sending response");
+
+
 
         res.json({
             success: true,

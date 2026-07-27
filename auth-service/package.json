@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
-    "clean": "rm -rf dist",
-    "deep-clean": "rm -rf dist node_modules package-lock.json",
+    "clean": "rimraf dist",
+    "deep-clean": "rimraf dist node_modules package-lock.json",
     "build": "npm run clean && tsc",
     "start": "node dist/src/server.js",
     "start:pm2": "pm2 start dist/src/server.js --name klar-backend-auth-service",
@@ -42,6 +42,7 @@
     "@types/mongoose": "^5.11.96",
     "@types/node": "^25.0.3",
     "nodemon": "^3.1.11",
+    "rimraf": "^6.1.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

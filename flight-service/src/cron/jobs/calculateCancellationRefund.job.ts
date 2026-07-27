@@ -55,9 +55,9 @@ const processSingleRefund = async (booking: any) => {
         const result = await cancellationPriceService.processRefundAndCreditWallet(booking.bookingId);
 
         if (result.walletCredited) {
-            console.log(`[Refund Job] Success: ${result.message}`);
+
         } else {
-            console.log(`[Refund Job] Skipped: ${result.message}`);
+
         }
 
     } catch (error: any) {

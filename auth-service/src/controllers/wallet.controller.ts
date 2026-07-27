@@ -104,10 +104,10 @@ export class WalletController {
     static async internalCreditWallet(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
 
-            console.log(`[AUTH SERVICE - internalCreditWallet] Request got here`);
+
             const { userId, amount, type, paymentMethod, referenceType, referenceId, description } = req.body;
 
-            console.log(`[AUTH SERVICE - internalCreditWallet] ${{ userId, amount, type, paymentMethod, referenceType, referenceId, description }}`);
+
 
             if (!userId || !Types.ObjectId.isValid(userId)) {
                 throw new BadRequestError("A valid userId is required");

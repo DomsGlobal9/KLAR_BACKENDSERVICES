@@ -135,7 +135,7 @@ export const searchOneWayController = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error("Search error:", error?.response?.data || error.message);
+
 
         return res.status(500).json({
             success: false,
@@ -291,7 +291,7 @@ export const searchReturnController = async (req: Request, res: Response) => {
         return res.status(200).json(response);
 
     } catch (error: any) {
-        console.error("Return search error:", error?.response?.data || error.message);
+
 
         return res.status(500).json({
             success: false,
@@ -449,10 +449,10 @@ export const searchMulticityController = async (req: Request, res: Response) => 
         return res.status(200).json(response);
 
     } catch (error: any) {
-        console.error("Multicity search error FULL ERROR:", error);
-        console.error("Multicity search error message:", error?.message);
-        console.error("Multicity search error response data:", error?.response?.data);
-        console.error("Multicity search error stack:", error?.stack);
+
+
+
+
 
         return res.status(500).json({
             success: false,

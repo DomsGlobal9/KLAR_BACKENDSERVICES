@@ -694,13 +694,13 @@ class BookingLocalController {
                 });
             }
 
-            console.log(`🧪 [API] Testing processBookingAftermath for: ${bookingId}`);
+
 
             const result = await BookingService.processBookingAftermathById(bookingId);
 
             res.status(result.success ? 200 : 500).json(result);
         } catch (error: any) {
-            console.error(`❌ [API] Test error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message

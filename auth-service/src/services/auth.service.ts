@@ -286,13 +286,13 @@ export class AuthService {
     }
 
     public async getCurrentUser(userId: string): Promise<any> {
-        console.log('👤 === getCurrentUser called ===');
-        console.log('👤 Fetching user for userId:', userId);
+
+
 
         const user = await UserModel.findById(userId);
 
         if (!user) {
-            console.error('❌ User not found for userId:', userId);
+
             throw new UnauthorizedError('User not found');
         }
 

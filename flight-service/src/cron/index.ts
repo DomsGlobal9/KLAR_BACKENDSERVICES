@@ -6,11 +6,11 @@ import { calculateCancellationRefundJob } from "./jobs/calculateCancellationRefu
 export const initializeCrons = () => {
 
     if (!cronConfig.enabled) {
-        console.log("Cron jobs are disabled");
+
         return;
     }
 
-    console.log("Initializing cron jobs...");
+
 
     checkBookingStatusJob();
 
@@ -18,5 +18,5 @@ export const initializeCrons = () => {
 
     // calculateCancellationRefundJob();
 
-    console.log("Cron jobs initialized");
+
 };

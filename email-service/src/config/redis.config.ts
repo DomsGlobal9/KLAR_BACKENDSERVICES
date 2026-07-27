@@ -18,27 +18,27 @@ class RedisConfig {
             });
 
             this.instance.on("connect", () => {
-                console.log("Redis connected successfully");
+
                 this.isConnected = true;
             });
 
             this.instance.on("ready", () => {
-                console.log("Redis is ready to use");
+
                 this.isConnected = true;
             });
 
             this.instance.on("error", (error: Error) => {
-                console.error("Redis connection error:", error);
+
                 this.isConnected = false;
             });
 
             this.instance.on("close", () => {
-                console.log("Redis connection closed");
+
                 this.isConnected = false;
             });
 
             this.instance.on("reconnecting", () => {
-                console.log("Redis reconnecting...");
+
                 this.isConnected = false;
             });
         }
@@ -56,7 +56,7 @@ class RedisConfig {
             const response = await client.ping();
             return response === "PONG";
         } catch (error) {
-            console.error("Redis health check failed:", error);
+
             return false;
         }
     }

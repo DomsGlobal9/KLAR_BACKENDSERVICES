@@ -338,8 +338,8 @@ export const refundRazorpayPaymentService = async (
 };
 
 const creditUserWallet = async (userId: string, amount: number, paymentId: string, orderId: string, platform: 'B2B' | 'B2C') => {
-    console.log(`Crediting wallet for user ${userId} with amount ${amount}`);
-    console.log(`Payment ID: ${paymentId}, Order ID: ${orderId}, Platform: ${platform}`);
+
+
     return true;
 };
 
@@ -362,7 +362,7 @@ export const razorpayWebhookService = async (
     }
 
     const webhookData: IWebhookPaymentData = JSON.parse(webhookBody);
-    console.log('Webhook Event:', webhookData.event);
+
 
     const payment = webhookData.payload?.payment?.entity;
     let platform: 'B2B' | 'B2C' = 'B2B';
@@ -387,10 +387,10 @@ export const razorpayWebhookService = async (
             await handlePaymentFailed(webhookData, platform);
             break;
         case 'order.paid':
-            console.log('Order paid event received');
+
             break;
         default:
-            console.log(`Unhandled event: ${webhookData.event}`);
+
     }
 
     return { success: true };
@@ -400,17 +400,17 @@ const handlePaymentCaptured = async (webhookData: IWebhookPaymentData, platform:
     const payment = webhookData.payload?.payment?.entity;
 
     if (!payment) {
-        console.error('No payment entity found');
+
         return;
     }
 
-    console.log(`Payment captured: ${payment.id}`);
-    console.log(`Amount: ${payment.amount / 100} ${payment.currency}`);
-    console.log(`Platform: ${platform}`);
+
+
+
 
     const existingOrder = await getOrderByRazorpayPaymentId(payment.id);
     if (existingOrder && existingOrder.status === 'SUCCESS') {
-        console.log(`Order ${existingOrder.orderId} already processed, skipping duplicate webhook`);
+
         return;
     }
 
@@ -430,14 +430,14 @@ const handlePaymentCaptured = async (webhookData: IWebhookPaymentData, platform:
             });
 
             await creditUserWallet(order.userId, order.amount, payment.id, orderId, platform);
-            console.log(`Order ${orderId} updated and wallet credited successfully`);
+
         } else if (order && order.status === 'SUCCESS') {
-            console.log(`Order ${orderId} already successful, skipping duplicate processing`);
+
         } else {
-            console.log(`Order not found for orderId: ${orderId}`);
+
         }
     } else {
-        console.warn('No order_id found in webhook');
+
     }
 
     return payment;
@@ -447,14 +447,14 @@ const handlePaymentAuthorized = async (webhookData: IWebhookPaymentData, platfor
     const payment = webhookData.payload?.payment?.entity;
 
     if (!payment) {
-        console.error('No payment entity found');
+
         return;
     }
 
-    console.log(`Payment authorized: ${payment.id}`);
-    console.log(`Amount: ${payment.amount / 100} ${payment.currency}`);
-    console.log(`Platform: ${platform}`);
-    console.log(`Payment will be auto-captured or will expire in 3 days`);
+
+
+
+
 
     let orderId = payment.order_id;
 
@@ -470,7 +470,7 @@ const handlePaymentAuthorized = async (webhookData: IWebhookPaymentData, platfor
                 razorpayPaymentId: payment.id,
                 platform: platform
             });
-            console.log(`Order ${orderId} updated to PENDING with authorized payment`);
+
         }
     }
 };
@@ -479,13 +479,13 @@ const handlePaymentFailed = async (webhookData: IWebhookPaymentData, platform: '
     const payment = webhookData.payload?.payment?.entity;
 
     if (!payment) {
-        console.error('No payment entity found');
+
         return;
     }
 
-    console.log(`Payment failed: ${payment.id}`);
-    console.log(`Error: ${payment.error_description || 'Unknown error'}`);
-    console.log(`Platform: ${platform}`);
+
+
+
 
     let orderId = payment.order_id;
 
@@ -501,7 +501,7 @@ const handlePaymentFailed = async (webhookData: IWebhookPaymentData, platform: '
                 razorpayPaymentId: payment.id,
                 platform: platform
             });
-            console.log(`Order ${orderId} updated to FAILED`);
+
         }
     }
 };
