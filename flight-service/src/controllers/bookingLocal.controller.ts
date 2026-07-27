@@ -200,25 +200,27 @@ class BookingLocalController {
 
     private applyFilter(bookings: any[], filterType: string): any[] {
         const now = new Date();
-        now.setHours(0, 0, 0, 0);
+        const todayStr = now.toISOString().split('T')[0];
 
         switch (filterType) {
             case 'upcoming':
                 return bookings.filter((b: any) => {
                     if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
-                    if (!b.departureDate) return false;
-                    const departureDate = new Date(b.departureDate);
-                    departureDate.setHours(0, 0, 0, 0);
-                    return departureDate >= now;
+                    if (!b.departureDate) return true;
+                    const parts = b.departureDate.split('/');
+                    if (parts.length !== 3) return true;
+                    const dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    return dateStr >= todayStr;
                 });
 
             case 'past':
                 return bookings.filter((b: any) => {
                     if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
-                    if (!b.departureDate) return false;
-                    const departureDate = new Date(b.departureDate);
-                    departureDate.setHours(0, 0, 0, 0);
-                    return departureDate < now;
+                    if (!b.departureDate) return true;
+                    const parts = b.departureDate.split('/');
+                    if (parts.length !== 3) return true;
+                    const dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    return dateStr < todayStr;
                 });
 
             case 'cancelled':
@@ -543,29 +545,22 @@ class BookingLocalController {
                 });
             }
 
-            const bookings = await BookingService.getBookingsByUserId(userData.id);
+            const result = await BookingService.getBookingsByUserIdPaginated(
+                userData.id,
+                pageNum,
+                limitNum,
+                filterType
+            );
 
-            const b2bBookings = bookings.filter((b: any) =>
+            const b2bBookings = result.data.filter((b: any) =>
                 b.userInfo?.clientType === 'b2b' ||
                 b.userInfo?.clientType?.toLowerCase() === 'b2b'
             );
 
-            const filteredBookings = this.applyFilter(b2bBookings, filterType);
-
-            const total = filteredBookings.length;
-            const paginatedBookings = filteredBookings.slice((pageNum - 1) * limitNum, pageNum * limitNum);
-
             return res.status(200).json({
                 success: true,
-                data: paginatedBookings,
-                pagination: {
-                    total,
-                    page: pageNum,
-                    limit: limitNum,
-                    totalPages: Math.ceil(total / limitNum),
-                    hasNextPage: pageNum < Math.ceil(total / limitNum),
-                    hasPrevPage: pageNum > 1
-                }
+                data: b2bBookings,
+                pagination: result.pagination
             });
         } catch (error: any) {
             return res.status(400).json({
@@ -574,6 +569,8 @@ class BookingLocalController {
             });
         }
     };
+
+
 
     public getBookingById = async (req: Request, res: Response) => {
         try {

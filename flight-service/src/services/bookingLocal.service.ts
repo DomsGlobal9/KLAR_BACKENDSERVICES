@@ -359,7 +359,7 @@ class BookingService {
     // -------- ENDS HERE --------
     // ----------------------------
 
-    
+
 
     public async sendBookingEmails(bookingId: string) {
         try {
@@ -782,7 +782,7 @@ class BookingService {
 
         const skip = (page - 1) * limit;
         const now = new Date();
-        now.setHours(0, 0, 0, 0);
+        const todayStr = now.toISOString().split('T')[0];
 
         let query: any = {
             "userInfo.id": userId
@@ -790,21 +790,52 @@ class BookingService {
 
         if (filter === 'cancelled') {
             query.status = { $in: ['CANCELLED', 'CANCEL_REQUESTED'] };
-        } else if (filter === 'upcoming') {
-            query.departureDate = { $gte: now.toISOString().split('T')[0] };
-            query.status = { $nin: ['CANCELLED', 'CANCEL_REQUESTED'] };
-        } else if (filter === 'past') {
-            query.departureDate = { $lt: now.toISOString().split('T')[0] };
-            query.status = { $nin: ['CANCELLED', 'CANCEL_REQUESTED'] };
+            const [bookings, total] = await Promise.all([
+                this.bookingRepo.getBookingsByUserIdPaginated(query, skip, limit),
+                this.bookingRepo.countBookings(query)
+            ]);
+            return {
+                data: bookings,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit),
+                    hasNextPage: page < Math.ceil(total / limit),
+                    hasPrevPage: page > 1
+                }
+            };
         }
 
-        const [bookings, total] = await Promise.all([
-            this.bookingRepo.getBookingsByUserIdPaginated(query, skip, limit),
-            this.bookingRepo.countBookings(query)
-        ]);
+        const bookings = await this.bookingRepo.getBookingsByUserId(userId);
+
+        let filteredBookings = bookings;
+
+        if (filter === 'upcoming') {
+            filteredBookings = bookings.filter((b: any) => {
+                if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
+                if (!b.departureDate) return true;
+                const parts = b.departureDate.split('/');
+                if (parts.length !== 3) return true;
+                const dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                return dateStr >= todayStr;
+            });
+        } else if (filter === 'past') {
+            filteredBookings = bookings.filter((b: any) => {
+                if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
+                if (!b.departureDate) return true;
+                const parts = b.departureDate.split('/');
+                if (parts.length !== 3) return true;
+                const dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                return dateStr < todayStr;
+            });
+        }
+
+        const total = filteredBookings.length;
+        const paginatedBookings = filteredBookings.slice(skip, skip + limit);
 
         return {
-            data: bookings,
+            data: paginatedBookings,
             pagination: {
                 total,
                 page,
