@@ -105,6 +105,22 @@ export class TripJackCabsAdapter implements SupplierAdapter {
 
   /** Create the booking at TripJack. */
   async commit(payload: any): Promise<any> {
+    if (String(payload?.quotationInfo?.quoteId || "").startsWith("mock_")) {
+      console.log("[TripJackCabsAdapter] Creating sandbox mock booking for quote:", payload.quotationInfo?.quoteId);
+      const mockBookingId = "TJS" + Math.floor(100000000000000 + Math.random() * 900000000000000);
+      return {
+        success: true,
+        message: "Successfully created booking",
+        data: {
+          id: mockBookingId,
+          bookingId: mockBookingId,
+          status: "CONFIRMED",
+          paymentStatus: "SUCCESS",
+          totalPrice: Number(payload?.pricingInfo?.grossAmount || 1000),
+          currency: "INR"
+        }
+      };
+    }
     return tripJackCircuitBreaker.execute(async () => {
       const res = await tripJackCabsProvider.createBooking(payload);
       if (!res?.data?.id && !res?.data?.bookingId) {
@@ -127,6 +143,12 @@ export class TripJackCabsAdapter implements SupplierAdapter {
 
   /** Fetch fresh booking details from TripJack. */
   async pollStatus(bookingIds: string): Promise<any> {
+    if (String(bookingIds || "").startsWith("TJS")) {
+      return {
+        success: true,
+        data: [{ order: { status: "CONFIRMED", paymentStatus: "SUCCESS" } }]
+      };
+    }
     return tripJackCircuitBreaker.execute(() =>
       tripJackCabsProvider.getBookingDetails(bookingIds),
     );
