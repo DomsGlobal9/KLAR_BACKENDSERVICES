@@ -1,6 +1,7 @@
 import axios from "axios";
 import { IBooking } from "../models/Booking.model";
-import { bookingTemplateService } from "./booking-template.service";
+import { compileReactHtml } from "../templates/HotelEmailTemplates";
+import { pdfGeneratorService } from "./hotel-pdf.service";
 
 /**
  * Service to handle external notifications (Email, etc.)
@@ -93,9 +94,16 @@ class NotificationService {
       let subject = `Hotel Booking Update - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
       if (rawStatus === "CONFIRMED") {
         subject = `Hotel Booking Confirmed - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
-      } else if (rawStatus === "CANCELLED" || rawStatus === "CANCELLATION_PENDING") {
+      } else if (
+        rawStatus === "CANCELLED" ||
+        rawStatus === "CANCELLATION_PENDING"
+      ) {
         subject = `Hotel Booking Cancelled - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
-      } else if (rawStatus === "PENDING" || rawStatus === "SUPPLIER_PENDING" || rawStatus === "MANUAL_REVIEW") {
+      } else if (
+        rawStatus === "PENDING" ||
+        rawStatus === "SUPPLIER_PENDING" ||
+        rawStatus === "MANUAL_REVIEW"
+      ) {
         subject = `Hotel Booking Under Process - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
       } else if (rawStatus === "FAILED") {
         subject = `Hotel Booking Failed & Refund Initiated - ${booking.hotelName || "Your Stay"} (Ref: ${booking.confirmationNumber})`;
@@ -108,15 +116,29 @@ class NotificationService {
         console.log(
           `[NotificationService] Sending client template to: ${guestList.join(", ")}`,
         );
-        const htmlContent = bookingTemplateService.compileReactHtml("client", booking, status);
+        const htmlContent = compileReactHtml("client", booking, status);
+        const pdfBuffer = await pdfGeneratorService.generateHotelVoucher(
+          booking,
+          "client",
+          status,
+        );
+
         const payload = {
           to: guestList,
           subject,
           html: htmlContent,
+          attachments: [
+            {
+              filename: `hotel-voucher-${booking.confirmationNumber}.pdf`,
+              content: pdfBuffer.toString("base64"),
+              contentType: "application/pdf",
+              encoding: "base64",
+            },
+          ],
         };
 
         const response = await axios.post(
-          `${this.emailServiceUrl}/email/send`,
+          `${this.emailServiceUrl}/email/send-with-attachment`,
           payload,
         );
         console.log(
@@ -130,15 +152,29 @@ class NotificationService {
         console.log(
           `[NotificationService] Sending agent template to: ${agentList.join(", ")}`,
         );
-        const htmlContent = bookingTemplateService.compileReactHtml("agent", booking, status);
+        const htmlContent = compileReactHtml("agent", booking, status);
+        const pdfBuffer = await pdfGeneratorService.generateHotelVoucher(
+          booking,
+          "agent",
+          status,
+        );
+
         const payload = {
           to: agentList,
           subject: `${subject} (Agent Copy)`,
           html: htmlContent,
+          attachments: [
+            {
+              filename: `hotel-voucher-${booking.confirmationNumber}.pdf`,
+              content: pdfBuffer.toString("base64"),
+              contentType: "application/pdf",
+              encoding: "base64",
+            },
+          ],
         };
 
         const response = await axios.post(
-          `${this.emailServiceUrl}/email/send`,
+          `${this.emailServiceUrl}/email/send-with-attachment`,
           payload,
         );
         console.log(
@@ -147,7 +183,9 @@ class NotificationService {
         );
       }
     } catch (error: any) {
-      console.error(`[NotificationService] Error sending booking status email:`);
+      console.error(
+        `[NotificationService] Error sending booking status email:`,
+      );
       console.error(`Message:`, error.message);
       if (error.response) {
         console.error(`Response Status:`, error.response.status);

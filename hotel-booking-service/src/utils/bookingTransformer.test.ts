@@ -118,7 +118,13 @@ test("TripJack travellers carry no address fields at all", () => {
   );
 
   const traveller = out.roomTravellerInfo[0].travellerInfo[0];
-  for (const field of ["Line1", "City", "StateCode", "PostalCode", "CountryCode"]) {
+  for (const field of [
+    "Line1",
+    "City",
+    "StateCode",
+    "PostalCode",
+    "CountryCode",
+  ]) {
     assert.equal(field in traveller, false, `${field} must not be sent to TJ`);
   }
   assert.equal(out.BookReservation, undefined);

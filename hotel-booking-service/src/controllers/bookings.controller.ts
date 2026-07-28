@@ -10,19 +10,19 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
         status: false,
         statusCode: 400,
         description: "Email is required",
-        body: null
+        body: null,
       });
     }
     const count = await hotelBookingRepository.countDocuments({
       guestEmail: email.trim().toLowerCase(),
-      clientType: "GUEST"
+      clientType: "GUEST",
     });
     res.json({
       status: true,
       statusCode: 200,
       body: {
-        hasBookings: count > 0
-      }
+        hasBookings: count > 0,
+      },
     });
   } catch (error: any) {
     console.error("Check Bookings by Email Error:", error.message);
@@ -30,7 +30,7 @@ export const checkBookingsByEmail = async (req: Request, res: Response) => {
       status: false,
       statusCode: 500,
       description: error.message || "Failed to check bookings",
-      body: null
+      body: null,
     });
   }
 };
@@ -41,10 +41,10 @@ export const getBookings = async (req: any, res: Response) => {
     const email = req.user?.email;
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
-    
+
     const clientType = req.query.clientType as string;
     const query: any = {};
-    
+
     if (!clientType) {
       return res.status(403).json({
         status: false,
@@ -53,11 +53,11 @@ export const getBookings = async (req: any, res: Response) => {
         body: null,
       });
     }
-    
+
     query.clientType = clientType;
 
     if (!isAdmin) {
-      if (clientType === 'B2B') {
+      if (clientType === "B2B") {
         if (!agentId) {
           return res.status(403).json({
             status: false,
@@ -67,7 +67,7 @@ export const getBookings = async (req: any, res: Response) => {
           });
         }
         query.agentId = agentId;
-      } else if (clientType === 'B2C') {
+      } else if (clientType === "B2C") {
         if (!agentId) {
           return res.status(403).json({
             status: false,
@@ -83,11 +83,11 @@ export const getBookings = async (req: any, res: Response) => {
             { userId: agentId },
             { guestEmail: email.toLowerCase() },
           ];
-          query.clientType = { $in: ['B2C', 'GUEST'] };
+          query.clientType = { $in: ["B2C", "GUEST"] };
         } else {
           query.userId = agentId;
         }
-      } else if (clientType === 'GUEST') {
+      } else if (clientType === "GUEST") {
         if (!email) {
           return res.status(403).json({
             status: false,
@@ -160,9 +160,9 @@ export const getBookingDetails = async (req: any, res: Response) => {
     const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
-    const isOwner = 
-      booking.agentId === userId || 
-      booking.userId === userId || 
+    const isOwner =
+      booking.agentId === userId ||
+      booking.userId === userId ||
       (booking as any).userInfo?.id === userId ||
       (userEmail && booking.guestEmail?.toLowerCase() === userEmail);
 

@@ -1,5 +1,9 @@
 import { Request, Response } from "express";
-import { PricingUtil, applyPlatformMarkup, platformMarkupAmount } from "../utils/pricing.util";
+import {
+  PricingUtil,
+  applyPlatformMarkup,
+  platformMarkupAmount,
+} from "../utils/pricing.util";
 import { resolveMarkupRules } from "../utils/wallet.util";
 import { convertToINR } from "../utils/fx.util";
 import { precheckService } from "../services/precheck.service";
@@ -145,12 +149,10 @@ export const getPricingSummaryController = async (
     }
 
     if (providerNetPrice <= 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Provider returned zero price. Please re-select the room.",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Provider returned zero price. Please re-select the room.",
+      });
     }
 
     // ─── Step 2: Apply Klar Markup Rules on top of provider net price ────────

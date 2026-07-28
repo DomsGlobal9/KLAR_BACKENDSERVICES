@@ -23,33 +23,38 @@ class BookingsService {
   async getAllBookings(filter: any = {}) {
     try {
       const query = { ...filter };
-      const bookings = await hotelBookingRepository.find(query, { createdAt: -1 });
+      const bookings = await hotelBookingRepository.find(query, {
+        createdAt: -1,
+      });
 
       // Map to safe DTO to prevent leaking raw provider responses and margins
       const mappedBookings = bookings.map((b: any) => ({
         _id: b._id,
-        confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
+        klarBookingId: b.klarBookingId,
+        confirmationNumber:
+          b.confirmationNumber || b.reservationId || "PENDING",
         reservationId: b.reservationId,
-        propertyId: b.propertyId || 'UNKNOWN',
-        provider: b.provider || 'rategain',
-        status: b.status || 'PENDING',
+        propertyId: b.propertyId || "UNKNOWN",
+        provider: b.provider || "rategain",
+        status: b.status || "PENDING",
         checkIn: b.checkIn || new Date().toISOString(),
         checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
         totalAmount: b.totalAmount || 0,
-        currencyCode: b.currencyCode || 'INR',
-        hotelName: b.hotelName || 'Hotel',
+        currencyCode: b.currencyCode || "INR",
+        hotelName: b.hotelName || "Hotel",
         hotelImage: b.hotelImage,
         hotelAddress: b.hotelAddress,
         city: b.city,
         starRating: b.starRating,
         agentId: b.agentId,
-        guestName: b.guestName || 'Guest',
-        rooms: b.rooms?.map((r: any) => ({
-          roomType: r.roomType || r.roomName || 'Standard Room',
-          boardType: r.boardType || r.boardName,
-          guests: r.guests || 1,
-          price: r.price || 0,
-        })) || [],
+        guestName: b.guestName || "Guest",
+        rooms:
+          b.rooms?.map((r: any) => ({
+            roomType: r.roomType || r.roomName || "Standard Room",
+            boardType: r.boardType || r.boardName,
+            guests: r.guests || 1,
+            price: r.price || 0,
+          })) || [],
         createdAt: b.createdAt,
       }));
 
@@ -118,7 +123,10 @@ class BookingsService {
       // Covers the cancel poll dying mid-flight, and cancellations initiated by
       // the hotel rather than by us. settleCancellation parks the booking for a
       // human when the penalty is unknown instead of guessing an amount.
-      await refundService.settleCancellation(booking, booking.cancelChargesInfo);
+      await refundService.settleCancellation(
+        booking,
+        booking.cancelChargesInfo,
+      );
     }
   }
 
@@ -132,11 +140,11 @@ class BookingsService {
       const orderStatus = tjDetails?.order?.status;
       const rsta = tjDetails?.itemInfos?.HOTEL?.ops?.[0]?.rsta;
 
-      // TripJack sets isSystemPending while the order is still being placed
-      // downstream. Any status it reports alongside that flag is provisional,
-      // so we refresh the cached payload but never advance the booking.
-      const isSystemPending = tjDetails?.isSystemPending === true;
-
+      // TripJack sets isSystemPending while downstream processing is still
+      // running. SUCCESS is trustworthy even alongside the flag, so we advance
+      // the booking; the status cron keeps re-syncing CONFIRMED bookings whose
+      // cached payload still carries the flag, so the provisional snapshot is
+      // eventually replaced and hotelConfirmationNumber backfilled.
       let newStatus: BookingStatus = booking.status;
       if (orderStatus === "SUCCESS" || rsta === "S") {
         newStatus = BookingStatus.CONFIRMED;
@@ -181,7 +189,11 @@ class BookingsService {
         `[TJ Sync] Booking ${booking.confirmationNumber} | ${booking.status} -> ${newStatus}`,
       );
 
-      await this.onStatusResolved(updated, newStatus, `TripJack reported ${orderStatus || rsta}.`);
+      await this.onStatusResolved(
+        updated,
+        newStatus,
+        `TripJack reported ${orderStatus || rsta}.`,
+      );
       return updated;
     } catch (syncErr: any) {
       console.error(
@@ -246,7 +258,11 @@ class BookingsService {
         `[RG Sync] Booking ${booking.confirmationNumber} | ${booking.status} -> ${newStatus} (rgStatus: ${rgStatus})`,
       );
 
-      await this.onStatusResolved(updated, newStatus, `RateGain reported ${rgStatus}.`);
+      await this.onStatusResolved(
+        updated,
+        newStatus,
+        `RateGain reported ${rgStatus}.`,
+      );
       return updated;
     } catch (rgSyncErr: any) {
       console.error(
@@ -264,6 +280,7 @@ class BookingsService {
     try {
       const query: any = {
         $or: [
+          { klarBookingId: id },
           { confirmationNumber: id },
           { reservationId: id },
           { publicToken: id },
@@ -283,17 +300,20 @@ class BookingsService {
       if (booking) {
         return {
           _id: booking._id,
+          klarBookingId: booking.klarBookingId,
           publicToken: booking.publicToken,
-          confirmationNumber: booking.confirmationNumber || booking.reservationId || 'PENDING',
+          confirmationNumber:
+            booking.confirmationNumber || booking.reservationId || "PENDING",
           reservationId: booking.reservationId,
-          propertyId: booking.propertyId || 'UNKNOWN',
-          provider: booking.provider || 'rategain',
-          status: booking.status || 'PENDING',
+          propertyId: booking.propertyId || "UNKNOWN",
+          provider: booking.provider || "rategain",
+          status: booking.status || "PENDING",
           checkIn: booking.checkIn || new Date().toISOString(),
-          checkOut: booking.checkOut || new Date(Date.now() + 86400000).toISOString(),
+          checkOut:
+            booking.checkOut || new Date(Date.now() + 86400000).toISOString(),
           totalAmount: booking.totalAmount || 0,
-          currencyCode: booking.currencyCode || 'INR',
-          hotelName: booking.hotelName || 'Hotel',
+          currencyCode: booking.currencyCode || "INR",
+          hotelName: booking.hotelName || "Hotel",
           hotelImage: booking.hotelImage,
           hotelAddress: booking.hotelAddress,
           city: booking.city,
@@ -302,13 +322,14 @@ class BookingsService {
           userId: booking.userId,
           guestEmail: booking.guestEmail,
           userInfo: booking.userInfo,
-          guestName: booking.guestName || 'Guest',
-          rooms: booking.rooms?.map((r: any) => ({
-            roomType: r.roomType || r.roomName || 'Standard Room',
-            boardType: r.boardType || r.boardName,
-            guests: r.guests || 1,
-            price: r.price || 0,
-          })) || [],
+          guestName: booking.guestName || "Guest",
+          rooms:
+            booking.rooms?.map((r: any) => ({
+              roomType: r.roomType || r.roomName || "Standard Room",
+              boardType: r.boardType || r.boardName,
+              guests: r.guests || 1,
+              price: r.price || 0,
+            })) || [],
           createdAt: booking.createdAt,
         };
       }

@@ -41,7 +41,10 @@ export function resolveCancellationRefund(
   }
 
   if (!cancelChargesInfo) {
-    return { ok: false, reason: "No cancellation charge breakdown was captured." };
+    return {
+      ok: false,
+      reason: "No cancellation charge breakdown was captured.",
+    };
   }
 
   const rawPenalty = cancelChargesInfo.applicableCharge;
@@ -55,11 +58,16 @@ export function resolveCancellationRefund(
 
   const penalty = Number(rawPenalty);
   if (!Number.isFinite(penalty) || penalty < 0) {
-    return { ok: false, reason: `Penalty is not a valid amount: ${rawPenalty}` };
+    return {
+      ok: false,
+      reason: `Penalty is not a valid amount: ${rawPenalty}`,
+    };
   }
 
   const bookingCurrency = (booking.currencyCode || "INR").toUpperCase();
-  const penaltyCurrency = (cancelChargesInfo.currency || bookingCurrency).toUpperCase();
+  const penaltyCurrency = (
+    cancelChargesInfo.currency || bookingCurrency
+  ).toUpperCase();
   if (penalty > 0 && penaltyCurrency !== bookingCurrency) {
     return {
       ok: false,

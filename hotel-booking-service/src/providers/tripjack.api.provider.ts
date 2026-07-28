@@ -318,7 +318,6 @@ export class TripJackApiProvider {
         JSON.stringify(data, null, 2),
       );
 
-
       if (data?.status?.success === false) {
         let errDesc =
           data.errors?.[0]?.message ||
@@ -349,7 +348,6 @@ export class TripJackApiProvider {
         `[TripJack] Book API Error (${bookingId}):`,
         JSON.stringify(errorData, null, 2),
       );
-      
 
       let errorMessage =
         errorData?.errors?.[0]?.message ||

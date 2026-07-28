@@ -7,6 +7,7 @@ export interface ICreateRazorpayOrderParams {
     currency?: string;
     platform: 'B2B' | 'B2C';
     bookingId?: string;
+    purpose?: string;
 }
 
 export interface ICreateRazorpayOrderResponse {

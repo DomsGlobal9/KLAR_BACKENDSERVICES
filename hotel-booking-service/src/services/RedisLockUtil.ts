@@ -48,7 +48,10 @@ export class RedisLockUtil {
       );
       return result === "OK";
     } catch (error: any) {
-      console.error(`[RedisLock] Failed to attempt lock for ${lockKey}`, error.message);
+      console.error(
+        `[RedisLock] Failed to attempt lock for ${lockKey}`,
+        error.message,
+      );
       // FAIL CLOSED by default: without the lock we cannot guarantee that a
       // concurrent/retried request won't create a duplicate booking (and double
       // supplier charge). Rejecting a booking is far cheaper than double-booking.

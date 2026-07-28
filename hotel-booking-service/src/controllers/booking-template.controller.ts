@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { bookingsService } from "../services/bookings.service";
-import { bookingTemplateService } from "../services/booking-template.service";
+import { pdfGeneratorService } from "../services/hotel-pdf.service";
 
 export class BookingTemplateController {
   /**
@@ -28,9 +28,11 @@ export class BookingTemplateController {
         return;
       }
 
-      const pdfBuffer = await bookingTemplateService.generatePdfBuffer(
-        "client",
+      const statusString = String(booking.status || "CONFIRMED");
+      const pdfBuffer = await pdfGeneratorService.generateHotelVoucher(
         booking,
+        "client",
+        statusString,
       );
       const statusLabel = String(booking.status || "invoice").toLowerCase();
 
@@ -78,9 +80,11 @@ export class BookingTemplateController {
         return;
       }
 
-      const pdfBuffer = await bookingTemplateService.generatePdfBuffer(
-        "agent",
+      const statusString = String(booking.status || "CONFIRMED");
+      const pdfBuffer = await pdfGeneratorService.generateHotelVoucher(
         booking,
+        "agent",
+        statusString,
       );
       const statusLabel = String(booking.status || "recon").toLowerCase();
 

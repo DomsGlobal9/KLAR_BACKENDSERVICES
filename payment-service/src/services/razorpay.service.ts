@@ -41,10 +41,6 @@ const getRazorpayKeyId = (platform: 'B2B' | 'B2C'): string => {
 export const createRazorpayOrderService = async (
     data: ICreateRazorpayOrderParams
 ): Promise<ICreateRazorpayOrderResponse> => {
-    
-    if (data.platform === 'B2C' && !data.bookingId) {
-        throw new Error('bookingId is required for B2C platform');
-    }
 
     const orderId = `RAZOR_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const currency = data.currency || 'INR';

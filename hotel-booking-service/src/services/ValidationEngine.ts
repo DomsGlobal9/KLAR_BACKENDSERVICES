@@ -75,7 +75,10 @@ export class ValidationEngine {
             throw new StructuredError(
               "ROOM_CHANGED",
               "The room offered by the hotel no longer matches your selection. Please review and book again.",
-              { expected: expectedResult.roomType, fresh: freshResult.roomType },
+              {
+                expected: expectedResult.roomType,
+                fresh: freshResult.roomType,
+              },
             );
           }
         }
@@ -103,7 +106,10 @@ export class ValidationEngine {
             throw new StructuredError(
               "MEAL_PLAN_CHANGED",
               "The meal plan offered by the hotel no longer matches your selection. Please review and book again.",
-              { expected: expectedResult.mealPlan, fresh: freshResult.mealPlan },
+              {
+                expected: expectedResult.mealPlan,
+                fresh: freshResult.mealPlan,
+              },
             );
           }
         }

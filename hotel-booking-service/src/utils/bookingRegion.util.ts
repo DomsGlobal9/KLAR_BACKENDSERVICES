@@ -84,7 +84,8 @@ const COUNTRY_PATHS: string[][] = [
 function readPath(obj: any, path: string[]): string | null {
   let cur = obj;
   for (const key of path) {
-    if (cur === null || cur === undefined || typeof cur !== "object") return null;
+    if (cur === null || cur === undefined || typeof cur !== "object")
+      return null;
     cur = cur[key];
   }
   return typeof cur === "string" && cur.trim() ? cur.trim() : null;
