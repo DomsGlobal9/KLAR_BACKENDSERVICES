@@ -12,8 +12,13 @@ class OrderService {
         // Ownership gate: only return supplier details for bookings the caller owns.
         // Without this, anyone with a bookingId could read another traveller's PII.
         const ids = bookingIds.split(",").map((s) => s.trim()).filter(Boolean);
-        const bookings = await CabBookingModel.find({ bookingId: { $in: ids } });
-        const found = new Set(bookings.map((b) => b.bookingId));
+        const bookings = await CabBookingModel.find({ 
+            $or: [
+                { klarBookingId: { $in: ids } },
+                { bookingId: { $in: ids } }
+            ]
+        });
+        const found = new Set(bookings.flatMap((b) => [b.klarBookingId, b.bookingId]));
         const missing = ids.filter((id) => !found.has(id));
         if (missing.length) {
             throw new StructuredError("NOT_FOUND", `Booking(s) not found: ${missing.join(", ")}`);
@@ -23,7 +28,8 @@ class OrderService {
             throw new StructuredError("FORBIDDEN", "You are not allowed to access one or more of these bookings.");
         }
 
-        return await tripJackCabsProvider.getBookingDetails(bookingIds);
+        const providerBookingIds = bookings.map(b => b.bookingId).join(",");
+        return await tripJackCabsProvider.getBookingDetails(providerBookingIds);
     }
 
     /**

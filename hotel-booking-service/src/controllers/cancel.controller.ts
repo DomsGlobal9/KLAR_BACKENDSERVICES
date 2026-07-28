@@ -34,6 +34,7 @@ const authorizeBookingAccess = async (
     ? { _id: targetId }
     : {
         $or: [
+          { klarBookingId: targetId },
           { confirmationNumber: targetId },
           { reservationId: targetId },
         ],

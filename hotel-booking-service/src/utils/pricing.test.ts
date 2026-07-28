@@ -42,7 +42,11 @@ const API_NET = 2008.81;
 /** Reloads the pricing modules under a different master config. */
 const reloadWith = (env: Record<string, string>) => {
   Object.assign(process.env, env);
-  for (const id of ["./pricing.util", "../config/markup-config", "./wallet.util"]) {
+  for (const id of [
+    "./pricing.util",
+    "../config/markup-config",
+    "./wallet.util",
+  ]) {
     delete require.cache[require.resolve(id)];
   }
   return {
@@ -57,10 +61,17 @@ test("the B2C floor is api net + the master's margin", () => {
 });
 
 test("the quote a B2C customer is given equals the floor commit will demand", async () => {
-  const rules = await resolveMarkupRules("B2C", "irrelevant-no-agent-lookup-on-b2c");
+  const rules = await resolveMarkupRules(
+    "B2C",
+    "irrelevant-no-agent-lookup-on-b2c",
+  );
   const quoted = PricingUtil.calculatePriceWithMarkup(API_NET, rules, 0);
 
-  assert.equal(quoted.total, b2cPriceFloor(API_NET), "quote drifted from the floor");
+  assert.equal(
+    quoted.total,
+    b2cPriceFloor(API_NET),
+    "quote drifted from the floor",
+  );
   assert.equal(quoted.total, 2108.81);
   assert.equal(quoted.markup, 100);
 });
@@ -91,7 +102,11 @@ test("quote and floor still agree when the master switches to a percentage", asy
   });
 
   const rules = await wallet.resolveMarkupRules("B2C", "token");
-  const quoted = pricing.PricingUtil.calculatePriceWithMarkup(API_NET, rules, 0);
+  const quoted = pricing.PricingUtil.calculatePriceWithMarkup(
+    API_NET,
+    rules,
+    0,
+  );
 
   assert.equal(pricing.b2cPriceFloor(API_NET), 2209.69); // 2008.81 + 10%
   assert.equal(quoted.total, pricing.b2cPriceFloor(API_NET));
@@ -105,7 +120,11 @@ test("a disabled B2C config sells at the api net on both sides", async () => {
   });
 
   const rules = await wallet.resolveMarkupRules("B2C", "token");
-  const quoted = pricing.PricingUtil.calculatePriceWithMarkup(API_NET, rules, 0);
+  const quoted = pricing.PricingUtil.calculatePriceWithMarkup(
+    API_NET,
+    rules,
+    0,
+  );
 
   // "Configured off" is a decision and must yield zero — unlike a failed config
   // fetch, which falls back rather than silently selling at cost.

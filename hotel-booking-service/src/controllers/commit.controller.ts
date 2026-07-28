@@ -10,7 +10,11 @@ export const commitController = async (req: any, res: Response) => {
     const agentId = req.user?.userId || req.user?.id || req.user?._id || null;
     const agentName = req.user?.email || null; // Fallback to email if name isn't in token
     const token = req.headers.authorization?.split(" ")[1] || "";
-    let clientType = req.headers["x-client-type"] || req.body.clientType || req.user?.clientType || "B2C";
+    let clientType =
+      req.headers["x-client-type"] ||
+      req.body.clientType ||
+      req.user?.clientType ||
+      "B2C";
     if (!agentId && clientType === "B2C") {
       clientType = "GUEST";
     }
@@ -99,10 +103,16 @@ export const commitController = async (req: any, res: Response) => {
 
     // Idempotency key (header preferred, body fallback) so a retried commit
     // returns the original booking instead of creating a duplicate.
-    finalPayload.idempotencyKey =
+    let idempKey =
       (req.headers["idempotency-key"] as string) ||
       req.body.idempotencyKey ||
       finalPayload.idempotencyKey;
+    if (idempKey) {
+      if (!idempKey.endsWith(`_${clientType}`)) {
+        idempKey = `${idempKey}_${clientType}`;
+      }
+      finalPayload.idempotencyKey = idempKey;
+    }
 
     console.log(
       `[FORENSIC] Commit Booking [${requestId}]: agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`,

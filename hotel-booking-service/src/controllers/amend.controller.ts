@@ -23,7 +23,13 @@ const authorizeBookingAccess = async (
   }
 
   const booking = await hotelBookingRepository.findOne(
-    { confirmationNumber },
+    { 
+      $or: [
+        { klarBookingId: confirmationNumber },
+        { confirmationNumber: confirmationNumber },
+        { reservationId: confirmationNumber }
+      ]
+    },
     true,
   );
   if (!booking) {

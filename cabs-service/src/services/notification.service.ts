@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ICabBooking } from "../models/CabBooking.model";
 import { generateCabVoucherHTML } from "../templates/cabConfirmationTemplate";
+import { cabsPdfGeneratorService } from "./cabs-pdf.service";
 
 /**
  * Service to handle external notifications (Email, etc.)
@@ -38,14 +39,21 @@ class NotificationService {
             console.log(`[NotificationService] Sending confirmation to: ${recipientList.join(', ')}`);
 
             const htmlContent = generateCabVoucherHTML(booking);
+            const pdfBuffer = await cabsPdfGeneratorService.generateCabVoucher(booking);
 
             const payload = {
                 to: recipientList,
-                subject: `Cab Booking Confirmation - ${booking.bookingId}`,
-                html: htmlContent
+                subject: `Cab Booking Confirmation - ${booking.klarBookingId || booking.bookingId}`,
+                html: htmlContent,
+                attachments: [{
+                    filename: `cab-voucher-${booking.klarBookingId || booking.bookingId}.pdf`,
+                    content: pdfBuffer.toString('base64'),
+                    contentType: 'application/pdf',
+                    encoding: 'base64'
+                }]
             };
 
-            const response = await axios.post(`${this.emailServiceUrl}/email/send`, payload);
+            const response = await axios.post(`${this.emailServiceUrl}/email/send-with-attachment`, payload);
             console.log(`[NotificationService] Email service response:`, response.data);
             return response.data;
         } catch (error: any) {

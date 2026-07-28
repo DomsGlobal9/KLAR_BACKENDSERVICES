@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { TripJackApiProvider } from "../providers/tripjack.api.provider";
 import { BookingStatus } from "../models/Booking.model";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
+import { notificationService } from "../services/notification.service";
 
 /**
  * Controller to confirm a previously HELD booking.
@@ -11,7 +12,11 @@ export const confirmController = async (req: Request, res: Response) => {
   try {
     const bookingId = req.body.bookingId;
     const booking = await hotelBookingRepository.findOne({
-      $or: [{ confirmationNumber: bookingId }, { reservationId: bookingId }],
+      $or: [
+        { klarBookingId: bookingId },
+        { confirmationNumber: bookingId }, 
+        { reservationId: bookingId }
+      ],
     });
 
     if (!booking) {
@@ -29,13 +34,11 @@ export const confirmController = async (req: Request, res: Response) => {
       !tjDetails.order ||
       typeof tjDetails.order.amount === "undefined"
     ) {
-      return res
-        .status(500)
-        .json({
-          status: false,
-          description:
-            "Could not fetch upstream booking details to verify payment amount.",
-        });
+      return res.status(500).json({
+        status: false,
+        description:
+          "Could not fetch upstream booking details to verify payment amount.",
+      });
     }
 
     const exactAmount = tjDetails.order.amount;
@@ -57,6 +60,8 @@ export const confirmController = async (req: Request, res: Response) => {
       booking.status = BookingStatus.CONFIRMED;
       booking.tripJackResponse = result;
       await booking.save();
+      // Send confirmation email
+      notificationService.sendBookingConfirmation(booking);
     }
 
     res.status(200).json({

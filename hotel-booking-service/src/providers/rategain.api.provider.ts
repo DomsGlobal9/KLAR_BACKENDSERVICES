@@ -24,17 +24,25 @@ export class RateGainApiProvider {
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
-        ...(booking.GuaranteeMethod ? { GuaranteeMethod: booking.GuaranteeMethod } : {}),
-        ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
+        ...(booking.GuaranteeMethod
+          ? { GuaranteeMethod: booking.GuaranteeMethod }
+          : {}),
+        ...(booking.GuaranteeType
+          ? { GuaranteeType: booking.GuaranteeType }
+          : {}),
         ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
         propertyID: booking.PropertyCode || rawPropertyId,
         PropertyId: booking.PropertyCode || rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
         BrandCode:
-          booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+          booking.BrandCode &&
+          booking.BrandCode !== "N/A" &&
+          booking.BrandCode !== ""
             ? booking.BrandCode
-            : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+            : booking.brandCode &&
+                booking.brandCode !== "N/A" &&
+                booking.brandCode !== ""
               ? booking.brandCode
               : "TkEvQQ==",
         checkin: booking.checkin || booking.checkIn,
@@ -45,7 +53,8 @@ export class RateGainApiProvider {
         checkOutDate: booking.checkout || booking.checkOut,
         CountryCode: booking.CountryCode || "IN",
         Currency: booking.Currency || booking.CurrencyCode || "INR",
-        DemandBookingId: booking.DemandBookingId || `demand-precheck-${Date.now()}`,
+        DemandBookingId:
+          booking.DemandBookingId || `demand-precheck-${Date.now()}`,
         ReservationDate: booking.ReservationDate || new Date().toISOString(),
         TimeStamp: booking.TimeStamp || new Date().toISOString(),
         EchoToken:
@@ -74,7 +83,7 @@ export class RateGainApiProvider {
             Guest: (rs.Guest || []).map((g: any) => {
               let fName = (g.FirstName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
               let lName = (g.LastName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
-              
+
               if (!fName) fName = "Guest";
               if (!lName) lName = "Guest";
 
@@ -167,17 +176,25 @@ export class RateGainApiProvider {
     const consolidatedPayload = {
       BookReservation: {
         ResStatus: booking.ResStatus || 1,
-        ...(booking.GuaranteeMethod ? { GuaranteeMethod: booking.GuaranteeMethod } : {}),
-        ...(booking.GuaranteeType ? { GuaranteeType: booking.GuaranteeType } : {}),
+        ...(booking.GuaranteeMethod
+          ? { GuaranteeMethod: booking.GuaranteeMethod }
+          : {}),
+        ...(booking.GuaranteeType
+          ? { GuaranteeType: booking.GuaranteeType }
+          : {}),
         ...(booking.CreditCard ? { CreditCard: booking.CreditCard } : {}),
         CurrencyCode: booking.CurrencyCode || booking.Currency || "USD",
         propertyID: booking.PropertyCode || rawPropertyId,
         PropertyId: booking.PropertyCode || rawPropertyId,
         PropertyCode: booking.PropertyCode || rawPropertyId,
         BrandCode:
-          booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+          booking.BrandCode &&
+          booking.BrandCode !== "N/A" &&
+          booking.BrandCode !== ""
             ? booking.BrandCode
-            : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+            : booking.brandCode &&
+                booking.brandCode !== "N/A" &&
+                booking.brandCode !== ""
               ? booking.brandCode
               : "TkEvQQ==",
         checkin: booking.checkin || booking.checkIn,
@@ -222,7 +239,7 @@ export class RateGainApiProvider {
             Guest: (rs.Guest || []).map((g: any) => {
               let fName = (g.FirstName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
               let lName = (g.LastName || "Guest").replace(/[^a-zA-Z0-9]/g, "");
-              
+
               if (!fName) fName = "Guest";
               if (!lName) lName = "Guest";
 
@@ -309,19 +326,22 @@ export class RateGainApiProvider {
       .replace(/^RG:/, "");
 
     const brandCode =
-      booking.BrandCode && booking.BrandCode !== "N/A" && booking.BrandCode !== ""
+      booking.BrandCode &&
+      booking.BrandCode !== "N/A" &&
+      booking.BrandCode !== ""
         ? booking.BrandCode
-        : booking.brandCode && booking.brandCode !== "N/A" && booking.brandCode !== ""
+        : booking.brandCode &&
+            booking.brandCode !== "N/A" &&
+            booking.brandCode !== ""
           ? booking.brandCode
           : "TkEvQQ==";
 
     const propertyCode =
-      booking.PropertyCode ||
-      booking.propertyCode ||
-      rawPropertyId ||
-      "N/A";
+      booking.PropertyCode || booking.propertyCode || rawPropertyId || "N/A";
 
-    console.log(`[RateGain Cancel] PropertyId="${rawPropertyId}", PropertyCode="${propertyCode}", BrandCode="${brandCode}"`);
+    console.log(
+      `[RateGain Cancel] PropertyId="${rawPropertyId}", PropertyCode="${propertyCode}", BrandCode="${brandCode}"`,
+    );
 
     const unwrappedPayload = {
       ConfirmationNumber:
@@ -352,9 +372,11 @@ export class RateGainApiProvider {
       console.error(
         "[RateGain] Cancel Error:",
         error.response?.status,
-        error.response?.data ? JSON.stringify(error.response.data) : error.message,
+        error.response?.data
+          ? JSON.stringify(error.response.data)
+          : error.message,
         "Payload Sent:",
-        JSON.stringify(unwrappedPayload, null, 2)
+        JSON.stringify(unwrappedPayload, null, 2),
       );
       throw error;
     }
@@ -365,7 +387,12 @@ export class RateGainApiProvider {
    * Fetch the current status of an existing reservation by confirmationNumber / reservationId.
    * Used by the status-sync path to resolve MANUAL_REVIEW bookings.
    */
-  async getReservationDetails(confirmationNumber: string, reservationId?: string, propertyId?: string, brandCode?: string) {
+  async getReservationDetails(
+    confirmationNumber: string,
+    reservationId?: string,
+    propertyId?: string,
+    brandCode?: string,
+  ) {
     const payload = {
       ConfirmationNumber: confirmationNumber,
       ...(reservationId ? { ReservationId: reservationId } : {}),
@@ -376,18 +403,24 @@ export class RateGainApiProvider {
     };
 
     try {
-      console.log(`[RateGain] GetReservation request: ${JSON.stringify(payload)}`);
+      console.log(
+        `[RateGain] GetReservation request: ${JSON.stringify(payload)}`,
+      );
       const response = await rateGainClient.post(
         "/api/SmartDistribution/GetReservation",
         payload,
       );
-      console.log(`[RateGain] GetReservation response (status=${response.status}): ${JSON.stringify(response.data)}`);
+      console.log(
+        `[RateGain] GetReservation response (status=${response.status}): ${JSON.stringify(response.data)}`,
+      );
       return response.data;
     } catch (error: any) {
       console.error(
         "[RateGain] GetReservation Error:",
         error.response?.status,
-        error.response?.data ? JSON.stringify(error.response.data) : error.message,
+        error.response?.data
+          ? JSON.stringify(error.response.data)
+          : error.message,
       );
       throw error;
     }

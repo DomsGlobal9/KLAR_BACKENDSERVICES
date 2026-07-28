@@ -107,7 +107,6 @@ export class HotelBookingRepository {
     );
     return result.modifiedCount;
   }
-
 }
 
 export const hotelBookingRepository = new HotelBookingRepository();

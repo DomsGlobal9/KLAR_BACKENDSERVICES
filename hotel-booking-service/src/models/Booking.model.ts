@@ -95,6 +95,7 @@ export interface IUserInfo {
 
 export interface IBooking extends Document {
   // ─── Identifiers ───────────────────────────────
+  klarBookingId?: string; // Klar's internal reference number (e.g. KLRH1234567890)
   confirmationNumber: string; // Provider's booking ID (TG-XXXXX). Used for supplier cancel.
   hotelConfirmationNumber?: string; // Real hotel/PMS confirmation number (display only)
   /** Client-supplied dedupe key; unique so retries can't create a second booking. */
@@ -212,6 +213,10 @@ const userInfoSchema = new Schema(
 
 const bookingSchema = new Schema<IBooking>(
   {
+    klarBookingId: {
+      type: String,
+      index: { unique: true, sparse: true },
+    },
     confirmationNumber: {
       type: String,
       required: true,

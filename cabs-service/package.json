@@ -34,6 +34,7 @@
   "type": "commonjs",
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/pdfmake": "^0.3.3",
     "axios": "^1.13.2",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
@@ -42,6 +43,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.5.0",
     "node-cron": "^4.2.1",
+    "pdfmake": "^0.3.11",
     "puppeteer": "^25.0.4",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",

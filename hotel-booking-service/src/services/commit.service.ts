@@ -3,7 +3,11 @@ import { tripJackProvider } from "../providers/tripjack.provider";
 import { tripJackAdapter } from "../adapters/tripjack.adapter";
 import { rateGainAdapter } from "../adapters/rategain.adapter";
 import { ValidationEngine, StructuredError } from "./ValidationEngine";
-import { BookingStatus, BookingProvider, IUserInfo } from "../models/Booking.model";
+import {
+  BookingStatus,
+  BookingProvider,
+  IUserInfo,
+} from "../models/Booking.model";
 import { BookingEventLogger } from "../models/BookingEvent";
 import { RedisLockUtil } from "./RedisLockUtil";
 import { hotelBookingRepository } from "../repositories/hotelBooking.repository";
@@ -81,16 +85,11 @@ async function pollTripJackBookingStatus(
     const apiSuccess = details?.status?.success === true;
     const tjStatus: string = details?.order?.status || "";
 
-    const isSystemPending = details?.isSystemPending === true;
     // A success status is terminal. Failure/cancellation statuses are always terminal.
     const isTerminal =
-      TJ_SUCCESS_STATUSES.has(tjStatus) ||
-      TJ_FAILED_STATUSES.has(tjStatus);
+      TJ_SUCCESS_STATUSES.has(tjStatus) || TJ_FAILED_STATUSES.has(tjStatus);
 
-    if (
-      !isTerminal &&
-      (TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)
-    ) {
+    if (!isTerminal && (TJ_PENDING_STATUSES.has(tjStatus) || !tjStatus)) {
       const backoffDelay = POLL_INTERVAL_MS;
       console.log(
         `[TripJack] Status ${tjStatus || "UNKNOWN"}. Polling attempt ${attempt}/${maxAttempts}. Waiting ${backoffDelay}ms...`,
@@ -131,7 +130,9 @@ async function pollTripJackBookingStatus(
       // than waiting on the 15-minute reconciliation sweep. refundFailedBooking
       // picks wallet vs Razorpay from the record and only closes the booking
       // out to FAILED once the refund lands.
-      const booking = await hotelBookingRepository.findOne({ _id: dbBookingId });
+      const booking = await hotelBookingRepository.findOne({
+        _id: dbBookingId,
+      });
       if (booking) {
         await refundService.refundFailedBooking(
           booking,
@@ -198,12 +199,18 @@ class CommitService {
     // index on Booking.idempotencyKey is the real guarantee; this is the fast path.
     const idempotencyKey = payload.idempotencyKey;
     if (idempotencyKey) {
-      const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
+      const existing = await hotelBookingRepository.findOne(
+        { idempotencyKey },
+        true,
+      );
       if (existing) {
         console.log(
           `[Commit] Idempotent replay for key ${idempotencyKey} -> ${existing.confirmationNumber}`,
         );
-        return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
+        throw new StructuredError(
+          "DUPLICATE_BOOKING",
+          "You have already booked this hotel for these dates."
+        );
       }
     }
 
@@ -212,9 +219,22 @@ class CommitService {
     const lockKey = `commit_lock_${agentId || "guest"}_${idempotencyKey || payload.optionId || payload.bookingId || tjBookingId}`;
 
     try {
-      return await RedisLockUtil.executeWithLock(lockKey, requestId, async () => {
-        if (isTripJack) {
-          return this.#commitTripJack(
+      return await RedisLockUtil.executeWithLock(
+        lockKey,
+        requestId,
+        async () => {
+          if (isTripJack) {
+            return this.#commitTripJack(
+              payload,
+              agentId,
+              agentName,
+              token,
+              clientType,
+              requestId,
+              userInfo,
+            );
+          }
+          return this.#commitRateGain(
             payload,
             agentId,
             agentName,
@@ -223,24 +243,24 @@ class CommitService {
             requestId,
             userInfo,
           );
-        }
-        return this.#commitRateGain(
-          payload,
-          agentId,
-          agentName,
-          token,
-          clientType,
-          requestId,
-          userInfo,
-        );
-      });
+        },
+      );
     } catch (err: any) {
       // A concurrent request with the same idempotency key won the unique-index
       // race: return its booking rather than surfacing a raw duplicate-key error.
-      if (idempotencyKey && (err?.code === 11000 || /E11000/.test(String(err?.message)))) {
-        const existing = await hotelBookingRepository.findOne({ idempotencyKey }, true);
+      if (
+        idempotencyKey &&
+        (err?.code === 11000 || /E11000/.test(String(err?.message)))
+      ) {
+        const existing = await hotelBookingRepository.findOne(
+          { idempotencyKey },
+          true,
+        );
         if (existing) {
-          return { status: true, idempotent: true, bookingId: existing.confirmationNumber, bookingRecord: existing };
+          throw new StructuredError(
+            "DUPLICATE_BOOKING",
+            "You have already booked this hotel for these dates."
+          );
         }
       }
       throw err;
@@ -253,7 +273,10 @@ class CommitService {
    * stale/reused id from the client can never pay for a second stay. Retries of
    * the same booking (same idempotencyKey) are allowed.
    */
-  async #assertPaymentNotReused(paymentId?: string, idempotencyKey?: string): Promise<void> {
+  async #assertPaymentNotReused(
+    paymentId?: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
     if (!paymentId) return;
     const query: any = {
       razorpayPaymentId: paymentId,
@@ -412,9 +435,14 @@ class CommitService {
         // forfeiting both margins with no signal to anyone: B2C markup is
         // invisible to the customer and platform markup is invisible to agents.
         const apiNet = Number(freshPrecheck.price ?? netPrice) || 0;
-        const requiredAmount = round2(Math.max(finalPrice, b2cPriceFloor(apiNet)));
+        const requiredAmount = round2(
+          Math.max(finalPrice, b2cPriceFloor(apiNet)),
+        );
         // Guard against a stale/reused payment id backing a second booking.
-        await this.#assertPaymentNotReused(payload.razorpayPaymentId, payload.idempotencyKey);
+        await this.#assertPaymentNotReused(
+          payload.razorpayPaymentId,
+          payload.idempotencyKey,
+        );
         const pay = await PaymentUtil.verifyRazorpayPayment({
           paymentId: payload.razorpayPaymentId,
           orderId: payload.razorpayOrderId,
@@ -422,10 +450,15 @@ class CommitService {
           platform: "B2C",
         });
         if (!pay.verified) {
-          await BookingEventLogger.log(bookingId, requestId, "PAYMENT_UNVERIFIED", {
-            reason: pay.reason,
-            requiredAmount,
-          });
+          await BookingEventLogger.log(
+            bookingId,
+            requestId,
+            "PAYMENT_UNVERIFIED",
+            {
+              reason: pay.reason,
+              requiredAmount,
+            },
+          );
           throw new StructuredError(
             "PAYMENT_UNVERIFIED",
             "We could not verify your payment. If any amount was debited it will be refunded automatically.",
@@ -480,8 +513,24 @@ class CommitService {
       }));
 
       // ─── PHASE 5: Save lean booking record ───────────────────────────────
+      const generateKlarBookingId = (providerCode: string): string => {
+        const date = new Date();
+        const yy = String(date.getFullYear()).slice(-2);
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const dd = String(date.getDate()).padStart(2, "0");
+        
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let randomChars = "";
+        for (let i = 0; i < 7; i++) {
+          randomChars += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        
+        return `KLH${providerCode}${yy}${mm}${dd}${randomChars}`;
+      };
+
       const primaryGuest = payload.roomTravellerInfo?.[0]?.travellerInfo?.[0];
       const saved = await hotelBookingRepository.createBooking({
+        klarBookingId: generateKlarBookingId("T"),
         confirmationNumber: tjResponse.bookingId || bookingId,
         reservationId: tjResponse.bookingId || bookingId,
         propertyId: payload.propertyId || "TJ-PROP",
@@ -499,9 +548,12 @@ class CommitService {
           : "",
         guestEmail: payload.deliveryInfo?.emails?.[0] || "",
         guestMobile: payload.deliveryInfo?.contacts?.[0] || "",
-        agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
-        userId: (clientType === "B2C" || clientType === "GUEST") ? (agentId || undefined) : undefined,
-        agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
+        agentId: clientType === "B2B" ? agentId || undefined : undefined,
+        userId:
+          clientType === "B2C" || clientType === "GUEST"
+            ? agentId || undefined
+            : undefined,
+        agentName: clientType === "B2B" ? agentName || undefined : undefined,
         rooms,
         hotelName: payload.hotelName,
         hotelImage: extractHotelImage(payload.hotelImage),
@@ -664,9 +716,14 @@ class CommitService {
         // the TripJack path for the rationale). Must cover the selling price AND
         // our floor — api net (incl. platform markup) plus the B2C markup.
         const apiNet = Number(freshPrecheck.price ?? netPrice) || 0;
-        const requiredAmount = round2(Math.max(finalPrice, b2cPriceFloor(apiNet)));
+        const requiredAmount = round2(
+          Math.max(finalPrice, b2cPriceFloor(apiNet)),
+        );
         // Guard against a stale/reused payment id backing a second booking.
-        await this.#assertPaymentNotReused(payload.razorpayPaymentId, payload.idempotencyKey);
+        await this.#assertPaymentNotReused(
+          payload.razorpayPaymentId,
+          payload.idempotencyKey,
+        );
         const pay = await PaymentUtil.verifyRazorpayPayment({
           paymentId: payload.razorpayPaymentId,
           orderId: payload.razorpayOrderId,
@@ -674,10 +731,15 @@ class CommitService {
           platform: "B2C",
         });
         if (!pay.verified) {
-          await BookingEventLogger.log(demandId, requestId, "PAYMENT_UNVERIFIED", {
-            reason: pay.reason,
-            requiredAmount,
-          });
+          await BookingEventLogger.log(
+            demandId,
+            requestId,
+            "PAYMENT_UNVERIFIED",
+            {
+              reason: pay.reason,
+              requiredAmount,
+            },
+          );
           throw new StructuredError(
             "PAYMENT_UNVERIFIED",
             "We could not verify your payment. If any amount was debited it will be refunded automatically.",
@@ -692,21 +754,28 @@ class CommitService {
       }
 
       // PHASE 4: Provider Booking
-      const rgPayload = payload.BookReservation 
-        ? { ...payload } 
+      const rgPayload = payload.BookReservation
+        ? { ...payload }
         : { ...(payload.bookingPayload || payload) };
 
       // Override RoomTypeCode and allocationDetails with the validated values from freshPrecheck
-      const validatedRooms = freshPrecheck.originalResponse?.body?.preCheckResponse?.rooms || [];
+      const validatedRooms =
+        freshPrecheck.originalResponse?.body?.preCheckResponse?.rooms || [];
       if (validatedRooms.length > 0) {
-        const selections = rgPayload.BookReservation?.RoomSelection || rgPayload.RoomSelection || [];
+        const selections =
+          rgPayload.BookReservation?.RoomSelection ||
+          rgPayload.RoomSelection ||
+          [];
         selections.forEach((rs: any, idx: number) => {
           const validatedRoom = validatedRooms[idx] || validatedRooms[0];
           const validatedRate = validatedRoom?.rates?.[0];
           const validatedRoomCode = validatedRoom?.RoomCode;
-          const validatedAllocation = validatedRate?.allocationDetails || validatedRoom?.allocationDetails;
+          const validatedAllocation =
+            validatedRate?.allocationDetails ||
+            validatedRoom?.allocationDetails;
           // Spec: Book must use the EXACT rate identifier confirmed in precheck.
-          const validatedKey = validatedRate?.rateKey || validatedRate?.RoomSelectionKey;
+          const validatedKey =
+            validatedRate?.rateKey || validatedRate?.RoomSelectionKey;
 
           if (validatedRoomCode) {
             rs.RoomTypeCode = validatedRoomCode;
@@ -746,8 +815,12 @@ class CommitService {
           rgPayload.BookReservation.SellingRate = rgSellingRate;
 
         // INJECT FRESH ROOM SELECTION KEY
-        if (freshPrecheck.optionId && rgPayload.BookReservation.RoomSelection?.[0]) {
-          rgPayload.BookReservation.RoomSelection[0].RoomSelectionKey = freshPrecheck.optionId;
+        if (
+          freshPrecheck.optionId &&
+          rgPayload.BookReservation.RoomSelection?.[0]
+        ) {
+          rgPayload.BookReservation.RoomSelection[0].RoomSelectionKey =
+            freshPrecheck.optionId;
         }
       } else {
         rgPayload.BookingRate = supplierBookingRate;
@@ -777,7 +850,9 @@ class CommitService {
       // Authoritative: only "Confirmed" (case-insensitive) counts as confirmed.
       const isConfirmed = /^confirmed$/i.test(rgStatus.trim());
       // Explicit terminal rejection from RateGain.
-      const isHardFailure = /^(failed|cancelled|rejected)$/i.test(rgStatus.trim());
+      const isHardFailure = /^(failed|cancelled|rejected)$/i.test(
+        rgStatus.trim(),
+      );
       // RateGain accepted the request (gave a ref or an OK envelope) and didn't hard-fail.
       // Confirmed → save CONFIRMED; accepted-but-not-confirmed (e.g. "ConfirmationFailed",
       // processing) → save MANUAL_REVIEW for reconciliation, WITHOUT faking a confirmation.
@@ -832,16 +907,33 @@ class CommitService {
       const primaryGuest =
         payload.BookReservation?.RoomSelection?.[0]?.Guest?.[0];
 
+      const generateKlarBookingId = (providerCode: string): string => {
+        const date = new Date();
+        const yy = String(date.getFullYear()).slice(-2);
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const dd = String(date.getDate()).padStart(2, "0");
+        
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let randomChars = "";
+        for (let i = 0; i < 7; i++) {
+          randomChars += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        
+        return `KLH${providerCode}${yy}${mm}${dd}${randomChars}`;
+      };
+
       const saved = await hotelBookingRepository.createBooking({
+        klarBookingId: generateKlarBookingId("R"),
         confirmationNumber:
           rgResponse.body?.booking?.confirmationNumber || "RG-PENDING",
-        reservationId:
-          rgResponse.body?.booking?.reservationId || "RG-PENDING",
+        reservationId: rgResponse.body?.booking?.reservationId || "RG-PENDING",
         propertyId: payload.BookReservation?.propertyID || "RG-PROP",
         provider: BookingProvider.RATEGAIN,
         // CONFIRMED only when RateGain returns booking.status === "Confirmed";
         // otherwise MANUAL_REVIEW so ops/reconciliation can resolve it (never fake it).
-        status: isConfirmed ? BookingStatus.CONFIRMED : BookingStatus.MANUAL_REVIEW,
+        status: isConfirmed
+          ? BookingStatus.CONFIRMED
+          : BookingStatus.MANUAL_REVIEW,
         checkIn: new Date(payload.BookReservation?.checkin),
         checkOut: new Date(payload.BookReservation?.checkout),
         totalAmount: round2(finalPrice),
@@ -860,9 +952,12 @@ class CommitService {
           payload.BookReservation?.phoneNumber ||
           payload.deliveryInfo?.contacts?.[0] ||
           "",
-        agentId: clientType === "B2B" ? (agentId || undefined) : undefined,
-        userId: (clientType === "B2C" || clientType === "GUEST") ? (agentId || undefined) : undefined,
-        agentName: clientType === "B2B" ? (agentName || undefined) : undefined,
+        agentId: clientType === "B2B" ? agentId || undefined : undefined,
+        userId:
+          clientType === "B2C" || clientType === "GUEST"
+            ? agentId || undefined
+            : undefined,
+        agentName: clientType === "B2B" ? agentName || undefined : undefined,
         rooms: rgRooms.length > 0 ? rgRooms : undefined,
         hotelName: payload.hotelName,
         hotelImage: extractHotelImage(payload.hotelImage),

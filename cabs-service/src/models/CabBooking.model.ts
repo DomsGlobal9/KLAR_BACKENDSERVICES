@@ -60,6 +60,7 @@ export enum PaymentMethod {
 }
 
 export interface ICabBooking extends Document {
+  klarBookingId?: string;
   bookingId?: string;
   correlationId?: string;
   /**
@@ -140,6 +141,7 @@ export interface ICabBooking extends Document {
 
 const CabBookingSchema = new Schema<ICabBooking>(
   {
+    klarBookingId: { type: String, unique: true, sparse: true, index: true },
     bookingId: { type: String, unique: true, sparse: true, index: true },
     correlationId: { type: String, index: true },
     idempotencyKey: { type: String, unique: true, sparse: true, index: true },

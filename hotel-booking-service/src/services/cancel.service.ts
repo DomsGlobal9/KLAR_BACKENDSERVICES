@@ -46,10 +46,20 @@ async function pollTripJackCancellationStatus(
 
         if (finalStatus === "CANCELLED") {
           if (process.env.ENABLE_AUTO_REFUNDS === "false") {
-            console.log(`[TripJack Cancel Poll] Auto-refund disabled. Marking ${bookingId} as CANCELLED. Pending manual CRM refund.`);
-            const updatedBooking = await hotelBookingRepository.findOneAndUpdate({ _id: booking._id }, { status: BookingStatus.CANCELLED }, { new: true });
+            console.log(
+              `[TripJack Cancel Poll] Auto-refund disabled. Marking ${bookingId} as CANCELLED. Pending manual CRM refund.`,
+            );
+            const updatedBooking =
+              await hotelBookingRepository.findOneAndUpdate(
+                { _id: booking._id },
+                { status: BookingStatus.CANCELLED },
+                { new: true },
+              );
             if (updatedBooking) {
-              notificationService.sendBookingStatusEmail(updatedBooking, BookingStatus.CANCELLED);
+              notificationService.sendBookingStatusEmail(
+                updatedBooking,
+                BookingStatus.CANCELLED,
+              );
             }
           } else {
             // refundCancelledBooking moves the booking to CANCELLED once the
@@ -466,7 +476,9 @@ class CancelService {
               cancelChargesInfo: cancelChargesInfo,
               cancellationDetails: {
                 ...(cancelChargesInfo?.cancellation || {}),
-                ...(rgCancelNumber ? { cancellationNumber: rgCancelNumber } : {}),
+                ...(rgCancelNumber
+                  ? { cancellationNumber: rgCancelNumber }
+                  : {}),
               },
             },
             { new: true },
@@ -474,16 +486,29 @@ class CancelService {
 
           if (updated) {
             if (process.env.ENABLE_AUTO_REFUNDS === "false") {
-              console.log(`✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; auto-refund disabled, marking CANCELLED.`);
-              const finalUpdated = await hotelBookingRepository.findOneAndUpdate({ _id: updated._id }, { status: BookingStatus.CANCELLED }, { new: true });
+              console.log(
+                `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; auto-refund disabled, marking CANCELLED.`,
+              );
+              const finalUpdated =
+                await hotelBookingRepository.findOneAndUpdate(
+                  { _id: updated._id },
+                  { status: BookingStatus.CANCELLED },
+                  { new: true },
+                );
               if (finalUpdated) {
-                notificationService.sendBookingStatusEmail(finalUpdated, BookingStatus.CANCELLED);
+                notificationService.sendBookingStatusEmail(
+                  finalUpdated,
+                  BookingStatus.CANCELLED,
+                );
               }
             } else {
               console.log(
                 `✅ RateGain confirmed cancellation for ${updated.confirmationNumber}; settling refund.`,
               );
-              await refundService.settleCancellation(updated, cancelChargesInfo);
+              await refundService.settleCancellation(
+                updated,
+                cancelChargesInfo,
+              );
             }
           }
         }
@@ -812,7 +837,8 @@ class CancelService {
     return {
       status: true,
       statusCode: 200,
-      description: "Calculated cancellation charges from booking policy (RateGain).",
+      description:
+        "Calculated cancellation charges from booking policy (RateGain).",
       totalAmount,
       applicableCharge,
       refundAmount,
