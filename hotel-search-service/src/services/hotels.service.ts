@@ -12,6 +12,7 @@ import {
   round2,
 } from "../utils/pricing.util";
 import { getSuggestions } from "./suggestions.service";
+import { HotelModel } from "../models/Hotel.model";
 import { env } from "../config/env";
 import searchResultCache from "../cache/searchResultCache.service";
 import { LruCache } from "../utils/lruCache";
@@ -159,7 +160,7 @@ export class HotelsService {
       const ageMs = Date.now() - master.builtAt;
       console.log(
         `[Search] master cache HIT for "${searchPayload.destination}" ` +
-          `(${master.hotels.length} hotels, age ${Math.round(ageMs / 1000)}s) — serving page ${pageNo} from cache`,
+        `(${master.hotels.length} hotels, age ${Math.round(ageMs / 1000)}s) — serving page ${pageNo} from cache`,
       );
       // Stale-while-revalidate: this response goes out against the cached list
       // regardless; the refresh lands in time for the next visitor.
@@ -350,7 +351,7 @@ export class HotelsService {
       );
       console.log(
         `[Search] background top-up for "${payload.destination}": ` +
-          `${current.hotels.length} → ${grown.hotels.length} hotels`,
+        `${current.hotels.length} → ${grown.hotels.length} hotels`,
       );
     });
   }
@@ -472,7 +473,7 @@ export class HotelsService {
             const drift = getDistanceKm(lat, lng, geoCenter.lat, geoCenter.lng);
             console.warn(
               `[GEO] Ignoring legacy GEO token [${lat},${lng}] (${drift.toFixed(0)}km from ` +
-                `text-resolved "${searchPayload.destination}") — text resolution wins.`,
+              `text-resolved "${searchPayload.destination}") — text resolution wins.`,
             );
           } else {
             // No usable destination name — the token is all we have.
@@ -613,7 +614,8 @@ export class HotelsService {
       timers.push(
         setTimeout(() => {
           softElapsed = true;
-          if (pageResults.length > 0) finish();
+          // COMMENTED OUT: If you want RateGain, we must wait for it!
+          // if (pageResults.length > 0) finish(); 
         }, softMs),
       );
       timers.push(setTimeout(finish, hardMs));
@@ -716,7 +718,7 @@ export class HotelsService {
 
     console.log(
       `[Search] master list built: received ${totalReceivedCount}, unique ${deduplicatedResults.length} ` +
-        `(merged ${dedupMeta.duplicatedCount}), after geofence ${finalOutputHotels.length}, inventory ${inventoryCount}`,
+      `(merged ${dedupMeta.duplicatedCount}), after geofence ${finalOutputHotels.length}, inventory ${inventoryCount}`,
     );
 
     return { hotels: finalOutputHotels, inventoryCount, providerHasMore, pagesFetched };
@@ -743,7 +745,7 @@ export class HotelsService {
 
       console.log(
         `[Search] extending master list for "${searchPayload.destination}": ` +
-          `have ${current.hotels.length}, need ${needed} — fetching supplier page(s) from ${current.supplierPagesFetched + 1}`,
+        `have ${current.hotels.length}, need ${needed} — fetching supplier page(s) from ${current.supplierPagesFetched + 1}`,
       );
 
       const grown = await this.growOnce(
@@ -808,7 +810,7 @@ export class HotelsService {
 
     console.log(
       `[Search] master list grown: +${added} hotels (now ${grown.hotels.length}), ` +
-        `supplier pages consumed ${grown.supplierPagesFetched}, more=${grown.providerHasMore}`,
+      `supplier pages consumed ${grown.supplierPagesFetched}, more=${grown.providerHasMore}`,
     );
 
     return grown;
@@ -1101,22 +1103,22 @@ export class HotelsService {
       // alternative-deal price shown next to the (marked-up) main price is unfair/wrong.
       const altDeal = rest.altDeal
         ? {
-            ...rest.altDeal,
-            price: round2(
-              calculateEnrichedPricing(
-                {
-                  basePrice: rest.altDeal.price,
-                  totalPrice: rest.altDeal.price,
-                  taxes: 0,
-                  mf: 0,
-                  mft: 0,
-                  currency: hotel.currency,
-                },
-                markupRules,
-                nights,
-              ).finalTotalPrice,
-            ),
-          }
+          ...rest.altDeal,
+          price: round2(
+            calculateEnrichedPricing(
+              {
+                basePrice: rest.altDeal.price,
+                totalPrice: rest.altDeal.price,
+                taxes: 0,
+                mf: 0,
+                mft: 0,
+                currency: hotel.currency,
+              },
+              markupRules,
+              nights,
+            ).finalTotalPrice,
+          ),
+        }
         : rest.altDeal;
 
       const publicPricing = buildPublicPricing({
@@ -1200,6 +1202,83 @@ export class HotelsService {
   async getHotelSuggestions(query: string) {
     return getSuggestions(query);
   }
+
+  /**
+   * Instant "explore" browse: reads straight from the locally synced hotel
+   * catalogue (HotelModel) instead of fanning out to live suppliers. There are
+   * no rates here — no dates means no supplier can price anything — so this
+   * only serves static content (photos, name, stars, address) fast enough for
+   * a browsing UI. Property-type filtering reuses getPropertyTypeLabel so a
+   * hotel classified as "Villa" here matches the same label the live search
+   * facets use.
+   */
+  async searchStaticHotels(params: {
+    city: string;
+    propertyType?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const city = (params.city || "").trim();
+    const page = params.page && params.page > 0 ? params.page : 1;
+    const pageSize =
+      params.pageSize && params.pageSize > 0 ? params.pageSize : DEFAULT_PAGE_SIZE;
+
+    if (!city) {
+      return { hotels: [], hasMore: false, inventoryCount: 0 };
+    }
+
+    // Escape regex metacharacters — city comes straight from user input.
+    const escaped = city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const cityRegex = new RegExp(`^${escaped}`, "i");
+
+    // Cap the in-memory set before filtering — enough for any browsing session,
+    // far short of loading a whole metro's inventory into one request.
+    const docs = await HotelModel.find({ cityName: cityRegex })
+      .select(
+        "tjHotelId name cityName countryName starRating address images location accTypeDesc accMultiDesc",
+      )
+      .limit(2000)
+      .lean();
+
+    let filtered = docs;
+    if (params.propertyType) {
+      const wanted = params.propertyType.toLowerCase();
+      filtered = docs.filter(
+        (h) => getPropertyTypeLabel(h).toLowerCase() === wanted,
+      );
+    }
+
+    const inventoryCount = filtered.length;
+    const start = (page - 1) * pageSize;
+    const pageDocs = filtered.slice(start, start + pageSize);
+
+    const hotels = pageDocs.map((h: any) => ({
+      id: h.tjHotelId,
+      // Same convention the live TripJack adapter uses (propertyCode ===
+      // hotelId, brandCode empty) — required so the detail page can fetch
+      // room pricing once the user picks dates. Without this, explore-mode
+      // cards land on the detail page with no propertyCode and pricing can
+      // never be fetched, even after dates are chosen.
+      propertyCode: h.tjHotelId,
+      brandCode: "",
+      name: h.name,
+      city: h.cityName,
+      country: h.countryName,
+      starRating: h.starRating || 0,
+      rating: h.starRating || 0,
+      address: h.address || "",
+      images: h.images || [],
+      latitude: h.location?.coordinates?.[1],
+      longitude: h.location?.coordinates?.[0],
+      source: "STATIC",
+    }));
+
+    return {
+      hotels,
+      hasMore: start + pageSize < filtered.length,
+      inventoryCount,
+    };
+  }
 }
 
 export const hotelsService = new HotelsService();
@@ -1216,9 +1295,9 @@ function getDistanceKm(
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
