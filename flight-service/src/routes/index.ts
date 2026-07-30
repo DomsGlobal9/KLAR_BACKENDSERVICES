@@ -9,6 +9,7 @@ import bookingLocalRoute from "./bookingLocal.routes";
 import cancelRoute from "./cancellation.route";
 import updateRoute from "./update.route";
 import voucherRoutes from "./voucher.routes";
+import priceAlertRoutes from "./priceAlert.routes";
 
 
 const router = Router();
@@ -23,6 +24,7 @@ router.use("/review", reviewRoutes);
 router.use("/ancillary", ancillaryRoutes);
 router.use("/book-local", bookingLocalRoute);
 router.use("/voucher", voucherRoutes);
+router.use("/alert", priceAlertRoutes);
 
 
-export default router;  
+export default router;

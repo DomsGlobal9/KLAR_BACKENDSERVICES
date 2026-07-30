@@ -1065,7 +1065,7 @@ class SearchService {
             const date = ri.travelDate ?? '';
             const cabin = (payload.cabinClass ?? 'ECONOMY').toUpperCase();
             const pax = JSON.stringify(payload.paxInfo ?? {});
-            return `route:oneway:${Date.now()}:${from}:${to}:${date}:${cabin}:${pax}`;
+            return `route:oneway:${from}:${to}:${date}:${cabin}:${pax}`;
         } catch {
             return '';
         }

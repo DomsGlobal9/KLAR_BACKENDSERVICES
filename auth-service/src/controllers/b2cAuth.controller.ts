@@ -379,92 +379,92 @@ export class B2CAuthController {
  * Request OTP for password reset
  * POST /api/b2c/auth/forgot-password/request-otp
  */
-requestPasswordResetOTP = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { email, mobileNumber } = req.body;
+    requestPasswordResetOTP = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { email, mobileNumber } = req.body;
 
-        // Validation
-        if (!email || !mobileNumber) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and mobile number are required",
+            // Validation
+            if (!email || !mobileNumber) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email and mobile number are required",
+                });
+            }
+
+            // Email format validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid email format",
+                });
+            }
+
+            // Mobile number validation (10 digits)
+            const mobileRegex = /^\d{10}$/;
+            if (!mobileRegex.test(mobileNumber)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid mobile number. Please enter 10 digits",
+                });
+            }
+
+            const result = await this.authService.requestPasswordResetOTP(email, mobileNumber);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+                // Remove OTP in production
+                ...(process.env.NODE_ENV !== 'production' && { otp: result.otp }),
             });
+        } catch (err) {
+            next(err);
         }
+    };
 
-        // Email format validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid email format",
+    /**
+     * Verify OTP and reset password
+     * POST /api/b2c/auth/forgot-password/reset
+     */
+    resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { email, newPassword } = req.body;
+
+            // Validation
+            if (!email || !newPassword) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email, and new password are required",
+                });
+            }
+
+            // Email format validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid email format",
+                });
+            }
+
+            // Password validation
+            if (newPassword.length < 6) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Password must be at least 6 characters",
+                });
+            }
+
+            await this.authService.resetPassword(email, newPassword);
+
+            res.status(200).json({
+                success: true,
+                message: "Password reset successfully. You can now login with your new password.",
             });
+        } catch (err) {
+            next(err);
         }
-
-        // Mobile number validation (10 digits)
-        const mobileRegex = /^\d{10}$/;
-        if (!mobileRegex.test(mobileNumber)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid mobile number. Please enter 10 digits",
-            });
-        }
-
-        const result = await this.authService.requestPasswordResetOTP(email, mobileNumber);
-
-        res.status(200).json({
-            success: true,
-            message: result.message,
-            // Remove OTP in production
-            ...(process.env.NODE_ENV !== 'production' && { otp: result.otp }),
-        });
-    } catch (err) {
-        next(err);
-    }
-};
-
-/**
- * Verify OTP and reset password
- * POST /api/b2c/auth/forgot-password/reset
- */
-resetPassword = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { email, newPassword } = req.body;
-
-        // Validation
-        if (!email || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Email, and new password are required",
-            });
-        }
-
-        // Email format validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid email format",
-            });
-        }
-
-        // Password validation
-        if (newPassword.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 6 characters",
-            });
-        }
-
-        await this.authService.resetPassword(email, newPassword);
-
-        res.status(200).json({
-            success: true,
-            message: "Password reset successfully. You can now login with your new password.",
-        });
-    } catch (err) {
-        next(err);
-    }
-};
+    };
 
 
 }
