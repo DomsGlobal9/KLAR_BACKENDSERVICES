@@ -63,7 +63,7 @@ export class MultiCityFlightListPdfService {
                 const logoBuffer = await fs.readFile(logoPath);
                 logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
             } catch (error) {
-                console.warn('Logo not found, continuing without logo');
+
             }
         }
 

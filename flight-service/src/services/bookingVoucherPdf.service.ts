@@ -63,14 +63,14 @@ export class BookingVoucherPdfService {
                 const logoBuffer = await fs.readFile(logoPath);
                 logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
             } catch (error) {
-                console.warn('Logo not found, continuing without logo');
+
             }
         }
 
         // Log the incoming data for debugging
-        console.log('=== Booking Response Structure ===');
-        console.log('bookingResponse keys:', Object.keys(bookingResponse || {}));
-        console.log('localBookingData keys:', Object.keys(localBookingData || {}));
+
+
+
         
         // The response from Tripjack comes in a specific structure
         // Based on your Book response, the data is in bookingResponse.data
@@ -78,8 +78,8 @@ export class BookingVoucherPdfService {
         const order = responseData.order || {};
         const itemInfos = responseData.itemInfos?.AIR || {};
         
-        console.log('order keys:', Object.keys(order));
-        console.log('itemInfos keys:', Object.keys(itemInfos));
+
+
 
         // Extract data with proper fallbacks
         const travellerInfo = itemInfos.TravellerInformation || [];
@@ -88,7 +88,7 @@ export class BookingVoucherPdfService {
         const deliveryInfo = order.DeliveryInformation || {};
         const emergencyContactInfo = order.EmergencyContactInformation || {};
 
-        console.log(`Found ${tripInformation.length} trip(s), ${travellerInfo.length} traveller(s)`);
+
 
         // Prepare flight segments
         const flightSegments: any[] = [];
@@ -154,7 +154,7 @@ export class BookingVoucherPdfService {
             });
         });
 
-        console.log(`Parsed ${flightSegments.length} flight segment(s)`);
+
 
         // Prepare traveller information with SSR details
         const travellers = travellerInfo.map((traveller: any, index: number) => {
@@ -223,7 +223,7 @@ export class BookingVoucherPdfService {
             };
         });
 
-        console.log(`Parsed ${travellers.length} traveller(s)`);
+
 
         // Calculate totals
         const fareComponents = totalPriceInfo.totalFareDetail?.FareComponents || {};
@@ -243,7 +243,7 @@ export class BookingVoucherPdfService {
             airlineGST: totalAdditionalFare.AirlineGSTComponent || 0
         };
 
-        console.log('Price breakdown:', priceBreakdown);
+
 
         // Get primary traveller
         const primaryTraveller = travellers.length > 0 ? travellers[0] : null;
@@ -414,14 +414,14 @@ export class BookingVoucherPdfService {
         };
 
         // Log final data for debugging
-        console.log('=== Final Template Data ===');
-        console.log('bookingId:', templateData.bookingId);
-        console.log('flightSegmentsCount:', templateData.flightSegments.length);
-        console.log('travellersCount:', templateData.travellers.length);
-        console.log('totalPrice:', templateData.totalPrice);
-        console.log('primaryGuest:', templateData.primaryGuest);
-        console.log('email:', templateData.email);
-        console.log('phone:', templateData.phone);
+
+
+
+
+
+
+
+
 
         const htmlContent = compiledTemplate(templateData);
 

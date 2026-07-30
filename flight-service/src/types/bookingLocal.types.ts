@@ -7,6 +7,24 @@ export interface UserInfo {
     clientType: string;
 }
 
+export interface PaginationParams {
+    page?: number;
+    limit?: number;
+    filter?: 'all' | 'upcoming' | 'past' | 'cancelled';
+}
+
+export interface PaginatedResponse<T> {
+    data: T[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+    };
+}
+
 export interface SSRInfo {
     key: string;
     code: string;
@@ -19,12 +37,10 @@ export interface Traveller {
     firstName: string;
     lastName: string;
     dob: string;
-
     passportNumber?: string;
     passportNationality?: string;
     passportIssueDate?: string;
     passportExpiryDate?: string;
-
     ssrSeatInfos?: SSRInfo[];
     ssrMealInfos?: SSRInfo[];
     ssrBaggageInfos?: SSRInfo[];
@@ -44,25 +60,32 @@ export interface EmergencyContact {
     name: string;
 }
 
+export interface FlightSegment {
+    departureDate: string;
+    departureTime?: string;
+    arrivalDate?: string;
+    arrivalTime?: string;
+    origin?: string;
+    destination?: string;
+    airline?: string;
+    flightNumber?: string;
+}
+
 export interface Booking {
     bookingId: string;
-
     amount?: number;
     tripjackPrice?: number;
     markupPrice?: number;
     totalPrice?: number;
-
     email: string;
     phone: string;
-
     isHold: boolean;
-
     travellers: Traveller[];
-
     gstInfo?: GSTInfo;
     emergencyContact?: EmergencyContact;
     userInfo?: UserInfo;
-
+    flightSegments?: FlightSegment[];
+    departureDate: string;
     status:
     | "INITIATED"
     | "SUCCESS"
@@ -79,13 +102,10 @@ export interface Booking {
     | "REISSUED"
     | "CANCEL_REQUESTED"
     | "CONFIRMED";
-
     amendmentId?: string;
-
     refundProcessed?: boolean;
     refundPrice?: string;
     refundDate?: Date;
-
     createdAt?: Date;
     updatedAt?: Date;
 }

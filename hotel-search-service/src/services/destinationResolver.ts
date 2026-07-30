@@ -659,9 +659,10 @@ export async function resolveForTJ(
   const normalizedQuery = query.trim();
 
   // 0. Direct ID match (e.g. "TJ:1000123")
-  if (normalizedQuery.startsWith("TJ:")) {
+  if (normalizedQuery.startsWith("TJ:") && /^\d+$/.test(normalizedQuery.replace("TJ:", ""))) {
     return [normalizedQuery.replace("TJ:", "")];
   }
+  const cleanQuery = normalizedQuery.startsWith("TJ:") ? normalizedQuery.replace("TJ:", "") : normalizedQuery;
 
   // 0.1. Direct numeric ID match (e.g. "100000010138")
   if (/^\d{8,15}$/.test(normalizedQuery)) {

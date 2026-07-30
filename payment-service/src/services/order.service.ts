@@ -19,7 +19,7 @@ export const createOrderService = async (data: {
     environment: string;
     bookingId?: string;
 }) => {
-    console.log(`[PAYMENT ORDER SERVICE] Order Create Body IN SERVICE: ${data}`);
+
 
     
     if (data.clientType === 'B2C' && !data.bookingId) {
@@ -59,7 +59,7 @@ export const createOrderService = async (data: {
                         status: 'PENDING',
                     });
                 } catch (error) {
-                    console.error('Error updating Cashfree order:', error);
+
                 }
             }
 
@@ -152,7 +152,7 @@ export const getPaymentStatusService = async (orderId: string) => {
                 cashfreePayment: paymentStatus,
             };
         } catch (error) {
-            console.error('Error fetching payment status from Cashfree:', error);
+
             return {
                 order,
                 error: 'Unable to fetch real-time status from payment gateway',
@@ -175,7 +175,7 @@ export const syncOrderStatusService = async (orderId: string) => {
     }
 
     const paymentStatus = await getCashfreePaymentStatus(order.cfOrderId);
-    console.log("@@@@@@@@@@@@@@@@@@@ The payment status we get", JSON.stringify(paymentStatus, null, 2));
+
 
     let status: 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED' = order.status;
 
@@ -184,7 +184,7 @@ export const syncOrderStatusService = async (orderId: string) => {
         const latestPayment = paymentStatus[0];
         const cfPaymentStatus = latestPayment.payment_status;
 
-        console.log("################ The payment status", JSON.stringify(cfPaymentStatus, null, 2));
+
 
         if (cfPaymentStatus === 'SUCCESS') {
             status = 'SUCCESS';

@@ -1,7 +1,6 @@
 import { BookingModel } from "../model/bookingLocal.model";
 import { Booking } from "../types/bookingLocal.types";
 
-
 export class BookingRepository {
 
     async createBooking(data: Booking) {
@@ -74,12 +73,6 @@ export class BookingRepository {
         );
     }
 
-    async getBookingsByUserId(userId: string) {
-        return await BookingModel.find({
-            "userInfo.id": userId
-        }).sort({ createdAt: -1 });
-    }
-
     async getBookingByIdAndUser(bookingId: string, userId: string) {
         return await BookingModel.findOne({
             bookingId: bookingId,
@@ -101,7 +94,6 @@ export class BookingRepository {
                     "FAILED",
                     "CANCELLED",
                     "ABORTED",
-                    // "UNCONFIRMED",
                     "REJECTED",
                     "INITIATED"
                 ]
@@ -117,29 +109,16 @@ export class BookingRepository {
     }
 
     async deleteExpiredInitiatedBookings() {
-
-        /**
-         * Current time
-         */
         const now = new Date();
-
-        /**
-         * 24 hours before current time
-         */
         const before24hr = new Date(
             now.getTime() - 24 * 60 * 60 * 1000
         );
-
-        /**
-         * Delete bookings
-         */
         const result = await BookingModel.deleteMany({
             status: "INITIATED",
             createdAt: {
                 $lte: before24hr
             }
         });
-
         return result.deletedCount;
     }
 
@@ -148,7 +127,7 @@ export class BookingRepository {
             const booking = await BookingModel.findOne({ email: email });
             return booking;
         } catch (error) {
-            console.error("Error finding booking by email:", error);
+
             throw new Error("Failed to find booking by email");
         }
     }
@@ -160,8 +139,25 @@ export class BookingRepository {
             });
             return bookings;
         } catch (error) {
-            console.error("Error finding bookings by email:", error);
+
             throw new Error("Failed to find bookings by email");
         }
+    }
+
+    async getBookingsByUserId(userId: string) {
+        return await BookingModel.find({
+            "userInfo.id": userId
+        }).sort({ createdAt: -1 });
+    }
+
+    async getBookingsByUserIdPaginated(query: any, skip: number, limit: number) {
+        return await BookingModel.find(query)
+            .sort({ departureDate: 1, createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+    }
+
+    async countBookings(query: any) {
+        return await BookingModel.countDocuments(query);
     }
 }

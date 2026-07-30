@@ -12,7 +12,6 @@ export const env = {
   // cached (L1 in-process, then Redis) and pages are sliced from it. See
   // hotels.service.ts for how the layers fit together.
   redisUrl: process.env.REDIS_URL || "redis://127.0.0.1:6379",
-  searchPrefetchPages: Number(process.env.SEARCH_PREFETCH_PAGES || 1),
 
   // Supplier pages the request WAITS for before responding. This is the number
   // that sets time-to-first-result, so it is deliberately 1: one page is a full

@@ -23,11 +23,11 @@ export const corsMiddleware: CorsOptions = {
         }
 
         if (envConfig.NODE_ENV === "production") {
-            console.error(`❌ CORS blocked for origin: ${origin}`);
+
             return callback(new Error("Not allowed by CORS"));
         }
 
-        console.warn(`⚠️ CORS warning: ${origin} not in allowlist`);
+
         return callback(null, true);
     },
 

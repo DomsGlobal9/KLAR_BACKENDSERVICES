@@ -8,7 +8,7 @@ class MarkupInterceptorService {
     applyMarkupToFlightSearch(response: any): any {
 
         if (!response || !MarkupConfiguration.isEnabled()) {
-            console.log("[MARKUP] Markup is disabled or no response");
+
             return response;
         }
 
@@ -17,22 +17,22 @@ class MarkupInterceptorService {
         const tripInfos = clonedResponse?.searchResult?.tripInfos;
 
         if (!tripInfos) {
-            console.log("[MARKUP] No tripInfos found");
+
             return clonedResponse;
         }
 
         if (tripInfos.ONWARD && Array.isArray(tripInfos.ONWARD)) {
-            console.log("[MARKUP] Processing ONWARD trips:", tripInfos.ONWARD.length);
+
             this.processFlightTripInfos(tripInfos.ONWARD);
         }
 
         if (tripInfos.RETURN && Array.isArray(tripInfos.RETURN)) {
-            console.log("[MARKUP] Processing RETURN trips:", tripInfos.RETURN.length);
+
             this.processFlightTripInfos(tripInfos.RETURN);
         }
 
         if (tripInfos.COMBO && Array.isArray(tripInfos.COMBO)) {
-            console.log("[MARKUP] Processing COMBO trips:", tripInfos.COMBO.length);
+
             this.processFlightTripInfos(tripInfos.COMBO);
         }
 
@@ -52,7 +52,7 @@ class MarkupInterceptorService {
                             const originalPrice = price.fD.ADULT.fC.TF;
                             const markupAmount = MarkupConfiguration.getMarkupValue(originalPrice);
 
-                            console.log(`[MARKUP] ADULT: Original ₹${originalPrice} + ₹${markupAmount} = ₹${originalPrice + markupAmount}`);
+
 
                             price.fD.ADULT.fC.originalTF = originalPrice;
                             price.fD.ADULT.fC.TF = originalPrice + markupAmount;

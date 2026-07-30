@@ -13,9 +13,9 @@ export class FlightAgencyBookingRepository {
                 this.localBookingRepo.getBookingById(bookingId)
             ]);
 
-            console.log("--- DEBUG FLIGHT AGENCY CORRELATION PIPELINE ---");
-            console.log("Tripjack Response API Present:", !!tripjackDetails);
-            console.log("Local Database Record Present:", !!localDbDetails);
+
+
+
 
             // 2. Validate existence of structural payload configurations
             if (!tripjackDetails) {
@@ -42,7 +42,7 @@ export class FlightAgencyBookingRepository {
             return combinedAgencyPayload;
 
         } catch (error: any) {
-            console.error("Critical Failure inside FlightAgencyBookingRepository parsing pipeline:", error.message);
+
             throw new Error(`Failed to correlate internal agency tracking variables: ${error.message}`);
         } 
     }

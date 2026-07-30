@@ -17,13 +17,13 @@ const startServer = async () => {
 
     setupApp();
 
-    app.listen(envConfig.PORT, '0.0.0.0', () => {
-      console.log(`Project is running on port ${envConfig.PORT} (0.0.0.0)`);
+    app.listen(envConfig.PORT, () => {
+
     });
 
   } catch (error) {
 
-    console.error(error);
+
 
     process.exit(1);
   }

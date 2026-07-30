@@ -23,7 +23,7 @@ export const createCashfreeOrder = async (data: {
     environment: string;
 }): Promise<ICashfreeOrderResponse> => {
 
-    console.log("CASHFREE: service", data);
+
     const apiUrl = data.environment === 'sandbox'
         ? 'https://sandbox.cashfree.com/pg'
         : 'https://api.cashfree.com/pg';
@@ -51,7 +51,7 @@ export const createCashfreeOrder = async (data: {
 
         return response.data;
     } catch (error: any) {
-        console.error('Cashfree Order Creation Error:', error.response?.data || error.message);
+
         throw new Error(error.response?.data?.message || 'Failed to create Cashfree order');
     }
 };
@@ -65,7 +65,7 @@ export const getCashfreeOrder = async (cfOrderId: string): Promise<ICashfreeOrde
 
         return response.data;
     } catch (error: any) {
-        console.error('Cashfree Get Order Error:', error.response?.data || error.message);
+
         throw new Error('Failed to fetch Cashfree order details');
     }
 };
@@ -81,7 +81,7 @@ export const getCashfreePaymentStatus = async (cfOrderId: string): Promise<ICash
 
         return response.data;
     } catch (error: any) {
-        console.error('Cashfree Payment Status Error:', error.response?.data || error.message);
+
         throw new Error('Failed to fetch payment status');
     }
 };

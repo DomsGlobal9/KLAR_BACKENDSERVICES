@@ -40,7 +40,7 @@ export const requestSignupOTP = async (
   next: NextFunction
 ) => {
   try {
-    console.log("The REQUEST signup function called");
+
 
     const { email } = req.body;
 
@@ -569,7 +569,7 @@ export const validateTokenForService = async (
       data: fullUser
     });
   } catch (error) {
-    console.error("Token validation error:", error);
+
 
     res.status(500).json({
       success: false,

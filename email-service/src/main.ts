@@ -7,7 +7,7 @@ const PORT = envConfig.PORT;
 async function startServer() {
     RedisConfig.getInstance();
     app.listen(PORT, () => {
-        console.log(`🚀 Email Service running on port ${PORT}`);
+
     });
 }
 

@@ -47,9 +47,9 @@ class MailConfig {
     private async verifyConnection(): Promise<void> {
         try {
             await this.transporter.verify();
-            console.log('📧 SMTP Connection verified successfully');
+
         } catch (error) {
-            console.error('❌ SMTP Connection failed:', error);
+
             throw error;
         }
     }
@@ -72,14 +72,14 @@ class MailConfig {
 
         try {
             const info = await this.transporter.sendMail(mailOptions);
-            console.log(`📨 Email sent: ${info.messageId}`);
+
             return {
                 success: true,
                 messageId: info.messageId,
                 response: info.response,
             };
         } catch (error) {
-            console.error('❌ Error sending email:', error);
+
             throw error;
         }
     }

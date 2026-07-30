@@ -28,6 +28,34 @@ export const searchHotels = async (
   }
 };
 
+export const getStaticHotels = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const city = req.query.city as string;
+    const propertyType = req.query.propertyType as string | undefined;
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const data = await hotelsService.searchStaticHotels({
+      city,
+      propertyType,
+      page,
+    });
+    res.status(200).json({
+      status: true,
+      body: data,
+    });
+  } catch (error: any) {
+    console.error("[Explore] static hotel lookup failed:", error.message);
+    res.status(500).json({
+      status: false,
+      description: "Could not load hotels right now. Please try again.",
+      body: { hotels: [], hasMore: false, inventoryCount: 0 },
+    });
+  }
+};
+
 export const getHotelSuggestions = async (
   req: Request,
   res: Response,
@@ -60,7 +88,7 @@ export const getPopularAreas = async (
   try {
     const { PopularAreaModel } = require("../models/PopularArea.model");
     const docs = await PopularAreaModel.find().lean();
-    
+
     const grouped: Record<string, Array<{ name: string; description: string; tag?: string }>> = {};
     for (const doc of docs) {
       if (!grouped[doc.cityKey]) {

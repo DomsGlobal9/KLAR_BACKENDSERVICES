@@ -167,10 +167,10 @@ const checkAndUpdateBookingStatus = async (
                                 }
                             );
 
-                            console.log(`✅ Wallet credited: ₹${refundAmount} for booking ${booking.bookingId}`);
+
                         }
                     } catch (error: any) {
-                        console.error(`❌ Failed to credit wallet for booking ${booking.bookingId}:`, error.message);
+
                     }
                 }
                 else {
@@ -206,12 +206,12 @@ const checkAndUpdateBookingStatus = async (
                                         refundDate: new Date()
                                     }
                                 );
-                                console.log(`✅ Refund processed via payment service: ₹${refundAmount} for booking ${booking.bookingId}`);
+
                             } else {
                                 throw new Error(refundResult.message || 'Refund failed');
                             }
                         } catch (error: any) {
-                            console.error(`❌ Failed to process refund for booking ${booking.bookingId}:`, error.message);
+
                         }
                     }
                 }

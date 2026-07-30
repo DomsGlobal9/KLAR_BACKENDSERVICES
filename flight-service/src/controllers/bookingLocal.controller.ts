@@ -16,9 +16,10 @@ class BookingLocalController {
         this.paymentServiceUrl = envConfig.PAYMENT_SERVICE;
     }
 
-    // *************************************************************************
-    // ************************  Private Functions  ****************************
-    // *************************************************************************
+    // ----------------------------
+    // ---- PRIVATE FUNCTIONS -----
+    // ------- BEGINS HERE --------
+    // ----------------------------
 
     private extractToken = (req: Request): string | null => {
         const authHeader = req.headers.authorization;
@@ -31,7 +32,6 @@ class BookingLocalController {
                     const parsed = JSON.parse(token);
                     token = parsed.value || parsed.token || token;
                 } catch (e) {
-                    // If parsing fails, keep as is
                 }
             }
 
@@ -47,7 +47,6 @@ class BookingLocalController {
                     const parsed = JSON.parse(token);
                     token = parsed.value || parsed.token || token;
                 } catch (e) {
-                    // If parsing fails, keep as is
                 }
             }
 
@@ -66,7 +65,6 @@ class BookingLocalController {
                     const parsed = JSON.parse(cleanToken);
                     cleanToken = parsed.value || parsed.token || cleanToken;
                 } catch (e) {
-                    // If parsing fails, keep as is
                 }
             }
 
@@ -200,9 +198,47 @@ class BookingLocalController {
         }
     };
 
-    // *************************************************************************
-    // ************************  Public Functions  ****************************
-    // *************************************************************************
+    private applyFilter(bookings: any[], filterType: string): any[] {
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+
+        switch (filterType) {
+            case 'upcoming':
+                return bookings.filter((b: any) => {
+                    if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
+                    if (!b.departureDate) return true;
+                    const parts = b.departureDate.split('/');
+                    if (parts.length !== 3) return true;
+                    const dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    return dateStr >= todayStr;
+                });
+
+            case 'past':
+                return bookings.filter((b: any) => {
+                    if (b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED') return false;
+                    if (!b.departureDate) return true;
+                    const parts = b.departureDate.split('/');
+                    if (parts.length !== 3) return true;
+                    const dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    return dateStr < todayStr;
+                });
+
+            case 'cancelled':
+                return bookings.filter((b: any) =>
+                    b.status === 'CANCELLED' ||
+                    b.status === 'CANCEL_REQUESTED'
+                );
+
+            case 'all':
+            default:
+                return bookings;
+        }
+    }
+
+    // ----------------------------
+    // ---- PRIVATE FUNCTIONS -----
+    // -------- ENDS HERE ---------
+    // ----------------------------
 
     public createLocalBooking = async (req: Request, res: Response) => {
         try {
@@ -451,7 +487,11 @@ class BookingLocalController {
 
     public getUserBookings = async (req: Request, res: Response) => {
         try {
-            const { source, email } = req.query;
+            const { source, email, page, limit, filter } = req.query;
+
+            const pageNum = Math.max(1, parseInt(page as string) || 1);
+            const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 10));
+            const filterType = (filter as string) || 'all';
 
             if (source === 'b2c') {
                 if (!email) {
@@ -462,14 +502,28 @@ class BookingLocalController {
                 }
 
                 const bookings = await BookingService.getBookingsByEmail(email as string);
-                
-                // Filter for B2C bookings only
-                const b2cBookings = bookings.filter((b: any) => b.userInfo?.clientType === 'b2c' || b.userInfo?.clientType?.toLowerCase() === 'b2c');
-                const reversedBookings = b2cBookings.reverse();
+
+                const b2cBookings = bookings.filter((b: any) =>
+                    b.userInfo?.clientType === 'b2c' ||
+                    b.userInfo?.clientType?.toLowerCase() === 'b2c'
+                );
+
+                const filteredBookings = this.applyFilter(b2cBookings, filterType);
+
+                const total = filteredBookings.length;
+                const paginatedBookings = filteredBookings.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
                 return res.status(200).json({
                     success: true,
-                    data: reversedBookings,
+                    data: paginatedBookings,
+                    pagination: {
+                        total,
+                        page: pageNum,
+                        limit: limitNum,
+                        totalPages: Math.ceil(total / limitNum),
+                        hasNextPage: pageNum < Math.ceil(total / limitNum),
+                        hasPrevPage: pageNum > 1
+                    }
                 });
             }
 
@@ -491,14 +545,22 @@ class BookingLocalController {
                 });
             }
 
-            const bookings = await BookingService.getBookingsByUserId(userData.id);
+            const result = await BookingService.getBookingsByUserIdPaginated(
+                userData.id,
+                pageNum,
+                limitNum,
+                filterType
+            );
 
-            // Filter for B2B bookings only
-            const b2bBookings = bookings.filter((b: any) => b.userInfo?.clientType === 'b2b' || b.userInfo?.clientType?.toLowerCase() === 'b2b');
+            const b2bBookings = result.data.filter((b: any) =>
+                b.userInfo?.clientType === 'b2b' ||
+                b.userInfo?.clientType?.toLowerCase() === 'b2b'
+            );
 
             return res.status(200).json({
                 success: true,
                 data: b2bBookings,
+                pagination: result.pagination
             });
         } catch (error: any) {
             return res.status(400).json({
@@ -507,6 +569,8 @@ class BookingLocalController {
             });
         }
     };
+
+
 
     public getBookingById = async (req: Request, res: Response) => {
         try {
@@ -616,10 +680,6 @@ class BookingLocalController {
         }
     };
 
-    // =======
-    // TESTING
-    // =======
-
     public testProcessAftermath = async (req: Request, res: Response) => {
         try {
             const bookingId = req.params.bookingId || req.query.bookingId || req.body.bookingId;
@@ -631,13 +691,13 @@ class BookingLocalController {
                 });
             }
 
-            console.log(`🧪 [API] Testing processBookingAftermath for: ${bookingId}`);
+
 
             const result = await BookingService.processBookingAftermathById(bookingId);
 
             res.status(result.success ? 200 : 500).json(result);
         } catch (error: any) {
-            console.error(`❌ [API] Test error:`, error.message);
+
             res.status(500).json({
                 success: false,
                 error: error.message

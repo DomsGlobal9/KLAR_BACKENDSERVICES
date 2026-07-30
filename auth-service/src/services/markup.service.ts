@@ -210,7 +210,7 @@ export class MarkupService {
                 _isInherited: targetUserId.toString() !== userId.toString()
             };
 
-            console.log(`[DEBUG] Markup result:`, JSON.stringify(result, null, 2));
+
             return result;
 
         } catch (error: any) {
