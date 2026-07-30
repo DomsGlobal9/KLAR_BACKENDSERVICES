@@ -156,7 +156,7 @@ class ReviewService {
 
     async getMarkupByServiceType(serviceType: string) {
         try {
-            console.log(`[DEBUG] URL: ${envConfig.AUTH_SERVICE}`);
+
 
             const response = await axios.post(
                 `${envConfig.AUTH_SERVICE}/markup/${serviceType}`,

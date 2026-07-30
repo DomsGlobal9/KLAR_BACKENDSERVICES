@@ -50,7 +50,7 @@ export const createRefundController = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error('Create refund controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to process refund'
@@ -88,7 +88,7 @@ export const createRefundByBookingIdController = async (req: Request, res: Respo
         });
 
     } catch (error: any) {
-        console.error('Create refund controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to process refund'
@@ -116,7 +116,7 @@ export const getRefundByRefundIdController = async (req: Request, res: Response)
         });
 
     } catch (error: any) {
-        console.error('Get refund by id controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refund'
@@ -144,7 +144,7 @@ export const getRefundsByPaymentIdController = async (req: Request, res: Respons
         });
 
     } catch (error: any) {
-        console.error('Get refunds by payment id controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refunds'
@@ -172,7 +172,7 @@ export const getRefundsByOrderIdController = async (req: Request, res: Response)
         });
 
     } catch (error: any) {
-        console.error('Get refunds by order id controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refunds'
@@ -217,7 +217,7 @@ export const updateRefundStatusController = async (req: Request, res: Response) 
         });
 
     } catch (error: any) {
-        console.error('Update refund status controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to update refund status'
@@ -244,7 +244,7 @@ export const getRefundByRazorpayRefundIdController = async (req: Request, res: R
         });
 
     } catch (error: any) {
-        console.error('Get refund by razorpay refund id controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refund'
@@ -277,7 +277,7 @@ export const getAllRefundsByUserIdController = async (req: Request, res: Respons
         });
 
     } catch (error: any) {
-        console.error('Get all refunds by user id controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refunds'
@@ -308,7 +308,7 @@ export const fetchRefundFromRazorpayController = async (req: Request, res: Respo
         });
 
     } catch (error: any) {
-        console.error('Fetch refund from razorpay controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refund from Razorpay'
@@ -334,7 +334,7 @@ export const fetchAllRefundsFromRazorpayController = async (req: Request, res: R
         });
 
     } catch (error: any) {
-        console.error('Fetch all refunds from razorpay controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch refunds from Razorpay'
@@ -374,7 +374,7 @@ export const updateRefundNotesController = async (req: Request, res: Response) =
         });
 
     } catch (error: any) {
-        console.error('Update refund notes controller error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to update refund notes'

@@ -623,7 +623,7 @@ export class BookingPaymentService {
                 }
             }
         } catch (error) {
-            console.error("Failed to send insufficient balance email:", error);
+
         }
     }
 
@@ -657,33 +657,33 @@ export class BookingPaymentService {
             });
 
             const user = await UserModel.findById(userId).populate('createdBy');
-            console.log("[sendPaymentSuccessEmail] User found:", user ? user.email : "No user");
+
 
             if (!user) {
-                console.log("[sendPaymentSuccessEmail] No user found, returning");
+
                 return;
             }
 
             if (userRole === "B2B_ADMIN") {
                 const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
-                console.log("[sendPaymentSuccessEmail] Is sub-company:", isSubCompany);
+
 
                 if (isSubCompany) {
                     const subCompanyEmail = user.email;
                     const parentAdmin = await UserModel.findById(user.createdBy);
 
-                    console.log("[sendPaymentSuccessEmail] Sub-company email:", subCompanyEmail);
-                    console.log("[sendPaymentSuccessEmail] Parent admin found:", parentAdmin ? parentAdmin.email : "No parent");
+
+
 
                     let parentWalletBalance = numericNewBalance;
                     if (parentAdmin) {
                         const parentWallet = await BookingPaymentRepository.getWallet(parentAdmin._id as Types.ObjectId);
                         parentWalletBalance = parentWallet?.balance ?? numericNewBalance;
-                        console.log("[sendPaymentSuccessEmail] Parent wallet balance:", parentWalletBalance);
+
                     }
 
                     if (subCompanyEmail) {
-                        console.log("[sendPaymentSuccessEmail] Sending email to sub-company:", subCompanyEmail);
+
                         const subCompanyHtml = paymentSuccessEmailTemplate("SUB_COMPANY", {
                             bookingId,
                             amount: numericAmount,
@@ -697,11 +697,11 @@ export class BookingPaymentService {
                             subject: "Booking Payment Processed Successfully",
                             html: subCompanyHtml
                         });
-                        console.log("[sendPaymentSuccessEmail] Email sent to sub-company successfully");
+
                     }
 
                     if (parentAdmin?.email) {
-                        console.log("[sendPaymentSuccessEmail] Sending email to parent:", parentAdmin.email);
+
                         const parentHtml = paymentSuccessEmailTemplate("PARENT_ADMIN", {
                             bookingId,
                             amount: numericAmount,
@@ -714,10 +714,10 @@ export class BookingPaymentService {
                             subject: "Booking Payment Processed - Sub-Company Transaction",
                             html: parentHtml
                         });
-                        console.log("[sendPaymentSuccessEmail] Email sent to parent successfully");
+
                     }
                 } else {
-                    console.log("[sendPaymentSuccessEmail] Sending email to parent admin only:", user.email);
+
                     const parentHtml = paymentSuccessEmailTemplate("PARENT_ADMIN", {
                         bookingId,
                         amount: numericAmount,
@@ -730,13 +730,13 @@ export class BookingPaymentService {
                         subject: "Booking Payment Processed - Wallet Debited",
                         html: parentHtml
                     });
-                    console.log("[sendPaymentSuccessEmail] Email sent to parent admin successfully");
+
                 }
             }
             else if (userRole === "RM") {
-                console.log("[sendPaymentSuccessEmail] Processing RM role");
+
                 const parentAdmin = await UserModel.findById(user.createdBy);
-                console.log("[sendPaymentSuccessEmail] Parent admin for RM:", parentAdmin?.email);
+
 
                 if (parentAdmin?.email) {
                     const rmHtml = paymentSuccessEmailTemplate("RM", {
@@ -751,13 +751,13 @@ export class BookingPaymentService {
                         subject: "Booking Payment Processed by RM",
                         html: rmHtml
                     });
-                    console.log("[sendPaymentSuccessEmail] Email sent to RM's parent successfully");
+
                 } else {
-                    console.log("[sendPaymentSuccessEmail] No parent admin email found for RM");
+
                 }
             }
         } catch (error) {
-            console.error("Failed to send payment success email:", error);
+
         }
     }
 
@@ -816,7 +816,7 @@ export class BookingPaymentService {
         totalPrice: number
     ) {
 
-        console.log("The PAYLOAD WE GOT: \n", {userId, userRole, bookingId, totalPrice});
+
 
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
@@ -825,13 +825,13 @@ export class BookingPaymentService {
 
         if (role === "RM") {
             const result = await this.handleRMPayment(userId, user, bookingId, totalPrice);
-            console.log("@@@@@@@@@@@@ The result we got role RM", result);
+
             return result;
         }
 
         if (role === "B2B_ADMIN" || userRole === "USER") {
             const result = await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
-            console.log("@@@@@@@@@@@@ The result we got role B2B_ADMIN", result);
+
             return result;
         }
 

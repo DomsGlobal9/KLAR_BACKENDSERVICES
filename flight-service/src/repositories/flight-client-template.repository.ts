@@ -12,9 +12,9 @@ export class FlightDocumentRepository {
                 this.localBookingRepo.getBookingById(bookingId)
             ]);
 
-            console.log("--- DEBUG USER FLIGHT DOCUMENT PIPELINE ---");
-            console.log("Tripjack Response Found:", JSON.stringify(tripjackDetails));
-            console.log("Local Database Record Found:", JSON.stringify(localDbDetails));
+
+
+
 
             if (!tripjackDetails) {
                 throw new Error(`Flight booking details not found for ID: ${bookingId}`);
@@ -51,12 +51,12 @@ export class FlightDocumentRepository {
                 pnr: (localDbDetails as any)?.pnr || (localDbDetails as any)?.pnrDetails || null
             };
 
-            console.log(`Successfully mapped customer total price for PDF: ₹${customerTotalPrice}`);
+
 
             return finalMergedPayload;
 
         } catch (error: any) {
-            console.error("Error in FlightDocumentRepository map pipeline:", error.message);
+
             throw new Error(`Failed to build user flight document payload: ${error.message}`);
         }
     }

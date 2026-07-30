@@ -52,21 +52,21 @@ async function main() {
     const db = mongoose.connection.db;
     if (!db) throw new Error("no database handle after connect");
 
-    console.log(DRY_RUN ? "— DRY RUN, nothing will be written —" : "— APPLYING —");
+
 
     // ── 1. MarkupConfig rows ────────────────────────────────────────────────
     const configs = db.collection("markupconfigs");
     const missingRegion = await configs.countDocuments({
         region: { $exists: false },
     });
-    console.log(`markupconfigs without region: ${missingRegion}`);
+
 
     if (!DRY_RUN && missingRegion > 0) {
         const res = await configs.updateMany(
             { region: { $exists: false } },
             { $set: { region: "ALL" } }
         );
-        console.log(`  stamped ${res.modifiedCount} row(s) with region=ALL`);
+
     }
 
     // ── 2. Agent markup services[] ──────────────────────────────────────────
@@ -75,7 +75,7 @@ async function main() {
         "services.region": { $exists: false },
         "services.0": { $exists: true },
     });
-    console.log(`agent markup docs with un-regioned services: ${agentsMissing}`);
+
 
     if (!DRY_RUN && agentsMissing > 0) {
         // Positional-all update: every services[] element lacking a region.
@@ -84,7 +84,7 @@ async function main() {
             { $set: { "services.$[el].region": "ALL" } },
             { arrayFilters: [{ "el.region": { $exists: false } }] }
         );
-        console.log(`  stamped services in ${res.modifiedCount} doc(s)`);
+
     }
 
     // ── 3. Drop the superseded unique index ─────────────────────────────────
@@ -94,12 +94,12 @@ async function main() {
     );
 
     if (!stale) {
-        console.log("stale { scope, serviceType } unique index: not present");
+
     } else {
-        console.log(`stale unique index found: ${stale.name}`);
+
         if (!DRY_RUN) {
             await configs.dropIndex(stale.name as string);
-            console.log(`  dropped ${stale.name}`);
+
         }
     }
 
@@ -116,11 +116,11 @@ async function main() {
     );
 
     await mongoose.disconnect();
-    console.log(DRY_RUN ? "dry run complete" : "migration complete");
+
 }
 
 main().catch(async (err) => {
-    console.error("migration failed:", err?.message || err);
+
     await mongoose.disconnect().catch(() => {});
     process.exit(1);
 });

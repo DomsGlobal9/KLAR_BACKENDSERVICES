@@ -3,7 +3,7 @@ import { envConfig } from './env.config';
 
 // Parse CORS origins from comma-separated string to array
 const allowedOrigins = envConfig.CORS.CORS_ORIGIN.split(',').map(origin => origin.trim());
-console.log("The allowed origins are", allowedOrigins);
+
 export const corsOptions: CorsOptions = {
 
     origin: (origin, callback) => {
@@ -34,12 +34,12 @@ export const corsOptions: CorsOptions = {
          * Production → block
          */
         if (envConfig.NODE_ENV === 'production') {
-            console.error(`❌ CORS blocked for origin: ${origin}`);
+
             return callback(new Error('Not allowed by CORS'));
         }
 
         // Development → warn but allow
-        console.warn(`⚠️ CORS warning: ${origin} not in allowlist`);
+
         callback(null, origin);
     },
 

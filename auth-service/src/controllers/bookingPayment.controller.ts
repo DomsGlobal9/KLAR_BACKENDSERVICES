@@ -8,7 +8,7 @@ export class BookingPaymentController {
 
     static async checkBalance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
-            console.log("***************** BALANCE check API call");
+
             if (!req.user) {
                 return res.status(401).json({
                     success: false,
@@ -38,12 +38,12 @@ export class BookingPaymentController {
             );
 
             if (result && Object.keys(result).length === 0) {
-                console.error("ERROR: Result is an empty object!");
+
                 throw new Error("Service returned empty result");
             }
 
             if (!result.hasSufficientBalance) {
-                console.log("Insufficient balance - sending error response");
+
                 return res.status(400).json({
                     success: false,
                     message: result.isAlreadyPaid
@@ -75,10 +75,10 @@ export class BookingPaymentController {
             });
 
         } catch (err: any) {
-            console.error("=== CONTROLLER ERROR ===");
-            console.error("Error:", err);
-            console.error("Error message:", err.message);
-            console.error("Stack trace:", err.stack);
+
+
+
+
 
             if (err.statusCode === 400 || err instanceof BadRequestError) {
                 return res.status(400).json({

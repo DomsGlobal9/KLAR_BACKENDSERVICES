@@ -10,7 +10,7 @@ import {
 export const createOrderController = async (req: Request, res: Response) => {
     try {
 
-        console.log(`[PAYMENT ORDER CONTROLELR] Order Create Body: ${req.body}`);
+
 
         const {
             userId,
@@ -23,7 +23,7 @@ export const createOrderController = async (req: Request, res: Response) => {
             bookingId
         } = req.body;
 
-        console.log(`[PAYMENT ORDER CONTROLELR] Order Create Body: ${req.body}`);
+
 
         if (!userId) {
             return res.status(400).json({
@@ -120,7 +120,7 @@ export const createOrderController = async (req: Request, res: Response) => {
             data: order,
         });
     } catch (error: any) {
-        console.error('Create order error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to create order',
@@ -146,7 +146,7 @@ export const getOrderController = async (req: Request, res: Response) => {
             data: order,
         });
     } catch (error: any) {
-        console.error('Get order error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch order',
@@ -180,7 +180,7 @@ export const getPaymentStatusController = async (req: Request, res: Response) =>
             },
         });
     } catch (error: any) {
-        console.error('Get payment status error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to fetch payment status',
@@ -207,7 +207,7 @@ export const syncOrderStatusController = async (req: Request, res: Response) => 
             data: updatedOrder,
         });
     } catch (error: any) {
-        console.error('Sync order status error:', error);
+
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to sync order status',

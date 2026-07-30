@@ -102,7 +102,7 @@ class FareController {
             return res.status(200).json(response);
 
         } catch (error: any) {
-            console.error("FareRule Controller Error:", error.message);
+
 
             return res.status(500).json({
                 success: false,

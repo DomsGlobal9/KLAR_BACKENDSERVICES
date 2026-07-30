@@ -58,7 +58,7 @@ class QueueService {
                 const result = await emailService.sendEmail(job.data);
 
                 if (!result.success) {
-                    console.error(`❌ [WORKER] Job ${job.id} failed:`, result.error);
+
                     throw new Error(result.error || "Email sending failed");
                 }
 
@@ -106,7 +106,7 @@ class QueueService {
         });
 
         this.worker.on("error", (error: Error) => {
-            console.error(`⚠️ [WORKER] Worker error:`, error.message);
+
         });
     }
 
@@ -128,12 +128,12 @@ class QueueService {
             attempts: this.MAX_RETRIES,
         });
 
-        console.log(`✅ [QUEUE] Job added successfully: ${job.id}`);
+
         return job.id || jobId;
     }
 
     async addBulkEmailJobs(emails: SendEmailPayload[]): Promise<{ jobIds: string[]; total: number }> {
-        console.log(`📦 [QUEUE] Adding ${emails.length} bulk email jobs`);
+
         
         const jobIds: string[] = [];
 
@@ -142,7 +142,7 @@ class QueueService {
             jobIds.push(jobId);
         }
 
-        console.log(`✅ [QUEUE] Bulk jobs added: ${jobIds.length} total`);
+
         return {
             jobIds,
             total: jobIds.length,
@@ -155,11 +155,11 @@ class QueueService {
         error?: string;
         attempts?: number;
     }> {
-        console.log(`🔍 [QUEUE] Getting status for job: ${jobId}`);
+
         const job = await this.emailQueue.getJob(jobId);
 
         if (!job) {
-            console.log(`❌ [QUEUE] Job ${jobId} not found`);
+
             return { status: "not_found" };
         }
 
@@ -171,17 +171,17 @@ class QueueService {
 
         if (state === "completed") {
             const returnValue = job.returnvalue;
-            console.log(`✅ [QUEUE] Job ${jobId} is completed`);
+
             return { ...result, data: returnValue };
         }
 
         if (state === "failed") {
             const error = job.failedReason;
-            console.log(`❌ [QUEUE] Job ${jobId} failed:`, error);
+
             return { ...result, error: error || undefined };
         }
 
-        console.log(`📊 [QUEUE] Job ${jobId} status: ${state}`);
+
         return result;
     }
 
@@ -192,7 +192,7 @@ class QueueService {
         failed: number;
         delayed: number;
     }> {
-        console.log(`📊 [QUEUE] Fetching queue stats`);
+
         const [waiting, active, completed, failed, delayed] = await Promise.all([
             this.emailQueue.getWaitingCount(),
             this.emailQueue.getActiveCount(),
@@ -201,7 +201,7 @@ class QueueService {
             this.emailQueue.getDelayedCount(),
         ]);
 
-        console.log(`📊 [QUEUE] Stats: waiting=${waiting}, active=${active}, completed=${completed}, failed=${failed}, delayed=${delayed}`);
+
         return {
             waiting,
             active,
@@ -212,16 +212,16 @@ class QueueService {
     }
 
     async cleanup(): Promise<void> {
-        console.log(`🧹 [QUEUE] Cleaning up queue`);
+
         await this.emailQueue.obliterate({ force: true });
-        console.log(`✅ [QUEUE] Queue cleaned up`);
+
     }
 
     async close(): Promise<void> {
-        console.log(`🔒 [QUEUE] Closing queue`);
+
         await this.worker?.close();
         await this.emailQueue.close();
-        console.log(`✅ [QUEUE] Queue closed`);
+
     }
 }
 

@@ -12,16 +12,16 @@ export const contextResolver = (
     next: NextFunction
 ) => {
 
-    console.log("========== CONTEXT RESOLVER ==========");
-    console.log("Original URL:", req.originalUrl);
-    console.log("Path:", req.path);
+
+
+
 
     const segments = req.path.split("/").filter(Boolean);
 
-    console.log("Segments:", segments);
+
 
     if (segments[0] === "health" || segments[0] === "admin") {
-        console.log("Skipping context resolver");
+
         return next();
     }
 
@@ -32,19 +32,19 @@ export const contextResolver = (
         seg === ClientType.B2B2B
     );
 
-    console.log("Detected Client:", client);
+
 
     if (client) {
         req.clientType = client as ClientType;
 
-        console.log("Client Type Set:", req.clientType);
-        console.log("====================================");
+
+
 
         return next();
     }
 
-    console.log("No valid client type found");
-    console.log("====================================");
+
+
 
     return next(new Error(`Invalid client type`));
 };

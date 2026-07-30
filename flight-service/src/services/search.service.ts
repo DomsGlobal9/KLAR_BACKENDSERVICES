@@ -107,7 +107,7 @@ class SearchService {
                     if (validation.isValid) {
                         normalized = FlightFilter.applyFilters(normalized, filters);
                     } else {
-                        console.warn("Invalid filters:", validation.errors);
+
                     }
                 }
 
@@ -159,7 +159,7 @@ class SearchService {
                 if (validation.isValid) {
                     normalized = FlightFilter.applyFilters(normalized, filters);
                 } else {
-                    console.warn('Invalid filters:', validation.errors);
+
                 }
             }
 
@@ -263,7 +263,7 @@ class SearchService {
                                 returnFlights = FlightFilter.applyFilters(returnFlights, filters);
                             }
                         } else {
-                            console.warn('Invalid filters:', validation.errors);
+
                         }
                     }
 
@@ -317,7 +317,7 @@ class SearchService {
                                 return onwardMatch && returnMatch;
                             });
                         } else {
-                            console.warn('Invalid filters:', validation.errors);
+
                         }
                     }
 
@@ -475,7 +475,7 @@ class SearchService {
                         normalized = { roundTrips: filteredRoundTrips };
                     }
                 } else {
-                    console.warn('Invalid filters:', validation.errors);
+
                 }
             }
 
@@ -651,7 +651,7 @@ class SearchService {
                                 applyToLegs || 'all'
                             );
                         } else {
-                            console.warn('Invalid filters:', validation.errors);
+
                         }
                     }
 
@@ -708,7 +708,7 @@ class SearchService {
                                 return allLegsMatch;
                             });
                         } else {
-                            console.warn('Invalid filters:', validation.errors);
+
                         }
                     }
 
@@ -810,7 +810,7 @@ class SearchService {
                         normalized = filteredItineraries;
                     }
                 } else {
-                    console.warn('Invalid filters:', validation.errors);
+
                 }
             }
 
@@ -893,7 +893,7 @@ class SearchService {
                             );
                             fareRulesMap.set(fareId, fareRuleResponse.data);
                         } catch (error) {
-                            console.error(`Failed to fetch fare rule for ${fareId}:`, error);
+
                             fareRulesMap.set(fareId, null);
                         }
                     }
@@ -981,7 +981,7 @@ class SearchService {
                                             fareRule: fareRuleResponse.data
                                         });
                                     } catch (error) {
-                                        console.error(`Failed to fetch fare rule for ${fare.id}:`, error);
+
                                         flight.availableFares.push({
                                             fareId: fare.id,
                                             fareIdentifier: fare.fareIdentifier,

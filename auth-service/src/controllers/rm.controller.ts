@@ -16,7 +16,7 @@ export const createRM = async (
 
     try {
 
-        console.log("RM Create body got:\n", req.body);
+
 
         const {
             memberName,

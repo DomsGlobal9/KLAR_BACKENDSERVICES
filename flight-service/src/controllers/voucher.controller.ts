@@ -53,7 +53,7 @@ class VoucherController {
                     response.data.data._id;
 
                 if (!userId) {
-                    console.error("❌ No user ID found in auth response:", response.data.data);
+
                     throw new Error("No user ID in token validation response");
                 }
 
@@ -65,19 +65,19 @@ class VoucherController {
                 };
             }
 
-            console.log("❌ TOKEN INVALID - success: false");
+
             throw new Error("Token validation failed");
         } catch (error: any) {
-            console.log("\n🔴 VALIDATION ERROR 🔴");
-            console.log("Error message:", error.message);
+
+
 
             if (error.response) {
-                console.log("Error Status:", error.response.status);
-                console.log("Error Data:", JSON.stringify(error.response.data, null, 2));
+
+
             } else if (error.request) {
-                console.log("No response received from Auth Service");
+
             } else {
-                console.log("Error setting up request:", error.message);
+
             }
 
             throw new Error(
@@ -98,7 +98,7 @@ class VoucherController {
      */
     public downloadVoucher = async (req: Request, res: Response) => {
         try {
-            console.log("📄 Downloading Voucher - START");
+
             const { bookingId } = req.params;
             const source = req.query.source as string;
 
@@ -115,7 +115,7 @@ class VoucherController {
 
             // If source is b2c, get booking without authentication
             if (source === 'b2c') {
-                console.log(`📖 Fetching booking ${bookingIdStr} for B2C source`);
+
                 localBooking = await BookingService.getBookingDetailsBySource(
                     bookingIdStr,
                     'b2c'
@@ -167,7 +167,7 @@ class VoucherController {
                 localBooking
             );
 
-            console.log("✅ Voucher downloaded successfully");
+
 
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename=voucher-${bookingIdStr}.pdf`);
@@ -175,7 +175,7 @@ class VoucherController {
             res.send(pdfBuffer);
 
         } catch (error: any) {
-            console.error("❌ Error downloading voucher:", error);
+
             return res.status(500).json({
                 success: false,
                 message: error.message || "Failed to download voucher",
@@ -189,7 +189,7 @@ class VoucherController {
      */
     public previewVoucher = async (req: Request, res: Response) => {
         try {
-            console.log("👁️ Previewing Voucher - START");
+
             const { bookingId } = req.params;
 
             const bookingIdStr = Array.isArray(bookingId) ? bookingId[0] : bookingId;
@@ -235,14 +235,14 @@ class VoucherController {
                 localBooking
             );
 
-            console.log("✅ Voucher preview generated");
+
 
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `inline; filename=voucher-${bookingIdStr}.pdf`);
             res.send(pdfBuffer);
 
         } catch (error: any) {
-            console.error("❌ Error previewing voucher:", error);
+
             return res.status(500).json({
                 success: false,
                 message: error.message || "Failed to preview voucher",
@@ -256,7 +256,7 @@ class VoucherController {
      */
     public getVoucherBase64 = async (req: Request, res: Response) => {
         try {
-            console.log("📊 Getting Voucher Base64 - START");
+
             const { bookingId } = req.params;
 
             const bookingIdStr = Array.isArray(bookingId) ? bookingId[0] : bookingId;
@@ -304,7 +304,7 @@ class VoucherController {
 
             const pdfBase64 = pdfBuffer.toString('base64');
 
-            console.log("✅ Voucher Base64 generated");
+
 
             return res.status(200).json({
                 success: true,
@@ -318,7 +318,7 @@ class VoucherController {
             });
 
         } catch (error: any) {
-            console.error("❌ Error getting voucher base64:", error);
+
             return res.status(500).json({
                 success: false,
                 message: error.message || "Failed to generate voucher",
@@ -332,7 +332,7 @@ class VoucherController {
      */
     public emailVoucher = async (req: Request, res: Response) => {
         try {
-            console.log("📧 Emailing Voucher - START");
+
             const { bookingId } = req.params;
             const { email } = req.body;
 
@@ -399,7 +399,7 @@ class VoucherController {
                 }]
             });
 
-            console.log("✅ Voucher emailed successfully");
+
 
             return res.status(200).json({
                 success: true,
@@ -411,7 +411,7 @@ class VoucherController {
             });
 
         } catch (error: any) {
-            console.error("❌ Error emailing voucher:", error);
+
             return res.status(500).json({
                 success: false,
                 message: error.message || "Failed to email voucher",
