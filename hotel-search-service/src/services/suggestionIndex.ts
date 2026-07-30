@@ -22,13 +22,6 @@ import { boundedEditDistance, normalizeText, tokenizeText } from "../utils/text"
  * Omitting the fields makes that a compile-time guarantee rather than a
  * convention someone can forget.
  */
-export interface CountryEntry {
-  name: string;
-  nameLower: string;
-  tokens: string[];
-  isoCode: string;
-  countryCode: string;
-}
 
 export interface CityEntry {
   name: string;
@@ -51,6 +44,7 @@ export interface CountryEntry {
   nameLower: string;
   tokens: string[];
   isoCode: string;
+  countryCode: string;
 }
 
 interface SuggestionIndex {
@@ -133,6 +127,7 @@ export function buildSuggestionIndex(): SuggestionIndex {
       nameLower,
       tokens: tokenize(country.name),
       isoCode: country.isoCode,
+      countryCode: country.isoCode,
     };
     indexByTokens(countryBuckets, entry);
     if (nameLower) push(countriesByFirstChar, nameLower[0], entry);
