@@ -86,5 +86,10 @@ hotelSchema.index({ cityName: "text", name: "text" });
 // Multikey index backing the autocomplete prefix lookup.
 hotelSchema.index({ searchTokens: 1 });
 
+// Backs the "top cities in <country>" aggregation behind the landing-page
+// destination tiles. Without it that group-by collection-scans all ~1.6M
+// documents; with it, only the one country's slice is touched.
+hotelSchema.index({ countryName: 1, cityName: 1 });
+
 export const HotelModel: Model<IHotel> =
   mongoose.models.Hotel || mongoose.model<IHotel>("Hotel", hotelSchema);
