@@ -28,19 +28,27 @@ export class PaymentUtil {
     if (!env.internalServiceKey) {
       return {
         verified: false,
-        reason: "INTERNAL_SERVICE_KEY is not configured; cannot verify payment.",
+        reason:
+          "INTERNAL_SERVICE_KEY is not configured; cannot verify payment.",
         capturedAmount: 0,
       };
     }
     if (!paymentId) {
-      return { verified: false, reason: "Missing razorpayPaymentId.", capturedAmount: 0 };
+      return {
+        verified: false,
+        reason: "Missing razorpayPaymentId.",
+        capturedAmount: 0,
+      };
     }
 
     try {
       const response = await axios.post(
         `${env.paymentServiceUrl}/razorpay/internal/verify`,
         { paymentId, orderId, expectedAmount, platform },
-        { headers: { "x-internal-key": env.internalServiceKey }, timeout: 15000 },
+        {
+          headers: { "x-internal-key": env.internalServiceKey },
+          timeout: 15000,
+        },
       );
 
       const data = response.data?.data;
@@ -61,7 +69,9 @@ export class PaymentUtil {
       return {
         verified: false,
         reason:
-          err?.response?.data?.message || err?.message || "Payment verification request failed.",
+          err?.response?.data?.message ||
+          err?.message ||
+          "Payment verification request failed.",
         capturedAmount: 0,
       };
     }
@@ -106,7 +116,8 @@ export class PaymentUtil {
 
     if (!response.data?.success) {
       throw new Error(
-        response.data?.message || "Gateway refund was rejected by payment-service",
+        response.data?.message ||
+          "Gateway refund was rejected by payment-service",
       );
     }
 

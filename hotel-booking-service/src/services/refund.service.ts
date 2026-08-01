@@ -48,7 +48,10 @@ class RefundService {
   /**
    * The supplier never honoured the booking. Give back everything the payer paid.
    */
-  async refundFailedBooking(booking: any, reason: string): Promise<RefundOutcome> {
+  async refundFailedBooking(
+    booking: any,
+    reason: string,
+  ): Promise<RefundOutcome> {
     return this.execute(booking, {
       amount: round2(Number(booking.totalAmount) || 0),
       reason,
@@ -126,7 +129,8 @@ class RefundService {
    */
   async retryRefund(booking: any): Promise<RefundOutcome> {
     const prior = booking.refund;
-    if (!prior) return { refunded: false, skipped: true, reason: "No refund to retry" };
+    if (!prior)
+      return { refunded: false, skipped: true, reason: "No refund to retry" };
 
     const reason = prior.reason || "Retrying a previously failed refund.";
 
@@ -159,7 +163,12 @@ class RefundService {
       if (updated) {
         notificationService.sendBookingStatusEmail(updated, req.finalStatus);
       }
-      return { refunded: false, skipped: false, amount: 0, reason: "No refund due under the cancellation policy" };
+      return {
+        refunded: false,
+        skipped: false,
+        amount: 0,
+        reason: "No refund due under the cancellation policy",
+      };
     }
 
     const method = this.resolveMethod(booking);
@@ -167,7 +176,10 @@ class RefundService {
     if (method === RefundMethod.NONE) {
       const updated = await this.markNoInstrument(booking, req);
       if (updated) {
-        notificationService.sendBookingStatusEmail(updated, req.noInstrumentStatus);
+        notificationService.sendBookingStatusEmail(
+          updated,
+          req.noInstrumentStatus,
+        );
       }
       return {
         refunded: false,
@@ -213,7 +225,10 @@ class RefundService {
       );
 
       if (transitioned) {
-        notificationService.sendBookingStatusEmail(transitioned, req.finalStatus);
+        notificationService.sendBookingStatusEmail(
+          transitioned,
+          req.finalStatus,
+        );
       }
 
       await BookingEventLogger.log(
@@ -308,7 +323,10 @@ class RefundService {
   }
 
   /** Non-refundable rate, or cancelled past the free window. Nothing owed. */
-  private async recordZeroRefund(booking: any, req: RefundRequest): Promise<any> {
+  private async recordZeroRefund(
+    booking: any,
+    req: RefundRequest,
+  ): Promise<any> {
     const updated = await BookingModel.findOneAndUpdate(
       { _id: booking._id, "refund.status": { $ne: RefundStatus.COMPLETED } },
       {
@@ -335,7 +353,10 @@ class RefundService {
     return updated;
   }
 
-  private async markNoInstrument(booking: any, req: RefundRequest): Promise<any> {
+  private async markNoInstrument(
+    booking: any,
+    req: RefundRequest,
+  ): Promise<any> {
     const updated = await BookingModel.findOneAndUpdate(
       { _id: booking._id, "refund.status": { $ne: RefundStatus.COMPLETED } },
       {
@@ -362,7 +383,10 @@ class RefundService {
     return updated;
   }
 
-  private async refundToWallet(booking: any, req: RefundRequest): Promise<string> {
+  private async refundToWallet(
+    booking: any,
+    req: RefundRequest,
+  ): Promise<string> {
     await WalletUtil.refundToAgentWallet(
       booking.agentId,
       req.amount,
@@ -372,7 +396,10 @@ class RefundService {
     return "";
   }
 
-  private async refundToGateway(booking: any, req: RefundRequest): Promise<string> {
+  private async refundToGateway(
+    booking: any,
+    req: RefundRequest,
+  ): Promise<string> {
     return PaymentUtil.refundGatewayPayment(
       booking.razorpayPaymentId,
       req.amount,

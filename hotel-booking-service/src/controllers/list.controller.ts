@@ -5,14 +5,18 @@ export const listController = async (req: any, res: Response) => {
   try {
     const { status, page, limit } = req.query;
     const agentId = req.user?.userId || req.user?.id || req.user?._id;
-    const roles = typeof req.user?.roles === "string" ? [req.user.roles] : req.user?.roles || [];
+    const roles =
+      typeof req.user?.roles === "string"
+        ? [req.user.roles]
+        : req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
     const isGuest = roles.includes("GUEST") || req.user?.isGuest;
     const email = req.user?.email;
     console.log(`[FORENSIC] req.user:`, JSON.stringify(req.user));
 
-    const clientType = req.headers["x-client-type"] || req.query.clientType || "B2C";
-    
+    const clientType =
+      req.headers["x-client-type"] || req.query.clientType || "B2C";
+
     const data = await listService.list({
       status: status as string | undefined,
       page: page ? parseInt(page as string, 10) : undefined,

@@ -82,12 +82,18 @@ export const ensureLocationAddress = async (loc: any): Promise<any> => {
     };
 };
 
+const knownStates = new Set([
+    'telangana', 'maharashtra', 'karnataka', 'tamil nadu', 'delhi', 'uttar pradesh', 
+    'gujarat', 'rajasthan', 'west bengal', 'kerala', 'haryana', 'punjab', 'bihar',
+    'madhya pradesh', 'andhra pradesh', 'odisha', 'jharkhand', 'assam', 'chhattisgarh',
+    'goa', 'uttarakhand', 'himachal pradesh', 'jammu and kashmir', 'ladakh'
+]);
+
 export const getCityFromAddress = (addressStr: string) => {
     if (!addressStr) return "City";
     const parts = addressStr.split(',').map(p => p.trim());
     if (parts.length === 1) return parts[0];
     
-    const lastPart = parts[parts.length - 1].toLowerCase().replace(/[^a-z\s]/g, '').trim();
     const knownCountries = [
         'uk', 'united kingdom', 'us', 'usa', 'united states', 'australia', 'canada', 
         'uae', 'united arab emirates', 'singapore', 'france', 'germany', 'malaysia', 
@@ -96,11 +102,20 @@ export const getCityFromAddress = (addressStr: string) => {
         'argentina', 'south africa', 'turkey', 'egypt', 'saudi arabia', 'qatar',
         'oman', 'kuwait', 'bahrain', 'vietnam', 'philippines', 'indonesia', 'new zealand', 'india'
     ];
-    
-    if (knownCountries.includes(lastPart) || lastPart.includes('emirates')) {
-        return parts.length > 1 ? parts[parts.length - 2] : "City";
+
+    let filtered = parts;
+    const lastPart = parts[parts.length - 1].toLowerCase().replace(/[^a-z\s]/g, '').trim();
+    if (knownCountries.includes(lastPart) || lastPart.includes('emirates') || lastPart.includes('india')) {
+        filtered = parts.slice(0, -1);
     }
-    return parts[parts.length - 1];
+    if (filtered.length === 0) return "City";
+    
+    const lastFiltered = filtered[filtered.length - 1].toLowerCase().replace(/[^a-z\s]/g, '').trim();
+    if (knownStates.has(lastFiltered) && filtered.length > 1) {
+        return filtered[filtered.length - 2];
+    }
+    
+    return filtered[filtered.length - 1];
 };
 
 export const getCountryFromAddress = (addressStr: string) => {

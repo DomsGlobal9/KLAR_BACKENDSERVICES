@@ -136,8 +136,10 @@ export const compileTravellerPayload = (
           allocationDetails:
             room.allocationDetails ||
             formData.RoomSelection?.[0]?.allocationDetails ||
-            formData.precheckResponse?.body?.preCheckResponse?.rooms?.[0]?.rates?.[0]?.allocationDetails ||
-            formData.precheckResponse?.body?.preCheckResponse?.allocationDetails ||
+            formData.precheckResponse?.body?.preCheckResponse?.rooms?.[0]
+              ?.rates?.[0]?.allocationDetails ||
+            formData.precheckResponse?.body?.preCheckResponse
+              ?.allocationDetails ||
             undefined,
           Guest: room.guests
             .filter((g: any) => g.isAdult)

@@ -69,9 +69,10 @@ const MIN_QUERY_LENGTH = 2;
 /**
  * Without a cap, a query like "taj" fills every slot with obscure prefix
  * matches (Tajao, Tajimi, Tajiri, Tajueco) and buries the Taj hotels the user
- * was actually reaching for.
+ * was actually reaching for. Increased from 2→4 so international destinations
+ * get enough slots when the user is clearly searching abroad.
  */
-const MAX_FOREIGN_CITIES = 2;
+const MAX_FOREIGN_CITIES = 4;
 
 /** "goa" → "Goa", "north goa" → "North Goa". The sync stores cityName lowercased. */
 function titleCase(value: string): string {
@@ -268,7 +269,7 @@ function matchAliasedPlaces(typedLower: string): {
   const states: Array<Scored<StateEntry>> = [];
   const cities: Array<Scored<CityEntry>> = [];
 
-  for (const { alias, canonical, kind } of matchAliasPrefixes(typedLower)) {
+  for (const { alias, canonical, kind, countryCode } of matchAliasPrefixes(typedLower)) {
     const score = alias === typedLower ? SCORE_EXACT : SCORE_WORD_PREFIX;
     const canonicalLower = normalize(canonical);
     const canonicalTokens = tokenize(canonical);
@@ -283,6 +284,18 @@ function matchAliasedPlaces(typedLower: string): {
       continue;
     }
 
+    // International alias: match against the specific country code provided.
+    if (countryCode) {
+      for (const entry of candidateCities(canonicalTokens)) {
+        if (entry.countryCode === countryCode && entry.nameLower === canonicalLower) {
+          cities.push({ entry, score });
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Home-country alias (legacy behaviour).
     for (const entry of candidateCities(canonicalTokens)) {
       if (entry.countryCode === HOME_COUNTRY && entry.nameLower === canonicalLower) {
         cities.push({ entry, score });
@@ -328,75 +341,58 @@ function matchCities(queryLower: string, queryTokens: string[]): Array<Scored<Ci
   return matches;
 }
 
-/**
- * Collapse the result set so each place appears exactly once, ranked home-first.
- *
- * A matched state claims its entire territory: every city inside it folds into
- * the parent row, because selecting the state already searches the whole region.
- * That is what turns Goa / North Goa / South Goa / Goa Velha into a single "Goa".
- * A matched name claims its spelling, so a second "Goa" or "Delhi" abroad is
- * dropped rather than shown as a confusing near-duplicate.
- *
- * States and cities are ranked in one list rather than one after the other, so a
- * foreign state can never outrank a home-country city.
- */
+const POPULAR_GLOBAL_DESTINATIONS = new Set([
+  "maldives", "goa", "dubai", "bali", "singapore", "manali", "jaipur",
+  "bangkok", "phuket", "pattaya", "shimla", "kerala", "mumbai", "delhi",
+  "bengaluru", "chennai", "hyderabad", "kolkata", "london", "paris", "new york"
+]);
+
 type Candidate =
+  | { kind: "country"; score: number; entry: CountryEntry }
   | { kind: "state"; score: number; entry: StateEntry }
   | { kind: "city"; score: number; entry: CityEntry };
 
 function buildDestinations(
   queryLower: string,
+  countries: Array<Scored<CountryEntry>>,
   states: Array<Scored<StateEntry>>,
   cities: Array<Scored<CityEntry>>,
   curated: Map<string, Array<{ name: string; description: string; tag?: string }>>,
 ): Suggestion[] {
-  /**
-   * The query names a home-country place outright ("goa", "delhi"). Anything
-   * foreign that merely shares a prefix ("Goascoran", "Delhi Hills") is noise,
-   * so it is dropped. When the query resolves nowhere at home ("new", "dubai")
-   * this stays false and foreign places compete normally.
-   */
-  const resolvedAtHome =
-    states.some((s) => s.entry.countryCode === HOME_COUNTRY && s.entry.nameLower === queryLower) ||
-    cities.some((c) => c.entry.countryCode === HOME_COUNTRY && c.entry.nameLower === queryLower);
-
   const candidates: Candidate[] = [
+    ...countries.map((c): Candidate => ({ kind: "country", score: c.score, entry: c.entry })),
     ...states.map((s): Candidate => ({ kind: "state", score: s.score, entry: s.entry })),
     ...cities.map((c): Candidate => ({ kind: "city", score: c.score, entry: c.entry })),
   ];
 
   candidates.sort((a, b) => {
+    // Tier 0: Popular global destinations (Maldives, Goa, Dubai, Bali...) that match the query
+    const aIsPopular = POPULAR_GLOBAL_DESTINATIONS.has(a.entry.nameLower) && a.entry.nameLower.startsWith(queryLower);
+    const bIsPopular = POPULAR_GLOBAL_DESTINATIONS.has(b.entry.nameLower) && b.entry.nameLower.startsWith(queryLower);
+    if (aIsPopular !== bIsPopular) return aIsPopular ? -1 : 1;
+
     if (a.score !== b.score) return a.score - b.score;
+
     const aHome = a.entry.countryCode === HOME_COUNTRY ? 0 : 1;
     const bHome = b.entry.countryCode === HOME_COUNTRY ? 0 : 1;
     if (aHome !== bHome) return aHome - bHome;
-    // A state outranks a city of equal standing: it is the broader search.
-    const aKind = a.kind === "state" ? 0 : 1;
-    const bKind = b.kind === "state" ? 0 : 1;
-    if (aKind !== bKind) return aKind - bKind;
-    return a.entry.name.length - b.entry.name.length;
-  });
 
-  const hasHomeMatch = candidates.some((c) => c.entry.countryCode === HOME_COUNTRY);
-  // With nothing at home ("dubai", "new york") foreign places are the answer, so
-  // let them use every slot. Otherwise they are capped to leave room for hotels.
-  const foreignBudget = hasHomeMatch ? MAX_FOREIGN_CITIES : MAX_DESTINATIONS;
+    // Closer length to query outranks longer strings
+    return Math.abs(a.entry.name.length - queryLower.length) - Math.abs(b.entry.name.length - queryLower.length);
+  });
 
   const destinations: Suggestion[] = [];
   const claimedStates = new Set<string>();
   const claimedNames = new Set<string>();
-  let foreignUsed = 0;
 
   for (const candidate of candidates) {
     if (destinations.length >= MAX_DESTINATIONS) break;
 
     const { entry, score, kind } = candidate;
     const isHome = entry.countryCode === HOME_COUNTRY;
+    const isPopularGlobal = POPULAR_GLOBAL_DESTINATIONS.has(entry.nameLower) || entry.nameLower.startsWith(queryLower);
 
-    if (!isHome && resolvedAtHome) continue;
-    // A foreign place earns a row only on a strong match, never on a typo guess.
-    if (!isHome && score > SCORE_PREFIX) continue;
-    if (!isHome && foreignUsed >= foreignBudget) continue;
+    if (!isHome && !isPopularGlobal && score > SCORE_PREFIX) continue;
     if (claimedNames.has(entry.nameLower)) continue;
 
     if (kind === "city") {
@@ -405,9 +401,23 @@ function buildDestinations(
     }
 
     claimedNames.add(entry.nameLower);
-    if (!isHome) foreignUsed++;
 
     const countryName = getCountryName(entry.countryCode);
+
+    if (kind === "country") {
+      destinations.push({
+        id: `COUNTRY:${entry.isoCode}`,
+        destCode: "",
+        destName: entry.name,
+        label: entry.name,
+        name: entry.name,
+        type: "city",
+        source: "GEO",
+        subtitle: `Country / Destination`,
+        subSuggestions: [],
+      });
+      continue;
+    }
 
     if (kind === "state") {
       claimedStates.add(`${entry.countryCode}::${entry.isoCode}`);
@@ -785,10 +795,31 @@ export async function getSuggestions(rawQuery: string): Promise<Suggestion[]> {
 
   const destinations = buildDestinations(
     queryLower,
-    [...matchStates(queryLower, queryTokens), ...aliased.states],
-    [...matchCities(queryLower, queryTokens), ...aliased.cities],
+    matchCountries(queryLower, queryTokens),
+    matchStates(queryLower, queryTokens),
+    matchCities(queryLower, queryTokens),
     curated,
   );
+
+  // Ensure that whatever destination string the user is typing (e.g., "Maldives", "Maldi", "Bali"),
+  // a clean destination entry is ALWAYS positioned at #1 at the top of the list if an exact match isn't already #1.
+  const hasExactDestination = destinations.some(
+    (d) => normalize(d.name).startsWith(queryLower) || queryLower.startsWith(normalize(d.name))
+  );
+  if (!hasExactDestination && rawQuery.trim().length >= 2) {
+    const cleanTitle = titleCase(rawQuery.trim());
+    destinations.unshift({
+      id: `CITY:${cleanTitle}`,
+      destCode: "",
+      destName: cleanTitle,
+      label: cleanTitle,
+      name: cleanTitle,
+      type: "city",
+      source: "GEO",
+      subtitle: `Search all hotels in ${cleanTitle}`,
+      subSuggestions: [],
+    });
+  }
 
   const results = [...destinations, ...hotelResult.hotels];
 

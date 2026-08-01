@@ -12,12 +12,12 @@ const corsOptions = {
         'https://klartravels.com',
         'https://www.klartravels.com',
         'https://b2b.klartravels.com',
-        'https://www.b2b.klartravels.com', 
+        'https://www.b2b.klartravels.com',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: true, 
-    optionsSuccessStatus: 200 
+    credentials: true,
+    optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -40,7 +40,7 @@ app.use("/api/insurance", routes);
 
 app.use((req, res) => {
     console.log(`❌ Route not found: ${req.method} ${req.url}`);
-    res.status(404).json({ 
+    res.status(404).json({
         error: 'Route not found',
         method: req.method,
         url: req.url

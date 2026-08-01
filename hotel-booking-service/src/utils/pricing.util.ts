@@ -47,7 +47,8 @@ export function applyPlatformMarkup(supplierNet: number): number {
 export function b2cMarkupAmount(apiNet: number): number {
   const cfg = getMarkupConfig().b2c;
   if (!cfg.enabled || !apiNet || apiNet <= 0) return 0;
-  const amt = cfg.type === "PERCENTAGE" ? (apiNet * cfg.value) / 100 : cfg.value;
+  const amt =
+    cfg.type === "PERCENTAGE" ? (apiNet * cfg.value) / 100 : cfg.value;
   return round2(Math.max(0, amt));
 }
 

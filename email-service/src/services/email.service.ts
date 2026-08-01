@@ -11,6 +11,7 @@ export interface SendEmailPayload {
     cc?: string | string[];
     bcc?: string | string[];
     replyTo?: string;
+    attachments?: any[];
 }
 
 export interface EmailResponse {
@@ -60,6 +61,7 @@ export class EmailService {
                 cc: cc.length ? cc : undefined,
                 bcc: bcc.length ? bcc : undefined,
                 replyTo: payload.replyTo || envConfig.DEFAULT_REPLY_TO,
+                attachments: payload.attachments,
             });
 
             console.log(`✅ [EMAIL] Email sent successfully`, {

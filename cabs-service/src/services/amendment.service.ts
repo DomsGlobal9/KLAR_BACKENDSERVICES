@@ -30,19 +30,27 @@ class AmendmentService {
     if (!bookingId)
       throw new StructuredError("VALIDATION_ERROR", "bookingId is required.");
 
-    const booking = await CabBookingModel.findOne({ bookingId });
+    const booking = await CabBookingModel.findOne({ 
+      $or: [
+        { klarBookingId: bookingId },
+        { bookingId: bookingId }
+      ]
+    });
     // A caller is passed for direct API access; assert ownership before we reveal
     // any booking-specific charge/refund detail. Internal calls (from
     // processCancellation, which already checked ownership) pass no caller.
     if (caller) assertBookingOwnership(booking, caller);
+    
+    // We must pass the provider's bookingId to TripJack, not our klarBookingId
+    const providerBookingId = booking?.bookingId || bookingId;
     const totalAmount = round2(booking?.totalAmount ?? 0); // gross the customer paid
     const apiPrice = round2(booking?.netAmount ?? booking?.totalAmount ?? 0);
 
     let raw: any = null;
     try {
-      raw = await tripJackCabsProvider.getAmendmentCharges(bookingId, type);
+      raw = await tripJackCabsProvider.getAmendmentCharges(providerBookingId, type);
     } catch (e: any) {
-      console.warn(`[AmendmentService] getAmendmentCharges failed for ${bookingId}: ${e?.message}`);
+      console.warn(`[AmendmentService] getAmendmentCharges failed for ${providerBookingId}: ${e?.message}`);
     }
 
     const amd = raw?.data?.amendment || raw?.data || {};
@@ -90,19 +98,26 @@ class AmendmentService {
     // 0. Ownership gate — cancellation is destructive and moves money, so a bare
     //    bookingId is never enough. The caller must own the booking (token
     //    identity, admin, or a matching guest capability proof).
-    const owned = await CabBookingModel.findOne({ bookingId: payload.bookingId });
+    const owned = await CabBookingModel.findOne({ 
+      $or: [
+        { klarBookingId: payload.bookingId },
+        { bookingId: payload.bookingId }
+      ]
+    });
     assertBookingOwnership(owned, caller);
+
+    const providerBookingId = owned?.bookingId || payload.bookingId;
 
     // 1. Capture the charge breakdown BEFORE cancelling (penalty depends on now).
     let cancelChargesInfo: any = null;
     try {
-      cancelChargesInfo = await this.getCharges(payload.bookingId, "CANCELLATION");
+      cancelChargesInfo = await this.getCharges(providerBookingId, "CANCELLATION");
     } catch (e: any) {
       console.warn(`[AmendmentService] Could not pre-calc cancel charges: ${e?.message}`);
     }
 
     // 2. Cancel at the supplier.
-    const finalPayload = { ...payload, amendmentType: "CANCELLATION" as const };
+    const finalPayload = { ...payload, bookingId: providerBookingId, amendmentType: "CANCELLATION" as const };
     const supplier = cabSupplierRegistry.getByCode("TJ");
     const result = supplier?.adapter.cancel
       ? await supplier.adapter.cancel(finalPayload)
@@ -111,10 +126,10 @@ class AmendmentService {
     const cancelled = result?.success || result?.data?.amendStatus === "SUCCESS";
     if (!cancelled) return result;
 
-    const booking = await CabBookingModel.findOne({ bookingId: payload.bookingId });
+    const booking = owned;
     if (!booking) {
       console.warn(
-        `[AmendmentService] Cancelled ${payload.bookingId} at supplier but no local record found.`,
+        `[AmendmentService] Cancelled ${providerBookingId} at supplier but no local record found.`,
       );
       return result;
     }

@@ -51,9 +51,9 @@ router.get("/health", (_req, res) => {
     database: dbStatus,
   });
 });
-
 // List bookings from DB
 router.get("/bookings", authenticateJWT, listController);
+
 
 // This endpoint is intentionally pre-auth (the guest flow asks "do you already
 // have bookings, please log in"), so it's an unauthenticated existence oracle.
@@ -83,7 +83,11 @@ router.post("/precheck", optionalAuthenticateJWT, precheckController);
 router.post("/commit", optionalAuthenticateJWT, commitController);
 router.post("/confirm", optionalAuthenticateJWT, confirmController);
 router.post("/cancel", optionalAuthenticateJWT, cancelController);
-router.get("/cancel/charges", optionalAuthenticateJWT, getCancelChargesController);
+router.get(
+  "/cancel/charges",
+  optionalAuthenticateJWT,
+  getCancelChargesController,
+);
 router.post("/refund/manual/:bookingId", authenticateJWT, processManualRefund);
 router.post("/pricing-summary", authenticateJWT, getPricingSummaryController);
 

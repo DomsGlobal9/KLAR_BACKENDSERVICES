@@ -60,7 +60,7 @@ export class RateGainAdapter implements SupplierAdapter {
         option.lowestRate ||
         option.Pricing?.TotalPrice ||
         0;
-      
+
       const supplierTotal = Number(rawPrice);
 
       const cur =
@@ -74,12 +74,19 @@ export class RateGainAdapter implements SupplierAdapter {
       let inc = 0;
       let exc = 0;
       const taxObj = option.taxes;
-      
+
       if (taxObj && Array.isArray(taxObj.taxes)) {
         taxObj.taxes.forEach((t: any) => {
           if ((t.clientCurrency || cur) !== cur) return;
-          const amt = Number(t.clientAmount ?? (t.clientCurrency === cur ? t.amount : 0)) || 0;
-          const isInc = t.included === true || t.included === "true" || t.included === 1 || taxObj.allIncluded === true;
+          const amt =
+            Number(
+              t.clientAmount ?? (t.clientCurrency === cur ? t.amount : 0),
+            ) || 0;
+          const isInc =
+            t.included === true ||
+            t.included === "true" ||
+            t.included === 1 ||
+            taxObj.allIncluded === true;
           if (isInc) {
             inc += amt;
           } else {
@@ -97,7 +104,7 @@ export class RateGainAdapter implements SupplierAdapter {
             option.totalTax ||
             option.taxes ||
             option.taxesAndFees ||
-            0
+            0,
         );
       }
 
@@ -118,7 +125,6 @@ export class RateGainAdapter implements SupplierAdapter {
       );
       const sellingRate =
         rawSellingRate > 0 ? Math.round(rawSellingRate * 100) / 100 : undefined;
-
 
       const currency =
         rgRes?.body?.CurrencyCode ||

@@ -36,13 +36,6 @@ export const createRazorpayOrderController = async (req: Request, res: Response)
             });
         }
 
-        
-        if (platform === 'B2C' && !bookingId) {
-            return res.status(400).json({
-                success: false,
-                message: 'bookingId is required for B2C platform'
-            });
-        }
 
         const result = await createRazorpayOrderService({
             userId,

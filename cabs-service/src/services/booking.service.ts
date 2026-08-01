@@ -409,8 +409,29 @@ class BookingService {
       },
     };
 
+    const generateKlarBookingId = (): string => {
+      const date = new Date();
+      const yy = String(date.getFullYear()).slice(-2);
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      let randomChars = "";
+      for (let i = 0; i < 7; i++) {
+        randomChars += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      
+      // Assuming TripJack is the only provider for cabs right now ("T")
+      return `KLCT${yy}${mm}${dd}${randomChars}`;
+    };
+
+    const bookingPayload = {
+      ...base,
+      klarBookingId: generateKlarBookingId(),
+    };
+
     try {
-      return await cabBookingRepository.createBooking(base);
+      return await cabBookingRepository.createBooking(bookingPayload);
     } catch (err: any) {
       if (err?.code === 11000) {
         const prior = await CabBookingModel.findOne({ idempotencyKey });

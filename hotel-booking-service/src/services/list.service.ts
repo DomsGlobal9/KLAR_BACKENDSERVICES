@@ -26,9 +26,9 @@ class ListService {
     }
 
     if (!query.isAdmin) {
-      if (query.clientType === 'GUEST') {
+      if (query.clientType === "GUEST") {
         if (query.email) filter.guestEmail = query.email;
-      } else if (query.clientType === 'B2B') {
+      } else if (query.clientType === "B2B") {
         if (query.agentId) filter.agentId = query.agentId;
       } else {
         if (query.agentId) filter.userId = query.agentId;
@@ -48,28 +48,29 @@ class ListService {
     // Map to safe DTO to prevent leaking raw provider responses and margins
     const mappedBookings = bookings.map((b: any) => ({
       _id: b._id,
-      confirmationNumber: b.confirmationNumber || b.reservationId || 'PENDING',
+      confirmationNumber: b.confirmationNumber || b.reservationId || "PENDING",
       reservationId: b.reservationId,
-      propertyId: b.propertyId || 'UNKNOWN',
-      provider: b.provider || 'rategain',
-      status: b.status || 'PENDING',
+      propertyId: b.propertyId || "UNKNOWN",
+      provider: b.provider || "rategain",
+      status: b.status || "PENDING",
       checkIn: b.checkIn || new Date().toISOString(),
       checkOut: b.checkOut || new Date(Date.now() + 86400000).toISOString(),
       totalAmount: b.totalAmount || 0,
-      currencyCode: b.currencyCode || 'INR',
-      hotelName: b.hotelName || 'Hotel',
+      currencyCode: b.currencyCode || "INR",
+      hotelName: b.hotelName || "Hotel",
       hotelImage: b.hotelImage,
       hotelAddress: b.hotelAddress,
       city: b.city,
       starRating: b.starRating,
       agentId: b.agentId,
-      guestName: b.guestName || 'Guest',
-      rooms: b.rooms?.map((r: any) => ({
-        roomType: r.roomType || r.roomName || 'Standard Room',
-        boardType: r.boardType || r.boardName,
-        guests: r.guests || 1,
-        price: r.price || 0,
-      })) || [],
+      guestName: b.guestName || "Guest",
+      rooms:
+        b.rooms?.map((r: any) => ({
+          roomType: r.roomType || r.roomName || "Standard Room",
+          boardType: r.boardType || r.boardName,
+          guests: r.guests || 1,
+          price: r.price || 0,
+        })) || [],
       createdAt: b.createdAt,
     }));
 

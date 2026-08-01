@@ -22,6 +22,7 @@ import { boundedEditDistance, normalizeText, tokenizeText } from "../utils/text"
  * Omitting the fields makes that a compile-time guarantee rather than a
  * convention someone can forget.
  */
+
 export interface CityEntry {
   name: string;
   nameLower: string;
@@ -43,12 +44,13 @@ export interface CountryEntry {
   nameLower: string;
   tokens: string[];
   isoCode: string;
+  countryCode: string;
 }
 
 interface SuggestionIndex {
+  countryBuckets: Map<string, CountryEntry[]>;
   cityBuckets: Map<string, CityEntry[]>;
   stateBuckets: Map<string, StateEntry[]>;
-  countryBuckets: Map<string, CountryEntry[]>;
   citiesByState: Map<string, CityEntry[]>;
   citiesByCountry: Map<string, CityEntry[]>;
   statesByCountry: Map<string, StateEntry[]>;
@@ -60,6 +62,7 @@ interface SuggestionIndex {
   builtInMs: number;
   cityCount: number;
 }
+
 
 let index: SuggestionIndex | null = null;
 
@@ -104,9 +107,9 @@ export function buildSuggestionIndex(): SuggestionIndex {
   if (index) return index;
   const startedAt = Date.now();
 
+  const countryBuckets = new Map<string, CountryEntry[]>();
   const cityBuckets = new Map<string, CityEntry[]>();
   const stateBuckets = new Map<string, StateEntry[]>();
-  const countryBuckets = new Map<string, CountryEntry[]>();
   const citiesByState = new Map<string, CityEntry[]>();
   const citiesByCountry = new Map<string, CityEntry[]>();
   const statesByCountry = new Map<string, StateEntry[]>();
@@ -124,6 +127,7 @@ export function buildSuggestionIndex(): SuggestionIndex {
       nameLower,
       tokens: tokenize(country.name),
       isoCode: country.isoCode,
+      countryCode: country.isoCode,
     };
     indexByTokens(countryBuckets, entry);
     if (nameLower) push(countriesByFirstChar, nameLower[0], entry);
@@ -160,9 +164,9 @@ export function buildSuggestionIndex(): SuggestionIndex {
   }
 
   index = {
+    countryBuckets,
     cityBuckets,
     stateBuckets,
-    countryBuckets,
     citiesByState,
     citiesByCountry,
     statesByCountry,
@@ -287,6 +291,12 @@ export function fuzzyCities(queryLower: string): Array<{ entry: CityEntry; dist:
     const home = city.countryCode === HOME_COUNTRY;
     const limit = home ? homeMax : max;
     const name = city.nameLower;
+
+    // Enforce prefix similarity: city must share at least first 3 characters for 3+ char queries.
+    // Stops "maldi" (prefix "mal") from matching "mandi" (prefix "man") or "madhi" (prefix "mad").
+    const prefixLen = Math.min(3, queryLower.length);
+    if (!name.startsWith(queryLower.slice(0, prefixLen))) continue;
+
     if (name.length < len - limit || name.length > len + limit) continue;
 
     const dist = boundedEditDistance(queryLower, name, limit);

@@ -24,7 +24,9 @@ import {
 // ── country extraction ──────────────────────────────────────────────────────
 
 test("reads the RateGain hotel country", () => {
-  const res = { body: { preCheckResponse: { hotel: { countryName: "Italy" } } } };
+  const res = {
+    body: { preCheckResponse: { hotel: { countryName: "Italy" } } },
+  };
   assert.equal(extractSupplierCountry(res), "Italy");
 });
 
@@ -51,7 +53,10 @@ test("the GUEST's country is never mistaken for the hotel's", () => {
 });
 
 test("a payload with no hotel country yields null", () => {
-  assert.equal(extractSupplierCountry({ body: { guest: { CountryCode: "IN" } } }), null);
+  assert.equal(
+    extractSupplierCountry({ body: { guest: { CountryCode: "IN" } } }),
+    null,
+  );
   assert.equal(extractSupplierCountry({}), null);
   assert.equal(extractSupplierCountry(null), null);
   assert.equal(extractSupplierCountry("nonsense"), null);
@@ -116,7 +121,11 @@ test("an unverifiable stay resolves ALL, not a guess", () => {
   assert.equal(d.region, "ALL");
   assert.equal(d.source, "none");
   assert.equal(d.unverified, true, "and is counted so coverage is measurable");
-  assert.equal(d.mismatch, false, "unverifiable is not the same as contradicted");
+  assert.equal(
+    d.mismatch,
+    false,
+    "unverifiable is not the same as contradicted",
+  );
 });
 
 test("an older client that sends no region still prices safely", () => {
