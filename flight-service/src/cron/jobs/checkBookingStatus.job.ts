@@ -57,9 +57,7 @@ const executeBookingStatusCron = async () => {
          */
         await processBookings(bookings);
 
-    } catch (error: any) {
-        console.error(`[Cron:checkBookingStatus] Error running booking status check:`, error?.message || error);
-    } finally {
+    } catch (error: any) { } finally {
 
         isRunning = false;
     }
@@ -99,9 +97,7 @@ const processSingleBooking = async (booking: any) => {
             response
         );
 
-    } catch (error: any) {
-        console.error(`[Cron:checkBookingStatus] Failed to reconcile booking ${booking.bookingId}:`, error?.message || error);
-    }
+    } catch (error: any) { }
 };
 
 /**

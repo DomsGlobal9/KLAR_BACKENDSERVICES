@@ -9,16 +9,9 @@ const loadAirports = () => {
     if (airportsCache) return airportsCache;
     
     try {
-        const airportCodes = require("airport-codes");
-        if (typeof airportCodes.toJSON === "function") {
-            airportsCache = airportCodes.toJSON();
-        } else if (Array.isArray(airportCodes)) {
-            airportsCache = airportCodes;
-        } else {
-            const filePath = path.join(process.cwd(), "node_modules", "airport-codes", "airports.json");
-            const fileData = fs.readFileSync(filePath, "utf-8");
-            airportsCache = JSON.parse(fileData);
-        }
+        const filePath = path.join(process.cwd(), "node_modules", "airport-codes", "airports.json");
+        const fileData = fs.readFileSync(filePath, "utf-8");
+        airportsCache = JSON.parse(fileData);
     } catch (error) {
         console.error("Error loading airports:", error);
         airportsCache = [];

@@ -147,6 +147,9 @@ export class HotelsService {
       };
     }
 
+    // 1. Resolve Location (Once) — shared by every supplier page we fetch below.
+    await this.resolveGeoCenter(searchPayload);
+
     const pageNo = Math.max(1, Number(searchPayload.pageNo) || 1);
     const limit = Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE);
 
@@ -168,9 +171,6 @@ export class HotelsService {
       console.log(
         `[Search] master cache MISS for "${searchPayload.destination}" — fetching ${env.searchBlockingPages} page(s) inline`,
       );
-      // Resolve Location ONLY on a cache miss before calling suppliers
-      await this.resolveGeoCenter(searchPayload);
-
       // Coalesced so concurrent identical searches share one supplier fan-out.
       master = await this.coalesce(masterKey, async () => {
         const built = await this.fetchMasterList(

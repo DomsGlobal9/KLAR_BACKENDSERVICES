@@ -55,11 +55,11 @@ async function geocodeQuery(query: string): Promise<GeoPoint | null> {
     const lng = result.geometry.lng;
     const boundingBox = result.bounds
       ? [
-        result.bounds.southwest.lat.toString(),
-        result.bounds.northeast.lat.toString(),
-        result.bounds.southwest.lng.toString(),
-        result.bounds.northeast.lng.toString(),
-      ]
+          result.bounds.southwest.lat.toString(),
+          result.bounds.northeast.lat.toString(),
+          result.bounds.southwest.lng.toString(),
+          result.bounds.northeast.lng.toString(),
+        ]
       : [];
 
     return { lat, lng, radiusKm: getRadiusFromBoundingBox(lat, lng, boundingBox), boundingBox };
@@ -102,9 +102,9 @@ function getDistanceKm(
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * (Math.PI / 180)) *
-    Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -164,7 +164,7 @@ export async function resolveGeoCenter(
       console.log(`[GEO] Cache HIT [${lat},${lng}] → radius=${cached.radiusKm}km`);
       return { lat: cached.lat ?? lat, lng: cached.lng ?? lng, radiusKm: cached.radiusKm };
     }
-  } catch (_) { }
+  } catch (_) {}
 
   // 2. Check if a request for these coordinates is already active (deduplication)
   if (activeGeoCenterLocks.has(cacheKey)) {
@@ -182,16 +182,16 @@ export async function resolveGeoCenter(
         `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}&no_annotations=1`,
         { timeout: 6000 },
       );
-
+      
       const results = response.data?.results;
       if (results && results.length > 0) {
         const components = results[0].components;
         const cityName =
-          components.city ||
-          components.town ||
-          components.village ||
+          components.city       ||
+          components.town       ||
+          components.village    ||
           components.municipality ||
-          components.state ||
+          components.state      ||
           components.county;
 
         if (cityName) {
@@ -210,7 +210,7 @@ export async function resolveGeoCenter(
                   { lat: cityCenter.lat, lng: cityCenter.lng, radiusKm: cityCenter.radiusKm },
                   { upsert: true, new: true },
                 );
-              } catch (_) { }
+              } catch (_) {}
               return cityCenter;
             }
           }
@@ -260,7 +260,7 @@ export async function resolveRadiusFromCoords(
       console.log(`[GEO] Radius cache HIT [${lat},${lng}]: ${cached.radiusKm}km`);
       return cached.radiusKm;
     }
-  } catch (_) { }
+  } catch (_) {}
 
   // 2. Lock deduplication
   if (activeRadiusLocks.has(cacheKey)) {
@@ -296,7 +296,7 @@ export async function resolveRadiusFromCoords(
             { lat, lng, radiusKm, boundingBox: bbox },
             { upsert: true, new: true },
           );
-        } catch (_) { }
+        } catch (_) {}
         return radiusKm;
       }
     } catch (err: any) {
@@ -659,10 +659,9 @@ export async function resolveForTJ(
   const normalizedQuery = query.trim();
 
   // 0. Direct ID match (e.g. "TJ:1000123")
-  if (normalizedQuery.startsWith("TJ:") && /^\d+$/.test(normalizedQuery.replace("TJ:", ""))) {
+  if (normalizedQuery.startsWith("TJ:")) {
     return [normalizedQuery.replace("TJ:", "")];
   }
-  const cleanQuery = normalizedQuery.startsWith("TJ:") ? normalizedQuery.replace("TJ:", "") : normalizedQuery;
 
   // 0.1. Direct numeric ID match (e.g. "100000010138")
   if (/^\d{8,15}$/.test(normalizedQuery)) {

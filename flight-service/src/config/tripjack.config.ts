@@ -6,9 +6,7 @@ type TripjackConfig = {
   ENV: "TEST" | "PROD";
 };
 
-//const isProduction = envConfig.NODE_ENV === "production";
-
-const isProduction = envConfig.NODE_ENV === "production" || process.env.USE_LIVE_API === "true" || process.env.TRIPJACK_ENV === "PROD";
+const isProduction = envConfig.NODE_ENV === "production";
 
 const tripjackConfig: TripjackConfig = isProduction
   ? {
