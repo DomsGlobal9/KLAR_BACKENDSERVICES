@@ -9,6 +9,16 @@ const charterSchema = new Schema<ICharterDocument>(
     to: { type: String, required: true, trim: true },
     departureDateTime: { type: Date, required: true },
     passengers: { type: Number, required: true, min: 1 },
+    category: {
+      type: String,
+      enum: [
+        "Private Jets",
+        "Helicopter Charter",
+        "Corporate Charter",
+        "Group Charter",
+      ],
+      required: true,
+    },
     fullName: { type: String, required: true, trim: true },
     mobileNumber: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
