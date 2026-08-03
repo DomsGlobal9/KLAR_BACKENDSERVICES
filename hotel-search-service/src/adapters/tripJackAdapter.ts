@@ -191,10 +191,7 @@ export async function searchTJ(
             if (dbImages.length > 0) return dbImages;
             return [];
           })();
-          const finalAmenities =
-            bh.amenities && bh.amenities.length > 0
-              ? bh.amenities
-              : getTJFallbackAmenities(bh.name || s.name, rating);
+          const finalAmenities = bh.amenities || [];
 
           return {
             ...bh,
@@ -235,7 +232,7 @@ export async function searchTJ(
 }
 
 function getTJFallbackAmenities(name: string, starRating: number): string[] {
-  const amenities = ["Free Wi-Fi", "Air Conditioning", "Room Service"];
+  const amenities: string[] = [];
   if (starRating >= 5) {
     amenities.push(
       "Swimming Pool",
@@ -279,10 +276,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
   const tjBase = Number(opt?.pricing?.basePrice ?? opt?.pricing?.totalPrice ?? 0);
   const tjTotal = Number(opt?.pricing?.totalPrice ?? 0);
   const tjPlatformAmt = platformMarkupAmount(tjBase);
-  const finalAmenities =
-    h.amenities && h.amenities.length > 0
-      ? h.amenities
-      : getTJFallbackAmenities(h.name, rating);
+  const finalAmenities = h.amenities || [];
 
   return {
     hotelId: `TJ:${hotelId}`,

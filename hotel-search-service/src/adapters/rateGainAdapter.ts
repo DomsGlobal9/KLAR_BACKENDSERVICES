@@ -489,9 +489,7 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
     accMultiDesc: h.accMultiDesc,
     accomodationType: h.accomodationType,
     description: h.description || "",
-    amenities: Array.isArray(h.hotelAmenities) && h.hotelAmenities.length > 0
-      ? h.hotelAmenities
-      : getRGFallbackAmenities(h.propertyName || "", parseFloat(h.categoryCode) || parseFloat(h.starRating) || 0),
+    amenities: h.hotelAmenities || [],
     propertyCode: h.propertyCode,
     brandCode: h.brandCode,
     isMandatory,
@@ -542,7 +540,7 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
 }
 
 function getRGFallbackAmenities(name: string, starRating: number): string[] {
-  const amenities = ["Free Wi-Fi", "Air Conditioning", "Room Service"];
+  const amenities: string[] = [];
   if (starRating >= 5) {
     amenities.push(
       "Swimming Pool",
