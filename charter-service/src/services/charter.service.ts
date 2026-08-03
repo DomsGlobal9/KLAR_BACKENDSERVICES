@@ -9,7 +9,6 @@ export class CharterService {
   }
 
   async createCharterBooking(data: CreateCharterInput) {
-    const booking = await this.charterRepository.create(data);
-    return booking;
+    return await this.charterRepository.create(data);
   }
 }
