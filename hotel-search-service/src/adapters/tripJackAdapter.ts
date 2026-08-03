@@ -315,9 +315,15 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     accTypeDesc: h.accTypeDesc,
     accMultiDesc: h.accMultiDesc,
     accomodationType: h.accomodationType,
-    isRefundable: refundable.isRefundable,
-    refundableLabel: refundable.label,
-    freeCancellationUntil: refundable.freeCancellationUntil,
+    // `/hms/v3/hotel/listing` does NOT return a `cancellation` object — that only
+    // arrives from the pricing call. So deriveRefundable almost always lands on
+    // its unknown=true fallback here. Emitting that fallback's `false` made every
+    // TJ card render a hard "Non-Refundable" it had no evidence for; send
+    // undefined instead (same contract as the RG adapter) so the UI shows a
+    // neutral state and the real policy surfaces on the detail page.
+    isRefundable: refundable.unknown ? undefined : refundable.isRefundable,
+    refundableLabel: refundable.unknown ? undefined : refundable.label,
+    freeCancellationUntil: refundable.unknown ? undefined : refundable.freeCancellationUntil,
     onHoldAllowed:
       opt?.onHoldAllowed ??
       opt?.cancellation?.onHoldAllowed ??

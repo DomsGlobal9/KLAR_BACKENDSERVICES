@@ -24,7 +24,15 @@ import {
   getPropertyTypeLabel,
 } from "./facets.service";
 
-const DEFAULT_PAGE_SIZE = 20;
+// 20 was the whole reason the results page felt thin — one screen of cards and
+// then a fetch. With RG now contributing ~80/page alongside TripJack's ~100 the
+// master list is deep enough to serve a larger page without extra supplier work.
+const DEFAULT_PAGE_SIZE = Math.max(1, Number(process.env.SEARCH_PAGE_SIZE || 30));
+// Hard ceiling on the client-supplied `limit`.
+const MAX_PAGE_SIZE = Math.max(
+  DEFAULT_PAGE_SIZE,
+  Number(process.env.SEARCH_MAX_PAGE_SIZE || 100),
+);
 
 // Ceiling on how many times a single request will extend the master list. Guards
 // against a supplier that keeps claiming `hasMore` while returning nothing new.
@@ -151,7 +159,13 @@ export class HotelsService {
     await this.resolveGeoCenter(searchPayload);
 
     const pageNo = Math.max(1, Number(searchPayload.pageNo) || 1);
-    const limit = Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE);
+    // `limit` is client-supplied, so clamp it at both ends. Unbounded before:
+    // a request for limit=100000 would have sliced the entire master list into
+    // one response.
+    const limit = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE),
+    );
 
     const masterKey = this.buildMasterKey(searchPayload, clientType);
     let master = await this.loadMaster(masterKey);
