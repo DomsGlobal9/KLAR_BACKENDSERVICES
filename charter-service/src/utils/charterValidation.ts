@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export const CHARTER_CATEGORIES = [
+  "Private Jets",
+  "Helicopter Charter",
+  "Corporate Charter",
+  "Group Charter",
+] as const;
+
 export const createCharterSchema = z.object({
   from: z
     .string({ message: "Source location is required" })
@@ -11,11 +18,17 @@ export const createCharterSchema = z.object({
     .trim(),
   departureDateTime: z
     .string({ message: "Departure Date & Time is required" })
-    .datetime({ message: "Invalid date format. Expected ISO date format (e.g., YYYY-MM-THH:mm:ssZ)" }),
+    .datetime({
+      message:
+        "Invalid date format. Expected ISO date format (e.g., YYYY-MM-THH:mm:ssZ)",
+    }),
   passengers: z
     .number({ message: "Passengers count is required" })
     .int("Passenger count must be an integer")
     .min(1, "At least 1 passenger is required"),
+  category: z.enum(CHARTER_CATEGORIES, {
+    message: "Please select a valid charter category",
+  }),
   fullName: z
     .string({ message: "Full Name is required" })
     .min(2, "Full Name must be at least 2 characters")
