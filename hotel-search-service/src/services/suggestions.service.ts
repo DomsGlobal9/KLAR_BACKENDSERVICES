@@ -206,11 +206,47 @@ function buildSubSuggestions(
     }));
 }
 
+/**
+ * The only countries allowed to appear as a destination row.
+ *
+ * "India" is not a place you book a hotel in — MakeMyTrip and every other OTA
+ * resolve a country query to its cities, never to the country itself. The
+ * exceptions are small nation-states that a traveller genuinely treats as one
+ * destination: you stay "in the Maldives", not in a named Maldivian city.
+ *
+ * Membership is about how the place is *booked*, not its size on a map, so this
+ * stays a hand-kept list rather than anything derived from the dataset.
+ */
+const DESTINATION_COUNTRIES = new Set([
+  "MV", // Maldives
+  "SG", // Singapore
+  "MU", // Mauritius
+  "SC", // Seychelles
+  "FJ", // Fiji
+  "BB", // Barbados
+  "AG", // Antigua and Barbuda
+  "AW", // Aruba
+  "BS", // Bahamas
+  "MT", // Malta
+  "CY", // Cyprus
+  "BH", // Bahrain
+  "QA", // Qatar
+  "BN", // Brunei
+  "BT", // Bhutan
+  "MC", // Monaco
+  "AD", // Andorra
+  "LI", // Liechtenstein
+  "SM", // San Marino
+  "HK", // Hong Kong
+  "MO", // Macau
+]);
+
 function matchCountries(queryLower: string, queryTokens: string[]): Array<Scored<CountryEntry>> {
   const matches: Array<Scored<CountryEntry>> = [];
   const seen = new Set<CountryEntry>();
 
   for (const entry of candidateCountries(queryTokens)) {
+    if (!DESTINATION_COUNTRIES.has(entry.isoCode)) continue;
     const score = scoreName(entry.nameLower, entry.tokens, queryLower, queryTokens);
     if (score !== NO_MATCH) {
       matches.push({ entry, score });
@@ -220,11 +256,27 @@ function matchCountries(queryLower: string, queryTokens: string[]): Array<Scored
 
   if (matches.length < 3) {
     for (const { entry, dist } of fuzzyCountries(queryLower)) {
+      if (!DESTINATION_COUNTRIES.has(entry.isoCode)) continue;
       if (!seen.has(entry)) matches.push({ entry, score: SCORE_FUZZY + dist });
     }
   }
 
   return matches;
+}
+
+/**
+ * True when the query is reaching for a country that we refuse to list.
+ *
+ * Used only to suppress the synthetic "Search all hotels in X" row: typing
+ * "india" must not produce a country destination through the back door after
+ * matchCountries has already declined to offer one.
+ */
+function isNonDestinationCountryQuery(queryLower: string, queryTokens: string[]): boolean {
+  for (const entry of candidateCountries(queryTokens)) {
+    if (DESTINATION_COUNTRIES.has(entry.isoCode)) continue;
+    if (entry.nameLower.startsWith(queryLower)) return true;
+  }
+  return false;
 }
 
 function matchStates(queryLower: string, queryTokens: string[]): Array<Scored<StateEntry>> {
@@ -806,7 +858,11 @@ export async function getSuggestions(rawQuery: string): Promise<Suggestion[]> {
   const hasExactDestination = destinations.some(
     (d) => normalize(d.name).startsWith(queryLower) || queryLower.startsWith(normalize(d.name))
   );
-  if (!hasExactDestination && rawQuery.trim().length >= 2) {
+  if (
+    !hasExactDestination &&
+    rawQuery.trim().length >= 2 &&
+    !isNonDestinationCountryQuery(queryLower, queryTokens)
+  ) {
     const cleanTitle = titleCase(rawQuery.trim());
     destinations.unshift({
       id: `CITY:${cleanTitle}`,

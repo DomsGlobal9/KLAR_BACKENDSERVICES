@@ -553,7 +553,7 @@ export class BookingPaymentService {
             const user = await UserModel.findById(userId).populate('createdBy');
             if (!user) return;
 
-            if (userRole === "B2B_ADMIN" || userRole === "MASTER" || userRole === "USER" || userRole === "AGENT") {
+            if (userRole === "B2B_ADMIN") {
                 const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
 
                 if (isSubCompany) {
@@ -664,7 +664,7 @@ export class BookingPaymentService {
                 return;
             }
 
-            if (userRole === "B2B_ADMIN" || userRole === "MASTER" || userRole === "USER" || userRole === "AGENT") {
+            if (userRole === "B2B_ADMIN") {
                 const isSubCompany = user.createdBy !== undefined && user.createdBy !== null;
 
 
@@ -775,13 +775,13 @@ export class BookingPaymentService {
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
 
-        const userRole = Array.isArray(user.roles) ? user.roles[0] : user.roles;
+        const userRole = user.roles;
 
         if (userRole === "RM") {
             return await this.handleRMBalanceCheck(userId, user, bookingId, totalPrice);
         }
 
-        if (userRole === "B2B_ADMIN" || userRole === 'USER' || userRole === 'MASTER' || userRole === 'AGENT') {
+        if (userRole === "B2B_ADMIN" || userRole === 'USER') {
             return await this.handleB2BAdminBalanceCheck(userId, user, bookingId, totalPrice);
         }
 
@@ -811,10 +811,12 @@ export class BookingPaymentService {
 
     static async payForBooking(
         userId: Types.ObjectId,
-        userRole: string | string[],
+        userRole: string,
         bookingId: string,
         totalPrice: number
     ) {
+
+
 
         const user = await UserModel.findById(userId);
         if (!user) throw new NotFoundError("User not found");
@@ -827,7 +829,7 @@ export class BookingPaymentService {
             return result;
         }
 
-        if (role === "B2B_ADMIN" || role === "USER" || role === "MASTER" || role === "AGENT") {
+        if (role === "B2B_ADMIN" || userRole === "USER") {
             const result = await this.handleB2BAdminPayment(userId, user, bookingId, totalPrice);
 
             return result;

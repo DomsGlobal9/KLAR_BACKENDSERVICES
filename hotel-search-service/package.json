@@ -10,6 +10,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "backfill:tokens": "ts-node --transpile-only scripts/backfillSearchTokens.ts",
+    "ensure:indexes": "ts-node --transpile-only scripts/ensureHotelIndexes.ts",
     "validate:aliases": "ts-node --transpile-only scripts/validateCityAliases.ts",
     "sync:hotels": "ts-node --transpile-only scripts/syncHotels.ts",
     "format": "prettier --write .",

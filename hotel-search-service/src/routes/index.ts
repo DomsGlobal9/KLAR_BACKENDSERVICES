@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getDestinations,
   getPopularDestinations,
+  getCountryCities,
 } from "../controllers/destinations.controller";
 import {
   searchHotels,
@@ -57,6 +58,7 @@ router.get("/health", (_req, res) => {
 
 router.get("/destinations", getDestinations);
 router.get("/destinations/popular", getPopularDestinations);
+router.get("/destinations/cities", getCountryCities);
 router.get("/hotels/suggestions", getHotelSuggestions);
 router.get("/hotels/popular-areas", getPopularAreas);
 router.get("/hotels/static", getStaticHotels);

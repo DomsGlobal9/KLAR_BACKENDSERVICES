@@ -88,7 +88,3 @@ CABS_MODULE_AUDIT.md
 HOTEL_MODULE_AUDIT.md
 *AUDIT.md
 *.md
-
-flight-service/scratch/
-flight-service/test_flight.js
-flight-service/tripjack_raw.json
