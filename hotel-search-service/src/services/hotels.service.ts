@@ -24,7 +24,15 @@ import {
   getPropertyTypeLabel,
 } from "./facets.service";
 
-const DEFAULT_PAGE_SIZE = 20;
+// 20 was the whole reason the results page felt thin — one screen of cards and
+// then a fetch. With RG now contributing ~80/page alongside TripJack's ~100 the
+// master list is deep enough to serve a larger page without extra supplier work.
+const DEFAULT_PAGE_SIZE = Math.max(1, Number(process.env.SEARCH_PAGE_SIZE || 30));
+// Hard ceiling on the client-supplied `limit`.
+const MAX_PAGE_SIZE = Math.max(
+  DEFAULT_PAGE_SIZE,
+  Number(process.env.SEARCH_MAX_PAGE_SIZE || 100),
+);
 
 // Ceiling on how many times a single request will extend the master list. Guards
 // against a supplier that keeps claiming `hasMore` while returning nothing new.
@@ -151,7 +159,13 @@ export class HotelsService {
     await this.resolveGeoCenter(searchPayload);
 
     const pageNo = Math.max(1, Number(searchPayload.pageNo) || 1);
-    const limit = Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE);
+    // `limit` is client-supplied, so clamp it at both ends. Unbounded before:
+    // a request for limit=100000 would have sliced the entire master list into
+    // one response.
+    const limit = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, Number(searchPayload.limit) || DEFAULT_PAGE_SIZE),
+    );
 
     const masterKey = this.buildMasterKey(searchPayload, clientType);
     let master = await this.loadMaster(masterKey);
@@ -587,18 +601,22 @@ export class HotelsService {
     //
     // The grace must clear RateGain's REAL bestproperties latency, not the
     // optimistic "2-5s" the old comments assumed. Measured live: a Rome geofilter
-    // search returns 1,913 properties in ~14.2s, a Goa one in ~10.7s. With the
-    // former 6s grace the hard cap sat at 14s and aborted RateGain ~200ms before
-    // its data landed, so slow international destinations returned zero hotels
-    // despite RG having full inventory. 12s grace → 20s cap covers RG's observed
-    // p99 plus the enrichment tail, and stays under RG's own 25s HTTP timeout so a
-    // genuinely stalled socket is still cancelled. The cap only bites when nothing
-    // has come back yet; the instant the first results land past the soft window
-    // we return, so healthy searches are unaffected.
+    // search returns 1,913 properties in ~14.2s, a Goa one in ~10.7s.
+    //
+    // Tradeoff chosen deliberately (see PR/chat): worst-case time-to-result is
+    // capped tighter — 6s grace → 14s hard cap — so DOMESTIC searches (Goa 10.7s
+    // + ~1-2s enrichment ≈ 12.7s, the primary market) still land inside the cap,
+    // while the pathological 20s+ tail is gone. The only casualties are the very
+    // slowest INTERNATIONAL geofilter searches (>14s), which may abort RateGain
+    // right before its data lands and fall back to whatever TripJack returned.
+    // Raise SEARCH_TIMEOUT_GRACE_MS back toward 12000 if those destinations must
+    // always include RG. The cap only bites when nothing has come back yet; the
+    // instant the first results land past the soft window we return, so healthy
+    // searches finish as soon as their slowest supplier does.
     const softMs = partialReturnTimeoutMs;
     const hardMs =
       partialReturnTimeoutMs +
-      Number(process.env.SEARCH_TIMEOUT_GRACE_MS || 12000);
+      Number(process.env.SEARCH_TIMEOUT_GRACE_MS || 6000);
 
     await new Promise<void>((resolve) => {
       const timers: ReturnType<typeof setTimeout>[] = [];
@@ -1229,28 +1247,55 @@ export class HotelsService {
 
     // Escape regex metacharacters — city comes straight from user input.
     const escaped = city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const cityRegex = new RegExp(`^${escaped}`, "i");
+    // Case-SENSITIVE on purpose. tjHotelSync lowercases and trims every
+    // cityName it writes, so lowercasing the query is exact — and only a
+    // case-sensitive anchored regex can walk the cityName index. With the `i`
+    // flag MongoDB has to scan all ~1.6M documents, which is what made this
+    // "instant" browse endpoint take ~1.7s.
+    const cityRegex = new RegExp(`^${escaped.toLowerCase()}`);
 
-    // Cap the in-memory set before filtering — enough for any browsing session,
-    // far short of loading a whole metro's inventory into one request.
-    const docs = await HotelModel.find({ cityName: cityRegex })
-      .select(
-        "tjHotelId name cityName countryName starRating address images location accTypeDesc accMultiDesc",
-      )
-      .limit(2000)
-      .lean();
+    const select =
+      "tjHotelId name cityName countryName starRating address images location accTypeDesc accMultiDesc";
+    const start = (page - 1) * pageSize;
 
-    let filtered = docs;
+    let pageDocs: any[];
+    let inventoryCount: number;
+    let hasMore: boolean;
+
     if (params.propertyType) {
+      // Property type is derived in application code, not stored, so this path
+      // still has to pull a pool and filter it here.
+      const docs = await HotelModel.find({ cityName: cityRegex })
+        .select(select)
+        .limit(2000)
+        .lean();
+
       const wanted = params.propertyType.toLowerCase();
-      filtered = docs.filter(
+      const filtered = docs.filter(
         (h) => getPropertyTypeLabel(h).toLowerCase() === wanted,
       );
-    }
 
-    const inventoryCount = filtered.length;
-    const start = (page - 1) * pageSize;
-    const pageDocs = filtered.slice(start, start + pageSize);
+      inventoryCount = filtered.length;
+      pageDocs = filtered.slice(start, start + pageSize);
+      hasMore = start + pageSize < filtered.length;
+    } else {
+      // The common case — the landing page's carousel and the first browse page.
+      // Paginating in Mongo instead of pulling 2,000 documents to show 20 cut
+      // this from ~1.5s to well under 100ms; the count runs off the cityName
+      // index and in parallel rather than as a second round trip.
+      const [docs, total] = await Promise.all([
+        HotelModel.find({ cityName: cityRegex })
+          .select(select)
+          .skip(start)
+          .limit(pageSize)
+          .lean(),
+        HotelModel.countDocuments({ cityName: cityRegex }),
+      ]);
+
+      pageDocs = docs;
+      inventoryCount = total;
+      hasMore = start + pageSize < total;
+    }
 
     const hotels = pageDocs.map((h: any) => ({
       id: h.tjHotelId,
@@ -1275,7 +1320,7 @@ export class HotelsService {
 
     return {
       hotels,
-      hasMore: start + pageSize < filtered.length,
+      hasMore,
       inventoryCount,
     };
   }

@@ -191,10 +191,7 @@ export async function searchTJ(
             if (dbImages.length > 0) return dbImages;
             return [];
           })();
-          const finalAmenities =
-            bh.amenities && bh.amenities.length > 0
-              ? bh.amenities
-              : getTJFallbackAmenities(bh.name || s.name, rating);
+          const finalAmenities = bh.amenities || [];
 
           return {
             ...bh,
@@ -235,7 +232,7 @@ export async function searchTJ(
 }
 
 function getTJFallbackAmenities(name: string, starRating: number): string[] {
-  const amenities = ["Free Wi-Fi", "Air Conditioning", "Room Service"];
+  const amenities: string[] = [];
   if (starRating >= 5) {
     amenities.push(
       "Swimming Pool",
@@ -279,10 +276,7 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
   const tjBase = Number(opt?.pricing?.basePrice ?? opt?.pricing?.totalPrice ?? 0);
   const tjTotal = Number(opt?.pricing?.totalPrice ?? 0);
   const tjPlatformAmt = platformMarkupAmount(tjBase);
-  const finalAmenities =
-    h.amenities && h.amenities.length > 0
-      ? h.amenities
-      : getTJFallbackAmenities(h.name, rating);
+  const finalAmenities = h.amenities || [];
 
   return {
     hotelId: `TJ:${hotelId}`,
@@ -315,9 +309,15 @@ function mapTJHotel(h: any, correlationId: string): UnifiedHotel {
     accTypeDesc: h.accTypeDesc,
     accMultiDesc: h.accMultiDesc,
     accomodationType: h.accomodationType,
-    isRefundable: refundable.isRefundable,
-    refundableLabel: refundable.label,
-    freeCancellationUntil: refundable.freeCancellationUntil,
+    // `/hms/v3/hotel/listing` does NOT return a `cancellation` object — that only
+    // arrives from the pricing call. So deriveRefundable almost always lands on
+    // its unknown=true fallback here. Emitting that fallback's `false` made every
+    // TJ card render a hard "Non-Refundable" it had no evidence for; send
+    // undefined instead (same contract as the RG adapter) so the UI shows a
+    // neutral state and the real policy surfaces on the detail page.
+    isRefundable: refundable.unknown ? undefined : refundable.isRefundable,
+    refundableLabel: refundable.unknown ? undefined : refundable.label,
+    freeCancellationUntil: refundable.unknown ? undefined : refundable.freeCancellationUntil,
     onHoldAllowed:
       opt?.onHoldAllowed ??
       opt?.cancellation?.onHoldAllowed ??

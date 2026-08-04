@@ -3,6 +3,8 @@ import { resolveForRG } from "../services/destinationResolver";
 import { rateGainProvider } from "../providers/rategain.provider";
 import { qualifyImageUrls } from "../utils/imageUrl.util";
 import { deriveRegion } from "../utils/region.util";
+import { deriveRefundable } from "../utils/pricing.util";
+import { HotelModel } from "../models/Hotel.model";
 
 export async function searchRG(
   req: UnifiedSearchRequest,
@@ -60,7 +62,18 @@ export async function searchRG(
       JSON.stringify(payload, null, 2),
     );
     const pageNo = req.pageNo || 1;
-    const batchSize = 1;
+    // How many RateGain API pages make up ONE of our search pages.
+    //
+    // Was hardcoded to 1, which capped RG at 20 hotels per search page while
+    // TripJack densification (TJ_HIDS_PER_PAGE=150 → TJ_MAX_PER_PAGE=100) yields
+    // up to 100. That ~5:1 asymmetry — not a bug in RG itself — is why RateGain
+    // looks absent from the merged list: it loses most dedup ties on price and
+    // has far fewer entries to begin with.
+    //
+    // These pages are fetched CONCURRENTLY, so raising this costs supplier quota
+    // and response size but NOT wall-clock latency — it does not push RG closer
+    // to the abort budget the way a sequential loop would.
+    const batchSize = Math.max(1, Number(process.env.RG_PAGES_PER_SEARCH || 4));
     const apiPageStart = (pageNo - 1) * batchSize + 1;
     // RateGain returns a fixed 20 properties per page. If that ever changes,
     // hasMore is off by at most one page — the client also stops as soon as a
@@ -68,7 +81,8 @@ export async function searchRG(
     const RG_PAGE_SIZE = 20;
 
     console.log(
-      `[RateGain] Requesting pages [${apiPageStart}] for search Page ${pageNo}`,
+      `[RateGain] Requesting API pages [${apiPageStart}..${apiPageStart + batchSize - 1}] ` +
+        `for search Page ${pageNo} (concurrent)`,
     );
 
     let allHotels: UnifiedHotel[] = [];
@@ -131,6 +145,51 @@ export async function searchRG(
             JSON.stringify(res, null, 1).substring(0, 500),
           );
         }
+
+        // Step 3: pull the REST of this search page's RG pages concurrently.
+        //
+        // Deliberately reuses `searchPayload` — the shape that just succeeded —
+        // so the Geofilter/destinationCode fallback resolved above is not
+        // re-litigated per page. Only pages that actually exist are requested
+        // (`total` bounds it), and one page failing never fails the batch:
+        // a rejected page contributes nothing and the rest still land.
+        const remaining: number[] = [];
+        for (let p = apiPageStart + 1; p < apiPageStart + batchSize; p++) {
+          if ((p - 1) * RG_PAGE_SIZE >= total) break; // past the last real page
+          remaining.push(p);
+        }
+
+        if (remaining.length > 0) {
+          const extraPages = await Promise.allSettled(
+            remaining.map((p) =>
+              rateGainProvider.getBestProperties(
+                { ...searchPayload, pageNo: p },
+                req._abortSignal,
+              ),
+            ),
+          );
+
+          let extraCount = 0;
+          for (const settled of extraPages) {
+            if (settled.status !== "fulfilled") continue;
+            const r: any = settled.value;
+            const ok =
+              r?.status === true ||
+              r?.status === "Success" ||
+              r?.header?.status === "Success" ||
+              r?.statusCode === 200;
+            if (!ok) continue;
+            const mapped = (r.body || []).map((h: any) =>
+              mapRGHotel(h, clientType),
+            );
+            allHotels.push(...mapped);
+            extraCount += mapped.length;
+          }
+          console.log(
+            `[RateGain] Concurrent top-up: +${extraCount} hotels from ${remaining.length} extra page(s). ` +
+              `Batch total ${allHotels.length}.`,
+          );
+        }
       } else {
         console.warn(
           `[RateGain] Non-Success:`,
@@ -150,9 +209,70 @@ export async function searchRG(
       console.error(`[RateGain] API Error:`, err.message);
     }
 
+    // ASYNC ENRICHMENT (don't wait for DB if it's too slow, but here we do it fast)
+    try {
+      const rgIds = allHotels.map((h) => h.hotelId.replace("RG:", ""));
+      // Cap follows the batch, not a fixed 100 — with RG_PAGES_PER_SEARCH>5 a
+      // hardcoded 100 would silently drop enrichment for the tail of the batch.
+      const staticData = await HotelModel.find({ tjHotelId: { $in: rgIds } })
+        .limit(Math.max(100, rgIds.length))
+        .lean();
+      const staticMap = new Map(staticData.map((s) => [s.tjHotelId, s]));
+
+      allHotels = allHotels.map((bh) => {
+        const s = staticMap.get(bh.hotelId.replace("RG:", ""));
+        if (s) {
+          const accTypeDesc = bh.accTypeDesc || s.accTypeDesc || "";
+          const accMultiDesc = bh.accMultiDesc || s.accMultiDesc || "";
+          const accomodationType =
+            bh.accomodationType || s.accomodationType || "";
+          const rating = bh.starRating || s.starRating || 0;
+          
+          const enrichedImages = (() => {
+            if (bh.images && bh.images.length > 0) return bh.images;
+            const dbImages = qualifyImageUrls(s.images, "RG");
+            if (dbImages.length > 0) return dbImages;
+            return [];
+          })();
+
+          const finalAmenities = bh.amenities && bh.amenities.length > 0
+            ? bh.amenities
+            : getRGFallbackAmenities(bh.name || s.name, rating);
+
+          return {
+            ...bh,
+            address: bh.address || s.address || "",
+            city: bh.city || s.cityName || "",
+            starRating: rating,
+            images: enrichedImages,
+            latitude: bh.latitude || s.location?.coordinates?.[1],
+            longitude: bh.longitude || s.location?.coordinates?.[0],
+            accTypeDesc,
+            accMultiDesc,
+            accomodationType,
+            hotelSegment:
+              accTypeDesc || accMultiDesc || bh.hotelSegment || "Hotel",
+            amenities: finalAmenities,
+          };
+        } else {
+          return {
+            ...bh,
+            amenities: bh.amenities && bh.amenities.length > 0
+              ? bh.amenities
+              : getRGFallbackAmenities(bh.name, bh.starRating || 0),
+          };
+        }
+      });
+    } catch (enrichErr) {
+      console.warn("[RateGain] DB enrichment warning:", enrichErr);
+    }
+
     // Unlike TripJack's, RateGain's totalRecord is a real count of matching
     // properties, so the page position tells us whether more remain.
-    const consumed = apiPageStart * RG_PAGE_SIZE;
+    // We now consume `batchSize` RG pages per search page, not one — computing
+    // `consumed` off apiPageStart alone would understate our position and keep
+    // claiming hasMore long after the destination was exhausted.
+    const consumed = (apiPageStart + batchSize - 1) * RG_PAGE_SIZE;
     return {
       hotels: allHotels, // preserve RateGain's relevance/distance order
       total: Math.max(allHotels.length, maxTotal),
@@ -324,10 +444,20 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
   // If taxAmount exists and is > 0, taxes are excluded from base price (need to be added)
   const taxesIncluded = taxAmt === 0; // RG usually excludes taxes; taxesIncluded=false unless no tax field
 
+  const rateOpt = h.roomRates?.[0] || h.options?.[0] || {};
+  const refundable = deriveRefundable({
+    explicit: rateOpt.isRefundable ?? h.isRefundable ?? undefined,
+    cancellationPolicies: rateOpt.cancellationPolicies || rateOpt.cancellation || h.cancellation || undefined,
+    rateComments: rateOpt.rateComments || rateOpt.rateComment || h.rateComments || h.rateComment || undefined,
+  });
+
   return {
     hotelId: `RG:${h.propertyId}`,
     source: "RG",
     name: h.propertyName,
+    isRefundable: refundable.unknown ? undefined : refundable.isRefundable,
+    refundableLabel: refundable.unknown ? undefined : refundable.label,
+    freeCancellationUntil: refundable.unknown ? undefined : refundable.freeCancellationUntil,
     address: h.address || "",
     city: h.city || h.destinationName || "",
     country: h.countryName || h.country || "",
@@ -354,11 +484,12 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
       h.roomRates?.[0]?.boardName ||
       h.options?.[0]?.boardName ||
       undefined,
-    hotelSegment: h.accTypeDesc || h.accMultiDesc || "Hotel",
+    hotelSegment: h.hotelSegments?.[0]?.name || h.accTypeDesc || h.accMultiDesc || "Hotel",
     accTypeDesc: h.accTypeDesc,
     accMultiDesc: h.accMultiDesc,
     accomodationType: h.accomodationType,
-    amenities: h.hotelAmenities ?? [],
+    description: h.description || "",
+    amenities: h.hotelAmenities || [],
     propertyCode: h.propertyCode,
     brandCode: h.brandCode,
     isMandatory,
@@ -406,4 +537,37 @@ function mapRGHotel(h: any, clientType: "B2B" | "B2C" = "B2C"): UnifiedHotel {
     },
     rawPayload: h,
   };
+}
+
+function getRGFallbackAmenities(name: string, starRating: number): string[] {
+  const amenities: string[] = [];
+  if (starRating >= 5) {
+    amenities.push(
+      "Swimming Pool",
+      "Fitness Center",
+      "Spa",
+      "Restaurant",
+      "Bar",
+    );
+  } else if (starRating >= 4) {
+    amenities.push("Swimming Pool", "Fitness Center", "Restaurant");
+  } else if (starRating >= 3) {
+    amenities.push("Restaurant", "24-hour Front Desk");
+  } else {
+    amenities.push("24-hour Front Desk");
+  }
+
+  const lowerName = (name || "").toLowerCase();
+  if (
+    lowerName.includes("resort") ||
+    lowerName.includes("spa") ||
+    lowerName.includes("beach")
+  ) {
+    if (!amenities.includes("Swimming Pool")) amenities.push("Swimming Pool");
+    if (!amenities.includes("Spa")) amenities.push("Spa");
+  }
+  if (lowerName.includes("parking") || lowerName.includes("airport")) {
+    amenities.push("Free Parking");
+  }
+  return [...new Set(amenities)];
 }
