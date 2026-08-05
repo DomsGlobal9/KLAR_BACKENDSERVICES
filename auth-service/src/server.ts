@@ -11,8 +11,8 @@ const PORT = envConfig.BASE.PORT;
 const startServer = async () => {
     await connectDB();
 
-    app.listen(PORT, () => {
-
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Auth service running on http://0.0.0.0:${PORT}`);
     });
 };
 
