@@ -627,7 +627,7 @@ class SearchService {
 
             if (printData == "true" || printData == true) {
                 
-                const normalizedWithAllFares = MultiCityNormalizer.transformWithAllFares(rawResponse.data);
+                const normalizedWithAllFares = MultiCityNormalizer.transformWithAllFares(rawResponse.data, payload);
 
                 let result: any;
 
@@ -762,7 +762,7 @@ class SearchService {
             }
 
             const normalizedResult =
-                MultiCityNormalizer.normalize(rawResponse.data);
+                MultiCityNormalizer.normalize(rawResponse.data, payload);
 
             let normalized = normalizedResult.flights;
 
@@ -1011,13 +1011,22 @@ class SearchService {
                 sessionId,
                 {
                     raw: rawResponse?.data?.searchResult?.tripInfos,
-                    isInternational: isInternational
+                    isInternational: isInternational,
+                    // The fare lookup has to split this itinerary into the same
+                    // legs the search response advertised, and that split is
+                    // driven by the requested routeInfos. Without them cached,
+                    // /fare/multicity regroups differently and can't find the
+                    // flightKey the client just received.
+                    searchQuery: payload
                 },
                 1800
             );
 
             const response: any = {
                 sessionId,
+                type: isInternational ? 'international' : (isDomestic ? 'domestic' : 'none'),
+                ...(isInternational ? { itineraries: normalized } : {}),
+                ...(isDomestic ? { legs: normalized } : {}),
                 flights: normalized,
                 airlineStats
             };
