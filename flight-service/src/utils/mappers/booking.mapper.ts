@@ -14,6 +14,10 @@ function mapTraveller(t: FrontendTraveller): TripjackTraveller {
         ...(t.dob && { dob: t.dob })
     };
 
+    if (t.documentId || t.di) {
+        traveller.di = t.documentId || t.di;
+    }
+
     const hasAnyPassport =
         t.passportNumber ||
         t.passportNationality ||

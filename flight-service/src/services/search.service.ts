@@ -150,6 +150,9 @@ class SearchService {
             const normalizedResult = OneWayNormalizer.transform({ data: markedUpResponse });
 
             let normalized = normalizedResult.flights;
+            if (payload?.searchModifiers?.isConnectingFlight === false) {
+                normalized = normalized.filter((f: any) => f.stops === 0);
+            }
             const airlineStats = normalizedResult.airlineStats;
 
             const originalCount = normalized.length;
@@ -439,6 +442,15 @@ class SearchService {
 
             const isDomestic = 'onward' in normalized && 'return' in normalized;
             const isInternational = 'roundTrips' in normalized;
+
+            if (payload?.searchModifiers?.isConnectingFlight === false) {
+                if (isDomestic) {
+                    normalized.onward = (normalized.onward || []).filter((f: any) => f.stops === 0);
+                    normalized.return = (normalized.return || []).filter((f: any) => f.stops === 0);
+                } else if (isInternational) {
+                    normalized.roundTrips = (normalized.roundTrips || []).filter((rt: any) => (rt.onward?.stops ?? 0) === 0 && (rt.return?.stops ?? 0) === 0);
+                }
+            }
 
             let originalOnwardCount = 0;
             let originalReturnCount = 0;
@@ -771,6 +783,17 @@ class SearchService {
             const isDomestic = normalized.length > 0 && 'flights' in normalized[0];
             const isInternational = normalized.length > 0 && 'legs' in normalized[0];
 
+            if (payload?.searchModifiers?.isConnectingFlight === false) {
+                if (isDomestic) {
+                    normalized = normalized.map((leg: any) => ({
+                        ...leg,
+                        flights: (leg.flights || []).filter((f: any) => f.stops === 0)
+                    }));
+                } else if (isInternational) {
+                    normalized = normalized.filter((it: any) => (it.legs || []).every((leg: any) => (leg.stops ?? 0) === 0));
+                }
+            }
+
             let originalCounts: Array<{ legIndex: number; count: number }> = [];
 
             if (isDomestic) {
@@ -1065,7 +1088,9 @@ class SearchService {
             const date = ri.travelDate ?? '';
             const cabin = (payload.cabinClass ?? 'ECONOMY').toUpperCase();
             const pax = JSON.stringify(payload.paxInfo ?? {});
-            return `route:oneway:${Date.now()}:${from}:${to}:${date}:${cabin}:${pax}`;
+            const pft = payload?.searchModifiers?.pft || 'REGULAR';
+            const conn = payload?.searchModifiers?.isConnectingFlight ?? true;
+            return `route:oneway:${from}:${to}:${date}:${cabin}:${pax}:${pft}:${conn}`;
         } catch {
             return '';
         }

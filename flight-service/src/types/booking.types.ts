@@ -15,6 +15,8 @@ export interface FrontendTraveller {
     passportNationality?: string;
     passportIssueDate?: string;
     passportExpiryDate?: string;
+    documentId?: string;
+    di?: string;
     ssrSeatInfos?: SSRInfo[];
     ssrMealInfos?: SSRInfo[];
     ssrBaggageInfos?: SSRInfo[];
@@ -56,6 +58,7 @@ export interface TripjackTraveller {
     pNat?: string;
     pid?: string;
     eD?: string;
+    di?: string;
 
     ssrSeatInfos?: SSRInfo[];
     ssrMealInfos?: SSRInfo[];
