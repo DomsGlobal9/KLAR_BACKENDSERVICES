@@ -134,12 +134,18 @@ export class BookingRepository {
 
     async getBookingsByEmail(email: string) {
         try {
+            const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const emailRegex = new RegExp(`^${escapedEmail}$`, 'i');
             const bookings = await BookingModel.find({
-                email: { $regex: new RegExp(`^${email}$`, 'i') }
-            });
+                $or: [
+                    { email: emailRegex },
+                    { "userInfo.email": emailRegex },
+                    { "deliveryInfo.emails": emailRegex },
+                    { "contactInfo.emails": emailRegex }
+                ]
+            }).sort({ createdAt: -1 });
             return bookings;
         } catch (error) {
-
             throw new Error("Failed to find bookings by email");
         }
     }

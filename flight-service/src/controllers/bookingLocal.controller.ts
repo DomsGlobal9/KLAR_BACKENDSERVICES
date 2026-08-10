@@ -504,8 +504,10 @@ class BookingLocalController {
                 const bookings = await BookingService.getBookingsByEmail(email as string);
 
                 const b2cBookings = bookings.filter((b: any) =>
+                    !b.userInfo?.clientType ||
                     b.userInfo?.clientType === 'b2c' ||
-                    b.userInfo?.clientType?.toLowerCase() === 'b2c'
+                    b.userInfo?.clientType?.toLowerCase() === 'b2c' ||
+                    b.userInfo?.clientType !== 'b2b'
                 );
 
                 const filteredBookings = this.applyFilter(b2cBookings, filterType);
