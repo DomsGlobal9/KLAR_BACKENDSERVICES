@@ -1,0 +1,45 @@
+{
+  "name": "passport-service",
+  "version": "1.0.0",
+  "description": "Passport microservice",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "nodemon --watch src --exec ts-node src/server.ts",
+    "build": "rimraf dist && tsc",
+    "start": "node dist/server.js",
+    "clean": "rimraf node_modules dist",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "pm2:start": "pm2 start dist/server.js --name passport-service",
+    "pm2:stop": "pm2 stop passport-service",
+    "pm2:restart": "pm2 restart passport-service",
+    "pm2:delete": "pm2 delete passport-service",
+    "pm2:logs": "pm2 logs passport-service",
+    "pm2:status": "pm2 status",
+    "deploy": "git pull && npm install && npm run build && pm2 restart passport-service"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/mongoose": "^5.11.96",
+    "@types/node": "^25.6.0",
+    "nodemon": "^3.1.14",
+    "rimraf": "^6.1.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "axios": "^1.15.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "ioredis": "^5.10.1",
+    "mongoose": "^9.4.1",
+    "node-cron": "^4.2.1",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
+  }
+}
