@@ -20,7 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 
 connectDB();
 
-app.use('/api', routes);
+app.use('/api/cruise', routes);
 
 app.get('/', (req, res) => {
     res.json({
