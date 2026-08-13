@@ -4,61 +4,7 @@ import {
     InsuranceBookingStatus,
     InsuranceJourneyType,
 } from "../models/InsuranceBooking.model";
-
-// ─── Async Status Poller ──────────────────────────────────────────────────────
-
-const POLL_INTERVAL_MS = 5_000;   // 5 s
-const POLL_TIMEOUT_MS  = 120_000; // 2 min
-
-const TJ_SUCCESS  = new Set(["SUCCESS"]);
-const TJ_FAILED   = new Set(["FAILED", "CANCELLED", "ABORTED"]);
-
-async function pollInsuranceStatus(tjBookingId: string, dbId: string): Promise<void> {
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
-
-    const poll = async (): Promise<void> => {
-        if (Date.now() >= deadline) {
-            console.warn(`[TripSafe] Polling timeout for ${tjBookingId}. Leaving as PENDING.`);
-            return;
-        }
-        try {
-            const details = await tripJackInsuranceProvider.bookingDetails(tjBookingId);
-            const insStatus: string =
-                details?.order?.status ||
-                details?.itemInfos?.INSURANCE?.ios ||
-                "";
-
-            console.log(`[TripSafe] Poll ${tjBookingId}: status=${insStatus}`);
-
-            if (TJ_SUCCESS.has(insStatus)) {
-                await InsuranceBookingModel.findByIdAndUpdate(dbId, {
-                    status: InsuranceBookingStatus.SUCCESS,
-                    tjBookingDetailsResponse: details,
-                });
-                console.log(`✅ [TripSafe] Booking ${tjBookingId} → SUCCESS`);
-                return;
-            }
-            if (TJ_FAILED.has(insStatus)) {
-                await InsuranceBookingModel.findByIdAndUpdate(dbId, {
-                    status: InsuranceBookingStatus.FAILED,
-                    tjBookingDetailsResponse: details,
-                });
-                console.warn(`❌ [TripSafe] Booking ${tjBookingId} → ${insStatus}`);
-                return;
-            }
-
-            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-            return poll();
-        } catch (err: any) {
-            console.error("[TripSafe] Polling error:", err?.message);
-            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-            return poll();
-        }
-    };
-
-    // Fire-and-forget — does NOT block the HTTP response
-    poll().catch(e => console.error("[TripSafe] Uncaught poll error:", e?.message));
-}
+import { InsuranceReviewContextModel } from "../models/InsuranceReviewContext.model";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +40,89 @@ export function detectJourneyType(payload: any): InsuranceJourneyType {
     return InsuranceJourneyType.STANDALONE;
 }
 
+/** Every traveller across the (single) plan and product, in payload order. */
+function collectTravellers(payload: any): any[] {
+    const out: any[] = [];
+    for (const plan of payload.pli || []) {
+        for (const product of plan.pi || []) {
+            for (const t of product.iti || []) out.push(t);
+        }
+    }
+    return out;
+}
+
+/** Whole years between a date of birth and a reference date. */
+export function ageFromDob(dob: string, on: Date = new Date()): number | null {
+    const born = new Date(dob);
+    if (isNaN(born.getTime())) return null;
+    let age = on.getFullYear() - born.getFullYear();
+    const monthDelta = on.getMonth() - born.getMonth();
+    if (monthDelta < 0 || (monthDelta === 0 && on.getDate() < born.getDate())) age--;
+    return age;
+}
+
+/**
+ * Compare Book against the trusted Review context (B1/B2/B3).
+ * Only fields actually captured at Review are compared — a value we never
+ * managed to read is never used to reject a booking.
+ */
+export function assertMatchesReview(payload: any, ctx: any, amount: number): void {
+    const bookPlid = payload.pli?.[0]?.plid;
+    const bookPid  = payload.pli?.[0]?.pi?.[0]?.pid;
+
+    if (ctx.plid && bookPlid && ctx.plid !== bookPlid) {
+        throw { status: 400, message: `Plan does not match the reviewed plan. Reviewed ${ctx.plid}, booking ${bookPlid}.` };
+    }
+    if (ctx.pid && bookPid && ctx.pid !== bookPid) {
+        throw { status: 400, message: `Product does not match the reviewed product. Reviewed ${ctx.pid}, booking ${bookPid}.` };
+    }
+
+    const travellers = collectTravellers(payload);
+    if (ctx.travellerCount > 0 && travellers.length !== ctx.travellerCount) {
+        throw {
+            status: 400,
+            message: `Traveller count does not match the review. Reviewed ${ctx.travellerCount}, booking ${travellers.length}.`,
+        };
+    }
+
+    // Ages are what the plan was priced on at Search/Review. Compare as a
+    // multiset — traveller order is not contractually guaranteed.
+    const reviewedAges: number[] = (ctx.travellers || [])
+        .map((t: any) => Number(t?.age))
+        .filter((n: number) => Number.isFinite(n));
+    const bookedAges: number[] = travellers
+        .map((t: any) => Number(t?.age))
+        .filter((n: number) => Number.isFinite(n));
+
+    if (reviewedAges.length && reviewedAges.length === bookedAges.length) {
+        const a = [...reviewedAges].sort((x, y) => x - y).join(",");
+        const b = [...bookedAges].sort((x, y) => x - y).join(",");
+        if (a !== b) {
+            throw {
+                status: 400,
+                message: `Traveller ages do not match the review. Reviewed [${a}], booking [${b}].`,
+            };
+        }
+    }
+
+    // DOB is only present in the review context for the embedded flow.
+    const reviewedDobs = (ctx.travellers || []).map((t: any) => t?.dob).filter(Boolean).sort();
+    const bookedDobs   = travellers.map((t: any) => t?.dob).filter(Boolean).sort();
+    if (reviewedDobs.length && reviewedDobs.length === bookedDobs.length) {
+        if (reviewedDobs.join(",") !== bookedDobs.join(",")) {
+            throw { status: 400, message: "Traveller dates of birth do not match the review." };
+        }
+    }
+
+    // Reviewed fare — only when it was actually located in the Review response.
+    if (ctx.reviewedAmount != null && Math.abs(amount - Number(ctx.reviewedAmount)) > 0.01) {
+        throw {
+            status: 400,
+            message: `Payment amount does not match the reviewed fare. Reviewed ${ctx.reviewedAmount}, booking ${amount}.`,
+        };
+    }
+}
+
 // ─── Book Service ─────────────────────────────────────────────────────────────
 
 class BookService {
@@ -119,8 +148,19 @@ class BookService {
                 message: `Exactly one plan may be booked per review. Received ${payload.pli.length}.`,
             };
         }
+        if (payload.pli[0]?.pi?.length > 1) {
+            throw {
+                status: 400,
+                message: `Exactly one product (pid) may be booked per plan. Received ${payload.pli[0].pi.length}.`,
+            };
+        }
         if (!payload.paymentInfos?.length) {
             throw { status: 400, message: "paymentInfos is required. Use WALLET or CREDIT_LINE." };
+        }
+        // deliveryInfo carries the policy delivery address and is mandatory
+        // upstream (doc p. 25) (E3).
+        if (!payload.deliveryInfo?.emails?.some((e: any) => typeof e === "string" && e.trim())) {
+            throw { status: 400, message: "deliveryInfo.emails must contain at least one email address." };
         }
 
         // ── Payment amount validation ───────────────────────────────────────
@@ -140,6 +180,7 @@ class BookService {
         // declared a Student journey — same requests are rejected as before.
         const declaredStudent = explicitJourneyType(payload) === InsuranceJourneyType.STUDENT;
 
+        const seenTravellerIds = new Set<number>();
         for (const plan of payload.pli) {
             for (const product of plan.pi || []) {
                 for (const traveller of product.iti || []) {
@@ -159,65 +200,134 @@ class BookService {
                     if (declaredStudent && !traveller.sc) {
                         throw { status: 400, message: "Student course info (sc) is mandatory for STUDENT plans." };
                     }
+                    // Amendment/cancellation travellerKeys are keyed by id — a
+                    // duplicate would cancel the wrong passenger (E2). Absence is
+                    // tolerated: id is not a documented mandatory field.
+                    if (traveller.id !== undefined && traveller.id !== null) {
+                        const id = Number(traveller.id);
+                        if (seenTravellerIds.has(id)) {
+                            throw { status: 400, message: `Duplicate traveller id '${id}'. Traveller ids must be unique.` };
+                        }
+                        seenTravellerIds.add(id);
+                    }
+                    // dob drives the issued policy while age drives the price. A
+                    // wide gap means the plan was priced for a different person
+                    // (B5). Reported, not rejected — clients legitimately compute
+                    // age at different reference dates.
+                    if (traveller.dob && Number.isFinite(Number(traveller.age))) {
+                        const derived = ageFromDob(traveller.dob);
+                        if (derived !== null && Math.abs(derived - Number(traveller.age)) > 1) {
+                            console.warn(
+                                `⚠️  [TripSafe][AGE_DOB_MISMATCH] bookingId=${payload.bookingId} ` +
+                                `declaredAge=${traveller.age} ageFromDob=${derived} — priced on the declared age.`
+                            );
+                        }
+                    }
                 }
             }
         }
 
-        // ── Proxy to TripJack ───────────────────────────────────────────────
-        const tjResponse = await tripJackInsuranceProvider.book(payload);
-        const tjBookingId: string = tjResponse?.order?.bookingId || payload.bookingId;
-        let persisted = false;
-
-        // ── Persist to MongoDB ──────────────────────────────────────────────
-        try {
-
-            // Extract travellers for storage
-            const travellers: any[] = [];
-            for (const plan of payload.pli) {
-                for (const product of plan.pi || []) {
-                    for (const t of product.iti || []) {
-                        travellers.push(t);
-                    }
-                }
-            }
-
-            // Extract coverage dates from review payload echoed in booking
-            const firstPlan = payload.pli?.[0];
-            const coverageStart = payload.sd ? new Date(payload.sd) : undefined;
-            const coverageEnd   = payload.ed ? new Date(payload.ed) : undefined;
-
-            const record = new InsuranceBookingModel({
-                bookingId: tjBookingId,
-                journeyType,
-                planId:   firstPlan?.plid,
-                productId: firstPlan?.pi?.[0]?.pid,
-
-                coverageStart,
-                coverageEnd,
-
-                travellers,
-
-                amount,
-                currencyCode: "INR",
-
-                status: InsuranceBookingStatus.PENDING,
-
-                agentId,
-                agentName,
-                userId:   agentId   ?? undefined,
-                userName: agentName ?? undefined,
-
-                tjBookPayload:  payload,
-                tjBookResponse: tjResponse,
+        // ── Verify against the trusted Review context ───────────────────────
+        // Fail-open: no context (pre-deploy review, expired TTL, DB down) means
+        // Book behaves exactly as it did before this check existed (B1).
+        const reviewContext = await InsuranceReviewContextModel
+            .findOne({ bid: payload.bookingId })
+            .lean()
+            .catch((err: any) => {
+                console.warn(`⚠️  [TripSafe] Review context unavailable for ${payload.bookingId}: ${err?.message}`);
+                return null;
             });
 
-            const saved = await record.save();
+        if (reviewContext) {
+            assertMatchesReview(payload, reviewContext, amount);
+        }
+
+        // ── Reserve the booking before calling upstream (B4) ─────────────────
+        // The unique index on bookingId is enforced by MongoDB across every
+        // instance, so a retry of an in-flight booking is refused here instead
+        // of creating a second policy upstream.
+        // ponytail: keyed on the review bid; if TripJack ever returns a
+        // different booking id the reservation is renamed on success and a
+        // later retry would no longer collide. Logged as ID_MISMATCH if seen.
+        const doc = {
+            bookingId: payload.bookingId,
+            source: payload.source,
+            journeyType,
+            planId:    payload.pli?.[0]?.plid,
+            productId: payload.pli?.[0]?.pi?.[0]?.pid,
+            coverageStart: (reviewContext as any)?.sd ?? (payload.sd ? new Date(payload.sd) : undefined),
+            coverageEnd:   (reviewContext as any)?.ed ?? (payload.ed ? new Date(payload.ed) : undefined),
+            travellers: collectTravellers(payload),
+            amount,
+            currencyCode: "INR",
+            status: InsuranceBookingStatus.PENDING,
+            agentId,
+            agentName,
+            userId:   agentId   ?? undefined,
+            userName: agentName ?? undefined,
+            tjBookPayload: payload,
+        };
+
+        let reservationId: any = null;
+        try {
+            const reserved = await InsuranceBookingModel.create(doc);
+            reservationId = reserved._id;
+        } catch (err: any) {
+            if (err?.code === 11000) {
+                throw {
+                    status: 409,
+                    message: "A booking for this review is already in progress or complete.",
+                };
+            }
+            // DB unavailable — proceed unreserved rather than block a paying
+            // customer. Behaviour then matches the pre-B4 write path.
+            console.error(`⚠️  [TripSafe] Could not reserve ${payload.bookingId} (persistence unavailable): ${err?.message}`);
+        }
+
+        // ── Proxy to TripJack ───────────────────────────────────────────────
+        let tjResponse: any;
+        try {
+            tjResponse = await tripJackInsuranceProvider.book(payload);
+        } catch (err: any) {
+            if (reservationId) {
+                if (err?.response) {
+                    // TripJack answered and refused — nothing was created upstream,
+                    // so release the reservation and let a corrected retry through.
+                    await InsuranceBookingModel.deleteOne({ _id: reservationId }).catch(() => {});
+                } else {
+                    // Timeout or network failure: the booking may exist upstream.
+                    // Keep the reservation so a retry is refused, and let the
+                    // reconciliation sweep settle it from booking-details.
+                    console.error(
+                        `🚨 [TripSafe][INDETERMINATE_BOOKING] bookingId=${payload.bookingId} amount=${amount} ` +
+                        `— upstream outcome unknown (${err?.message}). Reservation kept; awaiting reconciliation.`
+                    );
+                }
+            }
+            throw err;
+        }
+
+        const tjBookingId: string = tjResponse?.order?.bookingId || payload.bookingId;
+        if (tjBookingId !== payload.bookingId) {
+            console.warn(
+                `⚠️  [TripSafe][BOOKING_ID_MISMATCH] review bid=${payload.bookingId} ` +
+                `upstream bookingId=${tjBookingId} — idempotency key renamed.`
+            );
+        }
+
+        // ── Persist the outcome ─────────────────────────────────────────────
+        let persisted = false;
+        try {
+            if (reservationId) {
+                await InsuranceBookingModel.findByIdAndUpdate(reservationId, {
+                    bookingId: tjBookingId,
+                    tjBookResponse: tjResponse,
+                });
+            } else {
+                await InsuranceBookingModel.create({ ...doc, bookingId: tjBookingId, tjBookResponse: tjResponse });
+            }
             persisted = true;
-            console.log(`✅ [TripSafe] Saved PENDING booking: ${tjBookingId} (DB: ${saved._id})`);
-
-            // Start fire-and-forget status polling
-            pollInsuranceStatus(tjBookingId, (saved._id as any).toString());
-
+            console.log(`✅ [TripSafe] Saved PENDING booking: ${tjBookingId}`);
         } catch (dbErr: any) {
             // The customer has been charged upstream but we hold no local
             // record — this needs manual reconciliation, so make it greppable

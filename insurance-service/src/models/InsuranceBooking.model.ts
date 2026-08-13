@@ -133,7 +133,8 @@ const travellerSchema = new Schema<ITraveller>(
 
 const insuranceBookingSchema = new Schema<IInsuranceBooking>(
     {
-        bookingId: { type: String, required: true, unique: true, index: true },
+        // `unique` already builds the index — declaring both warns in Mongoose 8.
+        bookingId: { type: String, required: true, unique: true },
         source: { type: String},
         amendmentId: { type: String },
 
