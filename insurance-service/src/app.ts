@@ -6,6 +6,14 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
+// Behind nginx/PM2 the socket address is the proxy, so every caller would share
+// one rate-limit bucket and real traffic would be throttled collectively.
+// Set TRUST_PROXY=1 when deployed behind a reverse proxy. Default is off, which
+// matches the behaviour before rate limiting existed.
+if (process.env.TRUST_PROXY) {
+    app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+}
+
 const corsOptions = {
     origin: [
         'http://localhost:5009',

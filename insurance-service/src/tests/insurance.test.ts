@@ -10,6 +10,7 @@
  */
 import { test, mock, describe } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import mongoose from "mongoose";
 
 import { searchService } from "../services/search.service";
@@ -464,15 +465,20 @@ describe("B1 book must match the reviewed context", () => {
 });
 
 describe("B2 reviewed fare extraction", () => {
-    test("finds the total fare in the documented shapes", () => {
+    test("reads the total fare from the evidenced tfd path", () => {
         assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ tfd: { ifc: { TF: 1610 } } }] }] } } }), 1610);
-        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ ptf: 9050 }] }] } } }), 9050);
+        assert.equal(extractReviewedAmount({ tfd: { ifc: { TF: 730 } } }), 730);
+    });
+
+    test("never treats ptf as the payable total", () => {
+        // Student search sample: ptf 9050 against a per-traveller TF of 8200.
+        // Using it would reject valid bookings on a false amount mismatch.
+        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ ptf: 9050 }] }] } } }), null);
     });
 
     test("returns null rather than guessing when no total is present", () => {
         assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ pid: "P1" }] }] } } }), null);
         assert.equal(extractReviewedAmount({}), null);
-        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ ptf: 0 }] }] } } }), null);
     });
 });
 
@@ -597,10 +603,12 @@ describe("B4 booking reservation", () => {
         }
     });
 
-    test("an indeterminate upstream failure keeps the reservation", async () => {
+    // The provider synthesises a `response` for timeouts too, so this drives the
+    // real axios path rather than a hand-made error the provider never throws.
+    test("a timeout keeps the reservation — the booking may exist upstream", async () => {
         const create = mock.method(InsuranceBookingModel, "create", async () => ({ _id: "res1" }) as any);
         const del = mock.method(InsuranceBookingModel, "deleteOne", (() => Promise.resolve({}) as any) as any);
-        const book = mock.method(tripJackInsuranceProvider, "book", async () => {
+        const post = mock.method(tripJackInsuranceClient, "post", async () => {
             throw Object.assign(new Error("timeout of 60000ms exceeded"), { code: "ECONNABORTED" });
         });
         try {
@@ -608,14 +616,66 @@ describe("B4 booking reservation", () => {
                 await bookService.book(bookPayload());
                 assert.fail("expected the timeout to propagate");
             } catch (err: any) {
-                assert.match(String(err.message), /timeout/i);
+                assert.equal(err.status, 500, "a timeout has no upstream status");
             }
             assert.equal(del.mock.callCount(), 0, "the booking may exist upstream — a retry must stay blocked");
         } finally {
             create.mock.restore();
             del.mock.restore();
-            book.mock.restore();
+            post.mock.restore();
         }
+    });
+
+    test("a 5xx keeps the reservation, a 4xx releases it", async () => {
+        for (const [status, expectedDeletes] of [[502, 0], [400, 1]] as const) {
+            const create = mock.method(InsuranceBookingModel, "create", async () => ({ _id: "res1" }) as any);
+            const del = mock.method(InsuranceBookingModel, "deleteOne", (() => Promise.resolve({}) as any) as any);
+            const post = mock.method(tripJackInsuranceClient, "post", async () => {
+                throw { response: { status, data: { errors: [{ message: "upstream" }] } } };
+            });
+            try {
+                try {
+                    await bookService.book(bookPayload());
+                    assert.fail("expected the upstream failure to propagate");
+                } catch (err: any) {
+                    // provider.book rethrows an axios error untouched, so the
+                    // effective status is read the way controllers read it.
+                    assert.equal(err.status ?? err.response?.status, status);
+                }
+                assert.equal(del.mock.callCount(), expectedDeletes, `status ${status}`);
+            } finally {
+                create.mock.restore();
+                del.mock.restore();
+                post.mock.restore();
+            }
+        }
+    });
+});
+
+// ─── C3 JWT secret fail-safe ──────────────────────────────────────────────────
+
+describe("C3 JWT secret fail-safe", () => {
+    /** Load config in a child process so process.exit can be observed. */
+    const loadConfig = (env: Record<string, string>) =>
+        spawnSync(process.execPath, ["-e", "require('./dist/config/env')"], {
+            env: { ...process.env, ...env },
+            encoding: "utf8",
+        });
+
+    test("a configured secret starts normally", () => {
+        const r = loadConfig({ NODE_ENV: "production", JWT_SECRET: "a-real-configured-secret" });
+        assert.equal(r.status, 0, r.stderr);
+    });
+
+    test("a missing secret is fatal in production", () => {
+        const r = loadConfig({ NODE_ENV: "production", JWT_SECRET: "" });
+        assert.equal(r.status, 1, "must not fall back to the published default secret");
+        assert.match(r.stderr + r.stdout, /JWT_SECRET is not set/);
+    });
+
+    test("the secret is never printed", () => {
+        const r = loadConfig({ NODE_ENV: "production", JWT_SECRET: "super-secret-value-xyz" });
+        assert.ok(!(r.stdout + r.stderr).includes("super-secret-value-xyz"));
     });
 });
 

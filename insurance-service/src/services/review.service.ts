@@ -13,12 +13,14 @@ import { InsuranceReviewContextModel } from "../models/InsuranceReviewContext.mo
  */
 export function extractReviewedAmount(res: any): number | null {
     const product = res?.isr?.iinfo?.pli?.[0]?.pi?.[0];
+    // Only `tfd` — "total fare details" — is evidenced as the payable total
+    // (amendment response: tfd.ifc.TF 1610 equals the cancellation amount).
+    // `ptf` is deliberately NOT used: the student search sample shows ptf 9050
+    // against a per-traveller TF of 8200, so it is a different figure and using
+    // it would reject legitimate bookings on a false mismatch.
     const candidates = [
         product?.tfd?.ifc?.TF,
-        product?.ptf,
-        product?.fd?.ifc?.TF,
         res?.tfd?.ifc?.TF,
-        res?.ifc?.TF,
     ];
     for (const c of candidates) {
         const n = Number(c);

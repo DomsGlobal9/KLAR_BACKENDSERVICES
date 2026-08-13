@@ -290,9 +290,12 @@ class BookService {
             tjResponse = await tripJackInsuranceProvider.book(payload);
         } catch (err: any) {
             if (reservationId) {
-                if (err?.response) {
-                    // TripJack answered and refused — nothing was created upstream,
-                    // so release the reservation and let a corrected retry through.
+                // Release only on a definite refusal — a 4xx means TripJack
+                // answered and created nothing. The provider synthesises a
+                // `response` even for timeouts (status 500), so presence of
+                // `response` must NOT be used to decide this.
+                const upstreamStatus = Number(err?.status ?? err?.response?.status);
+                if (upstreamStatus >= 400 && upstreamStatus < 500) {
                     await InsuranceBookingModel.deleteOne({ _id: reservationId }).catch(() => {});
                 } else {
                     // Timeout or network failure: the booking may exist upstream.
