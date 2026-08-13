@@ -38,3 +38,11 @@ if (isProduction && !env.TRIPJACK_PROD.API_KEY) {
 if (!env.mongoUri) {
     console.warn("⚠️  MONGODB_URI not set. Insurance bookings will NOT be persisted.");
 }
+
+// C3 — the fallback secret below is published in this repository. Verifying
+// production tokens against it would let anyone mint a valid JWT, so refuse to
+// start rather than fail open and silently.
+if (isProduction && !process.env.JWT_SECRET) {
+    console.error("❌ JWT_SECRET is not set. Refusing to start in production with the default secret.");
+    process.exit(1);
+}
