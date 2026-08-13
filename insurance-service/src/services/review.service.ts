@@ -15,6 +15,16 @@ class ReviewService {
             if (!pli.length) {
                 throw { status: 400, message: "pli array must contain at least one plan." };
             }
+            // TripSafe v6.0 Review FAQ (p. 21): "Can multiple plans from different
+            // providers be reviewed simultaneously in the pli array? — No, we can
+            // review only 1 plid, per search." A multi-plan review has no single
+            // bid to book against (F-24).
+            if (pli.length > 1) {
+                throw {
+                    status: 400,
+                    message: `Exactly one plan may be reviewed per search. Received ${pli.length}.`,
+                };
+            }
             for (const plan of pli) {
                 if (!plan.plid) {
                     throw { status: 400, message: "Each plan in pli must have a plid." };

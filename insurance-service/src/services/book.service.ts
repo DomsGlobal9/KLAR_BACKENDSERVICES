@@ -109,6 +109,16 @@ class BookService {
         if (!payload.pli?.length) {
             throw { status: 400, message: "pli (plan list) is required." };
         }
+        // Book must echo the single reviewed plan (doc p. 23: "All submitted data
+        // must exactly match the information provided in the Insurance Review
+        // Request", and Review accepts exactly one plan). Extra plans were booked
+        // upstream while only pli[0] was ever persisted below (F-25).
+        if (payload.pli.length > 1) {
+            throw {
+                status: 400,
+                message: `Exactly one plan may be booked per review. Received ${payload.pli.length}.`,
+            };
+        }
         if (!payload.paymentInfos?.length) {
             throw { status: 400, message: "paymentInfos is required. Use WALLET or CREDIT_LINE." };
         }

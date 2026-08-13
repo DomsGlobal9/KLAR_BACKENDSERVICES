@@ -145,6 +145,45 @@ describe("review validation", () => {
         await rejectsWith(reviewService.review({ pli: [{ plid: "isid1", pi: [] }] }), 400, /pid/i);
     });
 
+    test("rejects an empty pli", async () => {
+        await rejectsWith(reviewService.review({ pli: [] }), 400, /at least one plan/i);
+    });
+
+    test("rejects a plan without a plid", async () => {
+        await rejectsWith(reviewService.review({ pli: [{ pi: [{ pid: "P1" }] }] }), 400, /plid/i);
+    });
+
+    // F-24 — doc p. 21: "we can review only 1 plid, per search"
+    test("rejects more than one plan and does not reach TripJack", async () => {
+        const review = mock.method(tripJackInsuranceProvider, "review", async () => ({ bid: "TJS1" }));
+        try {
+            await rejectsWith(
+                reviewService.review({
+                    pli: [
+                        { plid: "isid1", pi: [{ pid: "P1" }] },
+                        { plid: "isid2", pi: [{ pid: "P2" }] },
+                    ],
+                }),
+                400,
+                /exactly one plan/i
+            );
+            assert.equal(review.mock.callCount(), 0, "must not reach the upstream review API");
+        } finally {
+            review.mock.restore();
+        }
+    });
+
+    test("accepts exactly one plan with one product", async () => {
+        const review = mock.method(tripJackInsuranceProvider, "review", async () => ({ bid: "TJS1" }));
+        try {
+            const res: any = await reviewService.review({ pli: [{ plid: "isid1", pi: [{ pid: "P1" }] }] });
+            assert.equal(res.status, true);
+            assert.equal(review.mock.callCount(), 1);
+        } finally {
+            review.mock.restore();
+        }
+    });
+
     test("embedded review requires iid, pid, refid, iti and coverage dates", async () => {
         await rejectsWith(reviewService.review({ iid: "isid1", pid: "P1" }), 400, /refid/i);
     });
@@ -195,6 +234,34 @@ describe("F-06 payment amount validation", () => {
             assert.equal(res.bookingId, "TJS70850000729798");
             // no DB in this environment — the flag must say so rather than imply a saved record
             assert.equal(res.persisted, false);
+        } finally {
+            book.mock.restore();
+        }
+    });
+});
+
+// ─── F-25 book echoes exactly one reviewed plan ───────────────────────────────
+
+describe("F-25 book plan echo", () => {
+    test("rejects more than one plan and does not reach TripJack", async () => {
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => ({ order: { bookingId: "TJS1" } }));
+        try {
+            const payload = bookPayload();
+            payload.pli = [payload.pli[0], JSON.parse(JSON.stringify(payload.pli[0]))];
+            payload.pli[1].plid = "isid9999999999_0_regular";
+            await rejectsWith(bookService.book(payload), 400, /exactly one plan/i);
+            assert.equal(book.mock.callCount(), 0, "must not book a plan that cannot be persisted");
+        } finally {
+            book.mock.restore();
+        }
+    });
+
+    test("accepts the single-plan payload the review flow produces", async () => {
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => ({ order: { bookingId: "TJS1" } }));
+        try {
+            const res: any = await bookService.book(bookPayload());
+            assert.equal(res.status, true);
+            assert.equal(book.mock.callCount(), 1);
         } finally {
             book.mock.restore();
         }
