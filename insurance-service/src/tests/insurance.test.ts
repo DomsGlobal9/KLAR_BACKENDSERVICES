@@ -117,6 +117,24 @@ describe("search validation", () => {
         await rejectsWith(searchService.search({ isq: { ...student, cd: 7 } }), 400, /cd must be one of/i);
     });
 
+    // Confirmed by the owner: 30 / 60 / 90 / 180 day student cover must be
+    // sellable. Doc v6.0 contradicts itself on the allowed `cd` values
+    // (p. 66 vs the search matrix on p. 89), so this pins the decision.
+    test("STUDENT accepts 30, 60, 90 and 180 day cover", async () => {
+        const search = mock.method(tripJackInsuranceProvider, "search", async () => ({ searchId: "isid1" }));
+        try {
+            for (const cd of [30, 60, 90, 180]) {
+                const res: any = await searchService.search({
+                    isq: { ...base.isq, ict: "STUDENT", cd, iti: [{ age: 20 }] },
+                });
+                assert.equal(res.journeyType, "STUDENT", `cd=${cd} must be accepted`);
+            }
+            assert.equal(search.mock.callCount(), 4);
+        } finally {
+            search.mock.restore();
+        }
+    });
+
     test("AMT is region-only with a 30/45/60 day duration", async () => {
         const amt = { ...base.isq, ict: "AMT", adr: 45, isc: { iri: [{ rkey: "ASI", rt: "POPULARREGION" }] } };
         await rejectsWith(
