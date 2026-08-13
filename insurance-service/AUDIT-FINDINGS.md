@@ -282,3 +282,86 @@ Conditions:
 3. **Schedule D-02.** Unauthenticated booking and cancellation via an attacker-controlled `source` field is the largest remaining risk in this service, and it caps how much F-04 can protect.
 4. **Set `TRIPJACK_TEST_API_KEY`** in non-production environments.
 5. Do not report D-01 through D-04 as fixed. They are not.
+
+---
+
+# Second-Round Review — Review → Book Contract Risks
+
+Scope: the six booking-contract priorities only. No re-audit. Deferred items (production URL, `B2C_PORTAL`, error mapping, UAT matrix) untouched.
+
+## Priority assessment
+
+| # | Priority | Current behaviour | Classification |
+|---|---|---|---|
+| 1 | Review → Book consistency | No Review context retained anywhere. Book trusts the client for `plid`, `pid`, traveller set, ages and amount | **CTO APPROVAL REQUIRED** (needs a store) |
+| 2 | Review exactly-one-plan | Accepted any number of plans | **FIXED** (F-24) |
+| 3 | Booking amount vs Review | Reviewed fare is never retained; only `amount > 0` is enforced | **CTO APPROVAL REQUIRED** |
+| 4 | Traveller count vs Review | Not checkable — reviewed count is not retained | **CTO APPROVAL REQUIRED** |
+| 5 | Traveller identity vs Review | Not checkable. One intra-payload proxy exists (`dob` vs `age`) | **SAFE WITH CTO APPROVAL** |
+| 6 | Booking idempotency | Local unique index only, applied *after* the upstream call | **DO NOT IMPLEMENT NOW** — assessment below |
+| — | Coverage date consistency | Book payload carries no `sd`/`ed` | **NOT APPLICABLE** — see F-23 |
+
+## Why 1, 3 and 4 cannot be done without approval
+
+`/review` and `/book` are independent stateless HTTP requests. The trusted values exist only inside the Review *response*, which is returned to the client and then discarded. At Book time the process holds nothing but `req.body`. There is no in-request, header, or existing-model route to the reviewed values:
+
+- `InsuranceBooking` documents are created **at book time**, so nothing exists to read.
+- Writing a review-time row into `InsuranceBooking` collides at book time — `bookingId` is `required + unique` and `book.service` does `new InsuranceBookingModel(...).save()`, which would fail on duplicate key and take the F-07 orphan path. It would also make abandoned reviews appear as PENDING bookings in `GET /bookings`, a public-facing change.
+- Re-calling Review at book time would mint a second `bid` and double the upstream call. Not viable.
+
+Retaining Review context therefore requires new persistence, so it needs schema approval. **Stopped as instructed.**
+
+### Proposal A — `InsuranceReviewContext` collection *(recommended, smallest)*
+
+```text
+{ bid: String (unique index), plid, pid, travellerCount: Number,
+  travellers: [{ id, age, dob }], sd: Date, ed: Date,
+  reviewedAmount: Number, createdAt: Date (TTL 24h) }
+```
+
+- **Write:** `review.service`, after a successful upstream Review, best-effort (never fails the review).
+- **Read:** `book.service`, by `payload.bookingId`. **Absent → proceed unchanged (fail-open)**, so nothing that works today breaks. Present → compare `plid`, `pid`, traveller count, per-traveller `age`/`dob`, and amount; reject mismatches with 400.
+- **Migration:** none — new collection, created on first write. **Rollback:** revert the commit and drop the collection; no existing data touched. **Downtime:** none.
+- **Compatibility:** no public request/response change. New 400s only for payloads that contradict their own Review.
+- **Caveat to settle first:** the exact path of the reviewed total fare in the Review response is not established. The doc lists `TF` under the fare component but shows no complete Review response body, and the Postman collection stores no example responses. Capture one real UAT Review response before wiring the amount comparison; ship the plid/pid/count/identity checks first, which use unambiguous fields.
+- Ship fail-open, watch a mismatch counter in production, then decide whether to fail closed.
+
+### Proposal B — reserve-then-book on the existing unique index
+
+Invert the booking write order: insert the `InsuranceBooking` row (status `PENDING`) *before* calling TripJack. Solves review-context retention **and** idempotency with no new collection, because Mongo's existing unique index on `bookingId` becomes a free cross-instance lock. Larger change to the booking write path, and it creates rows for bookings that then fail upstream. Do this only after A has proven the validation logic.
+
+## Idempotency assessment — DO NOT IMPLEMENT NOW
+
+**Current protection:** one unique index on `InsuranceBooking.bookingId`. `book.service` calls TripJack **first**, then saves. On a retry the sequence is: validate, `POST /oms/v1/insurance/book` *(second upstream booking already created)*, `save()` fails on duplicate key, caught, `ORPHANED_BOOKING` logged. The index prevents a duplicate **row**, not a duplicate **policy**. There is no idempotency key, no request id, no lock, and no shared state between PM2 instances.
+
+**Duplicate scenario:** `POST /book`, TripJack SUCCESS, response lost to a network timeout (axios timeout is 60 s while the documented Book SLA is under 1 s, so a client-side timeout or a double-click is the realistic trigger), client retries with the same body, second upstream booking against the same `bid`.
+
+**Unknown that must be resolved first:** whether TripJack itself rejects a second Book against an already-booked `bid`. The doc says `bookingId` is "a system generated unique ID" but never states the re-book behaviour, and there is no captured evidence either way. **Ask TripJack.** If they reject it, residual risk drops to a wasted call and this becomes P3.
+
+**Risk if they do not:** two policies, two wallet debits, one local record. The customer is charged twice and the second policy is invisible to cancellation. Financial and data integrity, **P1**.
+
+**Recommended design:** Proposal B — reserve the row before the upstream call; a duplicate key means the booking is already in flight or done, so return 409 without calling TripJack. Mongo enforces this across instances, so no Redis or distributed lock is needed.
+
+```text
+API change required:            NO for the happy path; adds a 409 status (new semantic)
+Frontend change required:       NO for correctness; SHOULD handle 409 as "already booked"
+DB schema change required:      NO new fields - reuses the existing unique index
+Infrastructure change required: NO (no Redis, no queue)
+Rollback:                       revert one commit; write order returns to book-then-save
+CTO approval required:          YES - changes booking write-path semantics
+```
+
+An `Idempotency-Key` header would be stricter but needs a frontend contract change; not recommended while `bid` already provides a natural per-review key.
+
+## Additional findings from this pass
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| F-24 | P1 | Review accepted multiple plans; contract allows exactly one | **FIXED** |
+| F-25 | P1 | Book forwarded every plan upstream but persisted only `pli[0]`, so a second plan was purchased and left invisible to details/list/amendment/cancellation | **FIXED** |
+| F-23 | P2 | `coverageStart`/`coverageEnd` are **always** undefined. `book.service` reads `payload.sd`/`payload.ed`, which the Book contract does not carry, so the schema fields have never been populated. The values could be backfilled from the booking-details response already fetched during polling, but that response's `isq` echo path is not evidenced in the doc or Postman. Capture one real response, then fix | **RECORDED** |
+| F-26 | P2 | Multiple products per plan (`pi.length > 1`) still accepted. Doc p. 21 implies one pid per plid ("we choose the pid corresponding to plid") but does not state it as flatly as the one-plan rule. Not enforced on that evidence alone | **SAFE WITH CTO APPROVAL** |
+| F-27 | P2 | Traveller `id` uniqueness is not validated. Amendment/cancellation `travellerKeys` are keyed by `id`; duplicates make partial cancellation target the wrong passenger. Rejecting duplicates cannot break a correct payload | **SAFE TO IMPLEMENT** (outside this pass's scope) |
+| F-28 | P2 | `dob` and `age` are both supplied per traveller and never cross-checked. Pricing is driven by `age` at Search/Review; the policy is issued on `dob`. A traveller reviewed at 30 and booked with a 70-year-old's `dob` is the mispricing vector, and it is checkable with no stored context. Needs a ±1 year tolerance for birthday-boundary and computed-at-different-date skew; can ship log-only first | **SAFE WITH CTO APPROVAL** |
+
+`pid`-belongs-to-`plid` verification is **not possible** at Review time — the pairing is established by the Search response, which is likewise not retained. It falls out for free once Proposal A stores the reviewed pair.
