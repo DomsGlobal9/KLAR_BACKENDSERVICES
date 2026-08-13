@@ -35,7 +35,10 @@ export class TripJackInsuranceProvider {
             || label;
 
         console.error(`[TripSafe][${label}] HTTP ${status}:`, redactForLog(data || message));
-        throw { response: { status, data: data || { message } } };
+        // C4 — carry `message` and `status` on the thrown object. Without them
+        // controllers fell through to their generic fallback text and the real
+        // TripJack message survived only inside `details`.
+        throw { status, message, response: { status, data: data || { message } } };
     }
 
     // ─── 1. Search ──────────────────────────────────────────────────────────
@@ -86,7 +89,7 @@ export class TripJackInsuranceProvider {
             const data = res.data;
             if (data?.status?.success === false) {
                 const msg = data.errors?.[0]?.message || data.status?.description || "TripSafe Book failed";
-                throw { response: { status: 400, data } };
+                throw { status: 400, message: msg, response: { status: 400, data } };
             }
             return data;
         } catch (err: any) {
