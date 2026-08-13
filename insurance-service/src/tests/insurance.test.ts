@@ -437,6 +437,32 @@ describe("B1 book must match the reviewed context", () => {
         );
     });
 
+    // Coverage dates: the Book contract carries none, so these only fire when a
+    // client sends non-contract dates that contradict the review.
+    const dated = { ...ctx, sd: new Date("2026-04-01"), ed: new Date("2026-04-15") };
+
+    test("accepts coverage dates matching the review", () => {
+        assertMatchesReview(bookPayload({ sd: "2026-04-01", ed: "2026-04-15" }), dated, 1500);
+    });
+
+    test("rejects a changed coverage start", () => {
+        assert.throws(
+            () => assertMatchesReview(bookPayload({ sd: "2026-03-01", ed: "2026-04-15" }), dated, 1500),
+            (e: any) => e.status === 400 && /coverage start/i.test(e.message)
+        );
+    });
+
+    test("rejects a changed coverage end", () => {
+        assert.throws(
+            () => assertMatchesReview(bookPayload({ sd: "2026-04-01", ed: "2026-09-15" }), dated, 1500),
+            (e: any) => e.status === 400 && /coverage end/i.test(e.message)
+        );
+    });
+
+    test("a booking that omits dates is unaffected", () => {
+        assertMatchesReview(bookPayload(), dated, 1500);
+    });
+
     test("rejects an amount that is not the reviewed fare", () => {
         assert.throws(
             () => assertMatchesReview(bookPayload(), ctx, 1),

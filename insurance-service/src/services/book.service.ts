@@ -61,6 +61,14 @@ export function ageFromDob(dob: string, on: Date = new Date()): number | null {
     return age;
 }
 
+/** Same calendar day. Unparseable input compares equal, so it never rejects. */
+function sameCoverageDay(a: any, b: any): boolean {
+    const x = new Date(a);
+    const y = new Date(b);
+    if (isNaN(x.getTime()) || isNaN(y.getTime())) return true;
+    return x.toISOString().slice(0, 10) === y.toISOString().slice(0, 10);
+}
+
 /**
  * Compare Book against the trusted Review context (B1/B2/B3).
  * Only fields actually captured at Review are compared — a value we never
@@ -112,6 +120,16 @@ export function assertMatchesReview(payload: any, ctx: any, amount: number): voi
         if (reviewedDobs.join(",") !== bookedDobs.join(",")) {
             throw { status: 400, message: "Traveller dates of birth do not match the review." };
         }
+    }
+
+    // Coverage dates are established by Review. The Book contract carries no
+    // sd/ed (doc pp. 24-25), so any dates in the payload are non-contract
+    // fields — reject ones that contradict the review rather than ignore them.
+    if (ctx.sd && payload.sd && !sameCoverageDay(ctx.sd, payload.sd)) {
+        throw { status: 400, message: "Coverage start date does not match the reviewed coverage." };
+    }
+    if (ctx.ed && payload.ed && !sameCoverageDay(ctx.ed, payload.ed)) {
+        throw { status: 400, message: "Coverage end date does not match the reviewed coverage." };
     }
 
     // Reviewed fare — only when it was actually located in the Review response.
