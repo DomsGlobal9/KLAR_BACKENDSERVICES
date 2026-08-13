@@ -13,12 +13,20 @@ import assert from "node:assert/strict";
 import mongoose from "mongoose";
 
 import { searchService } from "../services/search.service";
-import { reviewService } from "../services/review.service";
-import { bookService, detectJourneyType, explicitJourneyType } from "../services/book.service";
+import { reviewService, extractReviewedAmount } from "../services/review.service";
+import {
+    bookService,
+    detectJourneyType,
+    explicitJourneyType,
+    assertMatchesReview,
+    ageFromDob,
+} from "../services/book.service";
 import { listService } from "../services/list.service";
 import { bookingDetailsService } from "../services/bookingDetails.service";
+import { mapUpstreamStatus } from "../services/reconcile.service";
 import { tripJackInsuranceProvider, redactForLog } from "../providers/tripjack.insurance.provider";
-import { InsuranceJourneyType } from "../models/InsuranceBooking.model";
+import { tripJackInsuranceClient } from "../clients/tripjack.client";
+import { InsuranceBookingModel, InsuranceJourneyType, InsuranceBookingStatus } from "../models/InsuranceBooking.model";
 
 mongoose.set("bufferCommands", false);
 
@@ -336,6 +344,260 @@ describe("F-04 booking reads are scoped to the caller", () => {
     test("reading a booking by id without a caller identity is refused", async () => {
         await rejectsWith(bookingDetailsService.getFromDb("TJS70850000729798"), 401, /identity/i);
         await rejectsWith(bookingDetailsService.getFromDb("507f1f77bcf86cd799439011"), 401, /identity/i);
+    });
+});
+
+// ─── B1/B2/B3 review context consistency ──────────────────────────────────────
+
+describe("B1 book must match the reviewed context", () => {
+    const ctx = {
+        bid: "TJS70010000707761",
+        plid: "isid0219009173_0_regular",
+        pid: "ABHI-PLAN_250-WW-AAI-BOXX",
+        travellerCount: 1,
+        travellers: [{ id: 1, age: 30 }],
+        reviewedAmount: 1500,
+    };
+
+    test("accepts a booking that matches the review", () => {
+        assertMatchesReview(bookPayload(), ctx, 1500);
+    });
+
+    test("rejects a mismatched plid", () => {
+        const p = bookPayload();
+        p.pli[0].plid = "isid9999999999_0_regular";
+        assert.throws(() => assertMatchesReview(p, ctx, 1500), (e: any) => e.status === 400 && /plan does not match/i.test(e.message));
+    });
+
+    test("rejects a mismatched pid", () => {
+        const p = bookPayload();
+        p.pli[0].pi[0].pid = "ABHI-PLAN_50-ASIA-AAI-BOXX";
+        assert.throws(() => assertMatchesReview(p, ctx, 1500), (e: any) => e.status === 400 && /product does not match/i.test(e.message));
+    });
+
+    test("rejects fewer travellers than reviewed", () => {
+        const four = { ...ctx, travellerCount: 4, travellers: [{ age: 30 }, { age: 31 }, { age: 32 }, { age: 33 }] };
+        assert.throws(
+            () => assertMatchesReview(bookPayload(), four, 1500),
+            (e: any) => e.status === 400 && /reviewed 4, booking 1/i.test(e.message)
+        );
+    });
+
+    test("rejects more travellers than reviewed", () => {
+        const p = bookPayload();
+        p.pli[0].pi[0].iti = [traveller(), { ...traveller(), id: 2 }];
+        assert.throws(
+            () => assertMatchesReview(p, ctx, 1500),
+            (e: any) => e.status === 400 && /reviewed 1, booking 2/i.test(e.message)
+        );
+    });
+
+    test("rejects a traveller age that was not the one priced", () => {
+        const p = bookPayload();
+        p.pli[0].pi[0].iti = [{ ...traveller(), age: 68 }];
+        assert.throws(
+            () => assertMatchesReview(p, ctx, 1500),
+            (e: any) => e.status === 400 && /ages do not match/i.test(e.message)
+        );
+    });
+
+    test("age comparison ignores traveller order", () => {
+        const two = { ...ctx, travellerCount: 2, travellers: [{ age: 45 }, { age: 30 }] };
+        const p = bookPayload();
+        p.pli[0].pi[0].iti = [{ ...traveller(), age: 30 }, { ...traveller(), id: 2, age: 45 }];
+        assertMatchesReview(p, two, 1500);
+    });
+
+    test("rejects a mismatched date of birth when the review captured one", () => {
+        const withDob = { ...ctx, travellers: [{ age: 30, dob: "1994-06-15" }] };
+        const p = bookPayload();
+        p.pli[0].pi[0].iti = [{ ...traveller(), dob: "1960-01-01" }];
+        assert.throws(
+            () => assertMatchesReview(p, withDob, 1500),
+            (e: any) => e.status === 400 && /dates of birth/i.test(e.message)
+        );
+    });
+
+    test("rejects an amount that is not the reviewed fare", () => {
+        assert.throws(
+            () => assertMatchesReview(bookPayload(), ctx, 1),
+            (e: any) => e.status === 400 && /does not match the reviewed fare/i.test(e.message)
+        );
+    });
+
+    test("tolerates float noise on the amount", () => {
+        assertMatchesReview(bookPayload(), ctx, 1500.004);
+    });
+
+    test("skips any field the review never captured", () => {
+        // nothing captured → nothing to contradict → booking proceeds
+        assertMatchesReview(bookPayload(), { travellerCount: 0, travellers: [], reviewedAmount: null }, 99999);
+    });
+
+    test("book proceeds when no review context exists at all (fail-open)", async () => {
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => ({ order: { bookingId: "TJS1" } }));
+        try {
+            const res: any = await bookService.book(bookPayload());
+            assert.equal(res.status, true, "an absent context must not block a booking");
+        } finally {
+            book.mock.restore();
+        }
+    });
+});
+
+describe("B2 reviewed fare extraction", () => {
+    test("finds the total fare in the documented shapes", () => {
+        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ tfd: { ifc: { TF: 1610 } } }] }] } } }), 1610);
+        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ ptf: 9050 }] }] } } }), 9050);
+    });
+
+    test("returns null rather than guessing when no total is present", () => {
+        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ pid: "P1" }] }] } } }), null);
+        assert.equal(extractReviewedAmount({}), null);
+        assert.equal(extractReviewedAmount({ isr: { iinfo: { pli: [{ pi: [{ ptf: 0 }] }] } } }), null);
+    });
+});
+
+// ─── E1/E2/E3 payload integrity ───────────────────────────────────────────────
+
+describe("E1/E2/E3 book payload integrity", () => {
+    test("rejects more than one product per plan", async () => {
+        const p = bookPayload();
+        p.pli[0].pi = [p.pli[0].pi[0], { pid: "ABHI-PLAN_50-ASIA-AAI-BOXX", iti: [traveller()] }];
+        await rejectsWith(bookService.book(p), 400, /exactly one product/i);
+    });
+
+    test("rejects duplicate traveller ids", async () => {
+        const p = bookPayload();
+        p.pli[0].pi[0].iti = [traveller(), traveller()]; // both id: 1
+        await rejectsWith(bookService.book(p), 400, /duplicate traveller id/i);
+    });
+
+    test("accepts travellers with no id at all", async () => {
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => ({ order: { bookingId: "TJS1" } }));
+        try {
+            const p = bookPayload();
+            const a: any = traveller(); delete a.id;
+            const b: any = { ...traveller(), fn: "Sita" }; delete b.id;
+            p.pli[0].pi[0].iti = [a, b];
+            const res: any = await bookService.book(p);
+            assert.equal(res.status, true, "id is not a documented mandatory field");
+        } finally {
+            book.mock.restore();
+        }
+    });
+
+    test("rejects a booking with no delivery email", async () => {
+        await rejectsWith(bookService.book(bookPayload({ deliveryInfo: { contacts: ["9810000001"] } })), 400, /deliveryInfo\.emails/i);
+        await rejectsWith(bookService.book(bookPayload({ deliveryInfo: { emails: ["  "] } })), 400, /deliveryInfo\.emails/i);
+    });
+
+    test("rejects more than one product per plan at review", async () => {
+        await rejectsWith(
+            reviewService.review({ pli: [{ plid: "isid1", pi: [{ pid: "P1" }, { pid: "P2" }] }] }),
+            400,
+            /exactly one product/i
+        );
+    });
+});
+
+// ─── B5 dob vs age ────────────────────────────────────────────────────────────
+
+describe("B5 age derived from date of birth", () => {
+    test("computes whole years and respects the birthday boundary", () => {
+        assert.equal(ageFromDob("1994-06-15", new Date("2024-06-15")), 30);
+        assert.equal(ageFromDob("1994-06-15", new Date("2024-06-14")), 29);
+        assert.equal(ageFromDob("not-a-date"), null);
+    });
+});
+
+// ─── D1 reconciliation status mapping ─────────────────────────────────────────
+
+describe("D1 upstream status mapping", () => {
+    test("maps terminal statuses and leaves in-flight ones alone", () => {
+        assert.equal(mapUpstreamStatus("SUCCESS"), InsuranceBookingStatus.SUCCESS);
+        assert.equal(mapUpstreamStatus("FAILED"), InsuranceBookingStatus.FAILED);
+        assert.equal(mapUpstreamStatus("ABORTED"), InsuranceBookingStatus.FAILED);
+        // the old poller recorded this as FAILED
+        assert.equal(mapUpstreamStatus("CANCELLED"), InsuranceBookingStatus.CANCELLED);
+        assert.equal(mapUpstreamStatus("PENDING"), null);
+        assert.equal(mapUpstreamStatus(""), null);
+    });
+});
+
+// ─── C4 upstream error messages ───────────────────────────────────────────────
+
+describe("C4 TripJack error messages reach the caller", () => {
+    test("the upstream message is carried on the thrown object", async () => {
+        // Drive the real normaliseError path with an axios-shaped failure.
+        const post = mock.method(tripJackInsuranceClient, "post", async () => {
+            throw { response: { status: 400, data: { errors: [{ message: "Invalid productId" }] } } };
+        });
+        try {
+            await tripJackInsuranceProvider.review({ pli: [{ plid: "isid1", pi: [{ pid: "P1" }] }] });
+            assert.fail("expected the provider to throw");
+        } catch (err: any) {
+            assert.equal(err.status, 400);
+            assert.equal(err.message, "Invalid productId", "controllers read error.message");
+            assert.ok(err.response?.data, "details are still available");
+        } finally {
+            post.mock.restore();
+        }
+    });
+});
+
+// ─── B4 idempotency: reserve before booking ───────────────────────────────────
+
+describe("B4 booking reservation", () => {
+    test("a retry of an in-flight booking is refused without calling TripJack", async () => {
+        const create = mock.method(InsuranceBookingModel, "create", async () => {
+            throw Object.assign(new Error("E11000 duplicate key"), { code: 11000 });
+        });
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => ({ order: { bookingId: "TJS1" } }));
+        try {
+            await rejectsWith(bookService.book(bookPayload()), 409, /already in progress or complete/i);
+            assert.equal(book.mock.callCount(), 0, "the duplicate must never reach TripJack");
+        } finally {
+            create.mock.restore();
+            book.mock.restore();
+        }
+    });
+
+    test("a rejected booking releases the reservation so a corrected retry can proceed", async () => {
+        const create = mock.method(InsuranceBookingModel, "create", async () => ({ _id: "res1" }) as any);
+        const del = mock.method(InsuranceBookingModel, "deleteOne", (() => Promise.resolve({}) as any) as any);
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => {
+            throw { status: 400, message: "Invalid productId", response: { status: 400, data: {} } };
+        });
+        try {
+            await rejectsWith(bookService.book(bookPayload()), 400, /invalid productid/i);
+            assert.equal(del.mock.callCount(), 1, "TripJack answered and refused — nothing exists upstream");
+        } finally {
+            create.mock.restore();
+            del.mock.restore();
+            book.mock.restore();
+        }
+    });
+
+    test("an indeterminate upstream failure keeps the reservation", async () => {
+        const create = mock.method(InsuranceBookingModel, "create", async () => ({ _id: "res1" }) as any);
+        const del = mock.method(InsuranceBookingModel, "deleteOne", (() => Promise.resolve({}) as any) as any);
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => {
+            throw Object.assign(new Error("timeout of 60000ms exceeded"), { code: "ECONNABORTED" });
+        });
+        try {
+            try {
+                await bookService.book(bookPayload());
+                assert.fail("expected the timeout to propagate");
+            } catch (err: any) {
+                assert.match(String(err.message), /timeout/i);
+            }
+            assert.equal(del.mock.callCount(), 0, "the booking may exist upstream — a retry must stay blocked");
+        } finally {
+            create.mock.restore();
+            del.mock.restore();
+            book.mock.restore();
+        }
     });
 });
 
