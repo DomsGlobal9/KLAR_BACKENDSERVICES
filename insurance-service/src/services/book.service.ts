@@ -62,19 +62,35 @@ async function pollInsuranceStatus(tjBookingId: string, dbId: string): Promise<v
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function detectJourneyType(payload: any): InsuranceJourneyType {
-    const ict = (payload.ict || payload.pli?.[0]?.pi?.[0]?.ict || "").toUpperCase();
+/**
+ * Journey type as declared by the caller (ict or the _journeyType hint).
+ * Null when the caller said nothing — the Book contract has no ict field,
+ * so this is null for most requests.
+ */
+export function explicitJourneyType(payload: any): InsuranceJourneyType | null {
+    const ict = (payload.ict || payload.pli?.[0]?.pi?.[0]?.ict || payload._journeyType || "")
+        .toString()
+        .toUpperCase();
     if (ict === "STUDENT") return InsuranceJourneyType.STUDENT;
     if (ict === "AMT")     return InsuranceJourneyType.AMT;
     if (ict === "API_EMB" || ict === "EMBEDDED") return InsuranceJourneyType.EMBEDDED;
+    return null;
+}
 
-    // Fallback to hint field
-    if (payload._journeyType) {
-        const jt = payload._journeyType.toUpperCase();
-        if (jt === "STUDENT")  return InsuranceJourneyType.STUDENT;
-        if (jt === "AMT")      return InsuranceJourneyType.AMT;
-        if (jt === "EMBEDDED") return InsuranceJourneyType.EMBEDDED;
-    }
+/**
+ * Journey type recorded against the booking. Falls back to the product id,
+ * which carries the plan family (…PLAN_250_STUDENT…, …_ANNUAL…) — without
+ * this every Student and AMT booking was stored as STANDALONE (F-05).
+ * Used for persistence/reporting only; it never gates validation.
+ */
+export function detectJourneyType(payload: any): InsuranceJourneyType {
+    const explicit = explicitJourneyType(payload);
+    if (explicit) return explicit;
+
+    const pid: string = payload.pli?.[0]?.pi?.[0]?.pid || "";
+    if (/_STUDENT/i.test(pid)) return InsuranceJourneyType.STUDENT;
+    if (/ANNUAL|_AMT/i.test(pid)) return InsuranceJourneyType.AMT;
+
     return InsuranceJourneyType.STANDALONE;
 }
 
@@ -97,8 +113,22 @@ class BookService {
             throw { status: 400, message: "paymentInfos is required. Use WALLET or CREDIT_LINE." };
         }
 
+        // ── Payment amount validation ───────────────────────────────────────
+        // A missing/zero/negative amount cannot be a valid purchase and was
+        // previously forwarded upstream and persisted as 0 (F-06).
+        const amount = Number(payload.paymentInfos[0]?.amount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw {
+                status: 400,
+                message: "paymentInfos[0].amount must be a number greater than 0.",
+            };
+        }
+
         // ── Per-traveller validation ────────────────────────────────────────
         const journeyType = detectJourneyType(payload);
+        // Student course data is demanded only when the caller explicitly
+        // declared a Student journey — same requests are rejected as before.
+        const declaredStudent = explicitJourneyType(payload) === InsuranceJourneyType.STUDENT;
 
         for (const plan of payload.pli) {
             for (const product of plan.pi || []) {
@@ -116,7 +146,7 @@ class BookService {
                         throw { status: 400, message: "Nominee info (ni) is mandatory for every traveller." };
                     }
                     // Student: sc (student course) is mandatory
-                    if (journeyType === InsuranceJourneyType.STUDENT && !traveller.sc) {
+                    if (declaredStudent && !traveller.sc) {
                         throw { status: 400, message: "Student course info (sc) is mandatory for STUDENT plans." };
                     }
                 }
@@ -125,10 +155,11 @@ class BookService {
 
         // ── Proxy to TripJack ───────────────────────────────────────────────
         const tjResponse = await tripJackInsuranceProvider.book(payload);
+        const tjBookingId: string = tjResponse?.order?.bookingId || payload.bookingId;
+        let persisted = false;
 
         // ── Persist to MongoDB ──────────────────────────────────────────────
         try {
-            const tjBookingId: string = tjResponse?.order?.bookingId || payload.bookingId;
 
             // Extract travellers for storage
             const travellers: any[] = [];
@@ -156,7 +187,7 @@ class BookService {
 
                 travellers,
 
-                amount:      payload.paymentInfos?.[0]?.amount || 0,
+                amount,
                 currencyCode: "INR",
 
                 status: InsuranceBookingStatus.PENDING,
@@ -171,19 +202,27 @@ class BookService {
             });
 
             const saved = await record.save();
+            persisted = true;
             console.log(`✅ [TripSafe] Saved PENDING booking: ${tjBookingId} (DB: ${saved._id})`);
 
             // Start fire-and-forget status polling
             pollInsuranceStatus(tjBookingId, (saved._id as any).toString());
 
         } catch (dbErr: any) {
-            console.error("⚠️  [TripSafe] DB save failed (TJ API succeeded):", dbErr.message);
+            // The customer has been charged upstream but we hold no local
+            // record — this needs manual reconciliation, so make it greppable
+            // rather than a passing remark in the log (F-07).
+            console.error(
+                `🚨 [TripSafe][ORPHANED_BOOKING] bookingId=${tjBookingId} amount=${amount} ` +
+                `agentId=${agentId} — TripJack booking SUCCEEDED but DB persistence failed: ${dbErr?.message}`
+            );
         }
 
         return {
             status: true,
             statusCode: 200,
-            bookingId: tjResponse?.order?.bookingId || payload.bookingId,
+            bookingId: tjBookingId,
+            persisted,
             body: tjResponse,
         };
     }
