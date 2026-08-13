@@ -1,9 +1,19 @@
 # TripSafe Insurance Service — CTO Decisions Pending
 
-**Branch:** `audit/tripsafe-insurance-hardening` · **Base:** `aac5b43` · **Head:** `d166957`
+**Branch:** `audit/tripsafe-insurance-hardening` · **Base:** `aac5b43` · **Head:** `2f54f80`
 **Source:** rounds 1 and 2 of the TripSafe audit. Full evidence in `AUDIT-FINDINGS.md`.
 
-Everything in this document is **not implemented**. Nothing here has been changed in the branch. Each item states what is happening today, what the fix would change, and what could break — enough to decide without reopening the audit.
+> ## ⚠️ STATUS — superseded in part
+>
+> This document was written as a decision list when nothing in it was implemented. **The owner has since approved and I have implemented 16 of the 24 items** (round 3, commits `5897818` … `2f54f80`). Each entry below still describes the problem and the design accurately; the **Status** column in the summary table is the current truth.
+>
+> **Implemented:** B1, B2, B3, B4, B5, C3, C4, D1, D2, D3, D5, E1, E2, E3, E4, E6 — plus the student coverage-duration decision.
+>
+> **Explicitly kept as-is by the owner:** C1 (`B2C_PORTAL` bypass), C2 (`/search` + `/review` open), A2 (production URL).
+>
+> **Still open:** A1, A3 (questions for TripJack), D4 (needs one captured response), E5 (absorbed into C4), F1 (needs live UAT credentials).
+
+Each item states what was happening, what the fix changed, and what could break — enough to review without reopening the audit.
 
 ---
 
@@ -23,32 +33,42 @@ Severity: **P0** production/data/security critical · **P1** functional or finan
 
 ## Summary decision table
 
-| ID | Item | Sev | API change | DB change | My recommendation |
+| ID | Item | Sev | API change | DB change | Status |
 |---|---|---|---|---|---|
-| A1 | Confirm TripJack re-book behaviour on the same `bid` | — | — | — | **Ask now** — gates C2/B4 severity |
-| A2 | Confirm production domain (`api.tripjack.com` vs `tripjack.com`) | P2 | No | No | **Ask, then leave alone** |
-| A3 | Resolve 4 self-contradictions in doc v6.0 | P2 | Possibly | No | **Ask, change nothing meanwhile** |
-| B1 | Review→Book consistency store (Proposal A) | P1 | No | **YES — new collection** | **APPROVE** |
-| B2 | Booking amount vs reviewed fare | P1 | No | Depends on B1 | **APPROVE after B1 + A3** |
-| B3 | Traveller count / identity vs Review | P1 | No | Depends on B1 | **APPROVE with B1** |
-| B4 | Booking idempotency (Proposal B) | P1 | Adds 409 | No new fields | **APPROVE after A1** |
-| B5 | `dob` vs `age` cross-check | P2 | No | No | **APPROVE log-only first** |
-| C1 | `B2C_PORTAL` authentication bypass | **P0** | Yes | No | **APPROVE — highest open risk** |
-| C2 | `/search` and `/review` unauthenticated | P2 | Yes | No | Decide with C1 |
-| C3 | `JWT_SECRET` hardcoded fallback | P2 | No | No | **APPROVE fail-fast** |
-| C4 | TripJack error mapping redesign | P2 | Yes | No | **DEFER** |
-| D1 | Polling does not survive restart | P1 | No | No | **APPROVE** |
-| D2 | Mongo connection failure does not stop startup | P2 | No | No | **APPROVE** |
-| D3 | Rate limiting not mounted (40 RPM SLA) | P2 | Adds 429 | No | **APPROVE** |
-| D4 | `coverageStart`/`coverageEnd` never populated | P2 | No | No | Blocked on evidence |
-| D5 | No `unhandledRejection` handler | P3 | No | No | **APPROVE** |
-| E1 | Multiple products per plan not rejected | P2 | No | No | Approve if TripJack confirms |
-| E2 | Duplicate traveller `id` not rejected | P2 | No | No | **APPROVE** — safe as-is |
-| E3 | `deliveryInfo` not validated | P2 | No | No | Approve |
-| E4 | `source` field never populated | P3 | No | No | Approve |
-| E5 | Dead `msg` variable in provider | P3 | No | No | Approve |
-| E6 | Duplicate index declaration on `bookingId` | P3 | No | No | Approve |
-| F1 | Full UAT / documentation test matrix | P2 | No | No | Schedule separately |
+| A1 | Confirm TripJack re-book behaviour on the same `bid` | — | — | — | **OPEN — ask TripJack.** B4 now blocks retries locally, so this only sets residual severity |
+| A2 | Confirm production domain (`api.tripjack.com` vs `tripjack.com`) | P2 | No | No | **KEPT AS-IS by owner** — no change made |
+| A3 | Resolve 4 self-contradictions in doc v6.0 | P2 | Possibly | No | **OPEN — ask TripJack.** Student durations pinned by owner decision |
+| B1 | Review→Book consistency store | P1 | No | **YES — new collection** | **IMPLEMENTED** `5897818`, `ace5623` |
+| B2 | Booking amount vs reviewed fare | P1 | No | Uses B1 | **IMPLEMENTED** `ace5623` — active only when the fare is located |
+| B3 | Traveller count / identity vs Review | P1 | No | Uses B1 | **IMPLEMENTED** `ace5623` |
+| B4 | Booking idempotency (reserve-then-book) | P1 | Adds 409 | No new fields | **IMPLEMENTED** `ace5623` |
+| B5 | `dob` vs `age` cross-check | P2 | No | No | **IMPLEMENTED** `ace5623` — log-only, as recommended |
+| C1 | `B2C_PORTAL` authentication bypass | **P0** | Yes | No | **KEPT AS-IS by owner** — highest open risk |
+| C2 | `/search` and `/review` unauthenticated | P2 | Yes | No | **KEPT AS-IS by owner** — mitigated by D3 |
+| C3 | `JWT_SECRET` hardcoded fallback | P2 | No | No | **IMPLEMENTED** `5dded59` |
+| C4 | TripJack error messages never reached callers | P2 | Yes (`message` text) | No | **IMPLEMENTED** `9cd92cb` |
+| D1 | Polling does not survive restart | P1 | No | No | **IMPLEMENTED** `f73e727` |
+| D2 | Mongo connection failure does not stop startup | P2 | No | No | **IMPLEMENTED** `f73e727` |
+| D3 | Rate limiting not mounted (40 RPM SLA) | P2 | Adds 429 | No | **IMPLEMENTED** `4200f7d` — 100/min per IP |
+| D4 | `coverageStart`/`coverageEnd` never populated | P2 | No | No | **IMPLEMENTED** `ace5623` via B1 — the booking-details backfill remains unnecessary |
+| D5 | No `unhandledRejection` handler | P3 | No | No | **IMPLEMENTED** `f73e727` |
+| E1 | Multiple products per plan not rejected | P2 | No | No | **IMPLEMENTED** `5897818`, `ace5623` |
+| E2 | Duplicate traveller `id` not rejected | P2 | No | No | **IMPLEMENTED** `ace5623` |
+| E3 | `deliveryInfo` not validated | P2 | No | No | **IMPLEMENTED** `ace5623` |
+| E4 | `source` field never populated | P3 | No | No | **IMPLEMENTED** `ace5623` |
+| E5 | Dead `msg` variable in provider | P3 | No | No | **IMPLEMENTED** — absorbed into C4 `9cd92cb` |
+| E6 | Duplicate index declaration on `bookingId` | P3 | No | No | **IMPLEMENTED** `ace5623` |
+| F1 | Full UAT / documentation test matrix | P2 | No | No | **OPEN** — needs live UAT credentials and confirmation numbers |
+
+### Round-3 deployment notes
+
+- **New collection `insurancereviewcontexts`** is created on first write. No migration, no existing data touched. Rollback is `git revert` plus an optional `db.insurancereviewcontexts.drop()`.
+- **`POST /book` can now return 409** when a booking for the same review is already in progress or complete. Clients should treat it as "already booked", not as a failure to retry.
+- **Error response `message` text changes** on upstream failures — callers now see the real TripJack reason instead of the generic fallback. Anything string-matching the old text needs checking.
+- **The service now exits** on a failed Mongo connection, and in production if `JWT_SECRET` is unset. Both are set in the `.env` reviewed during this audit; **confirm the same on the production host before deploying.**
+- **Rate limiting defaults to 100 req/min per IP**, tunable with `RATE_LIMIT_PER_MIN`. Raise it if legitimate burst traffic is higher.
+- **Reconciliation runs every 60s** in-process, disable with `RECONCILE_ENABLED=false`. Safe with multiple instances (duplicate polling, idempotent writes); add a lease field if the upstream call volume matters.
+- **Review→Book validation is fail-open.** Reviews created before this deploy have no stored context and book exactly as they do today. Watch the logs for mismatch rejections before considering any tightening.
 
 ---
 
@@ -354,11 +374,9 @@ Nothing in this document has been implemented. These **have** been, across both 
 
 ---
 
-## Recommended sequence
+## What is left after round 3
 
-1. **Send A1, A2 and A3 to TripJack today.** Three items are blocked on the answers and the questions cost nothing.
-2. **Schedule C1.** Unauthenticated booking and cancellation is the largest open risk, and it caps what any authorization fix can achieve.
-3. **Approve B1** (fail-open). It unlocks B2, B3 and D4 in one change, with no public API change and a one-command rollback.
-4. **Batch-approve §E and D5.** Small, safe, no decisions of substance.
-5. **Approve D1 and D2** once you confirm the production instance count.
-6. **Revisit B4** when A1 comes back.
+1. **Send A1 and A3 to TripJack.** Neither blocks the release now — B4 refuses duplicate bookings locally regardless of the answer to A1 — but both close out residual uncertainty for free.
+2. **C1 remains the largest open risk in the service.** Unauthenticated booking and cancellation via an attacker-controlled `source` field, kept as-is by decision. Everything else in this branch is defence around it, not a substitute for it.
+3. **Verify the production environment before deploying:** `JWT_SECRET` set, `MONGODB_URI` reachable, and the TripJack API key present under either accepted name. The service now refuses to start without the first two.
+4. **F1 (UAT certification matrix)** still needs live credentials and real confirmation numbers. The 59 automated tests are regression protection, not certification.
