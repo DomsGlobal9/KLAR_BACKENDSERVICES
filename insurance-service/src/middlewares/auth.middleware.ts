@@ -17,7 +17,6 @@ export const authenticateJWT = (
     try {
 
         const authHeader = req.headers.authorization;
-        console.log("auth.middleware.ts insurance", authHeader)
         let token: string | null = null;
 
         if (authHeader) {
@@ -50,8 +49,6 @@ export const authenticateJWT = (
 
         // 3. Create a strictly typed string variable so TypeScript is 100% confident down the line
         const activeToken: string = token ?? "";
-
-        console.log("Cleaned token parsing trace:", activeToken.substring(0, 25) + "...");
 
         const decoded = jwt.verify(activeToken, env.jwtSecret);
         req.user = decoded;

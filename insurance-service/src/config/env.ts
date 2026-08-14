@@ -18,21 +18,31 @@ export const env = {
 
     /**
      * TripJack PROD Configuration
-     * Uses your existing variables (TRIPJACK_BASE_URL / TRIPJACK_API_KEY) for production
+     * Uses your existing variables (TRIPJACK_BASE_URL / TRIPJACK_API_KEY) for production.
+     * TRIPJACK_PROD_API_KEY is accepted as an alias — several deployed .env files use that
+     * name, and without this fallback the apikey header goes out empty (F-01).
      */
     TRIPJACK_PROD: {
         BASE_URL: process.env.TRIPJACK_BASE_URL || "https://api.tripjack.com",
-        API_KEY: process.env.TRIPJACK_API_KEY || "",
+        API_KEY: process.env.TRIPJACK_API_KEY || process.env.TRIPJACK_PROD_API_KEY || "",
     },
 };
 
 // Validation checks based on environment
 if (isProduction && !env.TRIPJACK_PROD.API_KEY) {
-    console.error("❌ Production TRIPJACK_API_KEY is not set. Insurance APIs will fail.");
+    console.error("❌ Neither TRIPJACK_API_KEY nor TRIPJACK_PROD_API_KEY is set. Insurance APIs will fail.");
 } else if (!isProduction && !env.TRIPJACK_TEST.API_KEY) {
-    console.error("❌ Test TRIPJACK_TEST_API_KEY is not set. Insurance APIs will fail.");
+    console.error("❌ TRIPJACK_TEST_API_KEY is not set. Insurance APIs will fail.");
 }
 
 if (!env.mongoUri) {
     console.warn("⚠️  MONGODB_URI not set. Insurance bookings will NOT be persisted.");
+}
+
+// C3 — the fallback secret below is published in this repository. Verifying
+// production tokens against it would let anyone mint a valid JWT, so refuse to
+// start rather than fail open and silently.
+if (isProduction && !process.env.JWT_SECRET) {
+    console.error("❌ JWT_SECRET is not set. Refusing to start in production with the default secret.");
+    process.exit(1);
 }

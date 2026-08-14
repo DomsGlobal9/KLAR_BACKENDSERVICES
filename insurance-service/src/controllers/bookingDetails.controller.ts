@@ -19,7 +19,8 @@ export const bookingDetailsController = async (req: AuthenticatedRequest, res: R
 
 export const bookingDetailsFromDbController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const data = await bookingDetailsService.getFromDb(String(req.params.id), ownerIdFrom(req.user));
+        const ownerId = req.user?.userId || req.user?.id || req.user?._id;
+        const data = await bookingDetailsService.getFromDb(String(req.params.id), ownerId);
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][BookingFromDB Error]", error?.message || error);

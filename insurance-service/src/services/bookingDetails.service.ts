@@ -34,11 +34,13 @@ class BookingDetailsService {
     }
 
     async getFromDb(id: string, ownerId?: string) {
-        // Fail closed rather than querying unscoped, matching list.service.ts.
+        // Ownership scope is mandatory — without it any caller can read any
+        // booking, PII included, by guessing an id (F-04).
         if (!ownerId) {
-            throw { status: 401, message: "Authentication required." };
+            throw { status: 401, message: "Caller identity is required to read a booking." };
         }
 
+        const owned = { $or: [{ agentId: ownerId }, { userId: ownerId }] };
         let booking;
 
         // The ownership filter is part of the query itself, so a booking that
@@ -54,6 +56,8 @@ class BookingDetailsService {
             booking = await InsuranceBookingModel.findOne({ bookingId: id, ...owned }).lean();
         }
 
+        // Deliberately 404 rather than 403 — a booking the caller does not own
+        // must not be distinguishable from one that does not exist.
         if (!booking) {
             throw { status: 404, message: `Insurance booking reference "${id}" not located in database.` };
         }
