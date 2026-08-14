@@ -1,5 +1,6 @@
 import { tripJackInsuranceProvider } from "../providers/tripjack.insurance.provider";
 import { InsuranceBookingModel, InsuranceBookingStatus } from "../models/InsuranceBooking.model";
+import { assertOwnsBooking } from "./ownership";
 
 class AmendmentService {
 
@@ -16,13 +17,17 @@ class AmendmentService {
      *   travellerKeys: { [planId]: { [productId]: [{ id }] } }
      * }
      */
-    async raise(payload: any) {
+    async raise(payload: any, ownerId?: string) {
         if (!payload.bookingId) {
             throw { status: 400, message: "bookingId is required." };
         }
         if (!payload.travellerKeys) {
             throw { status: 400, message: "travellerKeys is required." };
         }
+
+        // Raising an amendment starts a cancellation against the supplier, so
+        // the caller must own the policy.
+        await assertOwnsBooking(payload.bookingId, ownerId);
 
         // Force correct type
         const tjPayload = {
@@ -62,13 +67,17 @@ class AmendmentService {
      *   travellerKeys: { ... }
      * }
      */
-    async cancel(payload: any) {
+    async cancel(payload: any, ownerId?: string) {
         if (!payload.amendmentId) {
             throw { status: 400, message: "amendmentId is required." };
         }
         if (!payload.bookingId) {
             throw { status: 400, message: "bookingId is required." };
         }
+
+        // Destructive: this cancels a real policy with the insurer. Ownership
+        // is checked before anything reaches TripJack.
+        await assertOwnsBooking(payload.bookingId, ownerId);
 
         const tjPayload = {
             ...payload,

@@ -39,10 +39,12 @@ router.get("/health", (_req, res) => {
 // ─── Insurance Flow ───────────────────────────────────────────────────────────
 
 // Search — Standalone, Student, AMT, Embedded
-router.post("/search", searchController);
+// Auth required: prevents anonymous fare-locking which creates orphaned review records.
+router.post("/search", authenticateJWT, searchController);
 
 // Review — get bookingId (bid) for Book API
-router.post("/review", reviewController);
+// Auth required: review locks a TripJack fare slot; must be tied to a real user.
+router.post("/review", authenticateJWT, reviewController);
 
 // Book — confirm insurance purchase + persist to DB
 router.post("/book", authenticateJWT, bookController);

@@ -16,10 +16,6 @@ export const authenticateJWT = (
 ): Response | void => {
     try {
 
-        if (req.body?.source === "B2C_PORTAL" || req.query?.source === "B2C_PORTAL") {
-            return next();
-        }
-
         const authHeader = req.headers.authorization;
         console.log("auth.middleware.ts insurance", authHeader)
         let token: string | null = null;

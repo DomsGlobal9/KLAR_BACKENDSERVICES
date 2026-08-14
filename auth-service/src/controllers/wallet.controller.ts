@@ -442,6 +442,17 @@ export class WalletController {
                 return res.status(401).json({ success: false, message: "Unauthorized" });
             }
 
+            // B2C retail users pay via Razorpay — they have no agent wallet.
+            // Reject any attempt to use this endpoint with a B2C token so that
+            // a misconfigured client never silently debits the wrong account.
+            if (req.user.clientType === "b2c" || req.user.clientType === "B2C") {
+                return res.status(403).json({
+                    success: false,
+                    message: "Wallet debit is not available for B2C accounts. Use Razorpay checkout instead.",
+                    code: "B2C_WALLET_NOT_SUPPORTED",
+                });
+            }
+
             const { amount, referenceType, referenceId, description } = req.body;
 
             if (!amount || typeof amount !== "number" || amount <= 0) {

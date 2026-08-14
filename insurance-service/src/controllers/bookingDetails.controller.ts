@@ -1,11 +1,12 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { bookingDetailsService } from "../services/bookingDetails.service";
+import { ownerIdFrom } from "../services/ownership";
 
 export const bookingDetailsController = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const bookingId: string = req.body.bookingId || (Array.isArray(req.query.bookingId) ? req.query.bookingId[0] : req.query.bookingId) || "";
-        const data = await bookingDetailsService.getDetails(bookingId);
+        const data = await bookingDetailsService.getDetails(bookingId, ownerIdFrom(req.user));
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][BookingDetails Error]", error?.message || error);
@@ -18,7 +19,7 @@ export const bookingDetailsController = async (req: AuthenticatedRequest, res: R
 
 export const bookingDetailsFromDbController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const data = await bookingDetailsService.getFromDb(String(req.params.id));
+        const data = await bookingDetailsService.getFromDb(String(req.params.id), ownerIdFrom(req.user));
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][BookingFromDB Error]", error?.message || error);

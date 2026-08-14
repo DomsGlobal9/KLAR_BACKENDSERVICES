@@ -85,6 +85,9 @@ export interface IInsuranceBooking extends Document {
     agentName?: string;
     userId?: string;
     userName?: string;
+    // Identifies whether the booking was made by a B2B agent or a B2C retail user.
+    // Drives ownership queries, refund routing, and audit reports.
+    clientType?: "B2B" | "B2C";
 
     // Raw TripJack payloads (for debugging / audit)
     tjSearchPayload?: any;
@@ -169,6 +172,11 @@ const insuranceBookingSchema = new Schema<IInsuranceBooking>(
         agentName: { type: String },
         userId:    { type: String, index: true },
         userName:  { type: String },
+        clientType: {
+            type: String,
+            enum: ["B2B", "B2C"],
+            index: true,
+        },
 
         // Raw payloads
         tjSearchPayload:          { type: Schema.Types.Mixed },

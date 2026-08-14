@@ -1,16 +1,21 @@
 import mongoose from "mongoose";
 import { tripJackInsuranceProvider } from "../providers/tripjack.insurance.provider";
 import { InsuranceBookingModel } from "../models/InsuranceBooking.model";
+import { assertOwnsBooking, ownerFilter } from "./ownership";
 
 class BookingDetailsService {
     /**
      * Fetch insurance booking details from TripJack.
      * Also updates local DB record with the latest response.
      */
-    async getDetails(bookingId: string) {
+    async getDetails(bookingId: string, ownerId?: string) {
         if (!bookingId) {
             throw { status: 400, message: "bookingId is required." };
         }
+
+        // Verify the caller owns this booking before relaying it to TripJack —
+        // otherwise any authenticated user could read any policy by id.
+        await assertOwnsBooking(bookingId, ownerId);
 
         const result = await tripJackInsuranceProvider.bookingDetails(bookingId);
 
@@ -28,15 +33,25 @@ class BookingDetailsService {
         };
     }
 
-    async getFromDb(id: string) {
+    async getFromDb(id: string, ownerId?: string) {
+        // Fail closed rather than querying unscoped, matching list.service.ts.
+        if (!ownerId) {
+            throw { status: 401, message: "Authentication required." };
+        }
+
         let booking;
+
+        // The ownership filter is part of the query itself, so a booking that
+        // belongs to someone else is indistinguishable from one that does not
+        // exist — the 404 below cannot be used to enumerate booking ids.
+        const owned = ownerFilter(ownerId);
 
         // Check if the parameter matches a standard 24-character Mongoose ObjectId structure
         if (mongoose.Types.ObjectId.isValid(id)) {
-            booking = await InsuranceBookingModel.findById(id).lean();
+            booking = await InsuranceBookingModel.findOne({ _id: id, ...owned }).lean();
         } else {
             // Fallback: Query using your custom indexed property string key instead
-            booking = await InsuranceBookingModel.findOne({ bookingId: id }).lean();
+            booking = await InsuranceBookingModel.findOne({ bookingId: id, ...owned }).lean();
         }
 
         if (!booking) {

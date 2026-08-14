@@ -1,0 +1,26 @@
+{
+  "name": "klar-backend-services",
+  "version": "1.0.0",
+  "description": "Root workspace to run all Klar backend microservices",
+  "scripts": {
+    "dev": "concurrently -k -c \"cyan,blue,green,magenta,yellow,red,gray\" -n \"AUTH,FLIGHT,HOTEL-SEARCH,HOTEL-BOOK,PAYMENT,EMAIL,CABS\" \"npm --prefix auth-service run dev\" \"npm --prefix flight-service run dev\" \"npm --prefix hotel-search-service run dev\" \"npm --prefix hotel-booking-service run dev\" \"npm --prefix payment-service run dev\" \"npm --prefix email-service run dev\" \"npm --prefix cabs-service run dev\"",
+    "dev:all": "concurrently -k -c \"cyan,blue,green,magenta,yellow,red,gray,white,bgBlue,bgMagenta,bgYellow,bgGreen\" -n \"AUTH,FLIGHT,HOTEL-SEARCH,HOTEL-BOOK,PAYMENT,EMAIL,CABS,INSURANCE,CHARTER,PASSPORT,TOUR,VISA\" \"npm --prefix auth-service run dev\" \"npm --prefix flight-service run dev\" \"npm --prefix hotel-search-service run dev\" \"npm --prefix hotel-booking-service run dev\" \"npm --prefix payment-service run dev\" \"npm --prefix email-service run dev\" \"npm --prefix cabs-service run dev\" \"npm --prefix insurance-service run dev\" \"npm --prefix charter-service run dev\" \"npm --prefix passport-service run dev\" \"npm --prefix tour-package-service run dev\" \"npm --prefix visa-service run dev\"",
+    "dev:auth": "npm --prefix auth-service run dev",
+    "dev:flight": "npm --prefix flight-service run dev",
+    "dev:hotel-search": "npm --prefix hotel-search-service run dev",
+    "dev:hotel-booking": "npm --prefix hotel-booking-service run dev",
+    "dev:payment": "npm --prefix payment-service run dev",
+    "dev:email": "npm --prefix email-service run dev",
+    "dev:cabs": "npm --prefix cabs-service run dev",
+    "dev:insurance": "npm --prefix insurance-service run dev",
+    "dev:charter": "npm --prefix charter-service run dev",
+    "dev:passport": "npm --prefix passport-service run dev",
+    "dev:tour": "npm --prefix tour-package-service run dev",
+    "dev:visa": "npm --prefix visa-service run dev",
+    "install:core": "npm --prefix auth-service install && npm --prefix flight-service install && npm --prefix hotel-search-service install && npm --prefix hotel-booking-service install && npm --prefix payment-service install && npm --prefix email-service install && npm --prefix cabs-service install",
+    "install:all": "npm --prefix auth-service install && npm --prefix cabs-service install && npm --prefix charter-service install && npm --prefix email-service install && npm --prefix flight-service install && npm --prefix hotel-booking-service install && npm --prefix hotel-search-service install && npm --prefix insurance-service install && npm --prefix passport-service install && npm --prefix payment-service install && npm --prefix tour-package-service install && npm --prefix visa-service install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

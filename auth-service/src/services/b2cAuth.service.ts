@@ -15,8 +15,13 @@ import { OTPService } from "./otp.service";
 
 import { JWTUtil } from "../utils/JWT";
 
+const googleAudiences = (process.env.GOOGLE_CLIENT_ID || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
 const googleClient = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID
+    googleAudiences[0] || process.env.GOOGLE_CLIENT_ID
 );
 
 
@@ -438,11 +443,18 @@ export class B2CAuthService {
 
         try {
 
+            const audiences = (process.env.GOOGLE_CLIENT_ID || "")
+                .split(",")
+                .map((id) => id.trim())
+                .filter(Boolean);
+
             const ticket =
                 await googleClient.verifyIdToken({
                     idToken,
                     audience:
-                        process.env.GOOGLE_CLIENT_ID,
+                        audiences.length > 1
+                            ? audiences
+                            : audiences[0] || process.env.GOOGLE_CLIENT_ID,
                 });
 
 

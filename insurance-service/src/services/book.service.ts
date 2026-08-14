@@ -84,7 +84,8 @@ class BookService {
     async book(
         payload: any,
         agentId?: string | null,
-        agentName?: string | null
+        agentName?: string | null,
+        clientType?: string | null
     ) {
         // ── Required field validation ───────────────────────────────────────
         if (!payload.bookingId) {
@@ -163,8 +164,11 @@ class BookService {
 
                 agentId,
                 agentName,
-                userId:   agentId   ?? undefined,
-                userName: agentName ?? undefined,
+                userId:     agentId   ?? undefined,
+                userName:   agentName ?? undefined,
+                clientType: clientType
+                    ? (clientType.toUpperCase() as "B2B" | "B2C")
+                    : undefined,
 
                 tjBookPayload:  payload,
                 tjBookResponse: tjResponse,
