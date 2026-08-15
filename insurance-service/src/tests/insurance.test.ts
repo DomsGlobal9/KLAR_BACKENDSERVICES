@@ -28,6 +28,7 @@ import {
     ageFromDob,
 } from "../services/book.service";
 import { listService } from "../services/list.service";
+import { countryService } from "../services/country.service";
 import { bookingDetailsService } from "../services/bookingDetails.service";
 import { mapUpstreamStatus } from "../services/reconcile.service";
 import { tripJackInsuranceProvider, redactForLog } from "../providers/tripjack.insurance.provider";
@@ -890,3 +891,44 @@ describe("amendment ownership and 24h window", () => {
         }
     });
 });
+
+describe("Country Service & Search", () => {
+    test("loads all countries when query is empty", () => {
+        const results = countryService.search();
+        assert.ok(results.length > 200, "Should load over 200 countries");
+        assert.ok(results.some((c) => c.code === "IN" && c.name === "India"));
+    });
+
+    test("returns empty list if search query is less than 2 letters", () => {
+        const results = countryService.search("I");
+        assert.equal(results.length, 0, "Query under 2 letters must return empty list");
+    });
+
+    test("displays exact 2-letter country code match first when searching with 2 letters", () => {
+        const results = countryService.search("IN");
+        assert.ok(results.length > 0);
+        assert.equal(results[0].code, "IN", "India (code: IN) must be displayed first for query IN");
+        assert.equal(results[0].name, "India");
+        assert.ok(results.length > 1, "Partial matches should also be included in the list");
+    });
+
+    test("displays exact country name match before partial matches", () => {
+        const results = countryService.search("Chad");
+        assert.ok(results.length >= 1);
+        assert.equal(results[0].name, "Chad", "Exact name match Chad must be first");
+    });
+
+    test("searches countries by name case-insensitively", () => {
+        const results = countryService.search("united arab emirates");
+        assert.ok(results.length >= 1);
+        assert.equal(results[0].code, "AE");
+        assert.equal(results[0].name, "United Arab Emirates");
+    });
+
+    test("returns empty list for non-existent country search", () => {
+        const results = countryService.search("XYZNonExistentCountry123");
+        assert.equal(results.length, 0);
+    });
+});
+
+

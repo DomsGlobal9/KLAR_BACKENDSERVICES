@@ -8,6 +8,7 @@ import { bookController }              from "../controllers/book.controller";
 import { bookingDetailsController, bookingDetailsFromDbController } from "../controllers/bookingDetails.controller";
 import { listController }              from "../controllers/list.controller";
 import { raiseAmendmentController, cancelController } from "../controllers/amendment.controller";
+import { countryController }           from "../controllers/country.controller";
 
 const router = Router();
 
@@ -19,6 +20,8 @@ router.get("/", (_req, res) => {
         version: "1.0.0",
         endpoints: {
             health:         "GET  /health",
+            countries:      "GET  /countries",
+            countrySearch:  "GET  /countries/search",
             search:         "POST /search",
             review:         "POST /review",
             book:           "POST /book",
@@ -35,6 +38,12 @@ router.get("/health", (_req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? "CONNECTED" : "DISCONNECTED";
     res.json({ status: "UP", service: "insurance-service", database: dbStatus });
 });
+
+// ─── Country Search ───────────────────────────────────────────────────────────
+
+router.get("/countries", countryController);
+router.get("/countries/search", countryController);
+router.post("/countries/search", countryController);
 
 // ─── Insurance Flow ───────────────────────────────────────────────────────────
 
@@ -61,3 +70,4 @@ router.post("/amendment/raise",  authenticateJWT, raiseAmendmentController);
 router.post("/amendment/cancel", authenticateJWT, cancelController);
 
 export default router;
+
