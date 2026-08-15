@@ -15,11 +15,10 @@ export const authenticateJWT = (
     next: NextFunction
 ): Response | void => {
     try {
-
-        if (req.body?.source === "B2C_PORTAL" || req.query?.source === "B2C_PORTAL") {
-            return next();
-        }
-
+        // C1 (P0) — the former `source=B2C_PORTAL` body/query bypass is removed.
+        // `source` is attacker-controlled, so it allowed unauthenticated booking,
+        // cancellation and booking-details reads. Every protected insurance route
+        // now requires a verified JWT; portal callers must send a real token.
         const authHeader = req.headers.authorization;
         let token: string | null = null;
 
