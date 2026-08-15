@@ -86,6 +86,9 @@ const BookingSchema = new Schema<BookingDocument>(
             type: String,
             enum: [
                 "INITIATED",
+                // Claimed by an in-flight booking attempt. Set atomically before
+                // the TripJack call so a concurrent duplicate is refused (C-6).
+                "BOOKING_IN_PROGRESS",
                 "SUCCESS",
                 "ON_HOLD",
                 "CANCELLED",
@@ -104,6 +107,8 @@ const BookingSchema = new Schema<BookingDocument>(
             default: "INITIATED"
         },
         amendmentId: { type: String },
+        /** When the current booking attempt claimed this record (C-6). */
+        bookingStartedAt: { type: Date },
         refundProcessed: {
             type: Boolean,
             default: false

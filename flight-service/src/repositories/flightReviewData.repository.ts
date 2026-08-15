@@ -73,9 +73,19 @@ export class FlightReviewDataRepository extends BaseRepository<IFlightReview> {
      */
     async getReviewDataByBookingId(bookingId: string): Promise<IFlightReview | null> {
         try {
+            // The stored document has no `data` wrapper — these queries used to
+            // target `data.mappedData.bookingId`, a path that does not exist in
+            // the schema, so every lookup returned null (C-1). Match the indexed
+            // top-level `bookingId` first and fall back to the nested copy for
+            // documents written before that field existed.
             return await FlightReviewData.findOne({
-                'data.mappedData.bookingId': bookingId
-            }).lean();
+                $or: [
+                    { bookingId },
+                    { 'mappedData.bookingId': bookingId }
+                ]
+            })
+                .sort({ storedAt: -1, createdAt: -1 })
+                .lean();
         } catch (error: any) {
             throw new Error(`Failed to get booking by bookingId: ${error.message}`);
         }
@@ -87,7 +97,10 @@ export class FlightReviewDataRepository extends BaseRepository<IFlightReview> {
     async getReviewDataByBookingIds(bookingIds: string[]): Promise<IFlightReview[]> {
         try {
             return await FlightReviewData.find({
-                'data.mappedData.bookingId': { $in: bookingIds }
+                $or: [
+                    { bookingId: { $in: bookingIds } },
+                    { 'mappedData.bookingId': { $in: bookingIds } }
+                ]
             }).lean();
         } catch (error: any) {
             throw new Error(`Failed to get bookings by bookingIds: ${error.message}`);
@@ -103,7 +116,12 @@ export class FlightReviewDataRepository extends BaseRepository<IFlightReview> {
     ): Promise<IFlightReview | null> {
         try {
             return await FlightReviewData.findOneAndUpdate(
-                { 'data.mappedData.bookingId': bookingId },
+                {
+                    $or: [
+                        { bookingId },
+                        { 'mappedData.bookingId': bookingId }
+                    ]
+                },
                 { $set: data },
                 { new: true, runValidators: true }
             );
@@ -118,7 +136,10 @@ export class FlightReviewDataRepository extends BaseRepository<IFlightReview> {
     async deleteReviewDataBookingId(bookingId: string): Promise<boolean> {
         try {
             const result = await FlightReviewData.findOneAndDelete({
-                'data.mappedData.bookingId': bookingId
+                $or: [
+                    { bookingId },
+                    { 'mappedData.bookingId': bookingId }
+                ]
             });
             return !!result;
         } catch (error: any) {
@@ -131,9 +152,7 @@ export class FlightReviewDataRepository extends BaseRepository<IFlightReview> {
      */
     async getReviewDataSessionId(sessionId: string): Promise<IFlightReview[]> {
         try {
-            return await FlightReviewData.find({
-                'data.sessionId': sessionId
-            }).lean();
+            return await FlightReviewData.find({ sessionId }).lean();
         } catch (error: any) {
             throw new Error(`Failed to get bookings by sessionId: ${error.message}`);
         }
@@ -164,7 +183,7 @@ export class FlightReviewDataRepository extends BaseRepository<IFlightReview> {
     async getReviewDataByRequestId(requestId: string): Promise<IFlightReview | null> {
         try {
             return await FlightReviewData.findOne({
-                'data.mappedData.searchQuery.requestId': requestId
+                'mappedData.searchQuery.requestId': requestId
             }).lean();
         } catch (error: any) {
             throw new Error(`Failed to get booking by requestId: ${error.message}`);

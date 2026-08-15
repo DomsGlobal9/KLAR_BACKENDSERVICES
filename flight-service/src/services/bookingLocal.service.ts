@@ -8,6 +8,18 @@ import { BookingRepository } from "../repositories/bookingLocal.repository";
 import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import TripjackBookingService from "./booking.service";
 import { FrontendBookingPayload } from "../types/booking.types";
+import { FlightReviewDataService } from "./flightReviewData.service";
+import SeatService, { seatMapCacheKey } from "./seat.service";
+import RedisCacheService from "../cache/redisCache.service";
+import { validateBookingPayload } from "../utils/tripjackBookingVerifier";
+import {
+    verifyBookingAmount,
+    BookingVerificationError,
+} from "../utils/bookingVerification.util";
+import {
+    resolveBookingRequirements,
+    isReviewExpired,
+} from "../utils/reviewConditions.util";
 import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
@@ -22,6 +34,7 @@ class BookingService {
     }
 
     private bookingRepo = new BookingRepository();
+    private reviewDataService = new FlightReviewDataService();
 
     // ----------------------------
     // ---- PRIVATE FUNCTIONS -----
@@ -737,12 +750,49 @@ class BookingService {
             throw error;
         }
 
+        // ── Authoritative verification, before anything is claimed or sent ──
+        //
+        // Everything below this point treats the request body as untrusted.
+        // The fare, the SSR prices and every conditional field requirement are
+        // rebuilt from the Review that TripJack itself returned (C-1/C-4/H-4).
+        const review = await this.loadReviewOrThrow(bookingId);
+        const requirements = resolveBookingRequirements(review.mappedData);
+
+        if (isReviewExpired(requirements, review.storedAt)) {
+            throw new BookingVerificationError(
+                "The reviewed fare has expired. Please search and review again.",
+                "REVIEW_EXPIRED",
+                409
+            );
+        }
+
+        // H-5 — Hold is only offered when TripJack allows blocking for this
+        // fare (conditions.isBA, Flights 1.8.2 p. 38).
+        if (updatedBooking.isHold && !requirements.hold.allowed) {
+            throw new BookingVerificationError(
+                "This fare cannot be held. Please complete an instant booking instead.",
+                "HOLD_NOT_ALLOWED"
+            );
+        }
+
+        const seatMap = await this.loadSeatMap(bookingId, updatedBooking.travellers);
+
+        // C-1 / H-4 — rebuild the payable amount from the Review plus
+        // server-priced ancillaries and reject anything that disagrees.
+        const verified = verifyBookingAmount({
+            clientTripjackAmount: updatedBooking.tripjackPrice,
+            review: review.mappedData,
+            seatMap,
+            travellers: updatedBooking.travellers || [],
+        });
+
         const tripjackPayload: FrontendBookingPayload = {
             bookingId: updatedBooking.bookingId,
             email: updatedBooking.email,
             phone: updatedBooking.phone,
             travellers: updatedBooking.travellers,
-            amount: updatedBooking.tripjackPrice || 0,
+            // The verified figure, never the client's.
+            amount: verified.authoritativeAmount,
             isHold: updatedBooking.isHold,
             emergencyContact: updatedBooking.emergencyContact
         };
@@ -751,15 +801,139 @@ class BookingService {
             tripjackPayload.gstInfo = updatedBooking.gstInfo;
         }
 
+        // C-4 / C-5 / H-6 / H-7 / H-8 — conditional field validation, server
+        // side, driven by the same Review conditions the form was built from.
+        validateBookingPayload(tripjackPayload, {
+            requirements,
+            departureDate: updatedBooking.departureDate,
+        });
+
+        // C-6 — claim the booking atomically. A concurrent duplicate, a retry
+        // or a double-click finds the record already claimed and is refused
+        // before any upstream call happens.
+        const claimed = await this.bookingRepo.claimForBooking(bookingId);
+        if (!claimed) {
+            throw new BookingVerificationError(
+                "This booking is already in progress or has already been completed.",
+                "BOOKING_ALREADY_IN_PROGRESS",
+                409
+            );
+        }
+
         const mapped = mapToTripjackBooking(tripjackPayload);
-        const response = await TripjackBookingService.book(mapped);
+
+        let response: any;
+        try {
+            response = await TripjackBookingService.book(mapped);
+        } catch (error: any) {
+            const upstreamStatus = Number(error?.response?.status);
+            if (upstreamStatus >= 400 && upstreamStatus < 500) {
+                // TripJack answered and created nothing — safe to let the
+                // customer correct the request and try again.
+                await this.bookingRepo.releaseBookingClaim(bookingId, "INITIATED").catch(() => { });
+            } else {
+                // Timeout or 5xx: the booking may exist upstream. Keep the
+                // claim so a retry cannot create a second ticket, and leave it
+                // for reconciliation.
+                console.error("[Booking][INDETERMINATE] upstream outcome unknown >>>", {
+                    bookingId,
+                    message: error?.message,
+                });
+            }
+            throw error;
+        }
+
+        // H-9 — record what TripJack actually said rather than collapsing
+        // everything that is not an outright success into a null.
+        const orderStatus = this.extractOrderStatus(response?.data);
+        await this.bookingRepo
+            .updateBookingStatus(bookingId, orderStatus)
+            .catch(() => { });
 
         if (response?.data?.status?.success === true) {
             this.sendBookingEmails(bookingId);
             return response.data;
-        } else {
-            return null;
         }
+
+        return null;
+    }
+
+    /**
+     * Load the Review stored at review time, or refuse to book.
+     *
+     * Failing closed is deliberate: without the Review there is no authoritative
+     * fare and no condition set, so proceeding would mean trusting the client
+     * for both — exactly the hole C-1 closes.
+     */
+    private async loadReviewOrThrow(bookingId: string) {
+        let review: any = null;
+        try {
+            review = await this.reviewDataService.getReviewDataByBookingId(bookingId);
+        } catch {
+            review = null;
+        }
+
+        if (!review?.mappedData) {
+            throw new BookingVerificationError(
+                "No reviewed fare is on record for this booking. Please review the itinerary again before booking.",
+                "REVIEW_MISSING",
+                409
+            );
+        }
+        return review;
+    }
+
+    /**
+     * Seat map for seat-SSR pricing, from cache, fetched once if absent.
+     * Skipped entirely when no seats were selected.
+     */
+    private async loadSeatMap(bookingId: string, travellers: any[]): Promise<any> {
+        const seatsSelected = (travellers || []).some(
+            (t: any) => t?.ssrSeatInfos?.length
+        );
+        if (!seatsSelected) return null;
+
+        try {
+            const cached = await RedisCacheService.get(seatMapCacheKey(bookingId));
+            if (cached) return cached;
+        } catch {
+            // fall through to a fresh fetch
+        }
+
+        const fresh = await SeatService.getSeats(bookingId);
+        return fresh?.data ?? null;
+    }
+
+    /**
+     * Map a TripJack booking response onto our local status (H-9).
+     *
+     * All seven documented order statuses are represented (Flights 1.8.2
+     * pp. 62-63). PENDING and ABORTED in particular must stay distinct from
+     * FAILED — money may have moved and they need reconciliation, not a retry.
+     */
+    private extractOrderStatus(data: any): Booking["status"] {
+        const upstream = String(
+            data?.order?.status ?? data?.status?.order ?? ""
+        ).toUpperCase();
+
+        switch (upstream) {
+            case "SUCCESS":
+            case "ON_HOLD":
+            case "CANCELLED":
+            case "FAILED":
+            case "PENDING":
+            case "ABORTED":
+            case "UNCONFIRMED":
+                return upstream as Booking["status"];
+            default:
+                break;
+        }
+
+        // No order status in the response: fall back to the call's own success
+        // flag. An unrecognised outcome is PENDING, not FAILED — it must be
+        // reconciled rather than silently retried.
+        if (data?.status?.success === true) return "SUCCESS";
+        return "PENDING";
     }
 
     async getBookingsByUserId(userId: string, filter?: string) {

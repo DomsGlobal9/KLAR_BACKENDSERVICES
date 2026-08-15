@@ -205,6 +205,13 @@ interface IDc {
     iqpe?: boolean;
 }
 
+interface IPcs {
+    pped?: boolean;
+    pid?: boolean;
+    pm?: boolean;
+    dobe?: boolean;
+}
+
 interface IAnlm {
     FlightNumber?: number;
     finml?: number;
@@ -226,6 +233,7 @@ interface IGst {
 
 interface IConditions {
     ffas?: any[];
+    pcs?: IPcs;
     isa?: boolean;
     dob?: IDob;
     iecr?: boolean;
@@ -274,6 +282,23 @@ interface IMappedData {
 export interface IFlightReview extends Document {
     mappedData?: IMappedData;
     sessionId?: string;
+    /**
+     * TripJack booking id, duplicated to the top level so a Review can be
+     * looked up at book time by an indexed equality match (C-1).
+     */
+    bookingId?: string;
+    /**
+     * Server-computed authoritative pricing, in integer paise, captured at
+     * Review time. `mappedData` holds the un-marked-up TripJack quote, so
+     * `farePaise` is the figure that must reach TripJack and `markupPaise` is
+     * KLAR's own margin, charged to the wallet but never sent upstream.
+     */
+    pricing?: {
+        farePaise?: number;
+        markupPaise?: number;
+    };
+    /** When this Review was stored — the clock used for `st` expiry. */
+    storedAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -472,6 +497,16 @@ const DcSchema = new Schema({
     iqpe: { type: Boolean, required: false }
 }, { _id: false });
 
+// Passport booking conditions (Flights 1.8.2 p. 32/37). These were absent from
+// the schema, so mongoose strict mode silently dropped them on persist and the
+// passport requirement could never be resolved from a stored Review (C-4/H-6).
+const PcsSchema = new Schema({
+    pped: { type: Boolean, required: false },
+    pid: { type: Boolean, required: false },
+    pm: { type: Boolean, required: false },
+    dobe: { type: Boolean, required: false }
+}, { _id: false });
+
 const AnlmSchema = new Schema({
     FlightNumber: { type: Number, required: false },
     finml: { type: Number, required: false },
@@ -493,6 +528,7 @@ const GstSchema = new Schema({
 
 const ConditionsSchema = new Schema({
     ffas: { type: [], required: false },
+    pcs: { type: PcsSchema, required: false },
     isa: { type: Boolean, required: false },
     dob: { type: DobSchema, required: false },
     iecr: { type: Boolean, required: false },
@@ -545,7 +581,13 @@ const MappedDataSchema = new Schema({
 
 const FlightReviewDataSchema = new Schema({
     mappedData: { type: MappedDataSchema, required: false },
-    sessionId: { type: String, required: false }
+    sessionId: { type: String, required: false },
+    bookingId: { type: String, required: false, index: true },
+    pricing: {
+        farePaise: { type: Number, required: false },
+        markupPaise: { type: Number, required: false }
+    },
+    storedAt: { type: Date, required: false, default: Date.now }
 }, {
     timestamps: true,
     collection: 'flight_fair_review'
