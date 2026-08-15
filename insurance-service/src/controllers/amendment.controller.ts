@@ -4,7 +4,8 @@ import { amendmentService } from "../services/amendment.service";
 
 export const raiseAmendmentController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const data = await amendmentService.raise(req.body);
+        const callerId = req.user?.userId || req.user?.id || req.user?._id;
+        const data = await amendmentService.raise(req.body, callerId);
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][RaiseAmendment Error]", error?.message || error);
@@ -17,7 +18,8 @@ export const raiseAmendmentController = async (req: AuthenticatedRequest, res: R
 
 export const cancelController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const data = await amendmentService.cancel(req.body);
+        const callerId = req.user?.userId || req.user?.id || req.user?._id;
+        const data = await amendmentService.cancel(req.body, callerId);
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][Cancel Error]", error?.message || error);
