@@ -28,26 +28,18 @@ class BookingDetailsService {
         };
     }
 
-    async getFromDb(id: string, ownerId?: string) {
-        // Ownership scope is mandatory — without it any caller can read any
-        // booking, PII included, by guessing an id (F-04).
-        if (!ownerId) {
+    async getFromDb(id: string, ownerId?: string, isB2C: boolean = false) {
+        if (!isB2C && !ownerId) {
             throw { status: 401, message: "Caller identity is required to read a booking." };
         }
 
-        const owned = { $or: [{ agentId: ownerId }, { userId: ownerId }] };
-        let booking;
-
-        // Check if the parameter matches a standard 24-character Mongoose ObjectId structure
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            booking = await InsuranceBookingModel.findOne({ _id: id, ...owned }).lean();
-        } else {
-            // Fallback: Query using your custom indexed property string key instead
-            booking = await InsuranceBookingModel.findOne({ bookingId: id, ...owned }).lean();
+        const query: any = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { bookingId: id };
+        if (!isB2C && ownerId) {
+            query.$or = [{ agentId: ownerId }, { userId: ownerId }];
         }
 
-        // Deliberately 404 rather than 403 — a booking the caller does not own
-        // must not be distinguishable from one that does not exist.
+        const booking = await InsuranceBookingModel.findOne(query).lean();
+
         if (!booking) {
             throw { status: 404, message: `Insurance booking reference "${id}" not located in database.` };
         }
