@@ -149,6 +149,12 @@ interface ITotalPriceList {
 interface ITripInformation {
     SegmentInformation?: ISegmentInformation[];
     TotalPriceList?: ITotalPriceList[];
+    /**
+     * isSeatMandatory — serialized on the wire as `ism`. True when seat
+     * selection is mandatory for this trip (IndiGo Upfront fare). Absent or
+     * false means no mandate.
+     */
+    ism?: boolean;
     AirFlowType?: string;
     InstantPurchaseMessage?: string;
     IsSpecialFare?: boolean;
@@ -450,6 +456,9 @@ const TotalPriceListSchema = new Schema({
 const TripInformationSchema = new Schema({
     SegmentInformation: { type: [SegmentInformationSchema], required: false },
     TotalPriceList: { type: [TotalPriceListSchema], required: false },
+    // isSeatMandatory (IndiGo Upfront). Must be in the schema or mongoose
+    // strict mode drops it and the mandate cannot be resolved at book time.
+    ism: { type: Boolean, required: false },
     AirFlowType: { type: String, required: false },
     InstantPurchaseMessage: { type: String, required: false },
     IsSpecialFare: { type: Boolean, required: false },

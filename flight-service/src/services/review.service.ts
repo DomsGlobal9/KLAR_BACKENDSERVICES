@@ -8,6 +8,7 @@ import { FlightReviewDataService } from "./flightReviewData.service";
 import { envConfig } from "../config";
 import { resolveBookingRequirements } from "../utils/reviewConditions.util";
 import { reviewTotalFarePaise } from "../utils/bookingVerification.util";
+import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
 
 export const SERVICE_TYPES = {
     FLIGHTS: "FLIGHTS",
@@ -197,6 +198,19 @@ class ReviewService {
             });
 
             const tripjackError = error.response?.data;
+
+            // IndiGo Upfront: not enough seats for the passenger count, or the
+            // seat map lookup failed. Surface why, so the agent can pick
+            // another fare instead of seeing a generic review failure.
+            const upfront = parseUpfrontSeatError(tripjackError);
+            if (upfront) {
+                const seatError = new Error(upfront.userMessage);
+                (seatError as any).statusCode = error.response?.status || 400;
+                (seatError as any).errorCode = upfront.errCode;
+                (seatError as any).details = upfront.reason;
+                (seatError as any).isSeatMandatory = true;
+                throw seatError;
+            }
 
             if (tripjackError && tripjackError.errors && tripjackError.errors.length > 0) {
                 const firstError = tripjackError.errors[0];

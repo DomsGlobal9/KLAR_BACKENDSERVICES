@@ -60,7 +60,19 @@ export interface BookingRequirements {
         applicable: boolean;
     };
     seat: {
+        /** Seat selection is offered for this itinerary (conditions.isa). */
         applicable: boolean;
+        /**
+         * Seat selection is *mandatory* — IndiGo Upfront fare. Distinct from
+         * `applicable`: that says seats can be chosen, this says they must be.
+         * Driven by the per-trip `ism` flag, not by `conditions`.
+         */
+        mandatory: boolean;
+        /**
+         * Segment ids belonging to trips that carry `ism: true`. Every adult
+         * and child must hold a seat on each of these; infants are exempt.
+         */
+        mandatorySegmentIds: string[];
     };
     hold: {
         allowed: boolean;
@@ -78,6 +90,30 @@ function flag(value: unknown): boolean {
     if (typeof value === "boolean") return value;
     if (typeof value === "string") return value.toLowerCase() === "true";
     return false;
+}
+
+/**
+ * Segment ids on trips where seat selection is mandatory (IndiGo Upfront).
+ *
+ * `ism` is returned per trip (`tripInfos[].ism`, mapped to
+ * `TripInformation[].ism`), so the mandate covers every segment of that trip.
+ * Trips without the flag are untouched — the rule applies only to Upfront
+ * fares, every other fare and airline behaves exactly as before.
+ */
+export function mandatorySeatSegmentIds(review: any): string[] {
+    const root = review?.mappedData || review;
+    const trips = root?.TripInformation || root?.tripInfos || [];
+    const ids: string[] = [];
+
+    for (const trip of trips) {
+        if (!flag(trip?.ism)) continue;
+        for (const seg of trip?.SegmentInformation || trip?.sI || []) {
+            const id = seg?.SegmentID ?? seg?.id;
+            if (id !== undefined && id !== null) ids.push(String(id));
+        }
+    }
+
+    return [...new Set(ids)];
 }
 
 /** The mapped Review payload, wherever the caller happens to hold it. */
@@ -106,6 +142,7 @@ export function resolveBookingRequirements(review: any): BookingRequirements {
     const dc = c.dc || {};
 
     const dobEveryone = flag(pcs.dobe);
+    const mandatorySegmentIds = mandatorySeatSegmentIds(review);
 
     return {
         passport: {
@@ -137,6 +174,8 @@ export function resolveBookingRequirements(review: any): BookingRequirements {
         },
         seat: {
             applicable: flag(c.isa),
+            mandatory: mandatorySegmentIds.length > 0,
+            mandatorySegmentIds,
         },
         hold: {
             allowed: flag(c.isBA),

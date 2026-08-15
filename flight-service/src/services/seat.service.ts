@@ -3,6 +3,7 @@ import tripjackConfig from "../config/tripjack.config";
 import { TRIPJACK_URLS } from "../config";
 import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
 import RedisCacheService from "../cache/redisCache.service";
+import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
 
 /** Cache key for a booking's seat map, used to price seat SSR at book time. */
 export const seatMapCacheKey = (bookingId: string) => `seatmap:${bookingId}`;
@@ -62,6 +63,19 @@ class SeatService {
                 data: JSON.stringify(error.response?.data, null, 2),
                 message: error.message
             });
+
+            // TripJack applies the Upfront seat sufficiency check to the seat
+            // map lookup too, so translate it here as well rather than letting
+            // it surface as a bare 500.
+            const upfront = parseUpfrontSeatError(error.response?.data);
+            if (upfront) {
+                const seatError: any = new Error(upfront.userMessage);
+                seatError.statusCode = error.response?.status || 400;
+                seatError.errorCode = upfront.errCode;
+                seatError.details = upfront.reason;
+                seatError.isSeatMandatory = true;
+                throw seatError;
+            }
 
             throw error;
         }

@@ -57,10 +57,54 @@ const NO_CONDITIONS: BookingRequirements = {
     emergencyContact: { required: false },
     documentId: { applicable: false, mandatory: false },
     pan: { applicable: false },
-    seat: { applicable: false },
+    seat: { applicable: false, mandatory: false, mandatorySegmentIds: [] },
     hold: { allowed: false },
     session: { validSeconds: null, createdAt: null },
 };
+
+/**
+ * Pax types that must hold a seat on an Upfront-fare segment.
+ * Infants travel on a lap and are excluded from the mandate.
+ */
+const SEAT_MANDATE_PAX_TYPES = new Set(["ADULT", "CHILD"]);
+
+/**
+ * Enforce IndiGo Upfront mandatory seat selection.
+ *
+ * TripJack rejects an Upfront booking with no seat (error 8038,
+ * `UPFRONT_SEAT_FAILURE$...`). Checking it here means the customer is told
+ * before the booking call rather than after a failed attempt, and it closes
+ * the case where a client skips the seat step entirely.
+ *
+ * The mandate is per segment: each adult/child needs a seat on every segment
+ * of a trip flagged `ism: true`.
+ */
+function validateMandatorySeats(
+    payload: FrontendBookingPayload,
+    req: BookingRequirements
+): void {
+    const mandatory = req.seat.mandatorySegmentIds;
+    if (!mandatory.length) return;
+
+    payload.travellers.forEach((t, index) => {
+        if (!SEAT_MANDATE_PAX_TYPES.has(String(t.paxType).toUpperCase())) return;
+
+        const seated = new Set(
+            (t.ssrSeatInfos || [])
+                .filter((s) => s?.key && s?.code)
+                .map((s) => String(s.key))
+        );
+
+        const missing = mandatory.filter((segmentId) => !seated.has(segmentId));
+        if (missing.length) {
+            fail(
+                `Seat selection is mandatory for this fare. ` +
+                `Please select a seat for traveller ${index + 1} on ${missing.length > 1 ? "segments" : "segment"} ${missing.join(", ")}.`,
+                "SEAT_SELECTION_MANDATORY"
+            );
+        }
+    });
+}
 
 /** Whole months between two dates, used for the passport 6-month rule. */
 function monthsBetween(from: Date, to: Date): number {
@@ -301,6 +345,9 @@ export function validateBookingPayload(
     }
 
     validateGst(payload, req);
+
+    // IndiGo Upfront: every adult/child needs a seat on each flagged segment.
+    validateMandatorySeats(payload, req);
 
     // Emergency contact — mandatory only when the Review sets `iecr`
     // (1.8.2 p. 50, Case 4). It used to be demanded of every booking.

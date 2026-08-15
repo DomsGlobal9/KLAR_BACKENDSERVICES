@@ -20,6 +20,7 @@ import {
     resolveBookingRequirements,
     isReviewExpired,
 } from "../utils/reviewConditions.util";
+import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
 import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
 import { flightBookingConfirmationTemplate } from "../templates/flight-booking-confirmation.template";
 import { flightAgencyBookingConfirmationTemplate } from "../templates/flight-agency-booking-confirmation.template";
@@ -831,6 +832,17 @@ class BookingService {
                 // TripJack answered and created nothing — safe to let the
                 // customer correct the request and try again.
                 await this.bookingRepo.releaseBookingClaim(bookingId, "INITIATED").catch(() => { });
+
+                // A seat taken between review and ticketing lands here. Say so
+                // explicitly so the agent re-picks a seat rather than guessing.
+                const upfront = parseUpfrontSeatError(error?.response?.data);
+                if (upfront) {
+                    throw new BookingVerificationError(
+                        upfront.userMessage,
+                        "SEAT_SELECTION_MANDATORY",
+                        400
+                    );
+                }
             } else {
                 // Timeout or 5xx: the booking may exist upstream. Keep the
                 // claim so a retry cannot create a second ticket, and leave it

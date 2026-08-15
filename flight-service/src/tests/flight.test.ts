@@ -30,6 +30,7 @@ import {
 } from "../utils/tripjackBookingVerifier";
 import { mapToTripjackBooking } from "../utils/mappers/booking.mapper";
 import { FrontendBookingPayload } from "../types/booking.types";
+import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -760,5 +761,209 @@ describe("traveller validation", () => {
                 ),
             "TITLE_INVALID"
         );
+    });
+});
+
+// ─── IndiGo Upfront mandatory seat selection ──────────────────────────────────
+
+describe("IndiGo Upfront mandatory seat selection", () => {
+    /** A reviewed itinerary whose trip carries ism: true on two segments. */
+    const upfrontReview = () => ({
+        TripInformation: [
+            {
+                ism: true,
+                SegmentInformation: [{ SegmentID: "SEG1" }, { SegmentID: "SEG2" }],
+            },
+        ],
+        conditions: { isa: true },
+    });
+
+    const seatOn = (...segmentIds: string[]) =>
+        segmentIds.map((key) => ({ key, code: `SEAT_${key}` }));
+
+    test("ism true marks every segment of that trip mandatory", () => {
+        const r = resolveBookingRequirements(upfrontReview());
+        assert.equal(r.seat.mandatory, true);
+        assert.deepEqual(r.seat.mandatorySegmentIds, ["SEG1", "SEG2"]);
+    });
+
+    test("a trip without ism carries no mandate", () => {
+        const r = resolveBookingRequirements({
+            TripInformation: [{ SegmentInformation: [{ SegmentID: "SEG1" }] }],
+            conditions: { isa: true },
+        });
+        assert.equal(r.seat.mandatory, false);
+        assert.deepEqual(r.seat.mandatorySegmentIds, []);
+        // seat selection is still offered, just not compulsory
+        assert.equal(r.seat.applicable, true);
+    });
+
+    test("only the flagged trip's segments are mandatory on a mixed itinerary", () => {
+        const r = resolveBookingRequirements({
+            TripInformation: [
+                { ism: true, SegmentInformation: [{ SegmentID: "OUT1" }] },
+                { SegmentInformation: [{ SegmentID: "RET1" }] },
+            ],
+        });
+        assert.deepEqual(r.seat.mandatorySegmentIds, ["OUT1"]);
+    });
+
+    test("rejects a booking with no seat on a mandatory segment", () => {
+        const req = resolveBookingRequirements(upfrontReview());
+        expectVerificationError(
+            () => validateBookingPayload(bookingPayload(), { requirements: req }),
+            "SEAT_SELECTION_MANDATORY"
+        );
+    });
+
+    test("rejects a booking seated on only one of two mandatory segments", () => {
+        const req = resolveBookingRequirements(upfrontReview());
+        expectVerificationError(
+            () =>
+                validateBookingPayload(
+                    bookingPayload({
+                        travellers: [traveller({ ssrSeatInfos: seatOn("SEG1") })],
+                    }),
+                    { requirements: req }
+                ),
+            "SEAT_SELECTION_MANDATORY"
+        );
+    });
+
+    test("accepts a booking seated on every mandatory segment", () => {
+        const req = resolveBookingRequirements(upfrontReview());
+        validateBookingPayload(
+            bookingPayload({
+                travellers: [traveller({ ssrSeatInfos: seatOn("SEG1", "SEG2") })],
+            }),
+            { requirements: req }
+        );
+    });
+
+    test("every adult and child needs their own seat", () => {
+        const req = resolveBookingRequirements(upfrontReview());
+        expectVerificationError(
+            () =>
+                validateBookingPayload(
+                    bookingPayload({
+                        travellers: [
+                            traveller({ ssrSeatInfos: seatOn("SEG1", "SEG2") }),
+                            // child has no seat
+                            traveller({
+                                firstName: "Kid",
+                                paxType: "CHILD",
+                                title: "Master",
+                            }),
+                        ],
+                    }),
+                    { requirements: req }
+                ),
+            "SEAT_SELECTION_MANDATORY"
+        );
+    });
+
+    test("infants are exempt from the seat mandate", () => {
+        const req = resolveBookingRequirements(upfrontReview());
+        // Infants travel on a lap, so an unseated infant must not block the booking.
+        validateBookingPayload(
+            bookingPayload({
+                travellers: [
+                    traveller({ ssrSeatInfos: seatOn("SEG1", "SEG2") }),
+                    traveller({ firstName: "Baby", paxType: "INFANT", title: "Master" }),
+                ],
+            }),
+            { requirements: req }
+        );
+    });
+
+    test("non-Upfront fares are unaffected by the mandate", () => {
+        const req = resolveBookingRequirements({
+            TripInformation: [{ SegmentInformation: [{ SegmentID: "SEG1" }] }],
+        });
+        validateBookingPayload(bookingPayload(), { requirements: req });
+    });
+
+    test("a seat entry with no code does not satisfy the mandate", () => {
+        const req = resolveBookingRequirements(upfrontReview());
+        expectVerificationError(
+            () =>
+                validateBookingPayload(
+                    bookingPayload({
+                        travellers: [
+                            traveller({
+                                ssrSeatInfos: [
+                                    { key: "SEG1", code: "" },
+                                    { key: "SEG2", code: "SEAT_SEG2" },
+                                ],
+                            }),
+                        ],
+                    }),
+                    { requirements: req }
+                ),
+            "SEAT_SELECTION_MANDATORY"
+        );
+    });
+});
+
+describe("Upfront seat error translation", () => {
+    const tjError = (errCode: string, message: string, details: string) => ({
+        status: { success: false, httpStatus: 400 },
+        errors: [{ errCode, message, details }],
+    });
+
+    test("recognises 12034 insufficient seats from Review", () => {
+        const parsed = parseUpfrontSeatError(
+            tjError(
+                "12034",
+                "Mandatory seat is not available for the selected fare type",
+                "UPFRONT_SEAT_FAILURE$Indigo Upfront fare is not available due to insufficient seats"
+            )
+        );
+        assert.ok(parsed);
+        assert.equal(parsed!.errCode, "12034");
+        assert.match(parsed!.userMessage, /not enough seats available/i);
+        // the raw prefix must not leak into what the agent reads
+        assert.ok(!parsed!.userMessage.includes("UPFRONT_SEAT_FAILURE"));
+    });
+
+    test("recognises a seat map lookup failure", () => {
+        const parsed = parseUpfrontSeatError(
+            tjError(
+                "12034",
+                "Mandatory seat is not available for the selected fare type",
+                "UPFRONT_SEAT_FAILURE$Issue fetching Seat Map API. Pls try again later."
+            )
+        );
+        assert.ok(parsed);
+        assert.match(parsed!.userMessage, /could not be confirmed|try again/i);
+    });
+
+    test("recognises 8038 seat selection mandatory from Book", () => {
+        const parsed = parseUpfrontSeatError(
+            tjError(
+                "8038",
+                "Seat Selection is Mandatory",
+                "UPFRONT_SEAT_FAILURE$For upfront fares, seat selection is mandatory for all passengers"
+            )
+        );
+        assert.ok(parsed);
+        assert.equal(parsed!.errCode, "8038");
+        assert.match(parsed!.userMessage, /seat selection is mandatory/i);
+    });
+
+    test("reads the error out of a nested axios payload", () => {
+        const parsed = parseUpfrontSeatError({
+            response: {
+                data: tjError("8038", "Seat Selection is Mandatory", "UPFRONT_SEAT_FAILURE$Seat selection failed while booking."),
+            },
+        });
+        assert.ok(parsed);
+        assert.equal(parsed!.errCode, "8038");
+    });
+
+    test("leaves unrelated TripJack errors alone", () => {
+        assert.equal(parseUpfrontSeatError(tjError("1000", "Request flight is not longer available.", "")), null);
+        assert.equal(parseUpfrontSeatError({}), null);
+        assert.equal(parseUpfrontSeatError(null), null);
     });
 });
