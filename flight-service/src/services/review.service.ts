@@ -6,6 +6,9 @@ import RedisCacheService from "../cache/redisCache.service";
 import { v4 as uuidv4 } from "uuid";
 import { FlightReviewDataService } from "./flightReviewData.service";
 import { envConfig } from "../config";
+import { resolveBookingRequirements } from "../utils/reviewConditions.util";
+import { reviewTotalFarePaise } from "../utils/bookingVerification.util";
+import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
 
 export const SERVICE_TYPES = {
     FLIGHTS: "FLIGHTS",
@@ -16,6 +19,47 @@ export const SERVICE_TYPES = {
 } as const;
 
 class ReviewService {
+
+    private reviewDataService = new FlightReviewDataService();
+
+    /**
+     * Persist the Review so Book can verify against it (C-1/C-4).
+     *
+     * `mappedData` is the un-marked-up TripJack quote — the authoritative fare
+     * and the conditions that decide which traveller fields are mandatory.
+     * Markup is stored separately because it is KLAR's margin, charged to the
+     * wallet but never sent to TripJack.
+     *
+     * Best-effort: a persistence failure must not fail a successful Review.
+     * Book fails closed if the record is missing, which is the safe direction.
+     */
+    private async persistReview(
+        bookingId: string,
+        authoritativeData: any,
+        markedUpData: any,
+        sessionId: string
+    ): Promise<void> {
+        try {
+            const farePaise = reviewTotalFarePaise(authoritativeData) ?? 0;
+            const markedUpPaise = reviewTotalFarePaise(markedUpData) ?? farePaise;
+
+            await this.reviewDataService.upsertReviewData({
+                bookingId,
+                mappedData: authoritativeData,
+                sessionId,
+                storedAt: new Date(),
+                pricing: {
+                    farePaise,
+                    markupPaise: Math.max(0, markedUpPaise - farePaise),
+                },
+            } as any);
+        } catch (error: any) {
+            console.error("[Review] Failed to persist review data >>>", {
+                bookingId,
+                message: error?.message,
+            });
+        }
+    }
 
     private applyMarkupToFare(mappedData: any, markup: any): any {
         const finalData = JSON.parse(JSON.stringify(mappedData));
@@ -126,8 +170,23 @@ class ReviewService {
                 raw: finalData,
             }, 1800);
 
+            // Store the authoritative (pre-markup) quote against the booking id
+            // so Book can rebuild the payable amount and resolve the traveller
+            // requirements without trusting the client (C-1/C-4).
+            const bookingId = mappedData?.bookingId;
+            if (bookingId) {
+                await this.persistReview(bookingId, mappedData, finalData, sessionId);
+            } else {
+                console.warn("[Review] No bookingId in review response; booking verification will fail closed.");
+            }
+
+            // Normalised conditions, so the frontend requires exactly the fields
+            // TripJack asks for instead of hardcoding them (C-4/C-5).
+            const bookingRequirements = resolveBookingRequirements(mappedData);
+
             return {
                 mappedData: finalData,
+                bookingRequirements,
                 sessionId
             };
 
@@ -139,6 +198,19 @@ class ReviewService {
             });
 
             const tripjackError = error.response?.data;
+
+            // IndiGo Upfront: not enough seats for the passenger count, or the
+            // seat map lookup failed. Surface why, so the agent can pick
+            // another fare instead of seeing a generic review failure.
+            const upfront = parseUpfrontSeatError(tripjackError);
+            if (upfront) {
+                const seatError = new Error(upfront.userMessage);
+                (seatError as any).statusCode = error.response?.status || 400;
+                (seatError as any).errorCode = upfront.errCode;
+                (seatError as any).details = upfront.reason;
+                (seatError as any).isSeatMandatory = true;
+                throw seatError;
+            }
 
             if (tripjackError && tripjackError.errors && tripjackError.errors.length > 0) {
                 const firstError = tripjackError.errors[0];
@@ -182,16 +254,19 @@ class ReviewService {
         }
     }
 
-    async beforeBookVerify(bookingIds: string) {
+    async beforeBookVerify(bookingId: string) {
 
         const env = tripjackConfig.ENV;
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.FARE_VALIDATE}`;
 
         try {
+            // H-1: the contract is `bookingId` (singular) — Flights 1.8.2 p. 57.
+            // This previously posted `bookingIds`, so the call could never
+            // succeed and the hold→confirm path had no fare revalidation.
             const response = await axios.post(
                 url,
-                { bookingIds },
+                { bookingId },
                 {
                     headers: {
                         "Content-Type": "application/json",
