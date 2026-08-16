@@ -288,6 +288,11 @@ class BookService {
             amount,
             currencyCode: "INR",
             status: InsuranceBookingStatus.PENDING,
+            // Delivery address for the policy, stored normalised so B2C
+            // booking history can be looked up by email on an indexed field.
+            // Validated as present above, so this is always populated for new
+            // bookings; older records fall back to travellers.eid.
+            contactEmail: String(payload.deliveryInfo?.emails?.[0] ?? "").trim().toLowerCase() || undefined,
             agentId,
             agentName,
             userId:   agentId   ?? undefined,

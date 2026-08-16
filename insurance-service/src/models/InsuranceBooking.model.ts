@@ -80,6 +80,14 @@ export interface IInsuranceBooking extends Document {
     status: InsuranceBookingStatus;
     cancelledAt?: Date;
 
+    /**
+     * Customer email the policy was delivered to (deliveryInfo.emails[0]),
+     * stored normalised and indexed so booking history can be looked up by
+     * email. `agentName` is not usable for this — for a B2C guest it holds the
+     * label "B2C Guest" rather than an address.
+     */
+    contactEmail?: string;
+
     // Agent / User
     agentId?: string;
     agentName?: string;
@@ -165,6 +173,8 @@ const insuranceBookingSchema = new Schema<IInsuranceBooking>(
             index: true,
         },
         cancelledAt: { type: Date },
+
+        contactEmail: { type: String, lowercase: true, trim: true, index: true },
 
         agentId:   { type: String, index: true },
         agentName: { type: String },
