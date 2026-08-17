@@ -1,3 +1,7 @@
+import dns from "node:dns/promises";
+dns.setServers(["1.1.1.1", "1.0.0.1", "0.0.0.0", "149.88.103.51"]);
+
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -20,7 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 
 connectDB();
 
-app.use('/api', routes);
+app.use('/api/cruise', routes);
 
 app.get('/', (req, res) => {
     res.json({

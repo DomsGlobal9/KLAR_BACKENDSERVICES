@@ -43,7 +43,7 @@ class FareController {
 
     async getMultiCityFares(req: Request, res: Response) {
         try {
-            const { sessionId, flightKey } = req.body;
+            const { sessionId, flightKey, priceId } = req.body;
 
             let { legIndex } = req.body;
 
@@ -61,7 +61,8 @@ class FareController {
             const data = await FareService.getMultiCityFares(
                 sessionId,
                 Number(legIndex),
-                flightKey
+                flightKey,
+                priceId
             );
 
             return res.status(200).json({

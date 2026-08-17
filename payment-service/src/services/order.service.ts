@@ -23,7 +23,7 @@ export const createOrderService = async (data: {
 
     
     if (data.clientType === 'B2C' && !data.bookingId) {
-        throw new Error('bookingId is required for B2C client type');
+        data.bookingId = `INS-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     }
 
     

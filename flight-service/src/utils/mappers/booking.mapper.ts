@@ -18,28 +18,23 @@ function mapTraveller(t: FrontendTraveller): TripjackTraveller {
         traveller.di = t.documentId || t.di;
     }
 
-    const hasAnyPassport =
-        t.passportNumber ||
-        t.passportNationality ||
-        t.passportIssueDate ||
-        t.passportExpiryDate;
+    // Each passport field is forwarded on its own merit (H-6). The previous
+    // all-or-nothing rule dropped the entire block whenever one field was
+    // absent, so a fare requiring only the passport number (pm=true, pped and
+    // pid false) went upstream with no passport at all and was rejected.
+    if (t.passportNumber?.trim()) traveller.pNum = t.passportNumber.trim();
+    if (t.passportNationality?.trim()) traveller.pNat = t.passportNationality.trim().toUpperCase();
+    if (t.passportIssueDate?.trim()) traveller.pid = t.passportIssueDate.trim();
+    if (t.passportExpiryDate?.trim()) traveller.eD = t.passportExpiryDate.trim();
 
-    const hasFullPassport =
-        t.passportNumber &&
-        t.passportNationality &&
-        t.passportIssueDate &&
-        t.passportExpiryDate;
-
-    if (hasFullPassport) {
-        traveller.pNum = t.passportNumber!;
-        traveller.pNat = t.passportNationality!;
-        traveller.pid = t.passportIssueDate!;
-        traveller.eD = t.passportExpiryDate!;
-    }
+    // H-7 / H-8 — document id and PAN, previously never transmitted.
+    if (t.documentId?.trim()) traveller.di = t.documentId.trim();
+    if (t.pan?.trim()) traveller.pan = t.pan.trim().toUpperCase();
 
     if (t.ssrSeatInfos?.length) traveller.ssrSeatInfos = t.ssrSeatInfos;
     if (t.ssrMealInfos?.length) traveller.ssrMealInfos = t.ssrMealInfos;
     if (t.ssrBaggageInfos?.length) traveller.ssrBaggageInfos = t.ssrBaggageInfos;
+    if (t.ssrExtraServiceInfos?.length) traveller.ssrExtraServiceInfos = t.ssrExtraServiceInfos;
 
     return traveller;
 }

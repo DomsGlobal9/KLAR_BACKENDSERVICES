@@ -8,6 +8,12 @@ class ListService {
         limit?: number;
         agentId?: string;
     }) {
+        // Ownership scope is mandatory. Without it this query returns every
+        // booking in the collection, PII included (F-04).
+        if (!query.agentId) {
+            throw { status: 401, message: "Caller identity is required to list bookings." };
+        }
+
         const filter: any = {};
 
         if (query.status && Object.values(InsuranceBookingStatus).includes(query.status as InsuranceBookingStatus)) {
@@ -16,12 +22,10 @@ class ListService {
         if (query.journeyType && Object.values(InsuranceJourneyType).includes(query.journeyType as InsuranceJourneyType)) {
             filter.journeyType = query.journeyType;
         }
-        if (query.agentId) {
-            filter.$or = [
-                { agentId: query.agentId },
-                { userId:  query.agentId },
-            ];
-        }
+        filter.$or = [
+            { agentId: query.agentId },
+            { userId:  query.agentId },
+        ];
 
         const page  = Math.max(query.page  || 1,  1);
         const limit = Math.min(Math.max(query.limit || 20, 1), 100);

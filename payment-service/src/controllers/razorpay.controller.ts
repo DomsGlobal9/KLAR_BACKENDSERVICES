@@ -37,6 +37,8 @@ export const createRazorpayOrderController = async (req: Request, res: Response)
         }
 
 
+        const resolvedBookingId = bookingId || `INS-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
         const result = await createRazorpayOrderService({
             userId,
             userEmail,
@@ -45,7 +47,7 @@ export const createRazorpayOrderController = async (req: Request, res: Response)
             amount,
             currency,
             platform,
-            bookingId 
+            bookingId: resolvedBookingId 
         });
 
         return res.status(200).json({

@@ -88,6 +88,7 @@ export interface Booking {
     departureDate: string;
     status:
     | "INITIATED"
+    | "BOOKING_IN_PROGRESS"
     | "SUCCESS"
     | "ON_HOLD"
     | "CANCELLED"
@@ -103,6 +104,7 @@ export interface Booking {
     | "CANCEL_REQUESTED"
     | "CONFIRMED";
     amendmentId?: string;
+    bookingStartedAt?: Date;
     refundProcessed?: boolean;
     refundPrice?: string;
     refundDate?: Date;

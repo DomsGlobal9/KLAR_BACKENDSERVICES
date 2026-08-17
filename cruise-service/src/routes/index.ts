@@ -4,6 +4,6 @@ import cruiseRoutes from './cruise.route';
 const router = Router();
 
 // Use cruise routes
-router.use('/cruise', cruiseRoutes);
+router.use(cruiseRoutes);
 
 export default router;
