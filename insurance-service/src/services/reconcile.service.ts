@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { tripJackInsuranceProvider } from "../providers/tripjack.insurance.provider";
 import { InsuranceBookingModel, InsuranceBookingStatus } from "../models/InsuranceBooking.model";
+import { bookingNotificationService } from "./bookingNotification.service";
 
 /**
  * Booking status reconciliation (D1).
@@ -66,6 +67,15 @@ export async function reconcilePendingBookings(): Promise<number> {
             });
             settled++;
             console.log(`[TripSafe][reconcile] ${booking.bookingId} → ${status}`);
+
+            // This is the authoritative point at which a booking becomes
+            // successful: `book.service` only ever writes PENDING, so nothing
+            // earlier — the book call, the provider response, payment — is a
+            // safe trigger. Awaited but never able to throw, and it runs after
+            // the status write so a notification problem cannot undo it.
+            if (status === InsuranceBookingStatus.SUCCESS) {
+                await bookingNotificationService.sendBookingConfirmation(booking.bookingId);
+            }
         } catch (err: any) {
             // Leave it PENDING; the next sweep retries.
             console.error(`[TripSafe][reconcile] ${booking.bookingId} failed: ${err?.message}`);
@@ -88,6 +98,13 @@ export function startReconciliation(): void {
         if (mongoose.connection.readyState !== 1) return;
         reconcilePendingBookings().catch(err =>
             console.error("[TripSafe][reconcile] sweep failed:", err?.message)
+        );
+
+        // A booking that has already settled to SUCCESS is no longer picked up
+        // by the sweep above, so a confirmation that failed while email-service
+        // was down would never be retried without this.
+        bookingNotificationService.retryFailedConfirmations().catch(err =>
+            console.error("[TripSafe][reconcile] notification retry failed:", err?.message)
         );
     }, SWEEP_INTERVAL_MS);
 

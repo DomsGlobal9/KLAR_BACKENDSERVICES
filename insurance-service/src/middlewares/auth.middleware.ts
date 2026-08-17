@@ -15,7 +15,7 @@ export const authenticateJWT = (
     next: NextFunction
 ): Response | void => {
     try {
-        const reqSource = req.body?.source || req.query?.source || req.headers["x-source"];
+        const reqSource = req.headers["x-source"];
         if (reqSource && String(reqSource).toUpperCase() === "B2C_PORTAL") {
             const authHeader = req.headers.authorization;
             let token: string | null = null;

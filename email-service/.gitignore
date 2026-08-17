@@ -1,0 +1,212 @@
+# Dependencies
+node_modules/
+# package-lock.json is committed on purpose: CI installs with `npm ci`, which
+# requires it, and it pins the exact tree that was type-checked and tested.
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Build output
+dist/
+build/
+lib/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.iml
+.project
+.classpath
+.settings/
+*.sublime-*
+
+# TypeScript
+*.ts.map
+*.js.map
+
+# Testing coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Database migrations (keep the migration files, not the generated meta)
+drizzle/meta/
+# Uncomment if you want to keep migration files
+# drizzle/*.sql
+
+# Uploads
+uploads/
+files/
+assets/uploads/
+
+# Redis
+dump.rdb
+
+# Docker
+*.pid
+docker-compose.override.yml
+!.dockerignore
+
+# AWS
+.aws/
+credentials
+
+# NPM
+.npm
+.npmrc
+
+# ESLint / Prettier
+.eslintcache
+.prettiercache
+
+# Jest / Testing
+jest.config.js
+test-results/
+test-reports/
+
+# PM2
+.pm2/
+pm2-*.log
+
+# Sentry
+.sentrycli
+
+# Environment-specific
+.env.local
+.env.production
+.env.staging
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.cert
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Swap files
+*.swp
+*.swo
+*~
+
+# Applications
+*.app
+*.exe
+*.dmg
+
+# Archives (if you download or generate them)
+*.zip
+*.tar.gz
+*.rar
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cloud services
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Secrets
+secrets/
+*.secret
+*.secrets
+**/secrets/
+**/*.secret
+
+# Output of CLI tools
+*.tgz
+*.snap
+
+# Ngrok
+ngrok.log
+*.ngrok
+
+# VS Code specific
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/extensions.json
+
+# Intellij / WebStorm
+.idea/modules.xml
+.idea/workspace.xml
+.idea/datasources.xml
+.idea/dataSources/
+.idea/sqlDataSources.xml
+
+# Azure
+.azure/
+
+# Serverless
+.serverless/
+
+# Next.js specific (if applicable)
+.next/
+out/
+
+# Nuxt.js (if applicable)
+.nuxt/
+.nuxtrc
+
+# Netlify
+.netlify/
+
+# Vercel
+.vercel/
+
+# Turborepo
+.turbo/
+
+# PWA
+sw.js
+workbox-*.js
+
+# Storybook
+storybook-static/
+
+# Distributed tracing
+trace/
+
+# Profiling
+profile/
