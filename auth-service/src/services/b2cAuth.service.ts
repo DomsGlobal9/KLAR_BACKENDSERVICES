@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { OAuth2Client } from "google-auth-library";
+import { UnauthorizedError } from "../errors/AppError";
 
 import { B2CUserRepository } from "../repositories/b2cUser.repository";
 
@@ -448,14 +449,32 @@ export class B2CAuthService {
                 .map((id) => id.trim())
                 .filter(Boolean);
 
-            const ticket =
-                await googleClient.verifyIdToken({
-                    idToken,
-                    audience:
-                        audiences.length > 1
-                            ? audiences
-                            : audiences[0] || process.env.GOOGLE_CLIENT_ID,
-                });
+            let ticket;
+            try {
+                ticket =
+                    await googleClient.verifyIdToken({
+                        idToken,
+                        audience:
+                            audiences.length > 1
+                                ? audiences
+                                : audiences[0] || process.env.GOOGLE_CLIENT_ID,
+                    });
+            } catch (verifyError: any) {
+                // A token Google refuses to verify is a client-auth problem,
+                // not a server fault — surface it as 401 with the library's
+                // reason intact. The most common cause in production is an
+                // audience mismatch: the app's serverClientId is missing from
+                // this service's GOOGLE_CLIENT_ID list.
+                console.error(
+                    "Google idToken verification failed:",
+                    verifyError?.message,
+                    "| configured audiences:",
+                    audiences.length
+                );
+                throw new UnauthorizedError(
+                    `Google sign-in could not be verified: ${verifyError?.message || "invalid token"}`
+                );
+            }
 
 
             const payload =
@@ -593,6 +612,12 @@ export class B2CAuthService {
                 "Google auth error:",
                 error
             );
+
+            // Keep typed errors (and their status codes) intact — wrapping
+            // them in a plain Error downgraded a 401 to a generic 500.
+            if (error instanceof UnauthorizedError) {
+                throw error;
+            }
 
             throw new Error(
                 error.message ||
