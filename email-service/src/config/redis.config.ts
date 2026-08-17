@@ -1,65 +1,87 @@
-import Redis from "ioredis";
-import { envConfig } from "./env.config";
+import Redis, { RedisOptions } from 'ioredis';
+import { envConfig } from './env.config';
 
-class RedisConfig {
-    private static instance: Redis | null = null;
-    private static isConnected = false;
+export const redisConnectionOptions: RedisOptions = {
+    host: envConfig.REDIS_HOST,
+    port: envConfig.REDIS_PORT,
+    password: envConfig.REDIS_PASSWORD,
+    db: envConfig.REDIS_DB,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    retryStrategy(times) {
+        return Math.min(times * 500, 3000);
+    },
+};
 
-    static getInstance(): Redis {
-        if (!this.instance) {
-            this.instance = new Redis(envConfig.REDIS_URL, {
-                retryStrategy: (times: number) => {
-                    const delay = Math.min(times * 50, 2000);
-                    return delay;
-                },
-                maxRetriesPerRequest: 3,
-                enableReadyCheck: true,
-                lazyConnect: false,
-            });
+let redisClient: Redis | null = null;
+let isConnecting = false;
 
-            this.instance.on("connect", () => {
+export const getRedisClient = (): Redis => {
+    if (!redisClient && !isConnecting) {
+        isConnecting = true;
+        redisClient = new Redis(redisConnectionOptions);
 
-                this.isConnected = true;
-            });
+        redisClient.on('connect', () => {
+            console.log(`✅ Redis connected successfully at ${envConfig.REDIS_HOST}:${envConfig.REDIS_PORT}`);
+            isConnecting = false;
+        });
 
-            this.instance.on("ready", () => {
+        redisClient.on('ready', () => {
+            console.log('✅ Redis is ready to accept commands');
+        });
 
-                this.isConnected = true;
-            });
+        redisClient.on('error', (err) => {
+            console.error('❌ Redis connection error:', err.message);
+            if (err.message.includes('ECONNREFUSED')) {
+                console.error('❌ Redis connection refused. Please check if Redis server is running.');
+            }
+            isConnecting = false;
+        });
 
-            this.instance.on("error", (error: Error) => {
+        redisClient.on('close', () => {
+            console.log('⚠️ Redis connection closed');
+        });
 
-                this.isConnected = false;
-            });
+        redisClient.on('reconnecting', (delay: any) => {
+            console.log(`🔄 Redis reconnecting in ${delay}ms...`);
+        });
 
-            this.instance.on("close", () => {
-
-                this.isConnected = false;
-            });
-
-            this.instance.on("reconnecting", () => {
-
-                this.isConnected = false;
-            });
-        }
-
-        return this.instance;
+        redisClient.on('end', () => {
+            console.log('⚠️ Redis connection ended');
+            redisClient = null;
+            isConnecting = false;
+        });
     }
+    return redisClient as Redis;
+};
 
-    static isReady(): boolean {
-        return this.isConnected && this.instance?.status === "ready";
-    }
-
-    static async healthCheck(): Promise<boolean> {
+export const closeRedisClient = async (): Promise<void> => {
+    if (redisClient) {
         try {
-            const client = this.getInstance();
-            const response = await client.ping();
-            return response === "PONG";
+            redisClient.disconnect();
+            console.log('✅ Redis connection disconnected.');
         } catch (error) {
-
-            return false;
+            console.error('❌ Error disconnecting Redis:', error);
+        } finally {
+            redisClient = null;
+            isConnecting = false;
         }
     }
-}
+};
 
-export default RedisConfig;
+/**
+ * Optional Testing Function 
+ * Test connection function
+ * @returns 
+ */
+export const testRedisConnection = async (): Promise<boolean> => {
+    try {
+        const client = getRedisClient();
+        await client.ping();
+        console.log('✅ Redis ping successful');
+        return true;
+    } catch (error) {
+        console.error('❌ Redis ping failed:', error);
+        return false;
+    }
+};
