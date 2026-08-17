@@ -176,6 +176,15 @@ class BookService {
         if (!payload.paymentInfos?.length) {
             throw { status: 400, message: "paymentInfos is required. Use WALLET or CREDIT_LINE." };
         }
+        // Doc p. 29: only WALLET and CREDIT_LINE are supported via API, and
+        // split payments are not supported — one payment entry only (F-12).
+        if (payload.paymentInfos.length > 1) {
+            throw { status: 400, message: "Split payments are not supported. Provide exactly one paymentInfos entry." };
+        }
+        const paymentMedium = String(payload.paymentInfos[0]?.paymentMedium || "").toUpperCase();
+        if (paymentMedium !== "WALLET" && paymentMedium !== "CREDIT_LINE") {
+            throw { status: 400, message: "paymentMedium must be WALLET or CREDIT_LINE." };
+        }
         // deliveryInfo carries the policy delivery address and is mandatory
         // upstream (doc p. 25) (E3).
         if (!payload.deliveryInfo?.emails?.some((e: any) => typeof e === "string" && e.trim())) {
@@ -280,6 +289,11 @@ class BookService {
             amount,
             currencyCode: "INR",
             status: InsuranceBookingStatus.PENDING,
+            // Delivery address for the policy, stored normalised so B2C
+            // booking history can be looked up by email on an indexed field.
+            // Validated as present above, so this is always populated for new
+            // bookings; older records fall back to travellers.eid.
+            contactEmail: String(payload.deliveryInfo?.emails?.[0] ?? "").trim().toLowerCase() || undefined,
             agentId,
             agentName,
             userId:   agentId   ?? undefined,

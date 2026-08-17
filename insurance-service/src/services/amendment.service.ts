@@ -1,8 +1,34 @@
 import { tripJackInsuranceProvider } from "../providers/tripjack.insurance.provider";
 import { InsuranceBookingModel, InsuranceBookingStatus } from "../models/InsuranceBooking.model";
-import { assertOwnsBooking } from "./ownership";
+
+// Doc p. 51 / §4 p. 87: TripSafe can be cancelled up to 24 hours before the
+// coverage start date. Enforced locally for a clear error instead of an
+// opaque upstream rejection.
+const CANCELLATION_CUTOFF_MS = 24 * 3600 * 1000;
 
 class AmendmentService {
+
+    /**
+     * Load the local booking record and enforce ownership.
+     *
+     * Fail-open when the booking is not persisted locally (pre-persistence
+     * bookings, DB outage) — TripJack remains the authority. When a record
+     * exists and carries an owner, a different caller gets 404, matching the
+     * F-04 doctrine: existence is never disclosed to a non-owner.
+     */
+    private async loadOwnedBooking(bookingId: string, callerId?: string | null) {
+        const booking = await InsuranceBookingModel
+            .findOne({ bookingId })
+            .lean()
+            .catch(() => null);
+        if (!booking) return null;
+
+        const owners = [booking.agentId, booking.userId].filter(Boolean);
+        if (callerId && owners.length && !owners.includes(callerId)) {
+            throw { status: 404, message: `Insurance booking "${bookingId}" not found.` };
+        }
+        return booking;
+    }
 
     // ─── Raise Amendment ────────────────────────────────────────────────────
 
@@ -17,17 +43,26 @@ class AmendmentService {
      *   travellerKeys: { [planId]: { [productId]: [{ id }] } }
      * }
      */
-    async raise(payload: any, ownerId?: string) {
+    async raise(payload: any, callerId?: string | null) {
         if (!payload.bookingId) {
             throw { status: 400, message: "bookingId is required." };
         }
-        if (!payload.travellerKeys) {
-            throw { status: 400, message: "travellerKeys is required." };
+        if (!payload.travellerKeys || typeof payload.travellerKeys !== "object" || !Object.keys(payload.travellerKeys).length) {
+            throw { status: 400, message: "travellerKeys is required: { [planId]: { [productId]: [{ id }] } }." };
         }
 
-        // Raising an amendment starts a cancellation against the supplier, so
-        // the caller must own the policy.
-        await assertOwnsBooking(payload.bookingId, ownerId);
+        const booking = await this.loadOwnedBooking(payload.bookingId, callerId);
+
+        // 24h cutoff — checked only when the coverage start is known locally.
+        if (booking?.coverageStart) {
+            const cutoff = new Date(booking.coverageStart).getTime() - CANCELLATION_CUTOFF_MS;
+            if (Date.now() > cutoff) {
+                throw {
+                    status: 400,
+                    message: "TripSafe cancellation must be raised at least 24 hours before the coverage start date.",
+                };
+            }
+        }
 
         // Force correct type
         const tjPayload = {
@@ -67,7 +102,7 @@ class AmendmentService {
      *   travellerKeys: { ... }
      * }
      */
-    async cancel(payload: any, ownerId?: string) {
+    async cancel(payload: any, callerId?: string | null) {
         if (!payload.amendmentId) {
             throw { status: 400, message: "amendmentId is required." };
         }
@@ -75,9 +110,7 @@ class AmendmentService {
             throw { status: 400, message: "bookingId is required." };
         }
 
-        // Destructive: this cancels a real policy with the insurer. Ownership
-        // is checked before anything reaches TripJack.
-        await assertOwnsBooking(payload.bookingId, ownerId);
+        await this.loadOwnedBooking(payload.bookingId, callerId);
 
         const tjPayload = {
             ...payload,

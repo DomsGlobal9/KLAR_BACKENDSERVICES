@@ -12,6 +12,11 @@ import { test, mock, describe } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
+
+import { authenticateJWT } from "../middlewares/auth.middleware";
+import { amendmentService } from "../services/amendment.service";
+import { env } from "../config/env";
 
 import { searchService } from "../services/search.service";
 import { reviewService, extractReviewedAmount } from "../services/review.service";
@@ -23,6 +28,7 @@ import {
     ageFromDob,
 } from "../services/book.service";
 import { listService } from "../services/list.service";
+import { countryService } from "../services/country.service";
 import { bookingDetailsService } from "../services/bookingDetails.service";
 import { mapUpstreamStatus } from "../services/reconcile.service";
 import { tripJackInsuranceProvider, redactForLog } from "../providers/tripjack.insurance.provider";
@@ -731,3 +737,198 @@ describe("F-03 PII redaction", () => {
         assert.ok(out.includes("isid1"));
     });
 });
+
+// ─── C1 auth bypass removal ───────────────────────────────────────────────────
+
+describe("C1 the source=B2C_PORTAL bypass is gone", () => {
+    const run = (req: any) => {
+        let statusCode: number | null = null;
+        let body: any = null;
+        let nextCalled = false;
+        const res: any = {
+            status(code: number) { statusCode = code; return this; },
+            json(payload: any)  { body = payload; return this; },
+        };
+        authenticateJWT(req, res, () => { nextCalled = true; });
+        return { statusCode, body, nextCalled };
+    };
+
+    test("source=B2C_PORTAL in the body no longer skips authentication", () => {
+        const r = run({ body: { source: "B2C_PORTAL" }, query: {}, headers: {} });
+        assert.equal(r.nextCalled, false, "the bypass must not reach the route");
+        assert.equal(r.statusCode, 401);
+        assert.equal(r.body?.code, "TOKEN_MISSING");
+    });
+
+    test("source=B2C_PORTAL in the query no longer skips authentication", () => {
+        const r = run({ body: {}, query: { source: "B2C_PORTAL" }, headers: {} });
+        assert.equal(r.nextCalled, false);
+        assert.equal(r.statusCode, 401);
+    });
+
+    test("a valid JWT still authenticates", () => {
+        const token = jwt.sign({ userId: "agent-1" }, env.jwtSecret);
+        const req: any = { body: {}, query: {}, headers: { authorization: `Bearer ${token}` } };
+        const r = run(req);
+        assert.equal(r.nextCalled, true, "a valid token must pass");
+        assert.equal(req.user?.userId, "agent-1");
+    });
+
+    test("a forged token is rejected", () => {
+        const token = jwt.sign({ userId: "agent-1" }, "not-the-secret");
+        const r = run({ body: {}, query: {}, headers: { authorization: `Bearer ${token}` } });
+        assert.equal(r.nextCalled, false);
+        assert.equal(r.statusCode, 401);
+    });
+});
+
+// ─── F-12 payment contract ────────────────────────────────────────────────────
+
+describe("F-12 payment medium contract", () => {
+    test("rejects split payments", async () => {
+        const p = bookPayload({
+            paymentInfos: [
+                { paymentMedium: "WALLET", amount: 700 },
+                { paymentMedium: "CREDIT_LINE", amount: 800 },
+            ],
+        });
+        await rejectsWith(bookService.book(p), 400, /split payments/i);
+    });
+
+    test("rejects an unsupported payment medium", async () => {
+        const p = bookPayload({ paymentInfos: [{ paymentMedium: "UPI", amount: 1500 }] });
+        await rejectsWith(bookService.book(p), 400, /WALLET or CREDIT_LINE/i);
+    });
+
+    test("CREDIT_LINE is accepted", async () => {
+        const book = mock.method(tripJackInsuranceProvider, "book", async () => ({ order: { bookingId: "TJS2" } }));
+        try {
+            const res: any = await bookService.book(bookPayload({ paymentInfos: [{ paymentMedium: "CREDIT_LINE", amount: 1500 }] }));
+            assert.equal(res.status, true);
+        } finally {
+            book.mock.restore();
+        }
+    });
+});
+
+// ─── Amendment ownership and cancellation window ──────────────────────────────
+
+describe("amendment ownership and 24h window", () => {
+    const futureCoverage = () => new Date(Date.now() + 72 * 3600 * 1000);
+    const raisePayload = () => ({
+        bookingId: "TJS70010000707761",
+        type: "CANCELLATION",
+        travellerKeys: { isid0219009173_0_regular: { "ABHI-PLAN_250-WW-AAI-BOOX": [{ id: 1 }] } },
+    });
+    const mockBooking = (doc: any) =>
+        mock.method(InsuranceBookingModel, "findOne", () => ({ lean: () => Promise.resolve(doc) }) as any);
+
+    test("rejects an empty travellerKeys object", async () => {
+        await rejectsWith(
+            amendmentService.raise({ bookingId: "TJS1", travellerKeys: {} }),
+            400,
+            /travellerKeys/i
+        );
+    });
+
+    test("another caller's booking reads as not found", async () => {
+        const findOne = mockBooking({ bookingId: "TJS70010000707761", agentId: "owner-1", coverageStart: futureCoverage() });
+        try {
+            await rejectsWith(amendmentService.raise(raisePayload(), "intruder-2"), 404, /not found/i);
+            await rejectsWith(
+                amendmentService.cancel({ ...raisePayload(), amendmentId: "AMD1" }, "intruder-2"),
+                404,
+                /not found/i
+            );
+        } finally {
+            findOne.mock.restore();
+        }
+    });
+
+    test("the owner can raise a cancellation", async () => {
+        const findOne = mockBooking({ bookingId: "TJS70010000707761", agentId: "owner-1", coverageStart: futureCoverage() });
+        const raise = mock.method(tripJackInsuranceProvider, "raiseAmendment", async () => ({
+            amendmentItems: [{ amendmentId: "AMD9", status: "REQUESTED" }],
+        }));
+        try {
+            const res: any = await amendmentService.raise(raisePayload(), "owner-1");
+            assert.equal(res.amendmentId, "AMD9");
+        } finally {
+            raise.mock.restore();
+            findOne.mock.restore();
+        }
+    });
+
+    test("a cancellation inside 24h of coverage start is refused", async () => {
+        const findOne = mockBooking({
+            bookingId: "TJS70010000707761",
+            agentId: "owner-1",
+            coverageStart: new Date(Date.now() + 2 * 3600 * 1000),
+        });
+        const raise = mock.method(tripJackInsuranceProvider, "raiseAmendment", async () => {
+            throw new Error("upstream must not be called");
+        });
+        try {
+            await rejectsWith(amendmentService.raise(raisePayload(), "owner-1"), 400, /24 hours/i);
+            assert.equal(raise.mock.callCount(), 0);
+        } finally {
+            raise.mock.restore();
+            findOne.mock.restore();
+        }
+    });
+
+    test("a booking with no local record fails open", async () => {
+        const findOne = mockBooking(null);
+        const raise = mock.method(tripJackInsuranceProvider, "raiseAmendment", async () => ({
+            amendmentItems: [{ amendmentId: "AMD10", status: "REQUESTED" }],
+        }));
+        try {
+            const res: any = await amendmentService.raise(raisePayload(), "anyone");
+            assert.equal(res.amendmentId, "AMD10", "TripJack stays the authority when we hold no record");
+        } finally {
+            raise.mock.restore();
+            findOne.mock.restore();
+        }
+    });
+});
+
+describe("Country Service & Search", () => {
+    test("loads all countries when query is empty", () => {
+        const results = countryService.search();
+        assert.ok(results.length > 200, "Should load over 200 countries");
+        assert.ok(results.some((c) => c.code === "IN" && c.name === "India"));
+    });
+
+    test("returns empty list if search query is less than 2 letters", () => {
+        const results = countryService.search("I");
+        assert.equal(results.length, 0, "Query under 2 letters must return empty list");
+    });
+
+    test("displays exact 2-letter country code match first when searching with 2 letters", () => {
+        const results = countryService.search("IN");
+        assert.ok(results.length > 0);
+        assert.equal(results[0].code, "IN", "India (code: IN) must be displayed first for query IN");
+        assert.equal(results[0].name, "India");
+        assert.ok(results.length > 1, "Partial matches should also be included in the list");
+    });
+
+    test("displays exact country name match before partial matches", () => {
+        const results = countryService.search("Chad");
+        assert.ok(results.length >= 1);
+        assert.equal(results[0].name, "Chad", "Exact name match Chad must be first");
+    });
+
+    test("searches countries by name case-insensitively", () => {
+        const results = countryService.search("united arab emirates");
+        assert.ok(results.length >= 1);
+        assert.equal(results[0].code, "AE");
+        assert.equal(results[0].name, "United Arab Emirates");
+    });
+
+    test("returns empty list for non-existent country search", () => {
+        const results = countryService.search("XYZNonExistentCountry123");
+        assert.equal(results.length, 0);
+    });
+});
+
+

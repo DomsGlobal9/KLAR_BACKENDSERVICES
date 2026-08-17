@@ -11,6 +11,40 @@ export class BookingRepository {
         return await BookingModel.findOne({ bookingId });
     }
 
+    /**
+     * Atomically claim a booking for an in-flight TripJack call (C-6).
+     *
+     * The filter and the write are one MongoDB operation, so of N concurrent
+     * requests exactly one matches a bookable status and flips it — the rest
+     * match nothing and get null. A read-then-write check would let two
+     * requests both observe "INITIATED" and both proceed.
+     *
+     * Only INITIATED and FAILED are bookable: a booking already in progress,
+     * successful, held or cancelled must never be re-sent.
+     */
+    async claimForBooking(bookingId: string) {
+        return await BookingModel.findOneAndUpdate(
+            { bookingId, status: { $in: ["INITIATED", "FAILED"] } },
+            { $set: { status: "BOOKING_IN_PROGRESS", bookingStartedAt: new Date() } },
+            { new: true }
+        );
+    }
+
+    /**
+     * Release a claim so a corrected request can retry.
+     *
+     * Only ever called when TripJack definitively refused the booking. After a
+     * timeout or 5xx the outcome is unknown and the claim is deliberately kept,
+     * so a retry cannot create a second ticket.
+     */
+    async releaseBookingClaim(bookingId: string, status: Booking["status"] = "INITIATED") {
+        return await BookingModel.findOneAndUpdate(
+            { bookingId, status: "BOOKING_IN_PROGRESS" },
+            { $set: { status } },
+            { new: true }
+        );
+    }
+
     async updateBooking(bookingId: string, updateData: Partial<Booking>) {
         return await BookingModel.findOneAndUpdate(
             { bookingId },

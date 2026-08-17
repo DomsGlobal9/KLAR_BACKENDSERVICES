@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "build": "rimraf dist && tsc",
+    "test": "tsc && node --test \"dist/tests/**/*.test.js\"",
     "start": "node dist/index.js",
     "clean": "rimraf node_modules dist",
     "lint": "eslint .",
