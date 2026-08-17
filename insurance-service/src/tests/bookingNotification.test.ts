@@ -364,7 +364,7 @@ describe("confirmation template", () => {
         assert.ok(html.includes("TJS70010000707761"));
         assert.ok(html.includes("TSON110386"));
         assert.ok(html.includes("Austria"));
-        assert.ok(html.includes("DOWNLOAD POLICY"));
+        assert.ok(html.includes("Key Benefits"));
     });
 
     test("renders Agent Layout correctly for B2B Client", () => {
