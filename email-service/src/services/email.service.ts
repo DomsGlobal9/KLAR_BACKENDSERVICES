@@ -12,46 +12,10 @@ import {
 export class EmailService {
     async sendEmail(options: EmailOptions): Promise<any> {
         const trackingId = options.trackingId || randomUUID();
-        let savedEmail = null;
 
         try {
-            const toAddresses = Array.isArray(options.to) ? options.to : [options.to];
-            const ccAddresses = options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : [];
-            const bccAddresses = options.bcc ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]) : [];
-
-            const emailData = {
-                trackingId,
-                parentTrackingId: options.parentTrackingId || null,
-                messageId: null,
-                inReplyTo: options.inReplyTo || null,
-                references: options.references || null,
-                direction: 'outgoing',
-                fromEmail: emailConfig.from,
-                fromName: null,
-                toEmail: toAddresses,
-                ccEmail: ccAddresses,
-                bccEmail: bccAddresses,
-                subject: options.subject,
-                body: options.text || null,
-                htmlBody: options.html || null,
-                attachments: options.attachments || [],
-                rawHeaders: null,
-                status: 'queued',
-                error: null,
-                leadId: options.leadId || null,
-                contactId: options.contactId || null,
-                isRead: false,
-                sentAt: null,
-                receivedAt: null,
-                userId: options.userId || null,
-                senderName: options.user_name || null,
-                senderEmail: options.user_mail || null,
-            };
-
-            savedEmail = await emailMessageRepository.saveOutgoingEmail(emailData);
-
             const jobPayload: EmailJobData = {
-                dbId: savedEmail.id,
+                dbId: trackingId,
                 trackingId,
                 options,
             };
@@ -64,14 +28,9 @@ export class EmailService {
                 message: 'Email queued for processing',
                 jobId: queueResult.jobId,
                 trackingId,
-                dbId: savedEmail.id,
             };
         } catch (error: any) {
             console.error('Email queue dispatch error:', error);
-
-            if (savedEmail) {
-                await emailMessageRepository.updateStatus(savedEmail.id, 'failed', undefined, error.message);
-            }
 
             return {
                 success: false,
@@ -125,43 +84,12 @@ export class EmailService {
         }>
     ): Promise<any> {
         const bulkJobsData: EmailJobData[] = [];
-        const savedEmails: any[] = [];
 
         for (const email of emails) {
             const trackingId = randomUUID();
-            const toAddresses = [email.to];
-
-            const emailData = {
-                trackingId,
-                parentTrackingId: null,
-                messageId: null,
-                inReplyTo: null,
-                references: null,
-                direction: 'outgoing',
-                fromEmail: emailConfig.from,
-                fromName: null,
-                toEmail: toAddresses,
-                ccEmail: [],
-                bccEmail: [],
-                subject: email.subject,
-                body: email.text || null,
-                htmlBody: email.html || null,
-                attachments: [],
-                rawHeaders: null,
-                status: 'queued',
-                error: null,
-                leadId: email.leadId || null,
-                contactId: email.contactId || null,
-                userId: (email as any).userId || (email as any).user_id || null,
-                senderName: (email as any).senderName || (email as any).user_name || (email as any).userName || null,
-                senderEmail: (email as any).senderEmail || (email as any).user_mail || (email as any).user_email || (email as any).userMail || null,
-            };
-
-            const saved = await emailMessageRepository.saveOutgoingEmail(emailData);
-            savedEmails.push(saved);
 
             bulkJobsData.push({
-                dbId: saved.id,
+                dbId: trackingId,
                 trackingId,
                 options: {
                     to: email.to,

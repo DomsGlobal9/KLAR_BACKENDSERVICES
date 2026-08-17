@@ -78,7 +78,13 @@ export const initEmailWorker = (): Worker<EmailJobData> => {
                 const result = await transporter.sendMail(mailOptions);
                 const messageId = result.messageId;
 
-                await emailMessageRepository.updateStatus(dbId, 'sent', messageId);
+                if (dbId) {
+                    try {
+                        await emailMessageRepository.updateStatus(dbId, 'sent', messageId);
+                    } catch (_) {
+                        // DB persistence bypassed per configuration
+                    }
+                }
 
                 return {
                     success: true,
@@ -88,7 +94,13 @@ export const initEmailWorker = (): Worker<EmailJobData> => {
                 };
             } catch (error: any) {
                 console.error(`[EmailWorker] Failed job ${job.id} (TrackingId: ${trackingId}):`, error.message);
-                await emailMessageRepository.updateStatus(dbId, 'failed', undefined, error.message);
+                if (dbId) {
+                    try {
+                        await emailMessageRepository.updateStatus(dbId, 'failed', undefined, error.message);
+                    } catch (_) {
+                        // DB persistence bypassed per configuration
+                    }
+                }
                 throw error;
             }
         },
