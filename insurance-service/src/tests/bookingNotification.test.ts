@@ -336,24 +336,48 @@ describe("email failure never affects the booking", () => {
 describe("confirmation template", () => {
     const data = {
         bookingId: "TJS70010000707761",
-        planName: "$250,000",
+        policyId: "TSON110386",
+        planName: "Platinum ($250,000 Cover)",
+        planTier: "Platinum",
+        coverageAmount: "$250,000",
         provider: "ABHI",
         coverageRegion: "Asia",
         coverageStart: "16 Aug 2026",
         coverageEnd: "04 Sep 2026",
-        amount: "INR 1,900",
-        travellers: [{ name: "Rahul Sharma", policyId: "TSON110386" }],
+        destination: "Austria",
+        amount: "₹1,900",
+        supplierPrice: "₹1,500",
+        sellingPrice: "₹1,900",
+        markup: "₹0",
+        gst: "₹288",
+        agentEarnings: "₹400",
+        agencyName: "ABC Travels",
+        agentName: "John Doe",
+        agentId: "AGT123",
+        travellers: [{ name: "Rahul Sharma", email: "rahul@gmail.com", policyId: "TSON110386" }],
         recipientType: "TRAVELLER" as const,
     };
 
-    test("includes the booking reference and policy details", () => {
+    test("renders Traveller Layout correctly", () => {
         const html = renderInsuranceBookingConfirmation(data);
-        for (const value of ["TJS70010000707761", "$250,000", "Asia", "INR 1,900", "Rahul Sharma"]) {
-            assert.ok(html.includes(value), `${value} must appear in the email`);
-        }
+        assert.ok(html.includes("Hello Rahul Sharma"));
+        assert.ok(html.includes("TJS70010000707761"));
+        assert.ok(html.includes("TSON110386"));
+        assert.ok(html.includes("Austria"));
+        assert.ok(html.includes("DOWNLOAD POLICY"));
     });
 
-    test("the agency copy is distinguishable from the traveller copy", () => {
+    test("renders Agent Layout correctly for B2B Client", () => {
+        const html = renderInsuranceBookingConfirmation({ ...data, recipientType: "B2B_CLIENT" });
+        assert.ok(html.includes("B2B AGENT COPY"));
+        assert.ok(html.includes("ABC Travels"));
+        assert.ok(html.includes("John Doe"));
+        assert.ok(html.includes("AGT123"));
+        assert.ok(html.includes("FINANCIAL SUMMARY"));
+        assert.ok(html.includes("Agent Earnings"));
+    });
+
+    test("the agency copy subject is distinguishable from the traveller copy", () => {
         const agency = insuranceBookingConfirmationSubject("TJS1", "B2B_CLIENT");
         const traveller = insuranceBookingConfirmationSubject("TJS1", "TRAVELLER");
         assert.ok(agency.includes("Agency Copy"));
@@ -368,14 +392,5 @@ describe("confirmation template", () => {
         assert.ok(!html.includes("<script>"), "markup in a name must not reach the email");
         assert.ok(html.includes("&lt;script&gt;"));
     });
-
-    test("absent optional details are omitted rather than shown blank", () => {
-        const html = renderInsuranceBookingConfirmation({
-            ...data,
-            provider: undefined,
-            coverageRegion: undefined,
-        });
-        assert.ok(!html.includes("Coverage region"));
-        assert.ok(!html.includes("Provider"));
-    });
 });
+

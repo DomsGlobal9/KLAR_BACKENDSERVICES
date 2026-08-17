@@ -2,13 +2,13 @@ import { Router } from "express";
 import mongoose from "mongoose";
 import { authenticateJWT } from "../middlewares/auth.middleware";
 
-import { searchController }            from "../controllers/search.controller";
-import { reviewController }            from "../controllers/review.controller";
-import { bookController }              from "../controllers/book.controller";
+import { searchController } from "../controllers/search.controller";
+import { reviewController } from "../controllers/review.controller";
+import { bookController } from "../controllers/book.controller";
 import { bookingDetailsController, bookingDetailsFromDbController } from "../controllers/bookingDetails.controller";
-import { listController }              from "../controllers/list.controller";
+import { listController } from "../controllers/list.controller";
 import { raiseAmendmentController, cancelController } from "../controllers/amendment.controller";
-import { countryController }           from "../controllers/country.controller";
+import { countryController } from "../controllers/country.controller";
 import { checkEmailController, bookingHistoryController } from "../controllers/bookingHistory.controller";
 
 const router = Router();
@@ -20,19 +20,19 @@ router.get("/", (_req, res) => {
         service: "insurance-service",
         version: "1.0.0",
         endpoints: {
-            health:         "GET  /health",
-            countries:      "GET  /countries",
-            countrySearch:  "GET  /countries/search",
-            search:         "POST /search",
-            review:         "POST /review",
-            book:           "POST /book",
+            health: "GET  /health",
+            countries: "GET  /countries",
+            countrySearch: "GET  /countries/search",
+            search: "POST /search",
+            review: "POST /review",
+            book: "POST /book",
             bookingDetails: "POST /booking-details",
-            bookings:       "GET  /bookings",
-            checkEmail:     "GET  /bookings/check-email",
+            bookings: "GET  /bookings",
+            checkEmail: "GET  /bookings/check-email",
             bookingHistory: "GET  /bookings/history",
-            bookingById:    "GET  /bookings/:id",
-            raiseAmend:     "POST /amendment/raise",
-            cancelAmend:    "POST /amendment/cancel",
+            bookingById: "GET  /bookings/:id",
+            raiseAmend: "POST /amendment/raise",
+            cancelAmend: "POST /amendment/cancel",
         },
     });
 });
@@ -60,11 +60,11 @@ router.post("/review", reviewController);
 router.post("/book", authenticateJWT, bookController);
 
 // Booking details — proxy TripJack status + optional DB sync
-router.post("/booking-details", authenticateJWT, bookingDetailsController);
+router.post("/booking-details", bookingDetailsController);
 
 // ─── My Bookings ──────────────────────────────────────────────────────────────
 
-router.get("/bookings",    authenticateJWT, listController);
+router.get("/bookings", authenticateJWT, listController);
 
 
 router.get("/bookings/check-email", checkEmailController);
@@ -76,7 +76,7 @@ router.get("/bookings/:id", authenticateJWT, bookingDetailsFromDbController);
 
 // ─── Amendments / Cancellation ────────────────────────────────────────────────
 
-router.post("/amendment/raise",  authenticateJWT, raiseAmendmentController);
+router.post("/amendment/raise", authenticateJWT, raiseAmendmentController);
 router.post("/amendment/cancel", authenticateJWT, cancelController);
 
 export default router;

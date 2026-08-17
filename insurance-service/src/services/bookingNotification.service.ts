@@ -126,15 +126,6 @@ export function resolveRecipients(booking: any): ResolvedRecipients {
 
 /** Booking data the template needs, derived from what is actually stored. */
 function buildTemplateData(booking: any) {
-    const travellers = Array.isArray(booking?.travellers) ? booking.travellers : [];
-
-    const productId: string = booking?.productId || "";
-    const planMatch = productId.match(/PLAN_(\d+)(?:_([A-Z]+))?-([A-Z]+)/i);
-
-    const cover = planMatch?.[1] ? `$${(Number(planMatch[1]) * 1000).toLocaleString("en-US")}` : "";
-    const variant = planMatch?.[2] ? planMatch[2].charAt(0) + planMatch[2].slice(1).toLowerCase() : "";
-    const regionCode = planMatch?.[3]?.toUpperCase();
-
     const REGIONS: Record<string, string> = {
         WW: "Worldwide",
         XUSC: "Worldwide excl. US & Canada",
@@ -146,6 +137,61 @@ function buildTemplateData(booking: any) {
         MDE: "Middle East",
     };
 
+    const COUNTRY_CODES: Record<string, string> = {
+        AT: "Austria",
+        FR: "France",
+        DE: "Germany",
+        IT: "Italy",
+        ES: "Spain",
+        CH: "Switzerland",
+        US: "United States",
+        CA: "Canada",
+        GB: "United Kingdom",
+        AE: "United Arab Emirates",
+        SG: "Singapore",
+        TH: "Thailand",
+        IN: "India",
+    };
+
+    // Locate the deep TripJack response object (from booking details or book response)
+    const tjResp = booking?.tjBookingDetailsResponse || booking?.tjBookResponse || {};
+    const body = tjResp?.body || tjResp;
+    const order = body?.order || {};
+    const insItem = body?.itemInfos?.INSURANCE || {};
+    const iinfo = insItem?.iinfo || {};
+    const isq = insItem?.isq || {};
+    const piObj = iinfo?.pli?.[0]?.pi?.[0] || {};
+    const tfdIfc = piObj?.tfd?.ifc || {};
+
+    const productId: string = booking?.productId || piObj?.pid || "";
+    const planMatch = productId.match(/PLAN_(\d+)(?:_([A-Z]+))?-([A-Z]+)/i);
+
+    const cover = piObj?.pn || (planMatch?.[1] ? `$${(Number(planMatch[1]) * 1000).toLocaleString("en-US")}` : "");
+    const variant = piObj?.pi || (planMatch?.[2] ? planMatch[2].charAt(0) + planMatch[2].slice(1).toLowerCase() : "");
+    const provider = piObj?.ip || productId.split("-")[0] || booking?.tjBookPayload?.pli?.[0]?.pi?.[0]?.pvd || "ABHI";
+
+    const regionCode = planMatch?.[3]?.toUpperCase();
+    const regionName = piObj?.rname || (regionCode && REGIONS[regionCode]) || booking?.region || undefined;
+
+    // Destination determination
+    const rawRkey = isq?.isc?.iri?.[0]?.rkey?.toUpperCase();
+    const destination = (rawRkey && COUNTRY_CODES[rawRkey]) || regionName || "Worldwide";
+
+    // Build Plan Name & Tier
+    const planTier = variant || "Gold Plus";
+    const coverageAmount = cover || "$100,000";
+
+    let planName = "";
+    if (variant && cover) {
+        planName = `${variant} (${cover} Cover)`;
+    } else if (variant) {
+        planName = variant;
+    } else if (cover) {
+        planName = `Travel Insurance (${cover} Cover)`;
+    } else {
+        planName = "Travel Insurance";
+    }
+
     const asDate = (value: any): string | undefined => {
         if (!value) return undefined;
         const d = new Date(value);
@@ -154,18 +200,78 @@ function buildTemplateData(booking: any) {
             : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     };
 
+    // Coverage Start / End
+    const coverageStart = asDate(isq?.sd || booking?.coverageStart);
+    const coverageEnd = asDate(isq?.ed || booking?.coverageEnd);
+
+    // Travellers & Policy IDs
+    const respTravellers = piObj?.iti || isq?.iti || [];
+    const modelTravellers = Array.isArray(booking?.travellers) ? booking.travellers : [];
+
+    const sourceTravellers = respTravellers.length ? respTravellers : modelTravellers;
+    const travellers = sourceTravellers.map((t: any) => {
+        const name = [t?.fn, t?.ln].filter(Boolean).join(" ").trim() || "Traveller";
+        const email = t?.eid || booking?.deliveryEmail || undefined;
+        const policyId = t?.policyId || undefined;
+        return { name, email, policyId };
+    });
+
+    const primaryPolicyId = travellers[0]?.policyId || "Pending";
+
+    // Financial Breakdown
+    const currency = booking?.currencyCode || "INR";
+    const currSym = currency === "INR" ? "₹" : `${currency} `;
+
+    const tfNum = Number(order?.amount ?? booking?.amount ?? tfdIfc?.TF ?? 0);
+    const spNum = Number(tfdIfc?.SP ?? (tfNum > 0 ? tfNum * 0.85 : 0));
+    const acNum = Number(tfdIfc?.AC ?? booking?.agentCommission ?? 0);
+    const gstNum = Number(tfdIfc?.IGST ?? tfdIfc?.SPGST ?? 0);
+    const markupNum = Number(order?.markup ?? booking?.markup ?? 0);
+
+    const amount = `${currSym}${tfNum.toLocaleString("en-IN")}`;
+    const supplierPrice = spNum > 0 ? `${currSym}${spNum.toLocaleString("en-IN")}` : "N/A";
+    const sellingPrice = amount;
+    const markup = `${currSym}${markupNum.toLocaleString("en-IN")}`;
+    const gst = gstNum > 0 ? `${currSym}${gstNum.toLocaleString("en-IN")}` : "Included";
+    const agentEarnings = acNum > 0 ? `${currSym}${acNum.toLocaleString("en-IN")}` : "₹0";
+
+    // Benefits Extraction
+    const pbft = Array.isArray(piObj?.pbft) ? piObj.pbft : [];
+    const extractedBenefits = pbft
+        .filter((b: any) => b?.name && (b?.bv === "BANNER" || b?.bv === "POPUP"))
+        .map((b: any) => String(b.name).trim())
+        .slice(0, 5);
+
     return {
-        bookingId: booking?.bookingId,
-        planName: [cover, variant].filter(Boolean).join(" ") || "Travel Insurance",
-        provider: productId.split("-")[0] || undefined,
-        coverageRegion: (regionCode && REGIONS[regionCode]) || undefined,
-        coverageStart: asDate(booking?.coverageStart),
-        coverageEnd: asDate(booking?.coverageEnd),
-        amount: `${booking?.currencyCode || "INR"} ${Number(booking?.amount ?? 0).toLocaleString("en-IN")}`,
-        travellers: travellers.map((t: any) => ({
-            name: [t?.fn, t?.ln].filter(Boolean).join(" ").trim() || "Traveller",
-            policyId: t?.policyId,
-        })),
+        bookingId: order?.bookingId || booking?.bookingId,
+        policyId: primaryPolicyId,
+        statusText: "Confirmed",
+
+        planName,
+        planTier,
+        coverageAmount,
+        provider,
+        coverageRegion: regionName,
+
+        coverageStart,
+        coverageEnd,
+        destination,
+
+        amount,
+        supplierPrice,
+        sellingPrice,
+        markup,
+        gst,
+        agentEarnings,
+
+        agencyName: booking?.agencyName || booking?.userName || "KLAR Travels",
+        agentName: booking?.agentName || "John Doe",
+        agentId: booking?.agentId || "AGT123",
+
+        keyBenefits: extractedBenefits.length ? extractedBenefits : undefined,
+        downloadPolicyUrl: `https://klar-b2b.com/insurance/download?bookingId=${order?.bookingId || booking?.bookingId}`,
+
+        travellers,
     };
 }
 
