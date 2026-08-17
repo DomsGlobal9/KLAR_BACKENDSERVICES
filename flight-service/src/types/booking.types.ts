@@ -17,6 +17,7 @@ export interface FrontendTraveller {
     passportExpiryDate?: string;
     /** Student / senior-citizen document id — required when `dc.idm` (H-7). */
     documentId?: string;
+    di?: string;
     /** PAN — collected when `ipa` is true (H-8). */
     pan?: string;
     ssrSeatInfos?: SSRInfo[];
