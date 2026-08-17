@@ -9,6 +9,14 @@ export const env = {
     mongoUri: process.env.MONGODB_URI || "",
 
     /**
+     * Base URL of email-service, e.g. http://localhost:5010/api/email.
+     * Same variable name and resolution flight-service already uses, so the
+     * deployment story is unchanged. Empty disables confirmation emails rather
+     * than failing a booking — see bookingNotification.service.
+     */
+    EMAIL_SERVICE: process.env.EMAIL_SERVICE || "",
+
+    /**
      * TripJack TEST Configuration
      */
     TRIPJACK_TEST: {
