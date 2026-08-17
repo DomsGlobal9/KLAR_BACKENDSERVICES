@@ -1,18 +1,38 @@
-import { Router } from "express";
-import { emailController } from "../controller/email.controller";
+import { Router } from 'express';
+import { emailController } from '../controllers/email.controller';
 
 const router = Router();
 
-router.get("/health", emailController.healthCheck);
-router.get("/status", emailController.getServiceStatus);
-router.get("/queue/stats", emailController.getQueueStats);
-router.get("/queue/job/:jobId", emailController.getJobStatus);
+/**
+ * Send email with full options (to, subject, text, html, cc, bcc)
+ */
+router.post('/send', emailController.sendEmail);
 
-router.post("/send", emailController.sendEmail);
-router.post("/send-with-attachment", emailController.sendEmail);
-router.post("/send-booking-confirmation", emailController.sendBookingConfirmation);
-router.post("/send-bulk", emailController.sendBulkEmails);
-router.post("/send-test", emailController.sendTestEmail);
-router.post("/validate", emailController.validateEmails);
+/**
+ * Send simple plain text email
+ */
+router.post('/send-simple', emailController.sendSimpleEmail);
+
+/**
+ * Send HTML email
+ */
+router.post('/send-html', emailController.sendHtmlEmail);
+
+/**
+ * Send bulk emails
+ */
+router.post('/send-bulk', emailController.sendBulkEmails);
+
+/**
+ * Queue monitoring & Job inspection routes
+ */
+router.get('/queue/status', emailController.getQueueStatus);
+router.get('/queue/job/:jobId', emailController.getQueueJob);
+
+/**
+ * Email logs & message queries
+ */
+router.get('/all', emailController.getAllEmails);
+router.get('/:id', emailController.getEmailById);
 
 export default router;

@@ -18,8 +18,10 @@ export const bookingDetailsController = async (req: AuthenticatedRequest, res: R
 
 export const bookingDetailsFromDbController = async (req: AuthenticatedRequest, res: Response) => {
     try {
+        const reqSource = req.body?.source || req.query?.source || req.headers["x-source"];
+        const isB2C = Boolean(reqSource && String(reqSource).toUpperCase() === "B2C_PORTAL");
         const ownerId = req.user?.userId || req.user?.id || req.user?._id;
-        const data = await bookingDetailsService.getFromDb(String(req.params.id), ownerId);
+        const data = await bookingDetailsService.getFromDb(String(req.params.id), ownerId, isB2C);
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][BookingFromDB Error]", error?.message || error);

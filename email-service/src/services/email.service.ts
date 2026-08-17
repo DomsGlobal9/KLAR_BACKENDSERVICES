@@ -1,167 +1,132 @@
-// email.service.ts
-import { mailTransporter } from "../app";
-import { envConfig } from "../config/env.config";
-import { getBookingConfirmationTemplate, BookingTemplateData } from "./templates";
-
-export interface SendEmailPayload {
-    to: string | string[];
-    subject: string;
-    text?: string;
-    html?: string;
-    cc?: string | string[];
-    bcc?: string | string[];
-    replyTo?: string;
-    attachments?: any[];
-}
-
-export interface EmailResponse {
-    success: boolean;
-    messageId?: string;
-    error?: string;
-}
-
-export interface BulkEmailPayload {
-    emails: SendEmailPayload[];
-}
+import { emailConfig, EmailOptions } from '../config/email.config';
+import { emailMessageRepository } from '../repositories/email-message.repository';
+import { randomUUID } from 'crypto';
+import {
+    enqueueEmailJob,
+    enqueueBulkEmailJobs,
+    getEmailQueueMetrics,
+    getJobById,
+    EmailJobData,
+} from '../queues/email.queue';
 
 export class EmailService {
-    private processRecipients(recipients?: string | string[]) {
-        if (!recipients) return [];
-        const arr = Array.isArray(recipients) ? recipients : [recipients];
-        return [...new Set(arr.map(r => r.trim()))];
-    }
+    async sendEmail(options: EmailOptions): Promise<any> {
+        const trackingId = options.trackingId || randomUUID();
 
-    async sendEmail(payload: SendEmailPayload): Promise<EmailResponse> {
         try {
-            console.log(`📨 [EMAIL] Preparing to send email`, {
-                to: Array.isArray(payload.to) ? payload.to.join(', ') : payload.to,
-                subject: payload.subject
-            });
+            const jobPayload: EmailJobData = {
+                dbId: trackingId,
+                trackingId,
+                options,
+            };
 
-            if (!payload.to || !payload.subject) {
-                throw new Error("to and subject are required");
-            }
-
-            if (!payload.text && !payload.html) {
-                throw new Error("Either text or html is required");
-            }
-
-            const to = this.processRecipients(payload.to);
-            const cc = this.processRecipients(payload.cc);
-            const bcc = this.processRecipients(payload.bcc);
-
-
-
-            const result = await mailTransporter.sendMail({
-                from: `"${envConfig.DEFAULT_FROM_NAME}" <${envConfig.DEFAULT_FROM}>`,
-                to,
-                subject: payload.subject,
-                text: payload.text,
-                html: payload.html,
-                cc: cc.length ? cc : undefined,
-                bcc: bcc.length ? bcc : undefined,
-                replyTo: payload.replyTo || envConfig.DEFAULT_REPLY_TO,
-                attachments: payload.attachments,
-            });
-
-            console.log(`✅ [EMAIL] Email sent successfully`, {
-                messageId: result.messageId,
-                to: to.length,
-                timestamp: new Date().toISOString()
-            });
+            const queueResult = await enqueueEmailJob(jobPayload);
 
             return {
                 success: true,
-                messageId: result.messageId,
+                status: 'queued',
+                message: 'Email queued for processing',
+                jobId: queueResult.jobId,
+                trackingId,
             };
         } catch (error: any) {
-            console.error(`❌ [EMAIL] Email sending failed:`, {
-                error: error.message,
-                to: Array.isArray(payload.to) ? payload.to.join(', ') : payload.to,
-                subject: payload.subject
-            });
+            console.error('Email queue dispatch error:', error);
+
             return {
                 success: false,
+                status: 'failed',
                 error: error.message,
+                trackingId,
             };
         }
     }
 
-    async sendBulkEmails(payload: BulkEmailPayload) {
+    async sendSimpleEmail(
+        to: string,
+        subject: string,
+        text: string,
+        options?: { leadId?: string; contactId?: string },
+        userId?: string
+    ): Promise<any> {
+        return this.sendEmail({
+            to,
+            subject,
+            text,
+            leadId: options?.leadId,
+            contactId: options?.contactId,
+            userId,
+        });
+    }
 
+    async sendHtmlEmail(
+        to: string,
+        subject: string,
+        html: string,
+        options?: { leadId?: string; contactId?: string }
+    ): Promise<any> {
+        return this.sendEmail({
+            to,
+            subject,
+            html,
+            leadId: options?.leadId,
+            contactId: options?.contactId,
+        });
+    }
 
-        const results = [];
-        let success = 0;
-        let failed = 0;
+    async sendBulkEmails(
+        emails: Array<{
+            to: string;
+            subject: string;
+            text?: string;
+            html?: string;
+            leadId?: string;
+            contactId?: string;
+        }>
+    ): Promise<any> {
+        const bulkJobsData: EmailJobData[] = [];
 
-        for (const email of payload.emails) {
-            const res = await this.sendEmail(email);
-            results.push(res);
-            res.success ? success++ : failed++;
+        for (const email of emails) {
+            const trackingId = randomUUID();
 
-            await new Promise(r => setTimeout(r, 100));
+            bulkJobsData.push({
+                dbId: trackingId,
+                trackingId,
+                options: {
+                    to: email.to,
+                    subject: email.subject,
+                    text: email.text,
+                    html: email.html,
+                    leadId: email.leadId,
+                    contactId: email.contactId,
+                    trackingId,
+                },
+            });
         }
 
+        const queuedJobs = await enqueueBulkEmailJobs(bulkJobsData);
 
         return {
-            success: failed === 0,
-            total: payload.emails.length,
-            successCount: success,
-            failedCount: failed,
-            results,
+            total: emails.length,
+            queued: queuedJobs.length,
+            status: 'queued',
+            jobs: queuedJobs,
         };
     }
 
-    async sendTestEmail(to?: string) {
-
-        return this.sendEmail({
-            to: to || envConfig.DEFAULT_FROM,
-            subject: "Test Email",
-            text: "Test email working ✅",
-            html: "<h2>Test email working ✅</h2>",
-        });
+    async getQueueStatus() {
+        return await getEmailQueueMetrics();
     }
 
-    async sendBookingConfirmation(to: string | string[], data: BookingTemplateData) {
-
-        const html = getBookingConfirmationTemplate(data);
-        return this.sendEmail({
-            to,
-            subject: `Booking Confirmation - ${data.hotelName} (Ref: ${data.confirmationNumber})`,
-            html
-        });
+    async getQueueJob(jobId: string) {
+        return await getJobById(jobId);
     }
 
-    validateEmails(emails: string | string[]) {
-
-        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const arr = Array.isArray(emails) ? emails : [emails];
-
-        const valid: string[] = [];
-        const invalid: string[] = [];
-
-        arr.forEach(e => (regex.test(e) ? valid.push(e) : invalid.push(e)));
-
-
-        return { valid, invalid };
+    async getAllEmails(options?: { limit?: number; offset?: number; direction?: 'incoming' | 'outgoing' }) {
+        return await emailMessageRepository.getAllEmails(options);
     }
 
-    async getServiceStatus() {
-
-        try {
-            await mailTransporter.verify();
-
-            return {
-                status: "healthy",
-                timestamp: new Date().toISOString(),
-            };
-        } catch (error) {
-
-            return {
-                status: "unhealthy",
-                timestamp: new Date().toISOString(),
-            };
-        }
+    async getEmailById(id: string) {
+        return await emailMessageRepository.getById(id);
     }
 }
 

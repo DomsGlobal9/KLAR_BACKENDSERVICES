@@ -15,8 +15,28 @@ export const authenticateJWT = (
     next: NextFunction
 ): Response | void => {
     try {
+        const reqSource = req.headers["x-source"];
+        if (reqSource && String(reqSource).toUpperCase() === "B2C_PORTAL") {
+            const authHeader = req.headers.authorization;
+            let token: string | null = null;
+            if (authHeader) {
+                const match = authHeader.match(/^Bearer\s+(.+)$/i);
+                token = match ? match[1] : authHeader;
+            } else if (req.query?.token && typeof req.query.token === "string") {
+                token = req.query.token;
+            }
 
-        if (req.body?.source === "B2C_PORTAL" || req.query?.source === "B2C_PORTAL") {
+            if (token) {
+                try {
+                    const decoded = jwt.verify(token, env.jwtSecret);
+                    req.user = decoded;
+                    return next();
+                } catch (e) {
+                    // Fallback to guest user context for B2C portal if token fails
+                }
+            }
+
+            req.user = { id: "b2c_guest_user", name: "B2C Guest", role: "guest" };
             return next();
         }
 
