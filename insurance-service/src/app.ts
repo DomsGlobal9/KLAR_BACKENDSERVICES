@@ -1,9 +1,14 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import routes from "./routes";
 import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
+
+if (process.env.TRUST_PROXY) {
+    app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+}
 
 const corsOptions = {
     origin: [
@@ -27,6 +32,18 @@ app.options('/*splat', cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 
 
+app.use(
+    rateLimit({
+        windowMs: 60_000,
+        limit: Number(process.env.RATE_LIMIT_PER_MIN) || 100,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: (req) => req.path === "/health" || req.path === "/api/insurance/health",
+        message: { status: false, statusCode: 429, message: "Too many requests. Please retry shortly." },
+    })
+);
+
+
 app.get("/", (_req: Request, res: Response) => {
     res.status(200).json({
         service: "insurance-service",
@@ -35,8 +52,7 @@ app.get("/", (_req: Request, res: Response) => {
     });
 });
 
-app.use("/api/insurance", routes);
-// app.use("/",              routes); 
+app.use("/api/insurance", routes); 
 
 app.use((req, res) => {
     console.log(`❌ Route not found: ${req.method} ${req.url}`);

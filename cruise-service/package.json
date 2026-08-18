@@ -1,8 +1,8 @@
 {
   "name": "cruise-service",
   "version": "1.0.0",
-  "description": "Cruise enquiry service for Klar Travels",
-  "main": "server.js",
+  "description": "Microservice for managing cruise enquiries and packages",
+  "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/server.ts",
     "build": "rimraf dist && tsc",
@@ -10,7 +10,14 @@
     "clean": "rimraf node_modules dist",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pm2:start": "pm2 start dist/server.js --name cruise-service",
+    "pm2:stop": "pm2 stop cruise-service",
+    "pm2:restart": "pm2 restart cruise-service",
+    "pm2:delete": "pm2 delete cruise-service",
+    "pm2:logs": "pm2 logs cruise-service",
+    "pm2:status": "pm2 status",
+    "deploy": "git pull && npm install && npm run build && pm2 restart cruise-service"
   },
   "keywords": [],
   "author": "",

@@ -2,23 +2,41 @@ import axios from "axios";
 import RedisCacheService from "../cache/redisCache.service";
 import { TRIPJACK_URLS, tripjackConfig } from "../config";
 import { BaseFlightNormalizer } from "../normalizers/baseFlight.normalizer";
+import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
 import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
 
 class FareService {
 
     async getFares(sessionId: string, flightKey: string) {
-
-
         const cachedData = await RedisCacheService.get(sessionId);
 
         if (!cachedData) {
             throw new Error("Session expired or invalid sessionId");
         }
 
-        const flights = cachedData?.raw?.ONWARD || cachedData?.raw?.RETURN;
+        const raw = cachedData?.raw;
+        const flights: any[] = [];
+
+        if (raw) {
+            if (Array.isArray(raw.ONWARD)) flights.push(...raw.ONWARD);
+            if (Array.isArray(raw.RETURN)) flights.push(...raw.RETURN);
+            if (Array.isArray(raw.COMBO)) flights.push(...raw.COMBO);
+            if (Array.isArray(raw)) flights.push(...raw);
+
+            const tripInfos = raw?.searchResult?.tripInfos || raw?.tripInfos;
+            if (tripInfos) {
+                if (Array.isArray(tripInfos.ONWARD)) flights.push(...tripInfos.ONWARD);
+                if (Array.isArray(tripInfos.RETURN)) flights.push(...tripInfos.RETURN);
+                if (Array.isArray(tripInfos.COMBO)) flights.push(...tripInfos.COMBO);
+            }
+        }
+
+        if (flights.length === 0) {
+            throw new Error("No flight data found in session");
+        }
 
         const selectedFlight = flights.find((flight: any) =>
-            flight.sI.map((seg: any) => seg.id).join("-") === flightKey
+            Array.isArray(flight?.sI) && flight.sI.map((seg: any) => seg?.id).join("-") === flightKey
         );
 
         if (!selectedFlight) {
@@ -26,6 +44,10 @@ class FareService {
         }
 
         const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
+
+        if (!fares || fares.length === 0) {
+            throw new Error("Fare extraction failed");
+        }
 
         const mappedResponse = TripjackFieldMapper.map(fares[0]);
 
@@ -181,7 +203,8 @@ class FareService {
     async getMultiCityFares(
         sessionId: string,
         legIndex: number,
-        flightKey: string
+        flightKey: string,
+        priceId?: string
     ) {
         const cachedData = await RedisCacheService.get(sessionId);
 
@@ -206,8 +229,24 @@ class FareService {
             let selectedLeg = null;
             let selectedCombo = null;
 
-            for (const combo of combos) {
-                const legs = this.extractLegsFromCombo(combo);
+            // Group with the same routeInfos the search response used, or the
+            // split here won't match the flightKey the client was given.
+            const targetDestinations =
+                MultiCityNormalizer.extractTargetDestinations(cachedData?.searchQuery);
+
+            // TripJack's segment ids are only unique *within* a combo — across a
+            // response the same id is reused for unrelated flights, so a
+            // flightKey like "507-508" matches several itineraries at different
+            // prices. Whenever the caller knows which one it selected, identify
+            // the combo by its priceId and only fall back to the ambiguous
+            // flightKey match when it doesn't.
+            const candidates = priceId
+                ? combos.filter((combo: any) =>
+                    (combo.totalPriceList || []).some((fare: any) => fare?.id === priceId))
+                : combos;
+
+            for (const combo of (candidates.length ? candidates : combos)) {
+                const legs = this.extractLegsFromCombo(combo, targetDestinations);
                 const leg = legs.find(leg =>
                     leg.legIndex === legIndex && leg.flightKey === flightKey
                 );
@@ -224,7 +263,7 @@ class FareService {
             }
 
             // Extract fares for the specific leg
-            const fares = this.extractFaresForLeg(selectedCombo, legIndex);
+            const fares = this.extractFaresForLeg(selectedCombo, legIndex, targetDestinations);
 
             if (!fares) {
                 throw new Error("Fare extraction failed");
@@ -257,56 +296,37 @@ class FareService {
         return TripjackFieldMapper.map(fares[0]);
     }
 
-    private extractLegsFromCombo(combo: any) {
+    /**
+     * Legs must be split exactly as MultiCityNormalizer split them when the
+     * search response was built — the client looks a fare up by the flightKey
+     * it was handed there. This used to split on `isRs`, which TripJack sets on
+     * every segment of the onward journey, so a MAA→DOH leg keyed "576-577" was
+     * looked for as "576-577-578" and 500'd with "Flight not found for leg 0".
+     */
+    private extractLegsFromCombo(combo: any, targetDestinations: string[] = []) {
         const segments = combo.sI || [];
-        const legs = [];
-        let currentLeg = 0;
-        let currentLegSegments = [];
+        const grouped = MultiCityNormalizer.groupSegmentsIntoLegs(segments, targetDestinations);
 
-        for (let i = 0; i < segments.length; i++) {
-            currentLegSegments.push(segments[i]);
-
-            if (segments[i].isRs === true || i === segments.length - 1) {
-                const flightKey = currentLegSegments.map((seg: any) => seg.id).join("-");
-                legs.push({
-                    legIndex: currentLeg,
-                    flightKey: flightKey,
-                    segments: [...currentLegSegments]
-                });
-
-                currentLeg++;
-                currentLegSegments = [];
-            }
-        }
-
-        return legs;
+        return Array.from(grouped.entries()).map(([legIndex, legSegments]) => ({
+            legIndex,
+            flightKey: legSegments.map((seg: any) => seg.id).join("-"),
+            segments: [...legSegments]
+        }));
     }
 
 
-    private extractFaresForLeg(combo: any, legIndex: number) {
+    private extractFaresForLeg(combo: any, legIndex: number, targetDestinations: string[] = []) {
         const segments = combo.sI || [];
-        let currentLeg = 0;
-        let currentLegSegments = [];
+        const grouped = MultiCityNormalizer.groupSegmentsIntoLegs(segments, targetDestinations);
+        const legSegments = grouped.get(legIndex);
 
-        for (let i = 0; i < segments.length; i++) {
-            currentLegSegments.push(segments[i]);
+        if (!legSegments || !legSegments.length) return null;
 
-            if (segments[i].isRs === true || i === segments.length - 1) {
-                if (currentLeg === legIndex) {
-                    const flightObj = {
-                        sI: currentLegSegments,
-                        totalPriceList: combo.totalPriceList
-                    };
-                    const fares = BaseFlightNormalizer.extractFares([flightObj]);
-                    return fares[0];
-                }
+        const fares = BaseFlightNormalizer.extractFares([
+            { sI: legSegments, totalPriceList: combo.totalPriceList }
+        ]);
 
-                currentLeg++;
-                currentLegSegments = [];
-            }
-        }
-
-        return null;
+        return fares[0] ?? null;
     }
 
     async getFareRule(flowType: string, id: string) {

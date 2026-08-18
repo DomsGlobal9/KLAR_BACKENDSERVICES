@@ -28,16 +28,17 @@ class BookingDetailsService {
         };
     }
 
-    async getFromDb(id: string) {
-        let booking;
-
-        // Check if the parameter matches a standard 24-character Mongoose ObjectId structure
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            booking = await InsuranceBookingModel.findById(id).lean();
-        } else {
-            // Fallback: Query using your custom indexed property string key instead
-            booking = await InsuranceBookingModel.findOne({ bookingId: id }).lean();
+    async getFromDb(id: string, ownerId?: string, isB2C: boolean = false) {
+        if (!isB2C && !ownerId) {
+            throw { status: 401, message: "Caller identity is required to read a booking." };
         }
+
+        const query: any = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { bookingId: id };
+        if (!isB2C && ownerId) {
+            query.$or = [{ agentId: ownerId }, { userId: ownerId }];
+        }
+
+        const booking = await InsuranceBookingModel.findOne(query).lean();
 
         if (!booking) {
             throw { status: 404, message: `Insurance booking reference "${id}" not located in database.` };

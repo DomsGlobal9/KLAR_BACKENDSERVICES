@@ -15,6 +15,7 @@ export const listController = async (req: AuthenticatedRequest, res: Response) =
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][List Error]", error?.message || error);
-        res.status(500).json({ status: false, statusCode: 500, message: error.message || "Failed to list bookings" });
+        const status = error.status || 500;
+        res.status(status).json({ status: false, statusCode: status, message: error.message || "Failed to list bookings" });
     }
 };

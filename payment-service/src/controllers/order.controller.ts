@@ -60,13 +60,8 @@ export const createOrderController = async (req: Request, res: Response) => {
             });
         }
 
-        // *** NEW VALIDATION: bookingId is mandatory for B2C ***
-        if (clientType === 'B2C' && !bookingId) {
-            return res.status(400).json({
-                success: false,
-                message: 'bookingId is required for B2C client type',
-            });
-        }
+        // *** B2C bookingId resolution & fallback ***
+        const resolvedBookingId = bookingId || (clientType === 'B2C' ? `INS-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}` : undefined);
 
         if (!amount) {
             return res.status(400).json({
