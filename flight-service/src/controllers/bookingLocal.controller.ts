@@ -250,7 +250,8 @@ class BookingLocalController {
                 userData = {
                     id: 'guest_user',
                     email: req.body.email || 'guest@example.com',
-                    role: 'guest'
+                    role: 'guest',
+                    clientType: 'b2c'
                 };
             } else {
                 const token = this.extractToken(req);
@@ -504,8 +505,10 @@ class BookingLocalController {
                 const bookings = await BookingService.getBookingsByEmail(email as string);
 
                 const b2cBookings = bookings.filter((b: any) =>
+                    !b.userInfo?.clientType ||
                     b.userInfo?.clientType === 'b2c' ||
-                    b.userInfo?.clientType?.toLowerCase() === 'b2c'
+                    b.userInfo?.clientType?.toLowerCase() === 'b2c' ||
+                    b.userInfo?.clientType?.toLowerCase() !== 'b2b'
                 );
 
                 const filteredBookings = this.applyFilter(b2cBookings, filterType);
