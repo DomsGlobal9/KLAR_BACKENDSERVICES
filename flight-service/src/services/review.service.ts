@@ -9,6 +9,13 @@ import { envConfig } from "../config";
 import { resolveBookingRequirements } from "../utils/reviewConditions.util";
 import { reviewTotalFarePaise } from "../utils/bookingVerification.util";
 import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
+import { logFlightEvent } from "../utils/flightLog.util";
+import {
+    MulticitySelectionError,
+    MulticitySelectionIndex,
+    MulticitySelectionRequest
+} from "../types/multicity.types";
+import { ResolvedMulticitySelection, resolveReviewPriceIds } from "../utils/multicitySelection.util";
 
 export const SERVICE_TYPES = {
     FLIGHTS: "FLIGHTS",
@@ -127,11 +134,49 @@ class ReviewService {
         return finalData;
     }
 
+    async resolveMulticityPriceIds(
+        sessionId: string,
+        rawSelections: Array<MulticitySelectionRequest | string>
+    ): Promise<{ priceIds: string[]; selection: MulticitySelectionIndex; resolved: ResolvedMulticitySelection[] }> {
+        if (!sessionId) {
+            throw new MulticitySelectionError("sessionId is required", "SESSION_ID_REQUIRED");
+        }
+
+        const cached = await RedisCacheService.get(sessionId);
+        const selection: MulticitySelectionIndex | undefined = cached?.multicitySelection;
+
+        if (!selection) {
+            throw new MulticitySelectionError(
+                "Session expired, invalid, or not a multicity search.",
+                "MULTICITY_SESSION_NOT_FOUND",
+                { sessionId }
+            );
+        }
+
+        const { priceIds, resolved } = resolveReviewPriceIds(selection, rawSelections);
+
+        logFlightEvent("REVIEW_SELECTION_RESOLVED", {
+            sessionId,
+            searchType: "MULTICITY",
+            mode: selection.mode,
+            selectionMode: selection.selectionMode,
+            resolved
+        });
+
+        return { priceIds, selection, resolved };
+    }
+
     async reviewFare(priceIds: string[]) {
         const sessionId = uuidv4();
         const env = tripjackConfig.ENV;
         const config = TRIPJACK_URLS[env];
         const url = `${config.BASE_URL}${config.REVIEW}`;
+
+        logFlightEvent("REVIEW_REQUEST", {
+            sessionId,
+            endpoint: config.REVIEW,
+            priceIdCount: priceIds.length
+        });
 
         try {
             const response = await axios.post(
@@ -176,8 +221,17 @@ class ReviewService {
             const bookingId = mappedData?.bookingId;
             if (bookingId) {
                 await this.persistReview(bookingId, mappedData, finalData, sessionId);
+                logFlightEvent("REVIEW_RESPONSE", {
+                    sessionId,
+                    priceIdCount: priceIds.length,
+                    bookingId
+                });
             } else {
-                console.warn("[Review] No bookingId in review response; booking verification will fail closed.");
+                logFlightEvent("REVIEW_RESPONSE_ERROR", {
+                    sessionId,
+                    priceIdCount: priceIds.length,
+                    reason: "MISSING_BOOKING_ID"
+                });
             }
 
             // Normalised conditions, so the frontend requires exactly the fields
@@ -187,6 +241,7 @@ class ReviewService {
             return {
                 mappedData: finalData,
                 bookingRequirements,
+                bookingId: bookingId ?? null,
                 sessionId
             };
 

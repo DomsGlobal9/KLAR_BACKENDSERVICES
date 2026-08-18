@@ -1,5 +1,14 @@
 import { BaseFlightNormalizer } from "./baseFlight.normalizer";
 import { envConfig } from "../config/env.config";
+import { logFlightEvent } from "../utils/flightLog.util";
+import {
+    MulticityDisplayLeg,
+    MulticityOption,
+    MulticityOptionFare,
+    MulticityRejection,
+    MulticityRoute,
+    MulticitySelectionIndex
+} from "../types/multicity.types";
 
 type AnyObj = Record<string, any>;
 
@@ -7,27 +16,32 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
 
     static normalize(searchResult: AnyObj, searchQuery?: AnyObj) {
         const tripInfos = searchResult?.searchResult?.tripInfos;
+        const routes = this.buildRoutes(searchQuery);
+
         if (!tripInfos) {
+            logFlightEvent("NORMALIZATION_RESULT", {
+                searchType: "MULTICITY",
+                supplierInventory: 0,
+                optionsCreated: 0,
+                reason: "NO_TRIP_INFOS"
+            });
             return {
                 flights: [],
-                airlineStats: []
+                airlineStats: [],
+                selection: this.emptySelection(routes)
             };
         }
 
-        const hasCombo = tripInfos.COMBO && Array.isArray(tripInfos.COMBO);
+        const hasCombo = Array.isArray(tripInfos.COMBO);
         const hasLegs = Object.keys(tripInfos).some(key => !isNaN(Number(key)));
 
         if (hasCombo && !hasLegs) {
-            return this.normalizeComboStructure(tripInfos.COMBO, searchQuery);
+            return this.normalizeComboStructure(tripInfos.COMBO, routes);
         }
 
-        return this.normalizeDomesticStructure(tripInfos);
+        return this.normalizeDomesticStructure(tripInfos, routes);
     }
 
-    /**
-     * Transform with all fares (for PDF generation)
-     * Includes all fare options for each flight
-     */
     static transformWithAllFares(searchResult: AnyObj, searchQuery?: AnyObj) {
         const tripInfos = searchResult?.searchResult?.tripInfos;
         if (!tripInfos) {
@@ -37,76 +51,71 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             };
         }
 
-        const hasCombo = tripInfos.COMBO && Array.isArray(tripInfos.COMBO);
+        const hasCombo = Array.isArray(tripInfos.COMBO);
         const hasLegs = Object.keys(tripInfos).some(key => !isNaN(Number(key)));
 
         if (hasCombo && !hasLegs) {
-            return this.transformComboWithAllFares(tripInfos.COMBO, searchQuery);
+            return this.transformComboWithAllFares(tripInfos.COMBO, this.buildRoutes(searchQuery));
         }
 
         return this.transformDomesticWithAllFares(tripInfos);
     }
 
-    private static normalizeDomesticStructure(tripInfos: AnyObj) {
-        const legKeys = Object.keys(tripInfos)
-            .filter(key => !isNaN(Number(key)))
-            .sort((a, b) => Number(a) - Number(b));
+    static buildRoutes(searchQuery?: AnyObj): MulticityRoute[] {
+        const routeInfos = searchQuery?.routeInfos || searchQuery?.searchQuery?.routeInfos;
+        if (!Array.isArray(routeInfos)) return [];
 
-        const legs = legKeys.map((key) => {
-            const flights = tripInfos[key] || [];
-            return this.mapLegToFlights(Number(key), flights);
-        });
-
-        const allFlights = legs.flatMap((leg: any) => leg.flights);
-
-        return {
-            flights: legs,
-            airlineStats: this.buildAirlineStats(allFlights)
-        };
-    }
-
-    /**
-     * Transform domestic multicity with all fares
-     */
-    private static transformDomesticWithAllFares(tripInfos: AnyObj) {
-        const legKeys = Object.keys(tripInfos)
-            .filter(key => !isNaN(Number(key)))
-            .sort((a, b) => Number(a) - Number(b));
-
-        const legs = legKeys.map((key) => {
-            const flights = tripInfos[key] || [];
-            return this.mapLegToFlightsWithAllFares(Number(key), flights);
-        });
-
-        return {
-            flights: legs,
-            type: 'domestic'
-        };
+        return routeInfos.map((route: any, routeIndex: number) => ({
+            routeIndex,
+            from: route?.fromCityOrAirport?.code || route?.from || '',
+            to: route?.toCityOrAirport?.code || route?.to || '',
+            travelDate: route?.travelDate || ''
+        }));
     }
 
     static extractTargetDestinations(searchQuery?: AnyObj): string[] {
-        const routeInfos = searchQuery?.routeInfos || searchQuery?.searchQuery?.routeInfos;
-        if (!Array.isArray(routeInfos)) return [];
-        return routeInfos
-            .map((r: any) => r.toCityOrAirport?.code || r.to)
+        return this.buildRoutes(searchQuery)
+            .map((route) => route.to)
             .filter(Boolean);
     }
 
-    /**
-     * Split a COMBO itinerary's segments into the legs the traveller actually
-     * searched for — one leg per entry in `routeInfos`.
-     *
-     * A leg ends where the requested destination is reached; everything before
-     * that is a connection within the same leg. `isRs` is NOT a leg boundary:
-     * TripJack sets it on *every* segment of the onward journey, so treating it
-     * as one shredded a leg into one "leg" per hop — HYD→LHR / LHR→SIN came
-     * back as HYD→LHR, LHR→BKK, BKK→TPE, TPE→SIN, and the client rendered
-     * four trips for a two-trip search.
-     *
-     * A long stopover (airport change or a >24h gap) ends a leg too — needed
-     * because the supplier may serve a requested LHR with STN or LGW, in which
-     * case the destination never matches by code.
-     */
+    private static emptySelection(routes: MulticityRoute[]): MulticitySelectionIndex {
+        return {
+            mode: "DOMESTIC",
+            selectionMode: "PER_ROUTE",
+            routes,
+            options: [],
+            unmappable: []
+        };
+    }
+
+    private static extractOptionFares(totalPriceList: any[]): MulticityOptionFare[] {
+        return (totalPriceList || [])
+            .filter((fare: any) => fare?.id)
+            .map((fare: any) => ({
+                priceId: fare.id,
+                fareIdentifier: fare.fareIdentifier ?? null,
+                totalPrice: fare?.fd?.ADULT?.fC?.originalTF ?? fare?.fd?.ADULT?.fC?.TF ?? 0
+            }));
+    }
+
+    private static cheapestPriceId(fares: MulticityOptionFare[]): string | null {
+        if (!fares.length) return null;
+        return fares.reduce((min, curr) => (curr.totalPrice < min.totalPrice ? curr : min), fares[0]).priceId;
+    }
+
+    private static buildDisplayLegs(groups: Map<number, any[]>): MulticityDisplayLeg[] {
+        return Array.from(groups.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([legIndex, legSegments]) => ({
+                legIndex,
+                segmentIds: legSegments.map((seg: any) => seg?.id),
+                flightKey: this.getFlightKey(legSegments),
+                from: legSegments[0]?.da?.code || '',
+                to: legSegments[legSegments.length - 1]?.aa?.code || ''
+            }));
+    }
+
     static groupSegmentsIntoLegs(
         segments: any[],
         targetDestinations: string[]
@@ -125,17 +134,12 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             const nextSegment = segments[i + 1];
             if (!nextSegment) break;
 
-            // Never produce more legs than were searched for.
             if (hasTargets && currentLeg >= targetDestinations.length - 1) continue;
 
             const destCodes = [segment.aa?.code, segment.aa?.cityCode].filter(Boolean);
             const currentTargetDest = targetDestinations[currentLeg];
             const isLegEndByDest = !!currentTargetDest && destCodes.includes(currentTargetDest);
 
-            // The requested airport isn't always the one flown to — ask for LHR
-            // and the supplier may route through STN, both city LON. So the
-            // stopover itself is the other signal: within a leg, connections are
-            // hours; between legs it's the days the traveller spends there.
             let isLegEndByDiscontinuity = false;
             const nextOrigCode = nextSegment.da?.code || nextSegment.da?.cityCode;
             if (destCodes[0] !== nextOrigCode) {
@@ -156,12 +160,6 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         return legs;
     }
 
-    /**
-     * A grouped leg is only flyable if each hop starts where the previous one
-     * landed and departs after it arrived. The supplier occasionally emits an
-     * `sI` array that is out of order or repeats a segment, which produces legs
-     * that travel backwards in time — those itineraries are dropped.
-     */
     private static isCoherentLeg(legSegments: any[]): boolean {
         for (let i = 0; i < legSegments.length - 1; i++) {
             const current = legSegments[i];
@@ -185,23 +183,77 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         return true;
     }
 
-    private static normalizeComboStructure(comboFlights: any[], searchQuery?: AnyObj) {
+    private static diagnoseGrouping(legs: Map<number, any[]>, routeCount: number): string[] {
+        const diagnostics: string[] = [];
+
+        if (routeCount && legs.size !== routeCount) {
+            diagnostics.push(`LEG_COUNT_MISMATCH:expected=${routeCount},actual=${legs.size}`);
+        }
+        if (!this.isCoherentItinerary(legs)) {
+            diagnostics.push("LEG_SEQUENCE_INCOHERENT");
+        }
+
+        return diagnostics;
+    }
+
+    private static normalizeComboStructure(comboFlights: any[], routes: MulticityRoute[]) {
+        const targetDestinations = routes.map((route) => route.to).filter(Boolean);
         const result: any[] = [];
-        const targetDestinations = this.extractTargetDestinations(searchQuery);
+        const options: MulticityOption[] = [];
+        const unmappable: MulticityRejection[] = [];
 
-        comboFlights.forEach((combo: any) => {
+        comboFlights.forEach((combo: any, sourceIndex: number) => {
             const segments = combo.sI || [];
-            const legs = this.groupSegmentsIntoLegs(segments, targetDestinations);
+            const fares = this.extractOptionFares(combo.totalPriceList);
 
-            // The supplier occasionally returns a COMBO carrying only some of
-            // the requested legs (e.g. COK→DOH→DXB for a COK→DXB→GOI search).
-            // Half an itinerary can't be flown or priced, so it isn't a result.
-            if (targetDestinations.length && legs.size !== targetDestinations.length) {
+            if (!segments.length || !fares.length) {
+                const reason = !segments.length ? "NO_SEGMENTS" : "NO_PRICE_IDS";
+                unmappable.push({ sourceType: "TRIPJACK_COMBO", sourceIndex, reason });
+                logFlightEvent("NORMALIZATION_REJECTED", {
+                    searchType: "MULTICITY",
+                    mode: "INTERNATIONAL",
+                    sourceIndex,
+                    reason
+                });
                 return;
             }
-            if (!this.isCoherentItinerary(legs)) return;
+
+            const legs = this.groupSegmentsIntoLegs(segments, targetDestinations);
+            const diagnostics = this.diagnoseGrouping(legs, routes.length);
+            const optionId = `C-${sourceIndex}`;
+            const priceIds = fares.map((fare) => fare.priceId);
+            const defaultPriceId = this.cheapestPriceId(fares);
+
+            options.push({
+                optionId,
+                sourceType: "TRIPJACK_COMBO",
+                sourceIndex,
+                routeIndex: null,
+                fares,
+                priceIds,
+                defaultPriceId,
+                legs: this.buildDisplayLegs(legs),
+                diagnostics
+            });
+
+            if (diagnostics.length) {
+                logFlightEvent("OPTION_CREATED_WITH_DIAGNOSTICS", {
+                    searchType: "MULTICITY",
+                    mode: "INTERNATIONAL",
+                    optionId,
+                    sourceIndex,
+                    segmentIds: segments.map((seg: any) => seg?.id),
+                    diagnostics
+                });
+            }
 
             const itinerary: any = {
+                optionId,
+                sourceType: "TRIPJACK_COMBO",
+                sourceIndex,
+                priceIds,
+                priceId: defaultPriceId,
+                diagnostics,
                 itineraryKey: this.getFlightKey(segments),
                 totalPrice: this.getCheapestFare(combo.totalPriceList)?.fd?.ADULT?.fC?.TF || 0,
                 legs: []
@@ -209,13 +261,21 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
 
             legs.forEach((legSegments, legIndex) => {
                 const legFlight = this.mapSegmentsToLeg(legSegments, combo.totalPriceList, legIndex);
-                itinerary.legs.push(legFlight);
+                itinerary.legs.push({ ...legFlight, optionId });
             });
 
             result.push(itinerary);
         });
 
-        // Build airline stats with airline code
+        logFlightEvent("NORMALIZATION_RESULT", {
+            searchType: "MULTICITY",
+            mode: "INTERNATIONAL",
+            supplierInventory: comboFlights.length,
+            optionsCreated: options.length,
+            unmappable: unmappable.length,
+            withDiagnostics: options.filter((option) => option.diagnostics.length).length
+        });
+
         const airlineMap: Record<string, { name: string; code: string; count: number }> = {};
 
         result.forEach((itinerary: any) => {
@@ -244,28 +304,93 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             }))
             .sort((a, b) => b.flights - a.flights);
 
+        const selection: MulticitySelectionIndex = {
+            mode: "INTERNATIONAL",
+            selectionMode: "COMBINED",
+            routes,
+            options,
+            unmappable
+        };
+
         return {
             flights: result,
-            airlineStats
+            airlineStats,
+            selection
         };
     }
 
-    /**
-     * Transform international multicity (combo) with all fares
-     */
-    private static transformComboWithAllFares(comboFlights: any[], searchQuery?: AnyObj) {
+    private static normalizeDomesticStructure(tripInfos: AnyObj, routes: MulticityRoute[]) {
+        const legKeys = Object.keys(tripInfos)
+            .filter(key => !isNaN(Number(key)))
+            .sort((a, b) => Number(a) - Number(b));
+
+        const options: MulticityOption[] = [];
+        const unmappable: MulticityRejection[] = [];
+
+        const legs = legKeys.map((key) => {
+            const routeIndex = Number(key);
+            const flights = tripInfos[key] || [];
+            return this.mapLegToFlights(routeIndex, flights, options, unmappable);
+        });
+
+        const allFlights = legs.flatMap((leg: any) => leg.flights);
+
+        logFlightEvent("NORMALIZATION_RESULT", {
+            searchType: "MULTICITY",
+            mode: "DOMESTIC",
+            routeCount: legKeys.length,
+            supplierInventory: legKeys.reduce((sum, key) => sum + (tripInfos[key]?.length || 0), 0),
+            optionsCreated: options.length,
+            unmappable: unmappable.length
+        });
+
+        const selection: MulticitySelectionIndex = {
+            mode: "DOMESTIC",
+            selectionMode: "PER_ROUTE",
+            routes: routes.length ? routes : legKeys.map((key) => ({
+                routeIndex: Number(key),
+                from: '',
+                to: '',
+                travelDate: ''
+            })),
+            options,
+            unmappable
+        };
+
+        return {
+            flights: legs,
+            airlineStats: this.buildAirlineStats(allFlights),
+            selection
+        };
+    }
+
+    private static transformDomesticWithAllFares(tripInfos: AnyObj) {
+        const legKeys = Object.keys(tripInfos)
+            .filter(key => !isNaN(Number(key)))
+            .sort((a, b) => Number(a) - Number(b));
+
+        const legs = legKeys.map((key) => {
+            const flights = tripInfos[key] || [];
+            return this.mapLegToFlightsWithAllFares(Number(key), flights);
+        });
+
+        return {
+            flights: legs,
+            type: 'domestic'
+        };
+    }
+
+    private static transformComboWithAllFares(comboFlights: any[], routes: MulticityRoute[]) {
         const result: any[] = [];
-        const targetDestinations = this.extractTargetDestinations(searchQuery);
+        const targetDestinations = routes.map((route) => route.to).filter(Boolean);
 
-        comboFlights.forEach((combo: any) => {
+        comboFlights.forEach((combo: any, sourceIndex: number) => {
             const segments = combo.sI || [];
-            const legs = this.groupSegmentsIntoLegs(segments, targetDestinations);
+            const optionFares = this.extractOptionFares(combo.totalPriceList);
+            if (!segments.length || !optionFares.length) return;
 
-            // See normalizeComboStructure — a partial itinerary isn't a result.
-            if (targetDestinations.length && legs.size !== targetDestinations.length) {
-                return;
-            }
-            if (!this.isCoherentItinerary(legs)) return;
+            const legs = this.groupSegmentsIntoLegs(segments, targetDestinations);
+            const diagnostics = this.diagnoseGrouping(legs, routes.length);
 
             const allFares = (combo.totalPriceList || []).map((fare: any) => ({
                 fareName: fare.fareIdentifier || "UNKNOWN",
@@ -281,6 +406,11 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             const totalPrice = cheapestFare?.fd?.ADULT?.fC?.TF || 0;
 
             const itinerary: any = {
+                optionId: `C-${sourceIndex}`,
+                sourceIndex,
+                priceIds: optionFares.map((fare) => fare.priceId),
+                priceId: this.cheapestPriceId(optionFares),
+                diagnostics,
                 itineraryKey: this.getFlightKey(segments),
                 totalPrice: totalPrice,
                 cheapestFare: {
@@ -334,6 +464,7 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             id: cheapestFare?.id || this.getFlightKey(segments),
             legIndex: legIndex,
             flightKey: this.getFlightKey(segments),
+            priceId: cheapestFare?.id ?? null,
             airline: first?.fD?.aI?.name,
             airlineCode: first?.fD?.aI?.code,
             flightNumber: `${first?.fD?.aI?.code}-${first?.fD?.fN}`,
@@ -363,9 +494,6 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         };
     }
 
-    /**
-     * Map segments to leg with all fares (for PDF)
-     */
     private static mapSegmentsToLegWithAllFares(
         segments: any[],
         totalPriceList: any[],
@@ -416,7 +544,6 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             price: cheapestFare?.fd?.ADULT?.fC?.TF ?? 0
         };
 
-
         if (cheapestFare?.fd?.ADULT?.fC?.originalTF && envConfig.PLATFORM_MARKUP.ENABLED) {
             flightData.original_price = cheapestFare.fd.ADULT.fC.originalTF;
             flightData.markup = cheapestFare.fd.ADULT.fC.markup;
@@ -425,60 +552,109 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
         return flightData;
     }
 
-    private static mapLegToFlights(legIndex: number, flights: any[]) {
-        return {
-            legIndex: legIndex,
-            flights: flights.map((flight: AnyObj) => {
-                const segments = flight.sI || [];
-                const first = segments[0];
-                const last = segments[segments.length - 1];
-                const cheapestFare = this.getCheapestFare(flight.totalPriceList || []);
+    private static mapLegToFlights(
+        routeIndex: number,
+        flights: any[],
+        options: MulticityOption[],
+        unmappable: MulticityRejection[]
+    ) {
+        const mapped: any[] = [];
 
-                const fromDate = this.getDateParts(first.dt);
-                const toDate = this.getDateParts(last.at);
-                const baggageInfo = cheapestFare?.fd?.ADULT?.bI;
-                const isRefundable = cheapestFare?.fd?.ADULT?.rT === 1 || cheapestFare?.fd?.ADULT?.rT === true;
+        flights.forEach((flight: AnyObj, sourceIndex: number) => {
+            const segments = flight.sI || [];
+            const fares = this.extractOptionFares(flight.totalPriceList);
 
-                return {
-                    id: cheapestFare?.id || this.getFlightKey(segments),
+            if (!segments.length || !fares.length) {
+                const reason = !segments.length ? "NO_SEGMENTS" : "NO_PRICE_IDS";
+                unmappable.push({ sourceType: "TRIPJACK_ROUTE", sourceIndex, reason });
+                logFlightEvent("NORMALIZATION_REJECTED", {
+                    searchType: "MULTICITY",
+                    mode: "DOMESTIC",
+                    routeIndex,
+                    sourceIndex,
+                    reason
+                });
+                return;
+            }
+
+            const optionId = `R${routeIndex}-${sourceIndex}`;
+            const first = segments[0];
+            const last = segments[segments.length - 1];
+            const cheapestFare = this.getCheapestFare(flight.totalPriceList || []);
+            const priceIds = fares.map((fare) => fare.priceId);
+            const defaultPriceId = this.cheapestPriceId(fares);
+
+            options.push({
+                optionId,
+                sourceType: "TRIPJACK_ROUTE",
+                sourceIndex,
+                routeIndex,
+                fares,
+                priceIds,
+                defaultPriceId,
+                legs: [{
+                    legIndex: routeIndex,
+                    segmentIds: segments.map((seg: any) => seg?.id),
                     flightKey: this.getFlightKey(segments),
-                    airline: first?.fD?.aI?.name,
-                    airlineCode: first?.fD?.aI?.code,
-                    flightNumber: `${first?.fD?.aI?.code}-${first?.fD?.fN}`,
-                    cabinClass: cheapestFare?.fd?.ADULT?.cc || 'ECONOMY',
-                    isRefundable: isRefundable,
-                    checkInBaggage: { weight: baggageInfo?.iB || '15 Kg', unit: '' },
-                    cabinBaggage: { weight: baggageInfo?.cB || '7 Kg', unit: '' },
-                    from: {
-                        city: first?.da?.city,
-                        airportCode: first?.da?.code,
-                        time: this.getTime(first?.dt),
-                        date: fromDate.date,
-                        day: fromDate.day
-                    },
-                    to: {
-                        city: last?.aa?.city,
-                        airportCode: last?.aa?.code,
-                        time: this.getTime(last?.at),
-                        date: toDate.date,
-                        day: toDate.day
-                    },
-                    stops: Math.max(segments.length - 1, 0),
-                    duration: this.formatDuration(
-                        segments.reduce(
-                            (sum: number, seg: any) => sum + (seg.duration || 0),
-                            0
-                        )
-                    ),
-                    price: cheapestFare?.fd?.ADULT?.fC?.TF ?? 0
-                };
-            })
+                    from: first?.da?.code || '',
+                    to: last?.aa?.code || ''
+                }],
+                diagnostics: []
+            });
+
+            const fromDate = this.getDateParts(first.dt);
+            const toDate = this.getDateParts(last.at);
+            const baggageInfo = cheapestFare?.fd?.ADULT?.bI;
+            const isRefundable = cheapestFare?.fd?.ADULT?.rT === 1 || cheapestFare?.fd?.ADULT?.rT === true;
+
+            mapped.push({
+                id: cheapestFare?.id || this.getFlightKey(segments),
+                optionId,
+                sourceType: "TRIPJACK_ROUTE",
+                sourceIndex,
+                routeIndex,
+                legIndex: routeIndex,
+                priceIds,
+                priceId: defaultPriceId,
+                flightKey: this.getFlightKey(segments),
+                airline: first?.fD?.aI?.name,
+                airlineCode: first?.fD?.aI?.code,
+                flightNumber: `${first?.fD?.aI?.code}-${first?.fD?.fN}`,
+                cabinClass: cheapestFare?.fd?.ADULT?.cc || 'ECONOMY',
+                isRefundable: isRefundable,
+                checkInBaggage: { weight: baggageInfo?.iB || '15 Kg', unit: '' },
+                cabinBaggage: { weight: baggageInfo?.cB || '7 Kg', unit: '' },
+                from: {
+                    city: first?.da?.city,
+                    airportCode: first?.da?.code,
+                    time: this.getTime(first?.dt),
+                    date: fromDate.date,
+                    day: fromDate.day
+                },
+                to: {
+                    city: last?.aa?.city,
+                    airportCode: last?.aa?.code,
+                    time: this.getTime(last?.at),
+                    date: toDate.date,
+                    day: toDate.day
+                },
+                stops: Math.max(segments.length - 1, 0),
+                duration: this.formatDuration(
+                    segments.reduce(
+                        (sum: number, seg: any) => sum + (seg.duration || 0),
+                        0
+                    )
+                ),
+                price: cheapestFare?.fd?.ADULT?.fC?.TF ?? 0
+            });
+        });
+
+        return {
+            legIndex: routeIndex,
+            flights: mapped
         };
     }
 
-    /**
-     * Map leg to flights with all fares (for PDF)
-     */
     private static mapLegToFlightsWithAllFares(legIndex: number, flights: any[]) {
         return {
             legIndex: legIndex,
@@ -490,7 +666,6 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
 
                 const fromDate = this.getDateParts(first.dt);
                 const toDate = this.getDateParts(last.at);
-
 
                 const allFares = (flight.totalPriceList || []).map((fare: any) => ({
                     fareName: fare.fareIdentifier || "UNKNOWN",

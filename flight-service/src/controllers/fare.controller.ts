@@ -43,7 +43,7 @@ class FareController {
 
     async getMultiCityFares(req: Request, res: Response) {
         try {
-            const { sessionId, flightKey, priceId } = req.body;
+            const { sessionId, optionId, flightKey, priceId } = req.body;
 
             let { legIndex } = req.body;
 
@@ -51,19 +51,27 @@ class FareController {
                 legIndex = legIndex[0];
             }
 
-            if (legIndex === undefined || !flightKey || !sessionId) {
+            if (!sessionId) {
                 return res.status(400).json({
                     success: false,
-                    message: "sessionId, legIndex and flightKey are required"
+                    message: "sessionId is required"
                 });
             }
 
-            const data = await FareService.getMultiCityFares(
+            if (!optionId && !flightKey) {
+                return res.status(400).json({
+                    success: false,
+                    message: "optionId is required (flightKey with legIndex is accepted for backward compatibility)"
+                });
+            }
+
+            const data = await FareService.getMultiCityFares({
                 sessionId,
-                Number(legIndex),
+                optionId,
+                legIndex: legIndex === undefined ? undefined : Number(legIndex),
                 flightKey,
                 priceId
-            );
+            });
 
             return res.status(200).json({
                 success: true,
@@ -71,9 +79,11 @@ class FareController {
             });
 
         } catch (error: any) {
-            return res.status(500).json({
+            return res.status(error.statusCode || 500).json({
                 success: false,
-                message: error.message
+                message: error.message,
+                errorCode: error.errorCode,
+                details: error.details
             });
         }
     }

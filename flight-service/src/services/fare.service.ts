@@ -4,6 +4,21 @@ import { TRIPJACK_URLS, tripjackConfig } from "../config";
 import { BaseFlightNormalizer } from "../normalizers/baseFlight.normalizer";
 import { MultiCityNormalizer } from "../normalizers/multicity.normalizer";
 import TripjackFieldMapper from "../utils/mappers/tripjackField.mapper";
+import { logFlightEvent } from "../utils/flightLog.util";
+import { findMulticityOption } from "../utils/multicitySelection.util";
+import {
+    MulticityOption,
+    MulticitySelectionError,
+    MulticitySelectionIndex
+} from "../types/multicity.types";
+
+export interface MultiCityFareQuery {
+    sessionId: string;
+    optionId?: string;
+    legIndex?: number;
+    flightKey?: string;
+    priceId?: string;
+}
 
 class FareService {
 
@@ -132,91 +147,144 @@ class FareService {
         throw new Error("Invalid flight data structure");
     }
 
-    // async getMultiCityFares(
-    //     sessionId: string,
-    //     legIndex: number,
-    //     flightKey: string
-    // ) {
-    //     const cachedData = await RedisCacheService.get(sessionId);
+    private resolveSourceFlight(tripInfos: any, option: MulticityOption): any {
+        const source = option.sourceType === "TRIPJACK_COMBO"
+            ? tripInfos?.COMBO?.[option.sourceIndex]
+            : tripInfos?.[String(option.routeIndex)]?.[option.sourceIndex];
 
-    //     if (!cachedData) {
-    //         throw new Error("Session expired or invalid sessionId");
-    //     }
+        if (!source) {
+            throw new MulticitySelectionError(
+                "The selected flight is no longer available in this search session.",
+                "SOURCE_NOT_IN_SESSION",
+                { optionId: option.optionId, sourceIndex: option.sourceIndex }
+            );
+        }
 
-    //     const tripInfos = cachedData?.raw;
+        const expectedIds = option.legs.flatMap((leg) => leg.segmentIds).join("-");
+        const actualIds = (source.sI || []).map((seg: any) => seg?.id).join("-");
 
-    //     const isInternational = cachedData?.isInternational;
+        if (expectedIds !== actualIds) {
+            throw new MulticitySelectionError(
+                "The selected flight no longer matches the cached search result.",
+                "SOURCE_MISMATCH",
+                { optionId: option.optionId }
+            );
+        }
 
-    //     if (!tripInfos) {
-    //         throw new Error("Invalid session data");
-    //     }
+        return source;
+    }
 
-    //     if (isInternational) {
-    //         const combos = tripInfos.COMBO;
+    async getMultiCityFares(query: MultiCityFareQuery) {
+        const { sessionId, legIndex, flightKey, priceId } = query;
 
-    //         if (!combos || !combos.length) {
-    //             throw new Error("No flights available");
-    //         }
-
-    //         const selectedCombo = combos.find((combo: any) => {
-    //             const segments = combo.sI || [];
-    //             const flightKeyToMatch = segments.map((seg: any) => seg.id).join("-");
-    //             return flightKeyToMatch === flightKey;
-    //         });
-
-    //         if (!selectedCombo) {
-    //             throw new Error("Flight not found");
-    //         }
-
-    //         const fares = BaseFlightNormalizer.extractFaresForCombo(selectedCombo);
-
-    //         if (!fares || fares.length === 0) {
-    //             throw new Error("Fare extraction failed");
-    //         }
-
-    //         return TripjackFieldMapper.map(fares[0]);
-    //     }
-
-    //     const legFlights = tripInfos[String(legIndex)];
-
-    //     if (!legFlights || !legFlights.length) {
-    //         throw new Error("Leg not found");
-    //     }
-
-    //     const selectedFlight = legFlights.find((flight: any) =>
-    //         flight.sI?.map((seg: any) => seg.id).join("-") === flightKey
-    //     );
-
-    //     if (!selectedFlight) {
-    //         throw new Error("Flight not found for given leg");
-    //     }
-
-    //     const fares = BaseFlightNormalizer.extractFares([selectedFlight]);
-
-    //     if (!fares || fares.length === 0) {
-    //         throw new Error("Fare extraction failed");
-    //     }
-
-    //     return TripjackFieldMapper.map(fares[0]);
-    // }
-
-    async getMultiCityFares(
-        sessionId: string,
-        legIndex: number,
-        flightKey: string,
-        priceId?: string
-    ) {
         const cachedData = await RedisCacheService.get(sessionId);
 
         if (!cachedData) {
-            throw new Error("Session expired or invalid sessionId");
+            throw new MulticitySelectionError(
+                "Session expired or invalid sessionId",
+                "SESSION_EXPIRED",
+                { sessionId }
+            );
         }
 
         const tripInfos = cachedData?.raw;
-        const isInternational = cachedData?.isInternational;
+        const selection: MulticitySelectionIndex | undefined = cachedData?.multicitySelection;
 
         if (!tripInfos) {
-            throw new Error("Invalid session data");
+            throw new MulticitySelectionError("Invalid session data", "SESSION_EMPTY", { sessionId });
+        }
+
+        logFlightEvent("FARE_REQUEST", {
+            sessionId,
+            searchType: "MULTICITY",
+            mode: selection?.mode,
+            optionId: query.optionId,
+            legIndex,
+            flightKey,
+            priceId
+        });
+
+        if (selection) {
+            const option = findMulticityOption(selection, query);
+
+            if (!option) {
+                throw new MulticitySelectionError(
+                    "The selected flight was not found in this search session.",
+                    "OPTION_NOT_FOUND",
+                    { optionId: query.optionId, flightKey, legIndex }
+                );
+            }
+
+            if (priceId && !option.priceIds.includes(priceId)) {
+                throw new MulticitySelectionError(
+                    "priceId does not belong to the selected flight.",
+                    "PRICE_ID_NOT_IN_OPTION",
+                    { optionId: option.optionId, priceId }
+                );
+            }
+
+            const source = this.resolveSourceFlight(tripInfos, option);
+            const fares = this.extractFaresForOption(source, option, legIndex);
+
+            if (!fares) {
+                throw new MulticitySelectionError(
+                    "Fare extraction failed",
+                    "FARE_EXTRACTION_FAILED",
+                    { optionId: option.optionId, legIndex }
+                );
+            }
+
+            logFlightEvent("FARE_RESPONSE", {
+                sessionId,
+                searchType: "MULTICITY",
+                mode: selection.mode,
+                optionId: option.optionId,
+                sourceIndex: option.sourceIndex,
+                routeIndex: option.routeIndex,
+                priceIds: option.priceIds
+            });
+
+            return TripjackFieldMapper.map(fares);
+        }
+
+        return this.getMultiCityFaresLegacy(cachedData, legIndex, flightKey, priceId);
+    }
+
+    private extractFaresForOption(source: any, option: MulticityOption, legIndex?: number) {
+        if (option.sourceType === "TRIPJACK_ROUTE" || legIndex === undefined) {
+            const fares = BaseFlightNormalizer.extractFares([source]);
+            return fares[0] ?? null;
+        }
+
+        const displayLeg = option.legs.find((leg) => leg.legIndex === legIndex);
+        if (!displayLeg) return null;
+
+        const segmentIds = new Set(displayLeg.segmentIds);
+        const legSegments = (source.sI || []).filter((seg: any) => segmentIds.has(seg?.id));
+
+        if (!legSegments.length) return null;
+
+        const fares = BaseFlightNormalizer.extractFares([
+            { sI: legSegments, totalPriceList: source.totalPriceList }
+        ]);
+
+        return fares[0] ?? null;
+    }
+
+    private async getMultiCityFaresLegacy(
+        cachedData: any,
+        legIndex?: number,
+        flightKey?: string,
+        priceId?: string
+    ) {
+        const tripInfos = cachedData?.raw;
+        const isInternational = cachedData?.isInternational;
+
+        if (legIndex === undefined || !flightKey) {
+            throw new MulticitySelectionError(
+                "legIndex and flightKey are required for this session.",
+                "LEGACY_SELECTION_INCOMPLETE"
+            );
         }
 
         if (isInternational) {
@@ -229,17 +297,9 @@ class FareService {
             let selectedLeg = null;
             let selectedCombo = null;
 
-            // Group with the same routeInfos the search response used, or the
-            // split here won't match the flightKey the client was given.
             const targetDestinations =
                 MultiCityNormalizer.extractTargetDestinations(cachedData?.searchQuery);
 
-            // TripJack's segment ids are only unique *within* a combo — across a
-            // response the same id is reused for unrelated flights, so a
-            // flightKey like "507-508" matches several itineraries at different
-            // prices. Whenever the caller knows which one it selected, identify
-            // the combo by its priceId and only fall back to the ambiguous
-            // flightKey match when it doesn't.
             const candidates = priceId
                 ? combos.filter((combo: any) =>
                     (combo.totalPriceList || []).some((fare: any) => fare?.id === priceId))
@@ -262,7 +322,6 @@ class FareService {
                 throw new Error(`Flight not found for leg ${legIndex}`);
             }
 
-            // Extract fares for the specific leg
             const fares = this.extractFaresForLeg(selectedCombo, legIndex, targetDestinations);
 
             if (!fares) {
@@ -272,7 +331,6 @@ class FareService {
             return TripjackFieldMapper.map(fares);
         }
 
-        // Domestic structure (your existing code)
         const legFlights = tripInfos[String(legIndex)];
 
         if (!legFlights || !legFlights.length) {
@@ -296,13 +354,6 @@ class FareService {
         return TripjackFieldMapper.map(fares[0]);
     }
 
-    /**
-     * Legs must be split exactly as MultiCityNormalizer split them when the
-     * search response was built — the client looks a fare up by the flightKey
-     * it was handed there. This used to split on `isRs`, which TripJack sets on
-     * every segment of the onward journey, so a MAA→DOH leg keyed "576-577" was
-     * looked for as "576-577-578" and 500'd with "Flight not found for leg 0".
-     */
     private extractLegsFromCombo(combo: any, targetDestinations: string[] = []) {
         const segments = combo.sI || [];
         const grouped = MultiCityNormalizer.groupSegmentsIntoLegs(segments, targetDestinations);
@@ -313,7 +364,6 @@ class FareService {
             segments: [...legSegments]
         }));
     }
-
 
     private extractFaresForLeg(combo: any, legIndex: number, targetDestinations: string[] = []) {
         const segments = combo.sI || [];

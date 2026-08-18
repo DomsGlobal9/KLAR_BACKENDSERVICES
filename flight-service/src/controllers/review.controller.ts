@@ -6,20 +6,34 @@ class ReviewController {
     async review(req: Request, res: Response) {
         
         try {
-            const { priceIds } = req.body;
+            const { priceIds, sessionId, selections, optionIds } = req.body;
 
-            if (!priceIds || !Array.isArray(priceIds) || priceIds.length === 0) {
+            const requestedSelections = selections || optionIds;
+
+            let resolvedPriceIds: string[] = priceIds;
+            let selectionSummary: unknown;
+
+            if (sessionId && Array.isArray(requestedSelections)) {
+                const resolution = await ReviewService.resolveMulticityPriceIds(
+                    sessionId,
+                    requestedSelections
+                );
+                resolvedPriceIds = resolution.priceIds;
+                selectionSummary = resolution.resolved;
+            }
+
+            if (!resolvedPriceIds || !Array.isArray(resolvedPriceIds) || resolvedPriceIds.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    message: "priceIds is required and must be a non-empty array"
+                    message: "Provide sessionId with selections, or a non-empty priceIds array"
                 });
             }
 
-            const data = await ReviewService.reviewFare(priceIds);
+            const data = await ReviewService.reviewFare(resolvedPriceIds);
 
             return res.status(200).json({
                 success: true,
-                data
+                data: selectionSummary ? { ...data, selection: selectionSummary } : data
             });
 
         } catch (error: any) {
