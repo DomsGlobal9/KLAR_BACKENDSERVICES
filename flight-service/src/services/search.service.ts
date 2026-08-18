@@ -650,6 +650,10 @@ class SearchService {
                 }
             );
 
+            if (rawResponse.data && rawResponse.data.status && rawResponse.data.status.success === false) {
+                throw new Error("TripJack API Error: " + JSON.stringify(rawResponse.data.errors));
+            }
+
             if (printData == "true" || printData == true) {
 
                 const normalizedWithAllFares = MultiCityNormalizer.transformWithAllFares(rawResponse.data, payload);
