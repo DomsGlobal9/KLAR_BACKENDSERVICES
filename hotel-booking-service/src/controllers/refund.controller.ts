@@ -23,7 +23,7 @@ export const processManualRefund = async (
 
     // Manual refunds are a CRM/admin action, not a self-service one. Only admins
     // (or the booking's own owner) may trigger a refund on a booking.
-    const roles = typeof req.user?.roles === "string" ? [req.user.roles] : (req.user?.roles || []);
+    const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
     const userId = req.user?.userId || req.user?.id;
     const userEmail = req.user?.email?.toLowerCase();

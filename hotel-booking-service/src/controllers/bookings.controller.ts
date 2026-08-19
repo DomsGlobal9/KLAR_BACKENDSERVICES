@@ -39,7 +39,7 @@ export const getBookings = async (req: any, res: Response) => {
   try {
     const agentId = req.user?.userId || req.user?.id || req.user?._id;
     const email = req.user?.email;
-    const roles = typeof req.user?.roles === "string" ? [req.user.roles] : (req.user?.roles || []);
+    const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
     const clientType = req.query.clientType as string;
@@ -157,7 +157,7 @@ export const getBookingDetails = async (req: any, res: Response) => {
     // Ownership Check
     const userId = req.user?.userId || req.user?.id;
     const userEmail = req.user?.email?.toLowerCase();
-    const roles = typeof req.user?.roles === "string" ? [req.user.roles] : (req.user?.roles || []);
+    const roles = req.user?.roles || [];
     const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
     const isOwner =
