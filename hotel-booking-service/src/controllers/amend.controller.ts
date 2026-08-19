@@ -39,7 +39,7 @@ const authorizeBookingAccess = async (
 
   const userId = req.user?.userId || req.user?.id;
   const userEmail = req.user?.email?.toLowerCase();
-  const roles = req.user?.roles || [];
+  const roles = typeof req.user?.roles === "string" ? [req.user.roles] : (req.user?.roles || []);
   const isAdmin = roles.includes("B2B_ADMIN") || roles.includes("ADMIN");
 
   const isOwner =
