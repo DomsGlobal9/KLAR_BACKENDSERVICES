@@ -5,6 +5,7 @@ import {
     InsuranceJourneyType,
 } from "../models/InsuranceBooking.model";
 import { InsuranceReviewContextModel } from "../models/InsuranceReviewContext.model";
+import { bookingNotificationService } from "./bookingNotification.service";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -353,17 +354,39 @@ class BookService {
 
         // ── Persist the outcome ─────────────────────────────────────────────
         let persisted = false;
+        const upstreamStatus =
+            tjResponse?.order?.status ||
+            tjResponse?.itemInfos?.INSURANCE?.ios ||
+            (tjResponse?.status?.success ? "SUCCESS" : "PENDING");
+
+        const finalStatus =
+            upstreamStatus === "SUCCESS"
+                ? InsuranceBookingStatus.SUCCESS
+                : InsuranceBookingStatus.PENDING;
+
         try {
             if (reservationId) {
                 await InsuranceBookingModel.findByIdAndUpdate(reservationId, {
                     bookingId: tjBookingId,
                     tjBookResponse: tjResponse,
+                    status: finalStatus,
                 });
             } else {
-                await InsuranceBookingModel.create({ ...doc, bookingId: tjBookingId, tjBookResponse: tjResponse });
+                await InsuranceBookingModel.create({
+                    ...doc,
+                    bookingId: tjBookingId,
+                    tjBookResponse: tjResponse,
+                    status: finalStatus,
+                });
             }
             persisted = true;
-            console.log(`✅ [TripSafe] Saved PENDING booking: ${tjBookingId}`);
+            console.log(`✅ [TripSafe] Saved ${finalStatus} booking: ${tjBookingId}`);
+
+            if (finalStatus === InsuranceBookingStatus.SUCCESS) {
+                bookingNotificationService.sendBookingConfirmation(tjBookingId).catch((err) => {
+                    console.error(`[TripSafe] Direct confirmation notification error for ${tjBookingId}:`, err?.message || err);
+                });
+            }
         } catch (dbErr: any) {
             // The customer has been charged upstream but we hold no local
             // record — this needs manual reconciliation, so make it greppable

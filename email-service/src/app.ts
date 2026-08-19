@@ -1,37 +1,24 @@
-import express from "express";
-import { envConfig } from "./config/env.config";
-import nodemailer from "nodemailer";
-import { corsMiddleware } from "./config/cors.config";
-import routes from "./routes";
+import cors from 'cors';
+import express from 'express';
+import routes from './routes';
+import { corsOptions } from './config/cors.config';
+import { supabaseConfig } from './config/supabase.config';
 
 const app = express();
 
-app.use(express.json());
-app.use(corsMiddleware);
+app.use(express.text({ type: 'text/plain', limit: '50mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cors(corsOptions));
 
-export const mailTransporter = nodemailer.createTransport({
-  host: envConfig.SMTP_HOST,
-  port: envConfig.SMTP_PORT,
-  secure: envConfig.SMTP_SECURE,
-  auth: {
-    user: envConfig.SMTP_USER,
-    pass: envConfig.SMTP_PASS,
-  },
-});
+app.use('/api/v1', routes);
 
-app.use("/api/v1", routes);
-
-mailTransporter.verify()
-  .then(() => console.log("Mail transporter is ready"))
-  .catch((err) => console.error("Mail transporter error:", err));
-
-app.get("/", (req, res) => {
-  res.send("Email Service is running 🚀");
-});
-
-app.use((err: any, req: any, res: any, next: any) => {
-
-  res.status(500).json({ message: "Internal Server Error" });
+app.get('/health', (_req, res) => {
+    res.json({
+        status: 'ok',
+        service: 'email-service',
+        ...supabaseConfig.healthStatus(),
+    });
 });
 
 export default app;

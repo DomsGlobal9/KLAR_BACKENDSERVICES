@@ -6,10 +6,6 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
-// Behind nginx/PM2 the socket address is the proxy, so every caller would share
-// one rate-limit bucket and real traffic would be throttled collectively.
-// Set TRUST_PROXY=1 when deployed behind a reverse proxy. Default is off, which
-// matches the behaviour before rate limiting existed.
 if (process.env.TRUST_PROXY) {
     app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 }
@@ -35,10 +31,7 @@ app.options('/*splat', cors(corsOptions));
 
 app.use(express.json({ limit: "2mb" }));
 
-// D3 — TripJack's SLA caps at 40 RPM (doc p. 87) and breaching it is our
-// contractual problem. /search and /review are unauthenticated, so without a
-// ceiling there is nothing limiting how fast anyone can drive that quota.
-// Tune with RATE_LIMIT_PER_MIN; health checks are exempt.
+
 app.use(
     rateLimit({
         windowMs: 60_000,
@@ -59,8 +52,7 @@ app.get("/", (_req: Request, res: Response) => {
     });
 });
 
-app.use("/api/insurance", routes);
-// app.use("/",              routes); 
+app.use("/api/insurance", routes); 
 
 app.use((req, res) => {
     console.log(`❌ Route not found: ${req.method} ${req.url}`);

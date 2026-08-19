@@ -4,12 +4,19 @@ import { bookService } from "../services/book.service";
 
 export const bookController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const agentId    = req.user?.userId || req.user?.id || req.user?._id || "guest_user";
-        const agentName  = req.user?.email  || req.user?.name || req.body?.deliveryInfo?.emails?.[0] || "guest_b2c";
-        const clientType = req.user?.clientType ?? null;
-        console.log(`[Insurance][Book] agentId=${agentId}, agentName=${agentName}, clientType=${clientType}`);
+        const reqSource = req.body?.source || req.query?.source || req.headers["x-source"];
+        const isB2C = Boolean(reqSource && String(reqSource).toUpperCase().includes("B2C"));
 
-        const data = await bookService.book(req.body, agentId, agentName, clientType);
+        const agentId   = req.user?.userId || req.user?.id || req.user?._id || (isB2C ? "b2c_guest_user" : "guest_user");
+        const agentName = req.user?.email || req.user?.user_email || req.user?.userEmail || req.user?.name || req.body?.deliveryInfo?.emails?.[0] || (isB2C ? "guest_b2c" : "guest_user");
+
+        if (!req.body.source) {
+            req.body.source = isB2C ? "B2C_PORTAL" : "B2B_PORTAL";
+        }
+
+        console.log(`[Insurance][Book] agentId=${agentId}, agentName=${agentName}, source=${req.body.source}`);
+
+        const data = await bookService.book(req.body, agentId, agentName);
         res.json(data);
     } catch (error: any) {
         console.error("[Insurance][Book Error]", error?.message || error);
@@ -19,3 +26,4 @@ export const bookController = async (req: AuthenticatedRequest, res: Response) =
         res.status(status).json({ status: false, statusCode: status, message, details });
     }
 };
+

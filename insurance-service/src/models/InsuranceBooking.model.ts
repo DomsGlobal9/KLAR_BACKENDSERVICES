@@ -9,6 +9,18 @@ export enum InsuranceBookingStatus {
     FAILED = "FAILED",
 }
 
+/** Lifecycle of the booking-confirmation email for one booking. */
+export enum InsuranceNotificationStatus {
+    /** Claimed by a sweep and currently being delivered. */
+    SENDING = "SENDING",
+    /** Accepted by email-service. Terminal — never retried. */
+    SENT = "SENT",
+    /** Delivery attempt failed. Retried until MAX_ATTEMPTS. */
+    FAILED = "FAILED",
+    /** No usable recipient. Terminal — retrying cannot help. */
+    SKIPPED_NO_RECIPIENT = "SKIPPED_NO_RECIPIENT",
+}
+
 export enum InsuranceJourneyType {
     STANDALONE = "STANDALONE",
     STUDENT = "STUDENT",
@@ -79,6 +91,23 @@ export interface IInsuranceBooking extends Document {
     // Status
     status: InsuranceBookingStatus;
     cancelledAt?: Date;
+
+    /**
+     * Confirmation-email state, so the same booking is never confirmed twice.
+     *
+     * Held on the booking document rather than in memory: the reconciliation
+     * sweep runs on every instance and restarts with the process, so an
+     * in-memory guard would send one email per instance and again after every
+     * deploy. `status` is claimed with an atomic conditional update, which is
+     * what actually makes concurrent sweeps safe.
+     */
+    confirmationEmail?: {
+        status?: InsuranceNotificationStatus;
+        sentAt?: Date;
+        attempts?: number;
+        recipientCount?: number;
+        lastError?: string;
+    };
 
     /**
      * Customer email the policy was delivered to (deliveryInfo.emails[0]),
@@ -176,6 +205,14 @@ const insuranceBookingSchema = new Schema<IInsuranceBooking>(
             index: true,
         },
         cancelledAt: { type: Date },
+
+        confirmationEmail: {
+            status: { type: String, enum: Object.values(InsuranceNotificationStatus) },
+            sentAt: { type: Date },
+            attempts: { type: Number, default: 0 },
+            recipientCount: { type: Number },
+            lastError: { type: String },
+        },
 
         contactEmail: { type: String, lowercase: true, trim: true, index: true },
 
