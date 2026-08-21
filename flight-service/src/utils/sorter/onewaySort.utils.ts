@@ -39,11 +39,24 @@ export class OnewayFlightSorter {
         });
     }
 
+    private static extractPrice(flight: any): number {
+        if (!flight) return 0;
+        const val = flight.price ?? flight.totalPrice ?? flight.fare ?? flight.totalFare ?? 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        if (typeof val === 'string') {
+            const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+            return isNaN(num) ? 0 : num;
+        }
+        return 0;
+    }
+
     /**
      * Compare by price (numeric)
      */
     private static comparePrice(a: Flight, b: Flight): number {
-        return a.price - b.price;
+        const priceA = this.extractPrice(a);
+        const priceB = this.extractPrice(b);
+        return priceA - priceB;
     }
 
     /**
