@@ -95,6 +95,8 @@ export class MultiCityNormalizer extends BaseFlightNormalizer {
             .map((fare: any) => ({
                 priceId: fare.id,
                 fareIdentifier: fare.fareIdentifier ?? null,
+                fareType: fare.ft || fare.pft || fare.fareIdentifier || 'REGULAR',
+                ft: fare.ft || fare.pft || 'REGULAR',
                 totalPrice: fare?.fd?.ADULT?.fC?.originalTF ?? fare?.fd?.ADULT?.fC?.TF ?? 0
             }));
     }

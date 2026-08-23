@@ -77,9 +77,10 @@ class SearchService {
         }
 
         try {
+            const tripjackPayload = this.prepareTripjackSearchPayload(payload);
             const rawResponse = await axios.post(
                 url,
-                { searchQuery: payload },
+                { searchQuery: tripjackPayload },
                 {
                     headers: {
                         "Content-Type": "application/json",
@@ -184,6 +185,7 @@ class SearchService {
             // Store by session id (for fare/details lookup)
             await RedisCacheService.set(sessionId, {
                 raw: markedUpResponse?.searchResult?.tripInfos,
+                searchQuery: payload,
             }, 1800);
 
             // Also store by route key (for repeated search cache hit)
@@ -234,9 +236,10 @@ class SearchService {
         const url = `${config.BASE_URL}${config.SEARCH}`;
 
         try {
+            const tripjackPayload = this.prepareTripjackSearchPayload(payload);
             const rawResponse = await axios.post(
                 url,
-                { searchQuery: payload },
+                { searchQuery: tripjackPayload },
                 {
                     headers: {
                         "Content-Type": "application/json",
@@ -588,6 +591,7 @@ class SearchService {
 
             await RedisCacheService.set(sessionId, {
                 raw: rawResponse?.data?.searchResult?.tripInfos,
+                searchQuery: payload,
             }, 1800);
 
             const response: any = {
@@ -639,9 +643,10 @@ class SearchService {
         });
 
         try {
+            const tripjackPayload = this.prepareTripjackSearchPayload(payload);
             const rawResponse = await axios.post(
                 url,
-                { searchQuery: payload },
+                { searchQuery: tripjackPayload },
                 {
                     headers: {
                         "Content-Type": "application/json",
@@ -1095,6 +1100,21 @@ class SearchService {
             penaltyDetails: rules?.penalties || rules?.cancellationPenalties || [],
             termsAndConditions: rules?.terms || rules?.fareTerms || []
         };
+    }
+
+    public prepareTripjackSearchPayload(payload: any): any {
+        if (!payload) return payload;
+        const cloned = JSON.parse(JSON.stringify(payload));
+        if (cloned.searchModifiers) {
+            const pft = cloned.searchModifiers.pft;
+            if (pft === 'REGULAR') {
+                delete cloned.searchModifiers.pft;
+            }
+            if (Object.keys(cloned.searchModifiers).length === 0) {
+                delete cloned.searchModifiers;
+            }
+        }
+        return cloned;
     }
 
     // ── Helper: build a deterministic cache key from a one-way search payload ──

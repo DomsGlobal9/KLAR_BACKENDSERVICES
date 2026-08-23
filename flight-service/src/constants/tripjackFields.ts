@@ -70,6 +70,7 @@ export const TRIPJACK_FIELD_MAP = {
     cB: "ClassCode",
     fB: "FareBasis",
     mI: "MealIncluded",
+    ft: "FareType",
 
     bI: "BaggageInfo",
     iB: "CheckInBaggage",

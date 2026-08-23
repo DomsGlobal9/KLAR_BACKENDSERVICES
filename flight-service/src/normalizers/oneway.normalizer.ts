@@ -81,6 +81,8 @@ export class OneWayNormalizer {
                 airlineCode: airlineCode,
                 flightNumber: `${first.fD.aI.code}-${first.fD.fN}`,
                 cabinClass: cheapest.fd.ADULT.cc,
+                fareType: cheapest?.ft || cheapest?.pft || cheapest?.fareIdentifier || "REGULAR",
+                ft: cheapest?.ft || cheapest?.pft || "REGULAR",
 
                 from: {
                     city: first.da.city,
@@ -152,6 +154,8 @@ export class OneWayNormalizer {
 
             const allFares = (flight.totalPriceList || []).map((fare: any) => ({
                 fareName: fare.fareIdentifier || "UNKNOWN",
+                fareType: fare.ft || fare.pft || fare.fareIdentifier || "REGULAR",
+                ft: fare.ft || fare.pft || "REGULAR",
                 totalPrice: fare.fd?.ADULT?.fC?.TF || 0,
                 cabinClass: fare.fd?.ADULT?.cc || "UNKNOWN",
                 fareId: fare.id,
@@ -205,7 +209,9 @@ export class OneWayNormalizer {
                 cheapestFare: {
                     price: cheapest?.fd?.ADULT?.fC?.TF || 0,
                     cabinClass: cheapest?.fd?.ADULT?.cc || "UNKNOWN",
-                    fareName: cheapest?.fareIdentifier || "UNKNOWN"
+                    fareName: cheapest?.fareIdentifier || "UNKNOWN",
+                    fareType: cheapest?.ft || cheapest?.pft || cheapest?.fareIdentifier || "REGULAR",
+                    ft: cheapest?.ft || cheapest?.pft || "REGULAR"
                 },
 
 
