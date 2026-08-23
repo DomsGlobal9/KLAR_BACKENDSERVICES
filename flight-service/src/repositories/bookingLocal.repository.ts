@@ -158,7 +158,16 @@ export class BookingRepository {
 
     async findBookingByEmail(email: string): Promise<Booking | null> {
         try {
-            const booking = await BookingModel.findOne({ email: email });
+            const cleanEmail = email ? email.trim() : "";
+            const escapedEmail = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const emailRegex = new RegExp(`^${escapedEmail}$`, 'i');
+            const booking = await BookingModel.findOne({
+                $or: [
+                    { email: { $regex: emailRegex } },
+                    { "userInfo.email": { $regex: emailRegex } },
+                    { "emergencyContact.email": { $regex: emailRegex } }
+                ]
+            });
             return booking;
         } catch (error) {
 
@@ -168,14 +177,14 @@ export class BookingRepository {
 
     async getBookingsByEmail(email: string) {
         try {
-            const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const cleanEmail = email ? email.trim() : "";
+            const escapedEmail = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const emailRegex = new RegExp(`^${escapedEmail}$`, 'i');
             const bookings = await BookingModel.find({
                 $or: [
-                    { email: emailRegex },
-                    { "userInfo.email": emailRegex },
-                    { "deliveryInfo.emails": emailRegex },
-                    { "contactInfo.emails": emailRegex }
+                    { email: { $regex: emailRegex } },
+                    { "userInfo.email": { $regex: emailRegex } },
+                    { "emergencyContact.email": { $regex: emailRegex } }
                 ]
             }).sort({ createdAt: -1 });
             return bookings;

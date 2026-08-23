@@ -235,7 +235,7 @@ class BookingController {
             // C-3 — this returns full traveller PII including passport data, so
             // knowing a booking id must not be enough to read it.
             const localBooking = await bookingRepo.getBookingById(String(bookingId)).catch(() => null);
-            if (!localBooking || !canAccessBooking(req.user, localBooking)) {
+            if (!localBooking || !canAccessBooking(req.user, localBooking, req)) {
                 return res.status(404).json({
                     success: false,
                     message: `Booking ${bookingId} was not found.`,
