@@ -28,7 +28,7 @@ class RedisConfig {
             });
 
             this.instance.on("error", (error: Error) => {
-
+                console.warn("[Redis] Connection error:", error.message);
                 this.isConnected = false;
             });
 

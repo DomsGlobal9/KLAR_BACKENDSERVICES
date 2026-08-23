@@ -4,17 +4,33 @@ class RedisCacheService {
     private client = RedisConfig.getInstance();
 
     async get(key: string) {
-        const data = await this.client.get(key);
-        return data ? JSON.parse(data) : null;
+        try {
+            if (!RedisConfig.isReady()) return null;
+            const data = await this.client.get(key);
+            return data ? JSON.parse(data) : null;
+        } catch (error: any) {
+            console.warn(`[RedisCacheService] GET error for key ${key}:`, error.message);
+            return null;
+        }
     }
 
     async set(key: string, value: any, ttl = 300) {
-        await this.client.set(key, JSON.stringify(value), "EX", ttl);
+        try {
+            if (!RedisConfig.isReady()) return;
+            await this.client.set(key, JSON.stringify(value), "EX", ttl);
+        } catch (error: any) {
+            console.warn(`[RedisCacheService] SET error for key ${key}:`, error.message);
+        }
     }
 
     async del(key: string) {
-        await this.client.del(key);
+        try {
+            if (!RedisConfig.isReady()) return;
+            await this.client.del(key);
+        } catch (error: any) {
+            console.warn(`[RedisCacheService] DEL error for key ${key}:`, error.message);
+        }
     }
 }
 
-export default new RedisCacheService();
+export default new RedisCacheService();

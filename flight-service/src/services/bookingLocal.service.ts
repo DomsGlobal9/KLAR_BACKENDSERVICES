@@ -549,10 +549,16 @@ class BookingService {
             );
         }
 
+        const userRole = Array.isArray(userData.roles)
+            ? userData.roles[0] || ""
+            : typeof userData.roles === "string"
+            ? userData.roles
+            : "";
+
         const userInfo = {
             id: userData.id,
             email: userData.email,
-            role: userData.roles?.[0] || "",
+            role: userRole,
             clientType: userData.clientType
         };
 

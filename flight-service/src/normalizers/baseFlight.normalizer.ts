@@ -35,7 +35,11 @@ export class BaseFlightNormalizer {
     }
 
     static getCheapestFare(totalPriceList: any[]) {
-        const cheapest = totalPriceList?.reduce((min, curr) => {
+        if (!Array.isArray(totalPriceList) || totalPriceList.length === 0) {
+            return undefined;
+        }
+
+        const cheapest = totalPriceList.reduce((min, curr) => {
             return curr.fd.ADULT.fC.TF < min.fd.ADULT.fC.TF ? curr : min;
         });
 
