@@ -91,6 +91,58 @@ describe('Student & Senior Citizen Booking Pipeline', () => {
                 (err: any) => err.errorCode === 'DOCUMENT_ID_REQUIRED'
             );
         });
+
+        test('demands DOB when booking a Student or Senior Citizen fare', () => {
+            const payload = createPayload({ dob: undefined });
+
+            assert.throws(
+                () => validateBookingPayload(payload, { fareType: 'STUDENT' }),
+                (err: any) => err.errorCode === 'DOB_REQUIRED'
+            );
+
+            assert.throws(
+                () => validateBookingPayload(payload, { fareType: 'SENIOR_CITIZEN' }),
+                (err: any) => err.errorCode === 'DOB_REQUIRED'
+            );
+        });
+
+        test('rejects Student passenger under 12 years of age on travel date', () => {
+            // Travel date: 2026-09-01, DOB: 2015-09-02 (age 10)
+            const payload = createPayload({ dob: '2015-09-02' });
+
+            assert.throws(
+                () => validateBookingPayload(payload, { fareType: 'STUDENT', departureDate: '2026-09-01' }),
+                (err: any) => err.errorCode === 'STUDENT_AGE_INVALID'
+            );
+        });
+
+        test('accepts Student passenger 12 years or older on travel date', () => {
+            // Travel date: 2026-09-01, DOB: 2014-09-01 (age 12)
+            const payload = createPayload({ dob: '2014-09-01' });
+
+            assert.doesNotThrow(() => {
+                validateBookingPayload(payload, { fareType: 'STUDENT', departureDate: '2026-09-01' });
+            });
+        });
+
+        test('rejects Senior Citizen passenger under 60 years of age on travel date', () => {
+            // Travel date: 2026-09-01, DOB: 1968-01-01 (age 58)
+            const payload = createPayload({ dob: '1968-01-01' });
+
+            assert.throws(
+                () => validateBookingPayload(payload, { fareType: 'SENIOR_CITIZEN', departureDate: '2026-09-01' }),
+                (err: any) => err.errorCode === 'SENIOR_CITIZEN_AGE_INVALID'
+            );
+        });
+
+        test('accepts Senior Citizen passenger 60 years or older on travel date', () => {
+            // Travel date: 2026-09-01, DOB: 1965-01-01 (age 61)
+            const payload = createPayload({ dob: '1965-01-01' });
+
+            assert.doesNotThrow(() => {
+                validateBookingPayload(payload, { fareType: 'SENIOR_CITIZEN', departureDate: '2026-09-01' });
+            });
+        });
     });
 
     describe('TripJack Booking Payload Mapping', () => {

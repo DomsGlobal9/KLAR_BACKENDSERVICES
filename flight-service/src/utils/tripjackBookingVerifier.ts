@@ -113,6 +113,16 @@ function monthsBetween(from: Date, to: Date): number {
     return months;
 }
 
+/** Calculate full years of age between DOB and travel/departure date. */
+function getAge(dob: Date, travelDate: Date): number {
+    let age = travelDate.getFullYear() - dob.getFullYear();
+    const monthDiff = travelDate.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && travelDate.getDate() < dob.getDate())) {
+        age--;
+    }
+    return age;
+}
+
 function parseDate(value: string): Date | null {
     if (!DATE_REGEX.test(value)) return null;
     const d = new Date(`${value}T00:00:00Z`);
@@ -249,8 +259,10 @@ function validateGst(payload: FrontendBookingPayload, req: BookingRequirements):
 export interface ValidateBookingOptions {
     /** Resolved Review conditions. Omitted only where no Review is available. */
     requirements?: BookingRequirements;
-    /** First segment departure date (YYYY-MM-DD), for passport date rules. */
+    /** First segment departure date (YYYY-MM-DD), for passport date and age rules. */
     departureDate?: string;
+    /** Fare type of the itinerary ('REGULAR' | 'STUDENT' | 'SENIOR_CITIZEN'). */
+    fareType?: string;
 }
 
 /**
@@ -264,6 +276,8 @@ export function validateBookingPayload(
     options: ValidateBookingOptions = {}
 ) {
     const req = options.requirements ?? NO_CONDITIONS;
+    const fareType = options.fareType?.toUpperCase();
+    const isSpecialFare = fareType === "STUDENT" || fareType === "SENIOR_CITIZEN";
 
     if (!payload.bookingId) fail("bookingId is required", "BOOKING_ID_REQUIRED");
 
@@ -314,9 +328,24 @@ export function validateBookingPayload(
             fail(`Invalid DOB at ${label}`, "DOB_INVALID");
         }
 
-        // DOB is demanded only where the Review says so (C-4).
-        if (dobRequiredFor(t.paxType, req) && !t.dob?.trim()) {
+        // DOB is demanded when the Review asks for it OR when booking special Student/Senior fare.
+        if ((dobRequiredFor(t.paxType, req) || isSpecialFare) && !t.dob?.trim()) {
             fail(`Date of birth is required for ${label}.`, "DOB_REQUIRED");
+        }
+
+        // Validate Student minimum age (>= 12) and Senior Citizen minimum age (>= 60)
+        if (t.dob?.trim() && options.departureDate) {
+            const dobDate = parseDate(t.dob.trim());
+            const travelDate = parseDate(options.departureDate);
+            if (dobDate && travelDate) {
+                const age = getAge(dobDate, travelDate);
+                if (fareType === "STUDENT" && t.paxType === "ADULT" && age < 12) {
+                    fail(`Student fare requires ${label} to be at least 12 years old.`, "STUDENT_AGE_INVALID");
+                }
+                if (fareType === "SENIOR_CITIZEN" && t.paxType === "ADULT" && age < 60) {
+                    fail(`Senior Citizen fare requires ${label} to be at least 60 years old.`, "SENIOR_CITIZEN_AGE_INVALID");
+                }
+            }
         }
 
         if (t.paxType === "ADULT") adultCount++;

@@ -12,6 +12,7 @@ import {
 import {
     resolveBookingRequirements,
     isReviewExpired,
+    extractFareTypeFromReview,
 } from "../utils/reviewConditions.util";
 import { AuthenticatedRequest, canAccessBooking } from "../middlewares/auth.middleware";
 import { BookingRepository } from "../repositories/bookingLocal.repository";
@@ -89,10 +90,12 @@ async function verifyAgainstReview(payload: any) {
 
     const verifiedPayload = { ...payload, amount: verified.authoritativeAmount };
 
+    const fareType = extractFareTypeFromReview(review.mappedData);
     validateBookingPayload(verifiedPayload, {
         requirements,
         departureDate:
             review.mappedData?.searchQuery?.routeInfos?.[0]?.travelDate,
+        fareType,
     });
 
     return verifiedPayload;
