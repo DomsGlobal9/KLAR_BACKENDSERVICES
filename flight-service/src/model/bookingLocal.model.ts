@@ -23,6 +23,8 @@ const TravellerSchema = new Schema(
         passportNationality: String,
         passportIssueDate: String,
         passportExpiryDate: String,
+        documentId: String,
+        pan: String,
         ssrSeatInfos: [SSRSchema],
         ssrMealInfos: [SSRSchema],
         ssrBaggageInfos: [SSRSchema]

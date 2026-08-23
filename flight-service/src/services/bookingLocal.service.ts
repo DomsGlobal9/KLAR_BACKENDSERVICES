@@ -536,9 +536,11 @@ class BookingService {
             throw new Error("Departure date is required");
         }
 
-        const travellersWithId = data.travellers.map((traveller) => ({
+        const travellersWithId = data.travellers.map((traveller: any) => ({
             ...traveller,
-            travellerId: uuidv4()
+            documentId: traveller.documentId || traveller.di,
+            ...(traveller.pan && { pan: traveller.pan }),
+            travellerId: traveller.travellerId || uuidv4()
         }));
 
         let emergencyContact = data.emergencyContact;

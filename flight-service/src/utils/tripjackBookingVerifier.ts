@@ -326,7 +326,8 @@ export function validateBookingPayload(
         validatePassport(t, index, req, options.departureDate);
 
         // H-7 — document id, for student / senior-citizen fares.
-        if (req.documentId.mandatory && !t.documentId?.trim()) {
+        const docId = t.documentId?.trim() || t.di?.trim();
+        if (req.documentId.mandatory && !docId) {
             fail(`Document ID is required for ${label}.`, "DOCUMENT_ID_REQUIRED");
         }
 
