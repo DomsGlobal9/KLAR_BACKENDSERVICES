@@ -39,11 +39,24 @@ export class OnewayFlightSorter {
         });
     }
 
+    private static extractPrice(flight: any): number {
+        if (!flight) return 0;
+        const val = flight.price ?? flight.totalPrice ?? flight.fare ?? flight.totalFare ?? 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        if (typeof val === 'string') {
+            const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+            return isNaN(num) ? 0 : num;
+        }
+        return 0;
+    }
+
     /**
      * Compare by price (numeric)
      */
     private static comparePrice(a: Flight, b: Flight): number {
-        return a.price - b.price;
+        const priceA = this.extractPrice(a);
+        const priceB = this.extractPrice(b);
+        return priceA - priceB;
     }
 
     /**
@@ -115,7 +128,27 @@ export class OnewayFlightSorter {
      * Convert time string "HH:MM" to minutes since midnight
      */
     private static timeToMinutes(time: string): number {
-        const [hours, minutes] = time.split(':').map(Number);
+        if (!time) return 0;
+        let timeStr = String(time).trim();
+        if (timeStr.includes('T')) {
+            const part = timeStr.split('T')[1];
+            if (part) timeStr = part;
+        }
+        const isPM = /PM/i.test(timeStr);
+        const isAM = /AM/i.test(timeStr);
+
+        const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+        if (!match) return 0;
+
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+
+        if (isPM && hours < 12) {
+            hours += 12;
+        } else if (isAM && hours === 12) {
+            hours = 0;
+        }
+
         return (hours * 60) + minutes;
     }
 

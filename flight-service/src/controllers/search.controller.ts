@@ -106,6 +106,16 @@ export const searchOneWayController = async (req: Request, res: Response) => {
             }
         }
 
+        if (!sortOption) {
+            if (req.body.filters?.departureTimeRange) {
+                sortOption = { field: 'departureTime', order: 'asc' };
+            } else if (req.body.filters?.arrivalTimeRange) {
+                sortOption = { field: 'arrivalTime', order: 'asc' };
+            } else if (req.body.filters?.priceRange) {
+                sortOption = { field: 'price', order: 'asc' };
+            }
+        }
+
         const includeStats = req.query.includeStats === 'true';
 
         const result = await searchService.searchOneWay(
@@ -245,6 +255,16 @@ export const searchReturnController = async (req: Request, res: Response) => {
                     min,
                     max
                 });
+            }
+        }
+
+        if (!sortOption) {
+            if (req.body.filters?.departureTimeRange) {
+                sortOption = { field: 'departureTime', order: 'asc' };
+            } else if (req.body.filters?.arrivalTimeRange) {
+                sortOption = { field: 'arrivalTime', order: 'asc' };
+            } else if (req.body.filters?.priceRange) {
+                sortOption = { field: 'price', order: 'asc' };
             }
         }
 
@@ -405,6 +425,16 @@ export const searchMulticityController = async (req: Request, res: Response) => 
                 applyToLegs = 'all';
             } else if (Array.isArray(req.body.applyToLegs)) {
                 applyToLegs = req.body.applyToLegs;
+            }
+        }
+
+        if (!sortOption) {
+            if (req.body.filters?.departureTimeRange) {
+                sortOption = { field: 'departureTime', order: 'asc' };
+            } else if (req.body.filters?.arrivalTimeRange) {
+                sortOption = { field: 'arrivalTime', order: 'asc' };
+            } else if (req.body.filters?.priceRange) {
+                sortOption = { field: 'price', order: 'asc' };
             }
         }
 

@@ -292,7 +292,27 @@ export class FlightFilter {
      * Convert time string "HH:MM" to minutes since midnight
      */
     private static timeToMinutes(time: string): number {
-        const [hours, minutes] = time.split(':').map(Number);
+        if (!time) return 0;
+        let timeStr = String(time).trim();
+        if (timeStr.includes('T')) {
+            const part = timeStr.split('T')[1];
+            if (part) timeStr = part;
+        }
+        const isPM = /PM/i.test(timeStr);
+        const isAM = /AM/i.test(timeStr);
+
+        const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+        if (!match) return 0;
+
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+
+        if (isPM && hours < 12) {
+            hours += 12;
+        } else if (isAM && hours === 12) {
+            hours = 0;
+        }
+
         return (hours * 60) + minutes;
     }
 
@@ -300,7 +320,8 @@ export class FlightFilter {
      * Validate time format (HH:MM)
      */
     private static isValidTimeFormat(time: string): boolean {
-        return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
+        if (!time) return false;
+        return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s*(AM|PM)?$/i.test(time.trim());
     }
 
     /**

@@ -19,7 +19,12 @@
     "pm2:status": "pm2 status",
     "deploy": "git pull && npm install && npm run build && pm2 restart klar-insurance-service"
   },
-  "keywords": ["insurance", "tripsafe", "tripjack", "klar"],
+  "keywords": [
+    "insurance",
+    "tripsafe",
+    "tripjack",
+    "klar"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
