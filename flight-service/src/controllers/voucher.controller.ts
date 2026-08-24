@@ -57,10 +57,20 @@ class VoucherController {
                     throw new Error("No user ID in token validation response");
                 }
 
+                const rawRoles = response.data.data.roles ?? response.data.data.role;
+                let roles: string[] = [];
+                if (Array.isArray(rawRoles)) {
+                    roles = rawRoles.map((r: any) => String(r));
+                } else if (typeof rawRoles === "string" && rawRoles.trim().length > 0) {
+                    roles = [rawRoles.trim()];
+                } else {
+                    roles = ["user"];
+                }
+
                 return {
                     id: userId,
                     email: response.data.data.email,
-                    roles: response.data.data.roles || ["user"],
+                    roles,
                     clientType: response.data.data.clientType || "b2c",
                 };
             }
