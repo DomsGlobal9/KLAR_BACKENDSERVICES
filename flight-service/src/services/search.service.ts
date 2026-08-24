@@ -1001,13 +1001,17 @@ class SearchService {
                 response.stats = stats;
             }
 
+            const displayedFlightsCount = isDomestic
+                ? normalized.reduce((sum: number, leg: any) => sum + (leg.flights?.length || 0), 0)
+                : normalized.length;
+
             logFlightEvent("SEARCH_RESPONSE", {
                 requestId,
                 sessionId,
                 searchType: "MULTICITY",
                 mode: selection.mode,
                 optionsReturned: selection.options.length,
-                displayedFlights: normalized.length
+                displayedFlights: displayedFlightsCount
             });
 
             return response;
