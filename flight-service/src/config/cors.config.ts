@@ -36,5 +36,6 @@ export const corsMiddleware: CorsOptions = {
     credentials: envConfig.CORS.CREDENTIALS,
     maxAge: envConfig.CORS.MAX_AGE,
 
+    optionsSuccessStatus: 200,
     exposedHeaders: ["X-Total-Count", "X-Page", "X-Per-Page"],
 };
