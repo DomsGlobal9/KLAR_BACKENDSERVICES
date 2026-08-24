@@ -212,3 +212,21 @@ export function isReviewExpired(
 
     return now.getTime() > base.getTime() + validSeconds * 1000;
 }
+
+/**
+ * Extract fare type ('STUDENT', 'SENIOR_CITIZEN', 'REGULAR') from stored Review object or mappedData.
+ */
+export function extractFareTypeFromReview(review: any): string {
+    const root = review?.mappedData || review;
+    const trips = root?.TripInformation || root?.tripInfos || [];
+    for (const trip of trips) {
+        const prices = trip?.TotalPriceList || trip?.totalPriceList || [];
+        for (const price of prices) {
+            const ft = price?.FareType || price?.ft || price?.fareType || price?.pft;
+            if (ft === "STUDENT" || ft === "SENIOR_CITIZEN") return ft;
+        }
+    }
+    const pft = root?.searchQuery?.searchModifiers?.pft || root?.searchModifiers?.pft;
+    if (pft === "STUDENT" || pft === "SENIOR_CITIZEN") return pft;
+    return "REGULAR";
+}

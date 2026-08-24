@@ -14,9 +14,8 @@ function mapTraveller(t: FrontendTraveller): TripjackTraveller {
         ...(t.dob && { dob: t.dob })
     };
 
-    if (t.documentId || t.di) {
-        traveller.di = t.documentId || t.di;
-    }
+    const docId = (t.documentId || t.di)?.trim();
+    if (docId) traveller.di = docId;
 
     // Each passport field is forwarded on its own merit (H-6). The previous
     // all-or-nothing rule dropped the entire block whenever one field was
@@ -27,8 +26,7 @@ function mapTraveller(t: FrontendTraveller): TripjackTraveller {
     if (t.passportIssueDate?.trim()) traveller.pid = t.passportIssueDate.trim();
     if (t.passportExpiryDate?.trim()) traveller.eD = t.passportExpiryDate.trim();
 
-    // H-7 / H-8 — document id and PAN, previously never transmitted.
-    if (t.documentId?.trim()) traveller.di = t.documentId.trim();
+    // H-8 — PAN.
     if (t.pan?.trim()) traveller.pan = t.pan.trim().toUpperCase();
 
     if (t.ssrSeatInfos?.length) traveller.ssrSeatInfos = t.ssrSeatInfos;

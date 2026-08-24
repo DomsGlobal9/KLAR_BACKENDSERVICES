@@ -107,6 +107,8 @@ export class ReturnNormalizer {
 
                 const allFares = (combo.totalPriceList || []).map((fare: any) => ({
                     fareName: fare.fareIdentifier || "UNKNOWN",
+                    fareType: fare.ft || fare.pft || fare.fareIdentifier || "REGULAR",
+                    ft: fare.ft || fare.pft || "REGULAR",
                     totalPrice: fare.fd?.ADULT?.fC?.TF || 0,
                     cabinClass: fare.fd?.ADULT?.cc || "UNKNOWN",
                     fareId: fare.id,
@@ -125,7 +127,9 @@ export class ReturnNormalizer {
                     cheapestFare: {
                         price: cheapestFare?.fd?.ADULT?.fC?.TF || 0,
                         cabinClass: cheapestFare?.fd?.ADULT?.cc || "UNKNOWN",
-                        fareName: cheapestFare?.fareIdentifier || "UNKNOWN"
+                        fareName: cheapestFare?.fareIdentifier || "UNKNOWN",
+                        fareType: cheapestFare?.ft || cheapestFare?.pft || cheapestFare?.fareIdentifier || "REGULAR",
+                        ft: cheapestFare?.ft || cheapestFare?.pft || "REGULAR"
                     },
                     allFares: allFares,
                     fareSummary: {
@@ -175,6 +179,8 @@ export class ReturnNormalizer {
             airlineCode: first.fD.aI.code,
             flightNumber: `${first.fD.aI.code}-${first.fD.fN}`,
             cabinClass: cheapest.fd.ADULT.cc,
+            fareType: cheapest?.ft || cheapest?.pft || cheapest?.fareIdentifier || "REGULAR",
+            ft: cheapest?.ft || cheapest?.pft || "REGULAR",
             from: {
                 city: first.da.city,
                 airportCode: first.da.code,
@@ -226,6 +232,8 @@ export class ReturnNormalizer {
 
         const allFares = (totalPriceList || []).map((fare: any) => ({
             fareName: fare.fareIdentifier || "UNKNOWN",
+            fareType: fare.ft || fare.pft || fare.fareIdentifier || "REGULAR",
+            ft: fare.ft || fare.pft || "REGULAR",
             totalPrice: fare.fd?.ADULT?.fC?.TF || 0,
             cabinClass: fare.fd?.ADULT?.cc || "UNKNOWN",
             fareId: fare.id,
@@ -269,7 +277,9 @@ export class ReturnNormalizer {
             cheapestFare: {
                 price: cheapest?.fd?.ADULT?.fC?.TF || 0,
                 cabinClass: cheapest?.fd?.ADULT?.cc || "UNKNOWN",
-                fareName: cheapest?.fareIdentifier || "UNKNOWN"
+                fareName: cheapest?.fareIdentifier || "UNKNOWN",
+                fareType: cheapest?.ft || cheapest?.pft || cheapest?.fareIdentifier || "REGULAR",
+                ft: cheapest?.ft || cheapest?.pft || "REGULAR"
             },
             allFares: allFares,
             fareSummary: {

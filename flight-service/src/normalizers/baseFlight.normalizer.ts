@@ -78,6 +78,8 @@ export class BaseFlightNormalizer {
 
                     fareId: fare.id,
                     fareIdentifier: fare.fareIdentifier,
+                    fareType: fare.ft || fare.pft || fare.fareIdentifier || 'REGULAR',
+                    ft: fare.ft || fare.pft || 'REGULAR',
 
                     passengerBreakup: {
                         ADULT: fare.fd?.ADULT || null,
@@ -142,6 +144,8 @@ export class BaseFlightNormalizer {
                 ...fare,
                 fareId: fare.id,
                 fareIdentifier: fare.fareIdentifier,
+                fareType: fare.ft || fare.pft || fare.fareIdentifier || 'REGULAR',
+                ft: fare.ft || fare.pft || 'REGULAR',
                 passengerBreakup: {
                     ADULT: fare.fd?.ADULT || null,
                     CHILD: fare.fd?.CHILD || null,
@@ -189,6 +193,8 @@ export class BaseFlightNormalizer {
                 ...fare,
                 fareId: fare.id,
                 fareIdentifier: fare.fareIdentifier,
+                fareType: fare.ft || fare.pft || fare.fareIdentifier || 'REGULAR',
+                ft: fare.ft || fare.pft || 'REGULAR',
                 passengerBreakup: {
                     ADULT: fare.fd?.ADULT || null,
                     CHILD: fare.fd?.CHILD || null,

@@ -19,6 +19,7 @@ import {
 import {
     resolveBookingRequirements,
     isReviewExpired,
+    extractFareTypeFromReview,
 } from "../utils/reviewConditions.util";
 import { parseUpfrontSeatError } from "../utils/upfrontSeatError.util";
 import { flightConfirmationTemplate } from "../templates/flightConfirmationTemplate";
@@ -536,9 +537,11 @@ class BookingService {
             throw new Error("Departure date is required");
         }
 
-        const travellersWithId = data.travellers.map((traveller) => ({
+        const travellersWithId = data.travellers.map((traveller: any) => ({
             ...traveller,
-            travellerId: uuidv4()
+            documentId: traveller.documentId || traveller.di,
+            ...(traveller.pan && { pan: traveller.pan }),
+            travellerId: traveller.travellerId || uuidv4()
         }));
 
         let emergencyContact = data.emergencyContact;
@@ -810,9 +813,11 @@ class BookingService {
 
         // C-4 / C-5 / H-6 / H-7 / H-8 — conditional field validation, server
         // side, driven by the same Review conditions the form was built from.
+        const fareType = extractFareTypeFromReview(review.mappedData);
         validateBookingPayload(tripjackPayload, {
             requirements,
             departureDate: updatedBooking.departureDate,
+            fareType,
         });
 
         // C-6 — claim the booking atomically. A concurrent duplicate, a retry

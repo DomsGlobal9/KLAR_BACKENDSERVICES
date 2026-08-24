@@ -41,6 +41,8 @@ export interface Traveller {
     passportNationality?: string;
     passportIssueDate?: string;
     passportExpiryDate?: string;
+    documentId?: string;
+    pan?: string;
     ssrSeatInfos?: SSRInfo[];
     ssrMealInfos?: SSRInfo[];
     ssrBaggageInfos?: SSRInfo[];

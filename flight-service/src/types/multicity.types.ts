@@ -22,6 +22,8 @@ export interface MulticityDisplayLeg {
 export interface MulticityOptionFare {
     priceId: string;
     fareIdentifier: string | null;
+    fareType?: string | null;
+    ft?: string | null;
     totalPrice: number;
 }
 
